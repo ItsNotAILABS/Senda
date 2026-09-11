@@ -1,0 +1,37 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Sovereign Summit",
+      "hasCanvas": false,
+      "bodyTextLen": 4050,
+      "bodyTextHash": "ed94217eeb7f59ef06d412a41b2a2406972d31eec4c66a203ad5f296cfaf3052",
+      "bodyTextPrefix": "Sovereign Summit Event Agenda Speakers Tickets Venue RSVP Reserv",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Sovereign Summit",
+      "hasCanvas": false,
+      "bodyTextLen": 3994,
+      "bodyTextHash": "2983634cdeb1857a794fb2e5a24e91247571fa74c472056a573586a8f0bf8dbe",
+      "bodyTextPrefix": "Sovereign Summit SHIPATON 2026 · DALLAS Sovereign Summit Six cor",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

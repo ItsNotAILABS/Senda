@@ -1,0 +1,10 @@
+node_modules/
+.vercel/
+.tanstack/
+artifacts/
+*.log
+.DS_Store
+pglite.data
+.pglite/
+dist/
+routeTree.gen.ts
