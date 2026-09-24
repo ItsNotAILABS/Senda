@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const PRIMARY = [
   { to: "/", label: "Portfolio" },
   { to: "/pre", label: "Pre-IPO" },
+  { to: "/agents", label: "Agents" },
   { to: "/invest", label: "Trade" },
   { to: "/payments", label: "Move" },
   { to: "/cards", label: "Cards" },
