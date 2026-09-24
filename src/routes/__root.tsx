@@ -1,10 +1,11 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
+import { WalletProvider } from "@/lib/wallet-context";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Sovereign Summit";
+const APP_NAME = "Senda";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -15,9 +16,9 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Sovereign Summit 2026 — the public launch of Sovereign Engine OS. Dallas, 26 September. Six cores. One kernel. Zero variance.",
+          "Senda — hold currencies, send nearby, trade PreStocks on Solana. Paper wallet.",
       },
-      { name: "theme-color", content: "#0b0c10" },
+      { name: "theme-color", content: "#0c110e" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -29,7 +30,7 @@ export const Route = createRootRoute({
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@500&family=Syne:wght@500;600;700;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap",
       },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
@@ -44,17 +45,19 @@ export const Route = createRootRoute({
       <body className="bg-bg text-fg">
         <PreviewHostBridge />
         <AuthProvider>
-          <Outlet />
+          <WalletProvider>
+            <Outlet />
+          </WalletProvider>
         </AuthProvider>
         <Toaster
           theme="dark"
-          position="bottom-center"
+          position="top-center"
           toastOptions={{
             className: "font-sans",
             style: {
-              background: "#1c1e26",
-              border: "1px solid #2a2c34",
-              color: "#f2efe8",
+              background: "#1b231e",
+              border: "1px solid #2a332c",
+              color: "#f3efe4",
             },
           }}
         />

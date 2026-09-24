@@ -2,87 +2,74 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-bg: #0b0c10;
-  --color-surface: #14161c;
-  --color-elevated: #1c1e26;
-  --color-fg: #f2efe8;
-  --color-muted: #9a9ba6;
-  --color-subtle: #6e6f7a;
-  --color-accent: #e23d3d;
-  --color-accent-fg: #fff7f5;
-  --color-border: #2a2c34;
-  --color-success: #3dba7a;
-  --color-success-fg: #062014;
-  --font-display: "Syne", ui-sans-serif, system-ui, sans-serif;
-  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --color-bg: #0c110e;
+  --color-surface: #131a16;
+  --color-elevated: #1b231e;
+  --color-fg: #f3efe4;
+  --color-muted: #a8b0a4;
+  --color-subtle: #6f776c;
+  --color-paper: #f3efe4;
+  --color-ink: #141812;
+  --color-accent: #d4ff4a;
+  --color-accent-fg: #141812;
+  --color-up: #3dd68c;
+  --color-up-fg: #04140c;
+  --color-down: #e24b3a;
+  --color-down-fg: #fff5f3;
+  --color-lime: #d4ff4a;
+  --color-lime-fg: #141812;
+  --color-border: #2a332c;
+  --color-felt: #131a16;
+  --color-felt-ink: #0c110e;
+  --color-chip: #d4ff4a;
+  --color-chip-ink: #141812;
+  --font-display: "Newsreader", ui-serif, Georgia, serif;
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
   --radius-xl: 1.5rem;
-  --radius-2xl: 2rem;
-  --aspect-portrait: 3/4;
-  --aspect-wide: 16/10;
-  --aspect-map: 4/3;
-  --shadow-border: 0 0 0 1px rgb(242 239 232 / 0.08);
-  --shadow-border-hover: 0 0 0 1px rgb(242 239 232 / 0.14);
+  --radius-2xl: 1.75rem;
+  --shadow-border: 0 0 0 1px rgb(243 239 228 / 0.08);
+  --shadow-border-hover: 0 0 0 1px rgb(243 239 228 / 0.16);
 }
 
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
     background: var(--color-bg);
     color: var(--color-fg);
-    scroll-behavior: smooth;
+    overflow-x: hidden;
   }
-
   body {
     min-height: 100dvh;
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
     line-height: 1.5;
+    overflow-x: hidden;
   }
-
-  h1,
-  h2,
-  h3 {
+  h1, h2, h3 {
     font-family: var(--font-display);
-    text-wrap: balance;
     letter-spacing: -0.03em;
-    line-height: 1.1;
+    line-height: 1.05;
+    font-weight: 500;
+    text-wrap: balance;
   }
-
-  p {
-    text-wrap: pretty;
-  }
-
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
-
   ::selection {
-    background: color-mix(in oklab, var(--color-accent) 70%, black);
+    background: var(--color-accent);
     color: var(--color-accent-fg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
+  *, *::before, *::after {
     animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-@utility shadow-panel {
-  box-shadow: var(--shadow-border);
 }

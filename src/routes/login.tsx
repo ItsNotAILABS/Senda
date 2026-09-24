@@ -6,42 +6,43 @@ export const Route = createFileRoute("/login")({ component: Login });
 
 function Login() {
   return (
-    <main className="grid min-h-dvh place-items-center bg-bg px-6 text-fg">
-      <div className="w-full max-w-sm space-y-6">
-        <div className="space-y-2">
-          <p className="font-mono text-xs tracking-widest text-accent uppercase">
-            Sovereign Summit
-          </p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
-            Sign in
-          </h1>
-          <p className="text-sm text-muted">
-            Use the same account you want on the guest list. We prefill your RSVP.
-          </p>
-        </div>
-        {authEnabled ? (
+    <main className="flex min-h-dvh flex-col bg-bg text-fg">
+      <p className="border-b border-border bg-elevated px-3 py-1.5 text-center text-xs text-muted">
+        Paper wallet · not real money
+      </p>
+      <div className="grid flex-1 place-items-center px-6 py-12">
+        <div className="w-full max-w-sm space-y-6">
           <div className="space-y-2">
-            {GROK_PROVIDERS.map((p) => (
-              <Button
-                key={p.providerId}
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => signIn(p.providerId, { callbackURL: "/" })}
-              >
-                Continue with {p.label}
-              </Button>
-            ))}
+            <p className="text-sm text-subtle">Senda</p>
+            <h1 className="text-3xl font-semibold tracking-tight">Keep your wallet</h1>
+            <p className="text-sm text-muted">
+              Guests stay on this phone. Sign in to keep balances, sends, and PreStocks.
+            </p>
           </div>
-        ) : (
-          <p className="text-sm text-muted">Sign-in is disabled.</p>
-        )}
-        <Link
-          to="/"
-          className="inline-block text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
-        >
-          Back to the event
-        </Link>
+          {authEnabled ? (
+            <div className="space-y-2">
+              {GROK_PROVIDERS.map((p) => (
+                <Button
+                  key={p.providerId}
+                  type="button"
+                  variant="secondary"
+                  className="w-full min-h-11"
+                  onClick={() => signIn(p.providerId, { callbackURL: "/" })}
+                >
+                  Continue with {p.label}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">Sign-in is disabled.</p>
+          )}
+          <Link
+            to="/"
+            className="inline-flex min-h-11 items-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+          >
+            Back to wallet
+          </Link>
+        </div>
       </div>
     </main>
   );

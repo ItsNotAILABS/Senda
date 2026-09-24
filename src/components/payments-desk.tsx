@@ -1,0 +1,364 @@
+import { useMemo, useState } from "react";
+import { toast } from "sonner";
+import { AddMoneyScreen } from "@/components/add-money";
+import { NearbyDesk } from "@/components/nearby-desk";
+import { CCYS, formatMoney, revolutFee, sendaDeposit, type Ccy } from "@/lib/wallet";
+import { rate } from "@/lib/wallet-fx";
+import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { cn } from "@/lib/utils";
+
+export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby";
+
+const ACTS: { id: PayAct; label: string }[] = [
+  { id: "send", label: "Send" },
+  { id: "nearby", label: "Nearby" },
+  { id: "request", label: "Request" },
+  { id: "exchange", label: "Exchange" },
+  { id: "add", label: "Add" },
+];
+
+export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string; initialFrom?: string }) {
+  const start: PayAct = ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
+  const [act, setAct] = useState<PayAct>(start);
+  const w = useWallet();
+  const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
+
+  return (
+    <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="min-h-0 overflow-auto border-b border-border lg:border-r lg:border-b-0">
+      <header className="px-5 pt-6 pb-3">
+        <h1 className="font-display text-4xl tracking-tight">Pay</h1>
+        <p className="mt-1 text-sm text-muted">Send, nearby, exchange, or add. Same cash you trade with. A send is a pain.001.</p>
+      </header>
+      <div className="mx-5 mb-4 rounded-xl bg-elevated px-4 py-3 text-sm">
+        <p className="font-medium">{w.w.tag}</p>
+        <p className="mt-1 font-mono text-xs text-muted">
+          {sendaDeposit(w.w.tag).routing} · {sendaDeposit(w.w.tag).account}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-1 px-4 pb-3">
+        {ACTS.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => setAct(a.id)}
+            className={cn(
+              "min-h-10 rounded-lg px-4 text-sm font-semibold",
+              act === a.id ? "bg-fg text-bg" : "bg-elevated text-muted",
+            )}
+          >
+            {a.label}
+          </button>
+        ))}
+      </div>
+      {act === "send" ? <SendForm w={w} /> : null}
+      {act === "nearby" ? <NearbyDesk /> : null}
+      {act === "request" ? <RequestForm w={w} /> : null}
+      {act === "exchange" ? <ExchangeForm w={w} fromInit={fromInit} /> : null}
+      {act === "add" ? <AddForm w={w} /> : null}
+      </div>
+      <aside className="min-h-0 overflow-auto">
+        <h2 className="px-5 pt-6 pb-2 text-xs font-medium tracking-wide text-subtle uppercase">Activity</h2>
+        {w.w.txs.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-subtle">Nothing yet.</p>
+        ) : (
+          <ul>
+            {w.w.txs.map((t) => (
+              <li key={t.id} className="border-t border-border px-5 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate text-sm font-medium">{t.counterparty}</p>
+                  <p className="font-mono text-xs tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
+                </div>
+                <p className="text-xs text-subtle">{t.kind} · {t.note}</p>
+                {t.uetr ? (
+                  <p className="truncate font-mono text-[10px] text-subtle">
+                    {t.iso} · {t.uetr}
+                  </p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
+    </main>
+  );
+}
+
+function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const [tag, setTag] = useState("");
+  const [name, setName] = useState("");
+  const [ccy, setCcy] = useState<Ccy>("USD");
+  const [raw, setRaw] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const amount = Number(raw) || 0;
+  const amountUsd = amount * (w.usdPer[ccy] || 0);
+  const rev = revolutFee("send", amountUsd, w.weekend);
+
+  function go() {
+    if (busy) return;
+    const t = tag.trim();
+    if (!t) {
+      toast.error("Who is it for?");
+      return;
+    }
+    setBusy(true);
+    const who = w.remember(name || t, t);
+    const r = w.send(amount, ccy, who, note);
+    setBusy(false);
+    if (!r.ok) toast.error(r.error);
+    else toast.success(`Sent ${formatMoney(amount, ccy)} to ${who.tag}.`);
+  }
+
+  return (
+    <div className="flex flex-col gap-4 px-5">
+      <label className="block">
+        <span className="text-xs font-medium text-subtle">To · @tag</span>
+        <input
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+          placeholder="@someone"
+          className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-sm outline-none placeholder:text-subtle"
+        />
+      </label>
+      {w.w.contacts.length > 0 ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {w.w.contacts.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setTag(c.tag);
+                setName(c.name);
+              }}
+              className="min-h-11 shrink-0 rounded-full bg-elevated px-4 text-sm font-medium"
+            >
+              {c.tag}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <label className="block">
+        <span className="text-xs font-medium text-subtle">Name</span>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Optional"
+          className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-sm outline-none placeholder:text-subtle"
+        />
+      </label>
+      <div className="flex gap-2">
+        <label className="flex-1">
+          <span className="text-xs font-medium text-subtle">Amount</span>
+          <input
+            inputMode="decimal"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="0"
+            className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-lg font-semibold tabular-nums outline-none placeholder:text-subtle"
+          />
+        </label>
+        <label className="w-28">
+          <span className="text-xs font-medium text-subtle">Ccy</span>
+          <select
+            value={ccy}
+            onChange={(e) => setCcy(e.target.value as Ccy)}
+            className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-3 text-sm outline-none"
+          >
+            {CCYS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Note"
+        className="min-h-12 rounded-2xl bg-elevated px-4 text-sm outline-none placeholder:text-subtle"
+      />
+      <p className="text-sm text-muted">
+        Instant · $0 · available {formatMoney(w.w.balances[ccy], ccy)}
+        {rev > 0 ? ` · Revolut would take ${formatMoney(rev)}` : ""}
+      </p>
+      <button
+        type="button"
+        disabled={busy || !(amount > 0)}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Send
+      </button>
+    </div>
+  );
+}
+
+function RequestForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const opened = w.w.opened?.length ? w.w.opened : ["USD"];
+  const [tag, setTag] = useState("");
+  const [ccy, setCcy] = useState<Ccy>("USD");
+  const [raw, setRaw] = useState("");
+  const amount = Number(raw) || 0;
+
+  function go() {
+    const t = tag.trim();
+    if (!t) {
+      toast.error("Who from?");
+      return;
+    }
+    const who = w.remember(t, t);
+    const r = w.receive(amount, ccy, who.tag, `Paid your request · ${ccy}`);
+    if (r.ok) toast.success(`${who.tag} paid ${formatMoney(amount, ccy)}.`);
+  }
+
+  return (
+    <div className="flex flex-col gap-4 px-5">
+      <p className="text-sm text-muted">Lands in the currency you pick. Hold it there — no auto-convert.</p>
+      <input
+        value={tag}
+        onChange={(e) => setTag(e.target.value)}
+        placeholder="@someone"
+        className="min-h-12 rounded-2xl bg-elevated px-4 text-sm outline-none placeholder:text-subtle"
+      />
+      <div className="flex gap-2">
+        <input
+          inputMode="decimal"
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          placeholder="0"
+          className="min-h-12 flex-1 rounded-2xl bg-elevated px-4 text-lg font-semibold tabular-nums outline-none placeholder:text-subtle"
+        />
+        <select
+          value={ccy}
+          onChange={(e) => setCcy(e.target.value as Ccy)}
+          className="min-h-12 w-28 rounded-2xl bg-elevated px-3 text-sm outline-none"
+        >
+          {opened.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        disabled={!(amount > 0)}
+        onClick={go}
+        className="min-h-12 rounded-full bg-fg text-base font-semibold text-bg"
+      >
+        Request {amount > 0 ? formatMoney(amount, ccy) : ""}
+      </button>
+    </div>
+  );
+}
+
+function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromInit: Ccy }) {
+  const opened: Ccy[] = w.w.opened?.length ? w.w.opened : ["USD"];
+  const [from, setFrom] = useState<Ccy>(opened.includes(fromInit) ? fromInit : "USD");
+  const [to, setTo] = useState<Ccy>("EUR");
+  const [raw, setRaw] = useState("");
+  const amount = Number(raw) || 0;
+  const r = rate(from, to, w.usdPer);
+  const got = amount * r;
+  const amountUsd = amount * (w.usdPer[from] || 0);
+  const rev = revolutFee("fx", amountUsd, w.weekend);
+  const oneToOne = (from === "USD" && to === "USDC") || (from === "USDC" && to === "USD");
+
+  const preview = useMemo(() => got, [got]);
+
+  function go() {
+    const res = w.convert(from, to, amount);
+    if (!res.ok) toast.error(res.error);
+    else toast.success(`Now holding ${formatMoney(preview, to)}.`);
+  }
+
+  const choices = Array.from(new Set([...opened, from, to]));
+
+  return (
+    <div className="flex flex-col gap-4 px-5">
+      <p className="text-sm text-muted">
+        Convert and hold. EUR for Europe, MXN for Mexico, USDC 1:1 with the dollar, SOL at the live price. It stays until you move it.
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <select
+          value={from}
+          onChange={(e) => setFrom(e.target.value as Ccy)}
+          className="min-h-12 rounded-2xl bg-elevated px-3 text-sm outline-none"
+        >
+          {choices.map((c) => (
+            <option key={c} value={c}>
+              From {c}
+            </option>
+          ))}
+        </select>
+        <select
+          value={to}
+          onChange={(e) => setTo(e.target.value as Ccy)}
+          className="min-h-12 rounded-2xl bg-elevated px-3 text-sm outline-none"
+        >
+          {CCYS.map((c) => (
+            <option key={c} value={c}>
+              Hold {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      <input
+        inputMode="decimal"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder="0"
+        className="min-h-14 rounded-2xl bg-elevated px-4 text-3xl font-semibold tabular-nums outline-none placeholder:text-subtle"
+      />
+      <p className="text-xs text-subtle">Available {formatMoney(w.w.balances[from] ?? 0, from)}</p>
+      <div className="rounded-2xl bg-elevated px-4 py-3 text-sm">
+        <p className="font-medium">You hold {formatMoney(got, to)}</p>
+        <p className="mt-1 text-muted">
+          {oneToOne
+            ? "USDC ↔ USD is 1:1. No spread."
+            : `1 ${from} = ${r.toFixed(4)} ${to} · mid-market · $0`}
+        </p>
+        {rev > 0 ? (
+          <p className="mt-1 text-muted">Revolut weekend/over-cap would take {formatMoney(rev)}.</p>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        disabled={!(amount > 0) || from === to}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Exchange
+      </button>
+    </div>
+  );
+}
+
+function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-4 px-5">
+      {open ? <AddMoneyScreen onClose={() => setOpen(false)} /> : null}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg"
+      >
+        Add money
+      </button>
+      <button
+        type="button"
+        className="min-h-12 rounded-full bg-elevated text-sm font-semibold"
+        onClick={() => {
+          const r = w.withdraw(Math.min(w.w.balances.USD, 2500), "USD");
+          if (!r.ok) toast.error(r.error);
+          else toast.success("On the way to checking.");
+        }}
+      >
+        Withdraw to bank
+      </button>
+    </div>
+  );
+}

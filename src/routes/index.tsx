@@ -1,42 +1,27 @@
-import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Agenda } from "@/components/agenda";
-import { Hero } from "@/components/hero";
-import { RsvpForm } from "@/components/rsvp-form";
-import { SiteFooter } from "@/components/site-footer";
-import { SiteNav } from "@/components/site-nav";
-import { Speakers } from "@/components/speakers";
-import { Tickets } from "@/components/tickets";
-import { Venue } from "@/components/venue";
-import { getCapacity, type CapacityMap } from "@/lib/rsvp";
+import { AppShell } from "@/components/app-shell";
+import { EquitiesDesk } from "@/components/equities-desk";
+import { getEquityBook } from "@/lib/equities";
 
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/")({
+  loader: () => getEquityBook(),
+  component: Home,
+  errorComponent: HomeError,
+});
 
 function Home() {
-  const [capacity, setCapacity] = useState<CapacityMap | null>(null);
-
-  const load = useCallback(() => {
-    void getCapacity()
-      .then(setCapacity)
-      .catch(() => setCapacity(null));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
+  const book = Route.useLoaderData();
   return (
-    <div className="min-h-dvh bg-bg text-fg">
-      <SiteNav />
-      <main>
-        <Hero />
-        <Agenda />
-        <Speakers />
-        <Tickets capacity={capacity} />
-        <Venue />
-        <RsvpForm capacity={capacity} onSubmitted={load} />
-      </main>
-      <SiteFooter />
-    </div>
+    <AppShell>
+      <EquitiesDesk book={book} />
+    </AppShell>
+  );
+}
+
+function HomeError({ error }: { error: Error }) {
+  return (
+    <AppShell>
+      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
+    </AppShell>
   );
 }
