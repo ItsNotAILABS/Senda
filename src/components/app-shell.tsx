@@ -6,16 +6,13 @@ import { readChain } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-const PRIMARY = [
+const TABS = [
   { to: "/", label: "Portfolio" },
   { to: "/pre", label: "Pre-IPO" },
   { to: "/agents", label: "Agents" },
   { to: "/invest", label: "Trade" },
   { to: "/payments", label: "Move" },
   { to: "/cards", label: "Cards" },
-] as const;
-
-const SECONDARY = [
   { to: "/social", label: "Play" },
   { to: "/cover", label: "Cover" },
   { to: "/solana", label: "Solana" },
@@ -36,44 +33,31 @@ export function AppShell({ children }: { children: ReactNode }) {
   const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-bg text-fg">
-      <header className="sticky top-0 z-40 border-b border-border bg-bg/95 backdrop-blur-md">
-        <div className="flex h-14 items-center gap-6 px-4 sm:px-6">
-          <Link to="/" className="font-display text-2xl tracking-tight">
-            Senda
-          </Link>
-          <nav className="hidden min-w-0 flex-1 items-center gap-1 lg:flex">
-            {PRIMARY.map((t) => {
-              const on = tabOn(pathname, t.to);
-              return (
-                <Link
-                  key={t.to}
-                  to={t.to}
-                  className={cn(
-                    "rounded-lg px-3 py-1.5 text-sm font-medium",
-                    on ? "bg-fg text-bg" : "text-fg hover:bg-elevated",
-                  )}
-                >
-                  {t.label}
-                </Link>
-              );
-            })}
-            <span className="mx-2 h-4 w-px bg-border" />
-            {SECONDARY.map((t) => {
-              const on = tabOn(pathname, t.to);
-              return (
-                <Link
-                  key={t.to}
-                  to={t.to}
-                  className={cn("rounded-lg px-2 py-1.5 text-sm", on ? "text-fg" : "text-subtle hover:text-fg")}
-                >
-                  {t.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="ml-auto flex items-center gap-4">
-            <ChainChip owner={owner} />
+    <div className="flex min-h-dvh bg-bg text-fg">
+      <aside className="sticky top-0 flex h-dvh w-52 shrink-0 flex-col border-r border-border bg-bg">
+        <Link to="/" className="px-4 pt-5 font-display text-2xl tracking-tight">
+          Senda
+        </Link>
+        <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2">
+          {TABS.map((t) => {
+            const on = tabOn(pathname, t.to);
+            return (
+              <Link
+                key={t.to}
+                to={t.to}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm",
+                  on ? "bg-fg font-semibold text-bg" : "text-muted hover:bg-elevated hover:text-fg",
+                )}
+              >
+                {t.label}
+              </Link>
+            );
+          })}
+        </nav>
+        <div className="border-t border-border px-3 py-3">
+          <ChainChip owner={owner} />
+          <div className="mt-3">
             {isPending ? (
               <div className="size-8 animate-pulse rounded-full bg-elevated" />
             ) : user ? (
@@ -89,25 +73,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           </div>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-2 lg:hidden">
-          {[...PRIMARY, ...SECONDARY].map((t) => {
-            const on = tabOn(pathname, t.to);
-            return (
-              <Link
-                key={t.to}
-                to={t.to}
-                className={cn(
-                  "shrink-0 rounded-lg px-2.5 py-1.5 text-sm",
-                  on ? "bg-fg text-bg" : "text-muted",
-                )}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
-      </header>
-      <div className="w-full">{children}</div>
+      </aside>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
@@ -133,7 +100,7 @@ function ChainChip({ owner }: { owner: string }) {
     };
   }, [owner]);
   return (
-    <Link to="/wallet" className="text-right">
+    <Link to="/wallet" className="block rounded-lg px-1 py-1 hover:bg-elevated">
       <p className="font-mono text-sm">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)}`) : "Your money"}</p>
       <p className="text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Phantom is a source"}</p>
     </Link>
