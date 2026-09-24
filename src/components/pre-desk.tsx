@@ -1,16 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  contractTitle,
-  formatClock,
-  loadPlayTickets,
-  placePlay,
-  remainingMs,
-  settlePlay,
-  yesAsk,
-  type PlayTicket,
-} from "@/lib/play-book";
-import { formatPremium, formatUsd, formatValuation, jupiterSwap, type HouseListing } from "@/lib/sol-house";
+import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { signStockSwap } from "@/lib/jup-sign";
+import { connectPhantom, mintDecimals, phantomProvider, splHolding } from "@/lib/phantom";
+import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -20,58 +13,77 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
     [names],
   );
   const [symbol, setSymbol] = useState(rows[0]?.symbol ?? "");
-  const [spend, setSpend] = useState(25);
-  const [side, setSide] = useState<"over" | "diverge">("over");
-  const [tickets, setTickets] = useState<PlayTicket[]>(() => loadPlayTickets());
+  const [usd, setUsd] = useState(10);
+  const [quote, setQuote] = useState<JupQuote | { error: string } | null>(null);
+  const [held, setHeld] = useState<{ ui: number; raw: string; decimals: number } | null>(null);
+  const [decimals, setDecimals] = useState(9);
+  const [sig, setSig] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const wallet = useWallet();
   const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
-  const cheap = rows[0];
+  const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
-  function take() {
+  useEffect(() => {
     if (!name) return;
-    const paid = wallet.investOut(spend, `${name.symbol} 1d`);
-    if (!paid.ok) {
-      toast.error(paid.error);
+    let live = true;
+    setQuote(null);
+    quoteJup({ data: { mint: name.mint, usd, side: "buy" } })
+      .then((r) => live && setQuote(r))
+      .catch(() => live && setQuote({ error: "No route" }));
+    return () => {
+      live = false;
+    };
+  }, [name?.mint, usd]);
+
+  useEffect(() => {
+    if (!name) return;
+    let live = true;
+    mintDecimals(name.mint)
+      .then((d) => live && setDecimals(d))
+      .catch(() => live && setDecimals(9));
+    return () => {
+      live = false;
+    };
+  }, [name?.mint]);
+
+  useEffect(() => {
+    if (!name || !owner) {
+      setHeld(null);
       return;
     }
-    const gap = name.mark > 0 ? (name.last - name.mark) / name.mark : 0;
-    const p = side === "over" ? (gap >= 0 ? 0.62 : 0.38) : Math.abs(gap) > 0.02 ? 0.45 : 0.55;
-    const ask = yesAsk(p);
-    placePlay({
-      stockId: name.id,
-      symbol: name.symbol,
-      tenor: "1d",
-      kind: side,
-      title: contractTitle(name.symbol, "1d", side === "over" ? "mark" : "gap"),
-      spend,
-      ask,
-      contracts: Math.round((spend / ask) * 100) / 100,
-      openLast: name.last,
-      openMark: name.mark,
-    });
-    setTickets(loadPlayTickets());
-    toast.success("Contract is on the book. It settles when the day window ends.");
-  }
+    let live = true;
+    splHolding(owner, name.mint)
+      .then((h) => live && setHeld(h))
+      .catch(() => live && setHeld(null));
+    return () => {
+      live = false;
+    };
+  }, [name?.mint, owner, sig]);
 
-  function settle() {
-    const prices: Record<string, { last: number; mark: number }> = {};
-    for (const n of rows) prices[n.id] = { last: n.last, mark: n.mark };
-    const done = settlePlay(prices);
-    for (const t of done) {
-      if (t.pnl > 0) wallet.investIn(t.spend + t.pnl, `${t.symbol} settled`);
-    }
-    setTickets(loadPlayTickets());
-    toast.success(done.length ? `${done.length} contract${done.length === 1 ? "" : "s"} settled.` : "Nothing is due yet.");
-  }
-
-  async function share() {
+  async function swap(side: "buy" | "sell") {
     if (!name) return;
-    const text = `${name.symbol} trades ${formatPremium(name.premium)} versus its SPV mark. Token ${formatUsd(name.last)}, mark ${formatUsd(name.mark)}. ${name.url}`;
+    setBusy(true);
     try {
-      await navigator.clipboard.writeText(text);
-      toast.success("Copied. That is the print, not advice.");
-    } catch {
-      toast.error("Could not copy.");
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = wallet.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const decimalsUsed = held?.decimals || decimals;
+      const done = await signStockSwap({
+        owner: who,
+        mint: name.mint,
+        usd,
+        side,
+        decimals: decimalsUsed,
+        tokenAmount: side === "sell" ? BigInt(held?.raw || "0") : undefined,
+      });
+      setSig(done.signature);
+      toast.success(`${side === "buy" ? "Bought" : "Sold"} ${done.outUi.toFixed(4)} on-chain.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The swap did not send.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -80,9 +92,8 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
       <section className="border-b border-border xl:border-r xl:border-b-0">
         <header className="px-5 pt-6 pb-4 lg:px-8">
           <h1 className="font-display text-4xl">Pre-IPO</h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted">
-            These eight names are PreStocks. Each token is backed by an SPV that holds the private company. The list is the live book, cheapest versus the SPV mark first.
-            {cheap ? ` ${cheap.symbol} is the widest gap right now, ${formatPremium(cheap.premium)}.` : ""}
+          <p className="mt-2 text-sm text-muted">
+            {owner ? owner : "Connect Phantom. The swap is built by Jupiter and signed in your wallet."}
           </p>
         </header>
         <table className="w-full text-left text-sm">
@@ -95,118 +106,94 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => {
-              const on = r.symbol === name?.symbol;
-              return (
-                <tr
-                  key={r.id}
-                  onClick={() => setSymbol(r.symbol)}
-                  className={cn("cursor-pointer border-t border-border", on ? "bg-elevated" : "hover:bg-surface")}
-                >
-                  <td className="px-5 py-3 lg:px-8">
-                    <span className="font-medium">{r.symbol}</span>
-                    <span className="mt-0.5 block text-xs text-muted">{r.sector}</span>
-                  </td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.last)}</td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.mark)}</td>
-                  <td className={cn("px-5 py-3 text-right font-mono tabular-nums lg:px-8", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
-                    {formatPremium(r.premium)}
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((r) => (
+              <tr
+                key={r.id}
+                onClick={() => {
+                  setSymbol(r.symbol);
+                  setSig(null);
+                }}
+                className={cn("cursor-pointer border-t border-border", r.symbol === name?.symbol ? "bg-elevated" : "hover:bg-surface")}
+              >
+                <td className="px-5 py-3 lg:px-8">
+                  <span className="font-medium">{r.symbol}</span>
+                  <span className="mt-0.5 block font-mono text-[11px] text-subtle">{r.mint.slice(0, 4)}…{r.mint.slice(-4)}</span>
+                </td>
+                <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.last)}</td>
+                <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.mark)}</td>
+                <td className={cn("px-5 py-3 text-right font-mono tabular-nums lg:px-8", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                  {formatPremium(r.premium)}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
-        {rows.length === 0 ? <p className="px-5 py-8 text-sm text-muted">PreStocks did not answer. Try again in a moment.</p> : null}
       </section>
 
       <aside className="px-5 py-6 lg:px-6">
         {name ? (
           <>
-            <p className="text-xs text-subtle">{name.sector}</p>
+            <p className="font-mono text-[11px] text-subtle">{name.mint}</p>
             <h2 className="font-display text-4xl">{name.symbol}</h2>
-            <p className="mt-3 text-sm text-muted">{name.description}</p>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <Stat k="Implied value" v={formatValuation(name.valuation)} />
-              <Stat k="SPV value" v={formatValuation(name.markValuation || 0)} />
-              <Stat k="Supply" v={name.supply ? name.supply.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "—"} />
-              <Stat k="Day left" v={formatClock(remainingMs("1d"))} />
-            </dl>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <a href={jupiterSwap(name.mint)} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg">
-                Buy on Jupiter
-              </a>
-              <a href={name.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm font-semibold text-accent">
-                Company page
-              </a>
-              <button type="button" onClick={() => void share()} className="inline-flex min-h-11 items-center text-sm text-muted">
-                Copy the print
-              </button>
-            </div>
-
-            <div className="mt-6 rounded-xl border border-border p-4">
-              <p className="text-xs text-subtle">One-day contract</p>
-              <p className="mt-1 text-sm">Settles on the next PreStocks print, not a coin flip. Cash leaves your balance now.</p>
-              <div className="mt-3 flex gap-1">
-                <Side on={side === "over"} label="Above the mark" onClick={() => setSide("over")} />
-                <Side on={side === "diverge"} label="Gap widens" onClick={() => setSide("diverge")} />
-              </div>
-              <div className="mt-3 flex gap-1">
-                {[25, 100, 500].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setSpend(n)}
-                    className={cn("min-h-9 rounded-lg px-3 font-mono text-xs tabular-nums", spend === n ? "bg-fg text-bg" : "bg-elevated text-muted")}
-                  >
-                    ${n}
-                  </button>
-                ))}
-              </div>
-              <button type="button" onClick={take} className="mt-3 min-h-11 rounded-lg bg-fg px-4 text-sm font-semibold text-bg">
-                Take ${spend}
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-subtle">Your contracts</p>
-                <button type="button" onClick={settle} className="text-xs text-muted">
-                  Settle what is due
+            <p className="mt-2 text-sm text-muted">{name.description}</p>
+            <div className="mt-4 flex gap-1">
+              {[10, 25, 100].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setUsd(n)}
+                  className={cn("min-h-9 rounded-lg px-3 font-mono text-xs tabular-nums", usd === n ? "bg-fg text-bg" : "bg-elevated text-muted")}
+                >
+                  ${n}
                 </button>
-              </div>
-              <ul className="mt-2 divide-y divide-border">
-                {tickets.filter((t) => !t.settled).slice(0, 6).map((t) => (
-                  <li key={t.id} className="py-2 text-sm">
-                    <span className="font-medium">{t.symbol}</span>
-                    <span className="mt-0.5 block text-xs text-muted">{t.title}</span>
-                  </li>
-                ))}
-                {tickets.every((t) => t.settled) ? <li className="py-2 text-sm text-muted">None open.</li> : null}
-              </ul>
+              ))}
             </div>
+            <QuoteLine quote={quote} usd={usd} decimals={decimals} />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void swap("buy")}
+              className="mt-4 min-h-12 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
+            >
+              {busy ? "Waiting for the wallet…" : phantomProvider() || owner ? `Swap $${usd} USDC` : "Connect Phantom and swap"}
+            </button>
+            {held && held.ui > 0 ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void swap("sell")}
+                className="mt-2 min-h-11 w-full rounded-lg bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-60"
+              >
+                Sell {held.ui.toFixed(4)} {name.symbol}
+              </button>
+            ) : owner ? (
+              <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
+            ) : null}
+            {sig ? (
+              <a
+                href={`https://solscan.io/tx/${sig}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 block font-mono text-xs text-accent break-all"
+              >
+                {sig}
+              </a>
+            ) : null}
           </>
-        ) : (
-          <p className="text-sm text-muted">No PreStocks names.</p>
-        )}
+        ) : null}
       </aside>
     </div>
   );
 }
 
-function Stat({ k, v }: { k: string; v: string }) {
+function QuoteLine({ quote, usd, decimals }: { quote: JupQuote | { error: string } | null; usd: number; decimals: number }) {
+  if (!quote) return <p className="mt-4 text-sm text-muted">Asking Jupiter for a route…</p>;
+  if ("error" in quote) return <p className="mt-4 text-sm text-down">{quote.error}</p>;
+  const impact = Math.abs(Number(quote.priceImpactPct) || 0);
+  const impactPct = impact > 1 ? impact : impact * 100;
   return (
-    <div>
-      <dt className="text-xs text-subtle">{k}</dt>
-      <dd className="font-mono tabular-nums">{v}</dd>
-    </div>
-  );
-}
-
-function Side({ on, label, onClick }: { on: boolean; label: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className={cn("min-h-9 rounded-lg px-3 text-xs", on ? "bg-fg text-bg" : "bg-elevated text-muted")}>
-      {label}
-    </button>
+    <p className="mt-4 font-mono text-sm">
+      ${usd} → {outUi(quote, decimals).toFixed(4)} · {quote.route[0] || "Jupiter"} · {impactPct.toFixed(2)}% impact
+    </p>
   );
 }

@@ -20,6 +20,7 @@ export async function signStockSwap(input: {
   side: "buy" | "sell";
   /** Raw token amount when selling. Ignored on a buy. */
   tokenAmount?: bigint;
+  decimals?: number;
 }): Promise<{ signature: string; outUi: number }> {
   const amount =
     input.side === "buy"
@@ -51,6 +52,6 @@ export async function signStockSwap(input: {
   const { VersionedTransaction } = await import("@solana/web3.js");
   const tx = VersionedTransaction.deserialize(b64ToBytes(swap.swapTransaction));
   const signature = await sendVersioned(tx);
-  const decimals = input.side === "buy" ? 8 : 6;
+  const decimals = input.decimals ?? (input.side === "buy" ? 9 : 6);
   return { signature, outUi: Number(quote.outAmount) / 10 ** decimals };
 }

@@ -100,12 +100,33 @@ async function rpc(method: string, params: unknown[]): Promise<unknown> {
   throw new Error(last);
 }
 
-export async function splBalance(owner: string, mint: string): Promise<number> {
+export async function mintDecimals(mint: string): Promise<number> {
+  const result = (await rpc("getAccountInfo", [mint, { encoding: "jsonParsed" }])) as {
+    value?: { data?: { parsed?: { info?: { decimals?: number } } } };
+  };
+  const d = result?.value?.data?.parsed?.info?.decimals;
+  return typeof d === "number" ? d : 9;
+}
+
+export async function splHolding(owner: string, mint: string): Promise<{ ui: number; raw: string; decimals: number }> {
   const result = (await rpc("getTokenAccountsByOwner", [
     owner,
     { mint },
     { encoding: "jsonParsed" },
-  ])) as { value?: Array<{ account?: { data?: { parsed?: { info?: { tokenAmount?: { uiAmount?: number | null } } } } } }> };
+  ])) as {
+    value?: Array<{
+      account?: { data?: { parsed?: { info?: { tokenAmount?: { uiAmount?: number | null; amount?: string; decimals?: number } } } } };
+    }>;
+  };
   const rows = result?.value ?? [];
-  return rows.reduce((sum, row) => sum + (row.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0), 0);
+  let ui = 0;
+  let raw = 0n;
+  let decimals = 9;
+  for (const row of rows) {
+    const t = row.account?.data?.parsed?.info?.tokenAmount;
+    ui += t?.uiAmount || 0;
+    if (t?.amount) raw += BigInt(t.amount);
+    if (typeof t?.decimals === "number") decimals = t.decimals;
+  }
+  return { ui, raw: raw.toString(), decimals };
 }
