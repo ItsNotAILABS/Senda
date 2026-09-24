@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { jupFillUrl } from "@/lib/jup-exec";
+import { FillButton } from "@/components/fill-button";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -108,13 +108,12 @@ function Score({ name, pct }: { name: string; pct: number }) {
 
 function Fill({ mint, label, side = "buy" }: { mint: string; label: string; side?: "buy" | "sell" }) {
   return (
-    <a
-      href={jupFillUrl(mint, side)}
-      target="_blank"
-      rel="noreferrer"
+    <FillButton
+      mint={mint}
+      usd={10}
+      side={side}
+      label={label}
       className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
-    >
-      {label}
-    </a>
+    />
   );
 }

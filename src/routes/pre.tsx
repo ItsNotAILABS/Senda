@@ -1,19 +1,23 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { PreDesk } from "@/components/pre-desk";
+import { getPreRoutes } from "@/lib/prestock";
 import { getHouse } from "@/lib/sol-house";
 
 export const Route = createFileRoute("/pre")({
-  loader: () => getHouse(),
+  loader: async () => {
+    const [house, routes] = await Promise.all([getHouse(), getPreRoutes()]);
+    return { house, routes };
+  },
   component: PrePage,
   errorComponent: PreError,
 });
 
 function PrePage() {
-  const house = Route.useLoaderData();
+  const { house, routes } = Route.useLoaderData();
   return (
     <AppShell>
-      <PreDesk names={house} />
+      <PreDesk names={house} routes={routes} />
     </AppShell>
   );
 }

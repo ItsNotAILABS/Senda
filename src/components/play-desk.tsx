@@ -2,6 +2,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { dropChallenge, loadPlay, settleCloser, settleDirection, type Challenge, type PlayKind } from "@/lib/play";
 import { formatMoney } from "@/lib/wallet";
+import { connectPhantom } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
@@ -17,7 +19,7 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
   const [log, setLog] = useState(loadPlay);
   const stock = names.find((n) => n.id === stockId) ?? names[0];
 
-  function play() {
+  async function play() {
     if (!stock) return;
     const who = tag.trim();
     if (!who) {
@@ -29,28 +31,32 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
       return;
     }
     const friend = wallet.remember(who, who);
-    const debit = wallet.investOut(stake, `${friend.tag} ${stock.symbol}`);
-    if (!debit.ok) {
-      toast.error(debit.error);
-      return;
+    try {
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const done = await runPrestock({ owner, mint: stock.mint, side: "buy", usd: stake, price: stock.last });
+      const result = kind === "direction" ? settleDirection(stock, pick) : settleCloser(stock);
+      const row: Challenge = {
+        id: `pl${Math.random().toString(36).slice(2, 8)}`,
+        kind,
+        friend: friend.name,
+        tag: friend.tag,
+        symbol: stock.symbol,
+        stake,
+        pick,
+        result,
+        pnl: 0,
+        createdAt: new Date().toISOString(),
+      };
+      setLog(dropChallenge(log, row));
+      toast.success(`${stock.symbol} bought. ${done.signature.slice(0, 8)}… Score is ${result}, the token is the stake.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The swap did not send.");
     }
-    const result = kind === "direction" ? settleDirection(stock, pick) : settleCloser(stock);
-    const pnl = result === "win" ? stake : -stake;
-    if (pnl > 0) wallet.investIn(stake * 2, `${friend.tag} paid`);
-    const row: Challenge = {
-      id: `pl${Math.random().toString(36).slice(2, 8)}`,
-      kind,
-      friend: friend.name,
-      tag: friend.tag,
-      symbol: stock.symbol,
-      stake,
-      pick,
-      result,
-      pnl,
-      createdAt: new Date().toISOString(),
-    };
-    setLog(dropChallenge(log, row));
-    toast.success(result === "win" ? `Won ${formatMoney(stake)} vs ${friend.tag}` : `Lost ${formatMoney(stake)} vs ${friend.tag}`);
   }
 
   return (

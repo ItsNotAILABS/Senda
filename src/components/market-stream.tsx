@@ -7,6 +7,9 @@ import { rails } from "@/lib/ecosystem";
 import { formatClock, minuteId, remainingMs } from "@/lib/minute-book";
 import { formatUsdTiny, protectCost, quotePeg, type PegQuote } from "@/lib/peg";
 import { loadPegs, openPeg, settlePegs } from "@/lib/peg-book";
+import { connectPhantom } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
+import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatChg, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +66,7 @@ export function MarketStream({
   const [how, setHow] = useState(false);
   const [openHowId, setOpenHowId] = useState<string | null>(null);
 
+  const wallet = useWallet();
   const lastSettle = useRef(0);
 
   useEffect(() => {
@@ -78,10 +82,7 @@ export function MarketStream({
     const done = settlePegs(prices);
     lastSettle.current = m;
     for (const t of done) {
-      if (t.pnl > 0) {
-        void onCredit(t.pnl, `peg ${t.symbol}`);
-        toast.success(`${t.symbol} peg paid ${formatUsdTiny(t.pnl)}`);
-      }
+      toast.message(`${t.symbol} window closed. The token is what you hold, not a cash prize.`);
     }
   }, [now, names, onCredit]);
 
@@ -91,38 +92,37 @@ export function MarketStream({
   const live = loadPegs().filter((p) => !p.settled);
 
   async function buyProtect(stock: HouseListing, spend: number) {
-    const quote = quotePeg(stock);
-    if (!quote) {
+    if (!quotePeg(stock)) {
       toast.error("No mark on this name.");
-      return;
-    }
-    const rider = protectCost(quote, spend, stock.last);
-    const total = spend + rider;
-    if (cash < total) {
-      toast.error("Not enough cash.");
-      setAddOpen(true);
       return;
     }
     setBusy(stock.id);
     try {
-      const d = await onDebit(total, `${stock.symbol} buy+protect`);
-      if (!d.ok) {
-        toast.error(d.error);
-        return;
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
-      const shares = spend / stock.last;
+      const done = await runPrestock({ owner, mint: stock.mint, side: "buy", usd: spend, price: stock.last });
+      const shares = stock.last > 0 ? spend / stock.last : 0;
       saveHouseBook(applyHouseDrop(loadHouseBook(), stock.id, "yes", spend, stock.last));
-      openPeg({
-        stockId: stock.id,
-        symbol: stock.symbol,
-        shares,
-        spend,
-        premiumPaid: rider,
-        elPerShare: quote.expectedLoss,
-        entryLast: stock.last,
-        entryMark: stock.mark,
-      });
-      toast.success(`${stock.symbol} · bought $${spend} + ${formatUsdTiny(rider)} peg`);
+      const quote = quotePeg(stock);
+      if (quote) {
+        openPeg({
+          stockId: stock.id,
+          symbol: stock.symbol,
+          shares,
+          spend,
+          premiumPaid: 0,
+          elPerShare: quote.expectedLoss,
+          entryLast: stock.last,
+          entryMark: stock.mark,
+        });
+      }
+      toast.success(`${stock.symbol} bought. ${done.signature.slice(0, 8)}…`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The swap did not send.");
     } finally {
       setBusy(null);
     }
@@ -204,24 +204,14 @@ export function MarketStream({
         <p className="mt-2 text-xs text-ink/55">
           ${dollars} name + {formatUsdTiny(extra)} peg = {formatUsdTiny(dollars + extra)}
         </p>
-        {cash < 1 ? (
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="mt-3 min-h-12 w-full rounded-full bg-ink text-sm font-semibold text-paper"
-          >
-            Add money to trade
-          </button>
-        ) : (
           <button
             type="button"
             disabled={busy === focus.id}
             onClick={() => void buyProtect(focus, dollars)}
             className="mt-3 min-h-12 w-full rounded-full bg-ink text-sm font-semibold text-paper disabled:opacity-50"
           >
-            Buy + Protect
+            Buy ${dollars} {focus.symbol}
           </button>
-        )}
         <a
           href={rails(focus.mint, focus.symbol).jupiter}
           target="_blank"

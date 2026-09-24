@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { loadHouseBook, markHouse } from "@/lib/house-paper";
-import { LTV, borrow, loadLoans, repay } from "@/lib/lend";
+import { LTV, loadLoans, repay } from "@/lib/lend";
+import { connectPhantom, splHolding } from "@/lib/phantom";
+import { runPrestock, spendable } from "@/lib/prestock";
+import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { formatMoney } from "@/lib/wallet";
 
@@ -14,26 +16,29 @@ export function LendDesk({
   onCredit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
   onDebit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
+  const wallet = useWallet();
   const [loans, setLoans] = useState(loadLoans);
-  const book = loadHouseBook();
-  const longs = house.filter((h) => h.venue === "prestocks" && (book[h.id]?.shares ?? 0) > 0);
+  const names = house.filter((h) => h.venue === "prestocks" && h.last > 0);
 
   async function take(h: HouseListing) {
-    const pos = book[h.id];
-    if (!pos || pos.shares <= 0) return;
-    const r = borrow(loans, h.id, h.symbol, pos.shares, h.last);
-    if ("error" in r) {
-      toast.error(r.error);
-      return;
+    try {
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const held = await splHolding(owner, h.mint);
+      const room = spendable(held.ui, h.last) * LTV;
+      if (room < 1) {
+        toast.error(`No ${h.symbol} in this wallet to draw against.`);
+        return;
+      }
+      const done = await runPrestock({ owner, mint: h.mint, side: "sell", usd: room, price: h.last });
+      toast.success(`Sold $${room.toFixed(2)} of ${h.symbol}. ${done.signature.slice(0, 8)}…`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The sale did not send.");
     }
-    const amt = r[0]?.borrowed ?? 0;
-    const c = await onCredit(amt, `borrow ${h.symbol}`);
-    if (!c.ok) {
-      toast.error(c.error);
-      return;
-    }
-    setLoans(r);
-    toast.success(`Borrowed ${formatMoney(amt)} vs ${h.symbol}`);
   }
 
   async function pay(id: string) {
@@ -51,36 +56,21 @@ export function LendDesk({
   return (
     <div className="px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        Borrow USDC against a long SPL PreStock. {Math.round(LTV * 100)}% LTV on token last. Position stays; cash
-        comes in. Same idea as lending the token in DeFi — paper here, Jupiter size is live.
+        Sell up to {Math.round(LTV * 100)}% of the {`PreStock`} this wallet actually holds. The USDC lands in the wallet. The rest of the token stays.
       </p>
-      {longs.length === 0 ? (
-        <p className="mt-6 text-sm text-subtle">Buy a name first, then borrow against it.</p>
-      ) : (
-        <ul className="mt-4 divide-y divide-border">
-          {longs.map((h) => {
-            const pos = book[h.id];
-            const mtm = markHouse(pos, h.last);
-            return (
-              <li key={h.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-semibold">{h.symbol}</p>
-                  <p className="font-mono text-xs text-subtle">
-                    {pos.shares.toFixed(4)} · mtm {formatUsd(mtm)} · room {formatMoney(mtm * LTV)}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void take(h)}
-                  className="min-h-11 rounded-full bg-elevated px-4 text-xs font-semibold"
-                >
-                  Borrow
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <ul className="mt-4 divide-y divide-border">
+        {names.map((h) => (
+          <li key={h.id} className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-semibold">{h.symbol}</p>
+              <p className="font-mono text-xs text-subtle">{formatUsd(h.last)} · draw is a sale, not a new loan</p>
+            </div>
+            <button type="button" onClick={() => void take(h)} className="min-h-11 rounded-full bg-elevated px-4 text-xs font-semibold">
+              Sell to spend
+            </button>
+          </li>
+        ))}
+      </ul>
       {loans.length > 0 ? (
         <ul className="mt-6 divide-y divide-border">
           {loans.map((l) => (

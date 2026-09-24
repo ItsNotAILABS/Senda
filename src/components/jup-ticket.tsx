@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { TokenMark } from "@/components/token-mark";
 import { rails } from "@/lib/ecosystem";
-import { impactPct, inUi, jupFillUrl, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { FillButton } from "@/components/fill-button";
+import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -113,14 +114,14 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
           </p>
         ) : null}
         <div className="px-6">
-          <a
-            href={jupFillUrl(stock.mint, side)}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 flex min-h-11 items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-fg"
-          >
-            Fill on Jupiter
-          </a>
+          <FillButton
+            mint={stock.mint}
+            usd={25}
+            side={side}
+            price={stock.last}
+            label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
+            className="mt-4 flex min-h-11 w-full items-center justify-center rounded-lg bg-accent text-sm font-semibold text-accent-fg"
+          />
         </div>
       </div>
     );
@@ -177,14 +178,14 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
           {q.route.length > 1 ? ` +${q.route.length - 1}` : ""} · impact {impact.toFixed(2)}% · slip {q.slippageBps} bps
         </p>
       ) : null}
-      <a
-        href={jupFillUrl(stock.mint, side)}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-3 flex min-h-12 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
-      >
-        Fill on Jupiter
-      </a>
+      <FillButton
+        mint={stock.mint}
+        usd={25}
+        side={side}
+        price={stock.last}
+        label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
+        className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
+      />
       <a
         href={rails(stock.mint, stock.symbol).solscan}
         target="_blank"

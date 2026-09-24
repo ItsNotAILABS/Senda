@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { PlayDesk } from "@/components/play-desk";
-import { applyHouseDrop, loadHouseBook, saveHouseBook } from "@/lib/house-paper";
+import { loadHouseBook } from "@/lib/house-paper";
+import { formatMoney } from "@/lib/wallet";
 import { loadPlay } from "@/lib/play";
 import { loadFeed, pushPost } from "@/lib/social";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
-import { formatMoney } from "@/lib/wallet";
+import { connectPhantom } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -17,16 +19,20 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
   const games = loadPlay();
   const book = loadHouseBook();
 
-  function copy(symbol: string, id: string, last: number) {
-    const spend = 25;
-    const r = w.investOut(spend, `copy ${symbol}`);
-    if (!r.ok) {
-      toast.error(r.error);
-      return;
+  async function copy(symbol: string, mint: string) {
+    try {
+      const existing = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = w.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const done = await runPrestock({ owner, mint, side: "buy", usd: 25 });
+      setFeed(pushPost(feed, { tag: w.w.tag, kind: "copy", text: `Bought ${symbol} · $${25} · ${done.signature.slice(0, 8)}`, symbol }));
+      toast.success(`${symbol} bought.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The swap did not send.");
     }
-    saveHouseBook(applyHouseDrop(loadHouseBook(), id, "yes", spend, last));
-    setFeed(pushPost(feed, { tag: w.w.tag, kind: "copy", text: `Copied ${symbol} · $25`, symbol }));
-    toast.success(`Copied ${symbol}`);
   }
 
   const board = games.reduce<Record<string, number>>((acc, g) => {
@@ -92,7 +98,7 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
               <button
                 key={h.id}
                 type="button"
-                onClick={() => copy(h.symbol, h.id, h.last)}
+                onClick={() => void copy(h.symbol, h.mint)}
                 className="min-h-11 shrink-0 rounded-full bg-elevated px-4 text-sm font-semibold"
               >
                 {h.symbol}

@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { buyCurve, loadBag, loadCurves, pctGrad, sellCurve, type CurveRow } from "@/lib/curve";
+import { loadBag, loadCurves, pctGrad, type CurveRow } from "@/lib/curve";
 import { formatMoney } from "@/lib/wallet";
+import { outUi, quoteJup } from "@/lib/jup-exec";
+import { connectPhantom, mintDecimals } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -17,34 +20,36 @@ export function CurveDesk() {
   const amount = Number(raw) || 0;
   const held = cur ? (bag[cur.id] ?? 0) : 0;
 
-  function go() {
+  async function go() {
     if (!cur) return;
-    if (side === "buy") {
-      const debit = wallet.investOut(amount, `${cur.symbol} DBC`);
-      if (!debit.ok) {
-        toast.error(debit.error);
-        return;
-      }
-      const r = buyCurve(rows, bag, cur.id, amount);
-      if (r.error) {
-        wallet.investIn(amount, "dbc:rollback");
-        toast.error(r.error);
-        return;
-      }
-      setRows(r.rows);
-      setBag(r.bag);
-      toast.success(`Bought ${r.tokens.toFixed(2)} ${cur.symbol} on the curve.`);
+    if (!(amount > 0)) {
+      toast.error("Enter an amount.");
       return;
     }
-    const r = sellCurve(rows, bag, cur.id, amount);
-    if (r.error) {
-      toast.error(r.error);
+    if (cur.mint.length < 32) {
+      toast.error("That curve has no mint.");
       return;
     }
-    wallet.investIn(r.usd, `${cur.symbol} DBC sell`);
-    setRows(r.rows);
-    setBag(r.bag);
-    toast.success(`Sold · ${formatMoney(r.usd)} USDC.`);
+    try {
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      let price: number | undefined;
+      if (side === "sell") {
+        const q = await quoteJup({ data: { mint: cur.mint, usd: 10, side: "buy" } });
+        if ("error" in q) throw new Error(q.error);
+        const dec = await mintDecimals(cur.mint);
+        const tokens = outUi(q, dec);
+        price = tokens > 0 ? 10 / tokens : undefined;
+      }
+      const done = await runPrestock({ owner, mint: cur.mint, side, usd: amount, price });
+      toast.success(`${side === "buy" ? "Bought" : "Sold"} ${cur.symbol}. ${done.signature.slice(0, 8)}…`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The swap did not send.");
+    }
   }
 
   return (

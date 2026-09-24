@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { jupFillUrl, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { FillButton } from "@/components/fill-button";
+import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { KAMINO_MARKET, type EquityBook, type ListedStock, type StockReserve } from "@/lib/equities";
 import { WalletPicker } from "@/components/wallet-picker";
 import { digestBooks } from "@/lib/books";
@@ -132,14 +133,12 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
               <div className="mt-4 rounded-xl border border-border p-4">
                 <p className="text-xs text-subtle">Buy</p>
                 <Quote mint={stock.mint} usd={usd} />
-                <a
-                  href={jupFillUrl(stock.mint, "buy")}
-                  target="_blank"
-                  rel="noreferrer"
+                <FillButton
+                  mint={stock.mint}
+                  usd={usd}
+                  label={`Buy $${usd} in your wallet`}
                   className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-accent"
-                >
-                  Buy ${usd} on Jupiter
-                </a>
+                />
               </div>
               {reserve ? (
                 <div className="mt-3 rounded-xl border border-border p-4">

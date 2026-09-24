@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { impactPct, jupFillUrl, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { FillButton } from "@/components/fill-button";
+import { impactPct, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { addAuto, addView, loadLab, pushTape } from "@/lib/lab-store";
 import { clankerEth, letsbonk, pumpCreate } from "@/lib/minty";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -113,14 +114,13 @@ function Grid({ children }: { children: ReactNode }) {
 
 function Fill({ mint, side, label }: { mint: string; side: "buy" | "sell"; label: string }) {
   return (
-    <a
-      href={jupFillUrl(mint, side)}
-      target="_blank"
-      rel="noreferrer"
-      className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
-    >
-      {label}
-    </a>
+    <FillButton
+      mint={mint}
+      usd={25}
+      side={side}
+      label={label}
+      className="mt-3 flex min-h-11 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
+    />
   );
 }
 
@@ -335,7 +335,6 @@ function Predict({ stock }: { stock: HouseListing }) {
 
 function Social({ stock }: { stock: HouseListing }) {
   const [tape, setTape] = useState(loadLab().tape);
-  const url = jupFillUrl(stock.mint, "buy");
   return (
     <Grid>
       <Card title="1 · Fill tape">
@@ -355,18 +354,15 @@ function Social({ stock }: { stock: HouseListing }) {
           ))}
         </ul>
       </Card>
-      <Card title="2 · Share the mint">
-        <p className="break-all font-mono text-[11px] text-subtle">{url}</p>
-        <button
-          type="button"
-          onClick={() => {
-            void navigator.clipboard?.writeText(url);
-            toast.success("Jupiter link copied.");
-          }}
+      <Card title="2 · Buy this mint">
+        <p className="break-all font-mono text-[11px] text-subtle">{stock.mint}</p>
+        <FillButton
+          mint={stock.mint}
+          usd={25}
+          price={stock.last}
+          label={`Buy $25 ${stock.symbol}`}
           className="mt-3 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
-        >
-          Copy fill link
-        </button>
+        />
       </Card>
     </Grid>
   );
@@ -482,9 +478,7 @@ function Autos({ stock, names }: { stock: HouseListing; names: HouseListing[] })
           {autos.map((a) => (
             <li key={a.id} className="text-xs">
               {a.kind} {a.symbol} ${a.usd}
-              <a className="ml-2 font-semibold text-accent" href={jupFillUrl(a.mint, "buy")} target="_blank" rel="noreferrer">
-                Fill
-              </a>
+              <FillButton mint={a.mint} usd={a.usd} label="Buy it" className="ml-2 font-semibold text-accent" />
             </li>
           ))}
         </ul>

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { signStockSwap } from "@/lib/jup-sign";
 import { connectPhantom, mintDecimals, phantomProvider, splHolding } from "@/lib/phantom";
+import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export function PreDesk({ names }: { names: HouseListing[] }) {
+export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreRoute[] }) {
   const rows = useMemo(
     () => [...names].filter((n) => n.venue === "prestocks" && n.last > 0).sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0)),
     [names],
@@ -69,14 +69,12 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
         const linked = wallet.linkChain(who, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
-      const decimalsUsed = held?.decimals || decimals;
-      const done = await signStockSwap({
+      const done = await runPrestock({
         owner: who,
         mint: name.mint,
         usd,
         side,
-        decimals: decimalsUsed,
-        tokenAmount: side === "sell" ? BigInt(held?.raw || "0") : undefined,
+        price: name.last,
       });
       setSig(done.signature);
       toast.success(`${side === "buy" ? "Bought" : "Sold"} ${done.outUi.toFixed(4)} on-chain.`);
@@ -102,7 +100,8 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
               <th className="px-5 py-2 font-medium lg:px-8">Company</th>
               <th className="px-2 py-2 text-right font-medium">Token</th>
               <th className="px-2 py-2 text-right font-medium">Mark</th>
-              <th className="px-5 py-2 text-right font-medium lg:px-8">Vs mark</th>
+              <th className="px-2 py-2 text-right font-medium">Vs mark</th>
+              <th className="px-5 py-2 text-right font-medium lg:px-8">Route</th>
             </tr>
           </thead>
           <tbody>
@@ -121,8 +120,11 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
                 </td>
                 <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.last)}</td>
                 <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.mark)}</td>
-                <td className={cn("px-5 py-3 text-right font-mono tabular-nums lg:px-8", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
                   {formatPremium(r.premium)}
+                </td>
+                <td className="px-5 py-3 text-right font-mono text-[11px] text-muted lg:px-8">
+                  {routes.find((x) => x.mint === r.mint)?.route || "—"}
                 </td>
               </tr>
             ))}
@@ -164,7 +166,7 @@ export function PreDesk({ names }: { names: HouseListing[] }) {
                 onClick={() => void swap("sell")}
                 className="mt-2 min-h-11 w-full rounded-lg bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-60"
               >
-                Sell {held.ui.toFixed(4)} {name.symbol}
+                Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
               </button>
             ) : owner ? (
               <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>

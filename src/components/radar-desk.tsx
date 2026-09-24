@@ -1,4 +1,4 @@
-import { rails } from "@/lib/ecosystem";
+import { FillButton } from "@/components/fill-button";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,6 @@ export function RadarDesk({ house }: { house: HouseListing[] }) {
       <ul className="mt-4 divide-y divide-border">
         {rows.map((r) => {
           const cheap = (r.premium ?? 0) < 0;
-          const href = rails(r.mint, r.symbol).jupiter;
           return (
             <li key={r.id} className="py-3">
               <div className="flex items-baseline justify-between gap-3">
@@ -29,9 +28,13 @@ export function RadarDesk({ house }: { house: HouseListing[] }) {
               <p className="font-mono text-[11px] text-subtle">
                 token {formatUsd(r.last)} · mark {formatUsd(r.mark)} · {cheap ? "discount" : "premium"}
               </p>
-              <a href={href} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-11 items-center text-xs font-semibold text-muted">
-                Jupiter USDC → {r.symbol}
-              </a>
+              <FillButton
+                mint={r.mint}
+                usd={10}
+                price={r.last}
+                label={`Buy $10 ${r.symbol}`}
+                className="mt-2 inline-flex min-h-11 items-center text-xs font-semibold text-muted"
+              />
             </li>
           );
         })}
