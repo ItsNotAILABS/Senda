@@ -1,8 +1,8 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { formatMoney, totalUsd } from "@/lib/wallet";
+import { readChain } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +19,7 @@ const SECONDARY = [
   { to: "/cover", label: "Cover" },
   { to: "/solana", label: "Solana" },
   { to: "/books", label: "Books" },
+  { to: "/wallet", label: "Wallet" },
   { to: "/more", label: "Account" },
 ] as const;
 
@@ -30,8 +31,8 @@ function tabOn(pathname: string, to: string) {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user, isPending } = useCurrentUserState();
-  const { w, usdPer } = useWallet();
-  const total = totalUsd(w, usdPer);
+  const { w } = useWallet();
+  const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
@@ -71,10 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-4">
-            <Link to="/payments" search={{ act: "add" }} className="text-right">
-              <p className="font-mono text-sm">{formatMoney(total, "USD")}</p>
-              <p className="text-[10px] text-subtle">{w.tag}</p>
-            </Link>
+            <ChainChip owner={owner} />
             {isPending ? (
               <div className="size-8 animate-pulse rounded-full bg-elevated" />
             ) : user ? (
@@ -110,5 +108,33 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       <div className="w-full">{children}</div>
     </div>
+  );
+}
+
+function ChainChip({ owner }: { owner: string }) {
+  const [usdc, setUsdc] = useState<number | null>(null);
+  useEffect(() => {
+    if (!owner) {
+      setUsdc(null);
+      return;
+    }
+    let live = true;
+    const pull = () => {
+      readChain(owner)
+        .then((s) => live && setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0))
+        .catch(() => live && setUsdc(null));
+    };
+    pull();
+    const id = window.setInterval(pull, 20_000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [owner]);
+  return (
+    <Link to="/wallet" className="text-right">
+      <p className="font-mono text-sm">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)}`) : "Connect"}</p>
+      <p className="text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Wallet"}</p>
+    </Link>
   );
 }

@@ -130,3 +130,84 @@ export async function splHolding(owner: string, mint: string): Promise<{ ui: num
   }
   return { ui, raw: raw.toString(), decimals };
 }
+
+const TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+const NAMES: Record<string, string> = {
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
+  PresTj4Yc2bAR197Er7wz4UUKSfqt6FryBEdAriBoQB: "ANDURIL",
+  Pren1FvFX6J3E4kXhJuCiAD5aDmGEb7qJRncwA8Lkhw: "ANTHROPIC",
+  PreZad18qfPtbxNpMtMuAuX2zVpvkEU8DnJx56faCWd: "FIGUREAI",
+  PreLWGkkeqG1s4HEfFZSy9moCrJ7btsHuUtfcCeoRua: "KALSHI",
+  PrekqLJvJ3qVdXmBGDiexvwUTF4rLFDa6HJbw9S: "NEURALINK",
+  PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF: "OPENAI",
+  Pre8AREmFPtoJFT8mQSXQLh56cwJmM7CFDRuoGBZiUP: "POLYMARKET",
+  PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh: "SPACEX",
+};
+
+export const PRESTOCK_MINTS = [
+  ["ANDURIL", "PresTj4Yc2bAR197Er7wz4UUKSfqt6FryBEdAriBoQB"],
+  ["ANTHROPIC", "Pren1FvFX6J3E4kXhJuCiAD5aDmGEb7qJRncwA8Lkhw"],
+  ["FIGUREAI", "PreZad18qfPtbxNpMtMuAuX2zVpvkEU8DnJx56faCWd"],
+  ["KALSHI", "PreLWGkkeqG1s4HEfFZSy9moCrJ7btsHuUtfcCeoRua"],
+  ["NEURALINK", "PrekqLJvJ3qVdXmBGDiexvwUTF4rLFDa6HJbw9S"],
+  ["OPENAI", "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF"],
+  ["POLYMARKET", "Pre8AREmFPtoJFT8mQSXQLh56cwJmM7CFDRuoGBZiUP"],
+  ["SPACEX", "PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh"],
+] as const;
+
+export type ChainToken = { mint: string; symbol: string; ui: number; decimals: number };
+export type ChainTx = { signature: string; err: boolean; time: number | null };
+export type ChainWallet = { sol: number; tokens: ChainToken[]; txs: ChainTx[] };
+
+type ParsedAccounts = {
+  value?: Array<{
+    account?: {
+      data?: { parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number | null; decimals?: number } } } };
+    };
+  }>;
+};
+
+async function tokenAccounts(owner: string, programId: string): Promise<ChainToken[]> {
+  const result = (await rpc("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed" }])) as ParsedAccounts;
+  const out: ChainToken[] = [];
+  for (const row of result?.value ?? []) {
+    const info = row.account?.data?.parsed?.info;
+    const mint = info?.mint ?? "";
+    const ui = info?.tokenAmount?.uiAmount || 0;
+    if (!mint || !(ui > 0)) continue;
+    out.push({
+      mint,
+      symbol: NAMES[mint] || `${mint.slice(0, 4)}…${mint.slice(-4)}`,
+      ui,
+      decimals: info?.tokenAmount?.decimals ?? 0,
+    });
+  }
+  return out;
+}
+
+/** What this address holds on Solana right now. Keys never move. */
+export async function readChain(owner: string): Promise<ChainWallet> {
+  const [lamports, classic, extra, sigs] = await Promise.all([
+    rpc("getBalance", [owner]) as Promise<number>,
+    tokenAccounts(owner, TOKEN_PROGRAM),
+    tokenAccounts(owner, TOKEN_2022).catch(() => [] as ChainToken[]),
+    rpc("getSignaturesForAddress", [owner, { limit: 8 }]) as Promise<
+      Array<{ signature?: string; err?: unknown; blockTime?: number | null }>
+    >,
+  ]);
+  const merged = new Map<string, ChainToken>();
+  for (const t of [...classic, ...extra]) merged.set(t.mint, t);
+  const tokens = [...merged.values()].sort((a, b) => Number(b.symbol === "USDC") - Number(a.symbol === "USDC") || b.ui - a.ui);
+  return {
+    sol: (lamports || 0) / 1e9,
+    tokens,
+    txs: (Array.isArray(sigs) ? sigs : []).map((s) => ({
+      signature: String(s.signature || ""),
+      err: Boolean(s.err),
+      time: s.blockTime ?? null,
+    })),
+  };
+}
