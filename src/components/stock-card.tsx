@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { BetPad } from "@/components/bet-pad";
 import { Button } from "@/components/ui/button";
 import type { Side } from "@/lib/lmsr";
@@ -113,14 +114,13 @@ export function StockCard({
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <a
-          href={stock.swapUrl}
-          target="_blank"
-          rel="noreferrer"
+        <Link
+          to="/wallet"
+          search={{ buy: stock.symbol }}
           className="font-mono text-[0.65rem] tracking-wide text-subtle uppercase hover:text-fg"
         >
-          Swap on Jupiter
-        </a>
+          Buy in the app
+        </Link>
         <Button type="button" variant="secondary" size="sm" className="min-h-11" disabled={busy} onClick={onOpen}>
           Open table
         </Button>

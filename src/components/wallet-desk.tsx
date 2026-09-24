@@ -175,9 +175,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
           <Link to="/pre" className="rounded-lg bg-elevated px-3 py-2">Buy</Link>
           <Link to="/payments" className="rounded-lg bg-elevated px-3 py-2">Send</Link>
           <Link to="/agents" className="rounded-lg bg-elevated px-3 py-2">Agents</Link>
-          <a href={owner ? `https://solscan.io/account/${owner}` : undefined} className="rounded-lg bg-elevated px-3 py-2 text-muted">
-            Account
-          </a>
         </div>
         <div className="mt-8 max-w-xl">
           <h2 className="text-sm font-semibold">Send cap</h2>

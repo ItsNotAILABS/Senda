@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { TokenMark } from "@/components/token-mark";
-import { rails } from "@/lib/ecosystem";
 import { FillButton } from "@/components/fill-button";
 import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -186,14 +185,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
         label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
         className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
       />
-      <a
-        href={rails(stock.mint, stock.symbol).solscan}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-2 block text-center text-[11px] font-semibold text-subtle"
-      >
-        Mint on Solscan
-      </a>
+      <p className="mt-2 break-all text-center font-mono text-[11px] text-subtle">{stock.mint}</p>
     </li>
   );
 }

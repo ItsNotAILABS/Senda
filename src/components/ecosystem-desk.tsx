@@ -1,4 +1,5 @@
-import { LEGAL, PARTNERS } from "@/lib/ecosystem";
+import { Link } from "@tanstack/react-router";
+import { LEGAL } from "@/lib/ecosystem";
 import { pre8 } from "@/lib/pre8";
 import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 
@@ -34,14 +35,21 @@ export function EcosystemDesk({ house }: { house: HouseListing[] }) {
             </li>
           ))}
       </ul>
-      <h3 className="mt-8 text-xs font-medium tracking-wide text-subtle uppercase">Ecosystem</h3>
+      <h3 className="mt-8 text-xs font-medium tracking-wide text-subtle uppercase">Do it here</h3>
       <ul className="mt-2 overflow-hidden rounded-2xl bg-elevated">
-        {PARTNERS.map((p) => (
-          <li key={p.name} className="border-b border-border last:border-0">
-            <a href={p.href} target="_blank" rel="noreferrer" className="block px-4 py-3">
-              <p className="text-sm font-semibold">{p.name}</p>
-              <p className="text-xs text-muted">{p.blurb}</p>
-            </a>
+        {(
+          [
+            ["/pre", "Buy", "Every PreStock. USDC from the wallet you connected."],
+            ["/wallet", "Hold and convert", "SOL, USDC, or a name you hold. The swap stays on this page."],
+            ["/agents", "Agents", "A job on your wallet. You still approve the send."],
+            ["/invest", "Games", "The stake is a buy of the name, not a link out."],
+          ] as const
+        ).map(([to, name, blurb]) => (
+          <li key={to} className="border-b border-border last:border-0">
+            <Link to={to} className="block px-4 py-3">
+              <p className="text-sm font-semibold">{name}</p>
+              <p className="text-xs text-muted">{blurb}</p>
+            </Link>
           </li>
         ))}
       </ul>

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
 import { BasketDesk } from "@/components/basket-desk";
@@ -263,23 +265,21 @@ export function PitFloor({
                 {under.symbol} last {formatUsd(under.last)} · mark {formatUsd(under.mark)}. Put is insurance on last.
               </p>
               <p className="mt-1 truncate font-mono text-[11px] text-subtle">{under.mint}</p>
-              <div className="mt-2 flex gap-2">
-                <a
-                  href={under.swapUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-h-11 rounded-full bg-elevated px-4 text-sm font-semibold leading-[2.75rem]"
+              <div className="mt-2 flex flex-wrap gap-2">
+                <FillButton
+                  mint={under.mint}
+                  usd={10}
+                  price={under.last}
+                  label={`Buy $10 ${under.symbol}`}
+                  className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                />
+                <Link
+                  to="/wallet"
+                  search={{ buy: under.symbol }}
+                  className="inline-flex min-h-11 items-center rounded-full bg-elevated px-4 text-sm font-semibold"
                 >
-                  Jupiter
-                </a>
-                <a
-                  href={`https://solscan.io/token/${under.mint}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-h-11 rounded-full bg-elevated px-4 text-sm font-semibold leading-[2.75rem]"
-                >
-                  Solscan
-                </a>
+                  Pay with SOL
+                </Link>
                 <button
                   type="button"
                   disabled={busy}

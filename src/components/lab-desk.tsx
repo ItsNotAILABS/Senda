@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FillButton } from "@/components/fill-button";
 import { impactPct, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { addAuto, addView, loadLab, pushTape } from "@/lib/lab-store";
-import { clankerEth, letsbonk, pumpCreate } from "@/lib/minty";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -433,25 +433,19 @@ function Struct({ names }: { names: HouseListing[] }) {
 }
 
 function Launch() {
-  const [name, setName] = useState("");
-  const [tick, setTick] = useState("");
   return (
     <Grid>
-      <Card title="1 · Solana">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="min-h-11 w-full rounded-xl bg-bg px-3 text-sm outline-none" />
-        <input value={tick} onChange={(e) => setTick(e.target.value.toUpperCase())} placeholder="TICK" className="mt-2 min-h-11 w-full rounded-xl bg-bg px-3 text-sm outline-none" />
-        <a href={pumpCreate(name || "Senda", tick || "SND")} target="_blank" rel="noreferrer" className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-fg text-sm font-semibold text-bg">
-          Pump.fun
-        </a>
-        <a href={letsbonk(name || "Senda", tick || "SND")} target="_blank" rel="noreferrer" className="mt-2 flex min-h-11 items-center justify-center rounded-full bg-bg text-sm font-semibold">
-          LetsBonk
-        </a>
+      <Card title="Buy a name">
+        <p className="text-sm text-muted">The eight PreStocks already exist. The buy happens on this account.</p>
+        <Link to="/pre" className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-fg text-sm font-semibold text-bg">
+          Open the book
+        </Link>
       </Card>
-      <Card title="2 · Ethereum">
-        <p className="text-sm text-muted">Same name, other chain. Clanker deploys the ERC-20.</p>
-        <a href={clankerEth(name || "Senda", tick || "SND")} target="_blank" rel="noreferrer" className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
-          Clanker
-        </a>
+      <Card title="Pay with what's in Phantom">
+        <p className="text-sm text-muted">SOL or USDC. You stay on the money page.</p>
+        <Link to="/wallet" className="mt-3 flex min-h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
+          Convert
+        </Link>
       </Card>
     </Grid>
   );

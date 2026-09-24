@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FillButton } from "@/components/fill-button";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { KAMINO_MARKET, type EquityBook, type ListedStock, type StockReserve } from "@/lib/equities";
+import { type EquityBook, type ListedStock, type StockReserve } from "@/lib/equities";
 import { WalletPicker } from "@/components/wallet-picker";
 import { digestBooks } from "@/lib/books";
 import { CCYS, formatMoney } from "@/lib/wallet";
@@ -227,9 +227,7 @@ function Collateral({
       <p className="mt-1 text-xs text-subtle">
         ${fmt(reserve.supplyUsd)} already in this market. If the share falls through the limit, Kamino can sell part of it.
       </p>
-      <a href={KAMINO_MARKET} target="_blank" rel="noreferrer" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-accent">
-        Borrow on Kamino
-      </a>
+      <p className="mt-3 text-sm text-muted">The buy signs in your wallet. This page does not send you out to borrow.</p>
     </>
   );
 }

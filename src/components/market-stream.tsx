@@ -3,7 +3,6 @@ import { toast } from "sonner";
 import { AddMoneyScreen } from "@/components/add-money";
 import { TokenMark } from "@/components/token-mark";
 import { applyHouseDrop, loadHouseBook, saveHouseBook } from "@/lib/house-paper";
-import { rails } from "@/lib/ecosystem";
 import { formatClock, minuteId, remainingMs } from "@/lib/minute-book";
 import { formatUsdTiny, protectCost, quotePeg, type PegQuote } from "@/lib/peg";
 import { loadPegs, openPeg, settlePegs } from "@/lib/peg-book";
@@ -212,14 +211,6 @@ export function MarketStream({
           >
             Buy ${dollars} {focus.symbol}
           </button>
-        <a
-          href={rails(focus.mint, focus.symbol).jupiter}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 block text-center text-xs font-semibold text-ink/55"
-        >
-          Live size · Jupiter USDC → {focus.symbol}
-        </a>
       </section>
 
       {live.length > 0 ? (
