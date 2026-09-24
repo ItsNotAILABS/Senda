@@ -43,6 +43,7 @@ The top of every page is the product. The quieter links are the same account, no
 | Page | Path | What it is |
 | --- | --- | --- |
 | Portfolio | `/` | The share book, the spendable figure, the buy / borrow / pay ticket |
+| Pre-IPO | `/pre` | The eight PreStocks. Discount to the SPV mark, the company, a Jupiter buy, a one-day contract |
 | Trade | `/invest` | The trading floor: spot, options, perps, index baskets, curves, the PreStocks house |
 | Move | `/payments` | Add, send, request, exchange, nearby. A send carries an ISO 20022 UETR. |
 | Cards | `/cards` | One-time checkout numbers, including a merchant lock |

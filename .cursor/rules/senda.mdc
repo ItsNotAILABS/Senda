@@ -35,7 +35,7 @@ Defined in `src/components/app-shell.tsx`.
 
 Primary, the product:
 
-- `/` Portfolio. `src/routes/index.tsx` loads `getEquityBook` and renders `src/components/equities-desk.tsx`.
+- `/pre` Pre-IPO. Live `https://prestocks.com/api/prestocks`. Discover by discount to the SPV mark, read the company, buy on Jupiter, copy the print, or take a one-day contract that debits the wallet and settles on the next print. `src/components/pre-desk.tsx`.
 - `/invest` Trade. `src/components/pit-floor.tsx` and the desks it imports.
 - `/payments` Move. `src/components/payments-desk.tsx`. Search `act` can be `send`, `nearby`, `request`, `exchange`, `add`.
 - `/cards` Cards. `src/components/cards-desk.tsx`. Search `spend` is a number, default 0.

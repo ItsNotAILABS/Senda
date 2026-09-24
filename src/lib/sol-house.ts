@@ -20,6 +20,10 @@ export type HouseListing = {
   mark: number;
   premium: number | null;
   valuation: number;
+  /** SPV mark valuation, PreStocks only. */
+  markValuation?: number;
+  /** Token supply, PreStocks only. */
+  supply?: number;
   holders: number;
   liquidity: number;
   change24h: number | null;
@@ -469,6 +473,8 @@ function prestocksRows(raw: unknown, px: Record<string, JupRow>): HouseListing[]
       mark,
       premium: premium(token, mark),
       valuation: n(r.impliedValuation) || n(r.markValuation),
+      markValuation: n(r.markValuation),
+      supply: n(r.supply),
       holders: Math.round(n(r.holders)),
       liquidity: n(px[mint]?.liquidity),
       change24h: chgFrac(px[mint]?.priceChange24h),
