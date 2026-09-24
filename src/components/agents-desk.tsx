@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
+import { recall, remember } from "@/lib/agent-memory";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
+import { spendCap } from "@/lib/spend-cap";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
@@ -24,11 +27,53 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
   const [busy, setBusy] = useState(false);
+  const [series, setSeries] = useState<number[]>([]);
   const wallet = useWallet();
   const picked = book.find((n) => n.symbol === symbol) ?? book[0];
 
   function put(next: AgentJobs) {
     setJobs(saveJobs(next));
+  }
+
+  useEffect(() => {
+    const level = bookLevel(book.map((n) => n.last));
+    if (level > 0) setSeries(pushLevel(level));
+  }, [book]);
+
+  const focus = id === "rich" ? rich : id === "daily" ? picked : cheap;
+  const side = id === "rich" ? "sell" : "buy";
+  const gate: Gate | null = focus
+    ? review({
+        symbol: focus.symbol,
+        side,
+        usd,
+        premium: focus.premium,
+        change24h: focus.change24h,
+        series,
+        cap: spendCap(),
+      })
+    : null;
+  const sendUsd = gate?.usd ?? usd;
+  const hits = focus
+    ? recall({
+        premium: focus.premium ?? 0,
+        change24h: focus.change24h ?? 0,
+        drawdown: gate?.drawdown ?? 0,
+        side,
+      })
+    : [];
+  const prior = hits.find((h) => h.score > 0.85);
+
+  function note(symbol: string, side: "buy" | "sell", amount: number, name?: HouseListing) {
+    remember({
+      at: new Date().toISOString(),
+      symbol,
+      side,
+      usd: amount,
+      premium: name?.premium ?? 0,
+      change24h: name?.change24h ?? 0,
+      drawdown: gate?.drawdown ?? 0,
+    });
   }
 
   async function owner(): Promise<string> {
@@ -45,6 +90,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setBusy(true);
     try {
       const who = await owner();
+      if (gate?.blocked) throw new Error(gate.blocked);
+      const usd = sendUsd;
+      if (!(usd > 0)) throw new Error("The risk gate cut this to nothing.");
       const buyMint = id === "cheap" ? cheap?.mint : picked?.mint;
       const buySymbol = id === "cheap" ? cheap?.symbol : picked?.symbol;
       if (id !== "rich" && payWith === "SOL") {
@@ -67,6 +115,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         if (id === "daily" && picked) put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
         if (id === "cheap" && cheap) put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
         toast.success(`Bought ${buySymbol} with SOL. ${done.signature.slice(0, 8)}…`);
+        note(buySymbol, "buy", usd, id === "cheap" ? cheap : picked);
         return;
       }
       if (id === "cheap") {
@@ -74,6 +123,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: cheap.mint, side: "buy", usd, price: cheap.last });
         put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
         toast.success(`Bought ${cheap.symbol}. ${done.signature.slice(0, 8)}…`);
+        note(cheap.symbol, "buy", usd, cheap);
       } else if (id === "rich") {
         const snap = await readChain(who);
         const held = book.find((n) => (snap.tokens.find((t) => t.mint === n.mint)?.ui ?? 0) > 0 && (n.premium ?? 0) > 0);
@@ -82,6 +132,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: target.mint, side: "sell", usd, price: target.last });
         put({ ...jobs, rich: { usd } });
         toast.success(`Sold ${target.symbol}. ${done.signature.slice(0, 8)}…`);
+        note(target.symbol, "sell", usd, target);
       } else {
         if (!picked) throw new Error("Pick a name.");
         if (jobs.daily?.mint === picked.mint && jobs.daily.lastDay === todayKey()) {
@@ -90,6 +141,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: picked.mint, side: "buy", usd, price: picked.last });
         put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
         toast.success(`Bought ${picked.symbol}. ${done.signature.slice(0, 8)}…`);
+        note(picked.symbol, "buy", usd, picked);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "It did not send.");
@@ -183,13 +235,33 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             </button>
           ))}
         </div>
+        <div className="mt-6 max-w-lg space-y-2 text-sm">
+          <p>
+            <span className="text-muted">Tape. </span>
+            {gate?.tape || "Waiting on the book."}
+          </p>
+          <p>
+            <span className="text-muted">Risk. </span>
+            {gate?.risk || "—"}
+          </p>
+          <p>
+            <span className="text-muted">Send. </span>
+            {gate?.blocked ? "Blocked." : `$${sendUsd} after the gate. You still approve it.`}
+          </p>
+          <p>
+            <span className="text-muted">Memory. </span>
+            {prior
+              ? `Last time it looked like this: ${prior.memory.side} ${prior.memory.symbol} for $${prior.memory.usd}.`
+              : "No similar past send yet."}
+          </p>
+        </div>
         <button
           type="button"
-          disabled={busy || book.length === 0}
+          disabled={busy || book.length === 0 || Boolean(gate?.blocked)}
           onClick={() => void run()}
           className="mt-6 min-h-12 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
         >
-          {busy ? "Waiting for the wallet…" : `Run · $${usd}`}
+          {busy ? "Waiting for the wallet…" : gate?.blocked ? "Blocked" : `Run · $${sendUsd}`}
         </button>
         {book.length === 0 ? <p className="mt-4 text-sm text-muted">PreStocks did not answer. Nothing to run.</p> : null}
       </section>
