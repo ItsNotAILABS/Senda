@@ -20,7 +20,7 @@ const SECONDARY = [
   { to: "/cover", label: "Cover" },
   { to: "/solana", label: "Solana" },
   { to: "/books", label: "Books" },
-  { to: "/wallet", label: "Wallet" },
+  { to: "/wallet", label: "Money" },
   { to: "/more", label: "Account" },
 ] as const;
 
@@ -134,8 +134,8 @@ function ChainChip({ owner }: { owner: string }) {
   }, [owner]);
   return (
     <Link to="/wallet" className="text-right">
-      <p className="font-mono text-sm">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)}`) : "Connect"}</p>
-      <p className="text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Wallet"}</p>
+      <p className="font-mono text-sm">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)}`) : "Your money"}</p>
+      <p className="text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Phantom is a source"}</p>
     </Link>
   );
 }

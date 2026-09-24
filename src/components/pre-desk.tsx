@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { connectPhantom, mintDecimals, phantomProvider, splHolding } from "@/lib/phantom";
+import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
+import { Link } from "@tanstack/react-router";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -91,7 +92,7 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
         <header className="px-5 pt-6 pb-4 lg:px-8">
           <h1 className="font-display text-4xl">Pre-IPO</h1>
           <p className="mt-2 text-sm text-muted">
-            {owner ? owner : "Connect Phantom. The swap is built by Jupiter and signed in your wallet."}
+            {owner ? "Buy with the USDC in this wallet, or pay with SOL on Your money." : "Phantom is a source of funds. Open Your money to use the SOL and USDC already there."}
           </p>
         </header>
         <table className="w-full text-left text-sm">
@@ -157,8 +158,11 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
               onClick={() => void swap("buy")}
               className="mt-4 min-h-12 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
             >
-              {busy ? "Waiting for the wallet…" : phantomProvider() || owner ? `Swap $${usd} USDC` : "Connect Phantom and swap"}
+              {busy ? "Waiting for the wallet…" : `Buy with $${usd} USDC`}
             </button>
+            <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">
+              Pay with SOL instead
+            </Link>
             {held && held.ui > 0 ? (
               <button
                 type="button"

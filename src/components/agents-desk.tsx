@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
-import { connectPhantom, readChain } from "@/lib/phantom";
+import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
+import { USDC } from "@/lib/jup-exec";
+import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -20,6 +22,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [jobs, setJobs] = useState<AgentJobs>(() => loadJobs());
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
+  const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
   const [busy, setBusy] = useState(false);
   const wallet = useWallet();
   const picked = book.find((n) => n.symbol === symbol) ?? book[0];
@@ -42,6 +45,30 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setBusy(true);
     try {
       const who = await owner();
+      const buyMint = id === "cheap" ? cheap?.mint : picked?.mint;
+      const buySymbol = id === "cheap" ? cheap?.symbol : picked?.symbol;
+      if (id !== "rich" && payWith === "SOL") {
+        if (id === "daily" && picked && jobs.daily?.mint === picked.mint && jobs.daily.lastDay === todayKey()) {
+          throw new Error(`Today's buy of ${picked.symbol} already went out.`);
+        }
+        if (!buyMint || !buySymbol) throw new Error("No name to buy.");
+        const px = await quoteRoute({ inputMint: SOL, outputMint: USDC, amountRaw: 1e9, outDecimals: 6 });
+        if (!(px.outUi > 0)) throw new Error("No SOL price.");
+        const solAmt = usd / px.outUi;
+        const dOut = await mintDecimals(buyMint);
+        const done = await signRoute({
+          owner: who,
+          inputMint: SOL,
+          outputMint: buyMint,
+          amountRaw: Math.floor(solAmt * 1e9),
+          outDecimals: dOut,
+          usd,
+        });
+        if (id === "daily" && picked) put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
+        if (id === "cheap" && cheap) put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
+        toast.success(`Bought ${buySymbol} with SOL. ${done.signature.slice(0, 8)}…`);
+        return;
+      }
       if (id === "cheap") {
         if (!cheap) throw new Error("No names on the book.");
         const done = await runPrestock({ owner: who, mint: cheap.mint, side: "buy", usd, price: cheap.last });
@@ -133,6 +160,18 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           </p>
         ) : null}
         <div className="mt-4 flex gap-1">
+          {(["USDC", "SOL"] as const).map((id) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setPayWith(id)}
+              className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", payWith === id ? "bg-fg text-bg" : "bg-elevated text-muted")}
+            >
+              Pay with {id}
+            </button>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-1">
           {[10, 25, 100].map((n) => (
             <button
               key={n}

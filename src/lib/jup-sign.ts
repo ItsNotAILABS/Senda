@@ -1,4 +1,4 @@
-/** Jupiter builds the swap. Phantom signs and sends it. Senda never holds the key. */
+/** Jupiter builds the swap. Phantom signs it. Senda never holds the key. */
 
 import { USDC } from "@/lib/jup-exec";
 import { sendVersioned } from "@/lib/phantom";
@@ -7,6 +7,26 @@ import { spendCap } from "@/lib/spend-cap";
 const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
 const SWAP = "https://lite-api.jup.ag/swap/v1/swap";
 
+export const SOL = "So11111111111111111111111111111111111111112";
+
+export type RouteQuote = {
+  inAmount: string;
+  outAmount: string;
+  outUi: number;
+  minUi: number;
+  impact: number;
+  route: string;
+};
+
+type RawQuote = {
+  outAmount?: string;
+  inAmount?: string;
+  otherAmountThreshold?: string;
+  priceImpactPct?: string;
+  error?: string;
+  routePlan?: Array<{ swapInfo?: { label?: string } }>;
+};
+
 function b64ToBytes(b64: string): Uint8Array {
   const bin = atob(b64);
   const out = new Uint8Array(bin.length);
@@ -14,32 +34,47 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-export async function signStockSwap(input: {
+export async function quoteRoute(input: {
+  inputMint: string;
+  outputMint: string;
+  amountRaw: number;
+  outDecimals: number;
+}): Promise<RouteQuote> {
+  if (!(input.amountRaw > 0)) throw new Error("Enter an amount.");
+  const url = `${QUOTE}?inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
+  const res = await fetch(url, { headers: { accept: "application/json" } });
+  const quote = (await res.json()) as RawQuote;
+  if (!res.ok || !quote.outAmount) throw new Error(quote.error || `Jupiter quote ${res.status}`);
+  const impact = Number(quote.priceImpactPct ?? 0);
+  const outUi = Number(quote.outAmount) / 10 ** input.outDecimals;
+  const minRaw = Number(quote.otherAmountThreshold || quote.outAmount);
+  return {
+    inAmount: quote.inAmount || String(Math.floor(input.amountRaw)),
+    outAmount: quote.outAmount,
+    outUi,
+    minUi: minRaw / 10 ** input.outDecimals,
+    impact,
+    route: (quote.routePlan ?? []).map((p) => p.swapInfo?.label).filter(Boolean).join(" → ") || "Jupiter",
+  };
+}
+
+export async function signRoute(input: {
   owner: string;
-  mint: string;
+  inputMint: string;
+  outputMint: string;
+  amountRaw: number;
+  outDecimals: number;
   usd: number;
-  side: "buy" | "sell";
-  /** Raw token amount when selling. Ignored on a buy. */
-  tokenAmount?: bigint;
-  decimals?: number;
 }): Promise<{ signature: string; outUi: number }> {
   if (!(input.usd > 0)) throw new Error("Enter an amount.");
   const cap = spendCap();
-  if (input.usd > cap) throw new Error(`That is $${input.usd}. Your send cap is $${cap}. Raise it on Wallet.`);
-  const amount =
-    input.side === "buy"
-      ? Math.max(1, Math.round(input.usd * 1e6))
-      : Number(input.tokenAmount ?? 0n);
-  if (!(amount > 0)) throw new Error("Nothing to sell.");
-  const inputMint = input.side === "buy" ? USDC : input.mint;
-  const outputMint = input.side === "buy" ? input.mint : USDC;
-  const quoteUrl = `${QUOTE}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
-  const quoteRes = await fetch(quoteUrl, { headers: { accept: "application/json" } });
-  const quote = (await quoteRes.json()) as { outAmount?: string; error?: string; priceImpactPct?: string };
-  if (!quoteRes.ok || !quote.outAmount) throw new Error(quote.error || `Jupiter quote ${quoteRes.status}`);
-  const impact = Number(quote.priceImpactPct ?? 0);
-  if (impact > 5) throw new Error(`Price impact is ${impact.toFixed(1)}%. The wallet was not asked to sign.`);
-
+  if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
+  const quoted = await quoteRoute(input);
+  if (quoted.impact > 5) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
+  const url = `${QUOTE}?inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
+  const quoteRes = await fetch(url, { headers: { accept: "application/json" } });
+  const quote = (await quoteRes.json()) as RawQuote;
+  if (!quote.outAmount) throw new Error(quote.error || "Jupiter did not quote.");
   const swapRes = await fetch(SWAP, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
@@ -52,12 +87,31 @@ export async function signStockSwap(input: {
   });
   const swap = (await swapRes.json()) as { swapTransaction?: string; error?: string };
   if (!swap.swapTransaction) throw new Error(swap.error || "Jupiter did not build a transaction.");
-
   const { Buffer } = await import("buffer");
   if (!globalThis.Buffer) globalThis.Buffer = Buffer;
   const { VersionedTransaction } = await import("@solana/web3.js");
   const tx = VersionedTransaction.deserialize(b64ToBytes(swap.swapTransaction));
   const signature = await sendVersioned(tx);
-  const decimals = input.decimals ?? (input.side === "buy" ? 9 : 6);
-  return { signature, outUi: Number(quote.outAmount) / 10 ** decimals };
+  return { signature, outUi: quoted.outUi };
+}
+
+export async function signStockSwap(input: {
+  owner: string;
+  mint: string;
+  usd: number;
+  side: "buy" | "sell";
+  tokenAmount?: bigint;
+  decimals?: number;
+}): Promise<{ signature: string; outUi: number }> {
+  const amount =
+    input.side === "buy" ? Math.max(1, Math.round(input.usd * 1e6)) : Number(input.tokenAmount ?? 0n);
+  if (!(amount > 0)) throw new Error("Nothing to sell.");
+  return signRoute({
+    owner: input.owner,
+    inputMint: input.side === "buy" ? USDC : input.mint,
+    outputMint: input.side === "buy" ? input.mint : USDC,
+    amountRaw: amount,
+    outDecimals: input.decimals ?? (input.side === "buy" ? 9 : 6),
+    usd: input.usd,
+  });
 }
