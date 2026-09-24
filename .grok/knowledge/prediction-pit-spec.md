@@ -46,16 +46,11 @@ Buy-in 1,000 chips: Dr 1000 / Cr 1100.
 Buy YES: player chips down, YES inventory up, cash to market book — balanced.
 Resolve YES: YES shares pay 1, NO shares pay 0, surplus to 4000.
 
-## Four tables (open night of the summit)
+## Tables
 
-1. **Kernel** — Sovereign Engine posts $0.00 ledger variance on the live
-   26 Sep demo.
-2. **Doors** — Kernel Pass at Vice Park is waitlist-only before 18:00 CDT
-   on 26 Sep 2026.
-3. **FORMA** — FORMA compounding prints a φ beat in Q4 2026.
-4. **Sky** — Core Circle waitlist ≥ 24 by event night.
-
-Each table: question, resolve-by date, `q_yes`, `q_no`, `b`, open|paused|resolved.
+Markets are PreStocks names and the questions the trade floor already loads.
+There is no event, no venue, and no ticketed night. The product is Senda.
+Read AGENTS.md before changing the pit.
 
 ## UX (table-side, not a feed)
 
@@ -83,4 +78,4 @@ if tools exist; else CSS grain + SVG felt.
 - Copying `monetization_markets_engine.py` virtual cards / Catvertising
 - Hypothetical "12k players" metrics
 - Touching the parent event site (`src/components/{hero,agenda,speakers,tickets,venue,rsvp-form}*`, `src/lib/event.ts`)
-- Binding **0.0.0.0:8080** — that port is the Sovereign Summit live preview
+- Binding **0.0.0.0:8080** — that port is how the app is served.

@@ -1,3 +1,8 @@
+---
+description: Senda operating manual. Read before editing.
+alwaysApply: true
+---
+
 # Senda — read this before you edit anything
 
 You are working in the Senda repository. This file is the whole manual. You do not need a briefing, a ticket, or another document. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/senda.mdc`, `.windsurfrules`, `.clinerules`, and `llms.txt`, because different agents only auto-load their own filename. If you can read this, you already have it. Trust the code when it disagrees with a memory from some other project.

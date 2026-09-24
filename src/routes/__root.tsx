@@ -16,7 +16,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Senda — hold currencies, send nearby, trade PreStocks on Solana. Paper wallet.",
+          "Senda. Hold a tokenized stock on Solana, borrow against it, and pay without selling it.",
       },
       { name: "theme-color", content: "#0c110e" },
     ],

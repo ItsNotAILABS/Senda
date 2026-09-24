@@ -1,5 +1,6 @@
 {
-  "name": "app-builder-workspace",
+  "name": "senda",
+  "description": "Hold a tokenized stock on Solana, borrow against it on Kamino, and pay with a one-time number that is never stored.",
   "private": true,
   "sideEffects": false,
   "type": "module",
