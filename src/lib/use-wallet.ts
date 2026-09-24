@@ -24,6 +24,7 @@ import {
   issueNearby,
   isWeekend,
   linkChain,
+  unlinkChain,
   loadWallet,
   openCurrency,
   openVault,
@@ -183,6 +184,11 @@ export function useWallet() {
       createWallet: () => commit(createSenda(w)),
       linkChain: (address: string, label: string, kind: "phantom" | "solana" | "evm") =>
         commit(linkChain(w, address, label, kind)),
+      unlink: (address: string) => {
+        const next = unlinkChain(w, address);
+        setW(next);
+        saveWallet(next);
+      },
       openVault: (name: string, ccy: Ccy = "USD") => commit(openVault(w, name, ccy)),
       openCurrency: (ccy: Ccy) => commit(openCurrency(w, ccy)),
       vaultIn: (id: string, amount: number) => commit(vaultIn(w, id, amount)),

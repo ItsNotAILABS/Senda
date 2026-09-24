@@ -75,7 +75,7 @@ export function AddAccountScreen({ onClose }: { onClose: () => void }) {
           >
             <span className="block text-sm font-semibold">Create a Senda wallet</span>
             <span className="block text-xs text-muted">
-              {w.w.senda ? shortPk(w.w.senda.pubkey) : "Self-custody SOL address. Key on this phone."}
+              {w.w.senda ? shortPk(w.w.senda.pubkey) : "Use Phantom. Senda does not keep a key."}
             </span>
           </button>
 

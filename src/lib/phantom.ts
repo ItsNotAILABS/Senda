@@ -31,6 +31,7 @@ export async function connectPhantom(): Promise<string> {
 }
 
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
+  await simulateFirst(tx);
   const p = phantomProvider();
   if (!p) throw new Error("Phantom is not connected.");
   if (p.signAndSendTransaction) {
@@ -45,6 +46,18 @@ export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promis
   const body = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false }]);
   if (typeof body !== "string") throw new Error("RPC did not return a signature.");
   return body;
+}
+
+async function simulateFirst(tx: { serialize: () => Uint8Array }): Promise<void> {
+  const raw = bytesToBase64(tx.serialize());
+  const result = (await rpc("simulateTransaction", [
+    raw,
+    { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "processed" },
+  ])) as { value?: { err?: unknown; logs?: string[] } };
+  if (result?.value?.err) {
+    const logs = (result.value.logs ?? []).filter((l) => /error|failed|insufficient/i.test(l)).slice(-2).join(" ");
+    throw new Error(logs || "The chain rejected this before your wallet was asked to sign.");
+  }
 }
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";

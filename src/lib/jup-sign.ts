@@ -2,6 +2,7 @@
 
 import { USDC } from "@/lib/jup-exec";
 import { sendVersioned } from "@/lib/phantom";
+import { spendCap } from "@/lib/spend-cap";
 
 const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
 const SWAP = "https://lite-api.jup.ag/swap/v1/swap";
@@ -22,6 +23,9 @@ export async function signStockSwap(input: {
   tokenAmount?: bigint;
   decimals?: number;
 }): Promise<{ signature: string; outUi: number }> {
+  if (!(input.usd > 0)) throw new Error("Enter an amount.");
+  const cap = spendCap();
+  if (input.usd > cap) throw new Error(`That is $${input.usd}. Your send cap is $${cap}. Raise it on Wallet.`);
   const amount =
     input.side === "buy"
       ? Math.max(1, Math.round(input.usd * 1e6))
@@ -31,8 +35,10 @@ export async function signStockSwap(input: {
   const outputMint = input.side === "buy" ? input.mint : USDC;
   const quoteUrl = `${QUOTE}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
   const quoteRes = await fetch(quoteUrl, { headers: { accept: "application/json" } });
-  const quote = (await quoteRes.json()) as { outAmount?: string; error?: string };
+  const quote = (await quoteRes.json()) as { outAmount?: string; error?: string; priceImpactPct?: string };
   if (!quoteRes.ok || !quote.outAmount) throw new Error(quote.error || `Jupiter quote ${quoteRes.status}`);
+  const impact = Number(quote.priceImpactPct ?? 0);
+  if (impact > 5) throw new Error(`Price impact is ${impact.toFixed(1)}%. The wallet was not asked to sign.`);
 
   const swapRes = await fetch(SWAP, {
     method: "POST",

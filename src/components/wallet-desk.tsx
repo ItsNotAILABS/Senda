@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { FillButton } from "@/components/fill-button";
 import { WalletPicker } from "@/components/wallet-picker";
 import { PRESTOCK_MINTS, readChain, type ChainWallet } from "@/lib/phantom";
+import { setSpendCap, spendCap } from "@/lib/spend-cap";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 
 export function WalletDesk() {
@@ -11,6 +12,8 @@ export function WalletDesk() {
   const owner = link?.address ?? "";
   const [snap, setSnap] = useState<ChainWallet | null>(null);
   const [err, setErr] = useState("");
+  const [cap, setCap] = useState(100);
+  useEffect(() => setCap(spendCap()), []);
 
   useEffect(() => {
     if (!owner) {
@@ -84,7 +87,33 @@ export function WalletDesk() {
           </p>
         )}
         <div className="mt-6 max-w-xl">
-          <WalletPicker />
+          <h2 className="text-sm font-semibold">Security</h2>
+          <ul className="mt-2 space-y-1 text-sm text-muted">
+            <li>Senda never asks for a seed phrase or a private key.</li>
+            <li>Every send is simulated on Solana first. If it would fail, Phantom is not opened.</li>
+            <li>A send bigger than the cap is refused. Price impact over 5% is refused.</li>
+          </ul>
+          <div className="mt-3 flex gap-1">
+            {[25, 100, 500].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setCap(setSpendCap(n))}
+                className={cap === n ? "min-h-9 rounded-lg bg-fg px-3 font-mono text-xs text-bg" : "min-h-9 rounded-lg bg-elevated px-3 font-mono text-xs text-muted"}
+              >
+                ${n}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-subtle">Send cap ${cap}. Agents use the same cap.</p>
+          {owner ? (
+            <button type="button" onClick={() => wallet.unlink(owner)} className="mt-3 text-sm text-down">
+              Disconnect this wallet
+            </button>
+          ) : null}
+          <div className="mt-4">
+            <WalletPicker />
+          </div>
         </div>
       </section>
       <aside className="px-5 py-6 lg:px-6">

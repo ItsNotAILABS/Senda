@@ -244,13 +244,14 @@ export function loadWallet(): Wallet {
     if (!raw) return empty();
     const p = JSON.parse(raw) as Partial<Wallet>;
     const base = empty();
-    return {
+    const hadSecret = Boolean((p as Wallet).senda?.secret);
+    const next: Wallet = {
       tag: typeof p.tag === "string" && p.tag.startsWith("@") ? p.tag : base.tag,
       balances: { ...base.balances, ...(p.balances ?? {}) },
       opened: Array.isArray((p as Wallet).opened) && (p as Wallet).opened.length ? (p as Wallet).opened : ["USD"],
       pockets: Array.isArray(p.pockets) ? p.pockets : [],
       vaults: Array.isArray((p as Wallet).vaults) ? (p as Wallet).vaults : [],
-      senda: (p as Wallet).senda ?? null,
+      senda: (p as Wallet).senda ? { ...(p as Wallet).senda!, secret: "" } : null,
       links: Array.isArray((p as Wallet).links) ? (p as Wallet).links : [],
       notes: Array.isArray((p as Wallet).notes) ? (p as Wallet).notes : [],
       cards: Array.isArray(p.cards) ? p.cards.map((c) => hydrateCard(c)) : [],
@@ -260,6 +261,8 @@ export function loadWallet(): Wallet {
       policies: Array.isArray(p.policies) ? p.policies : [],
       cardAuths: Array.isArray((p as Wallet).cardAuths) ? (p as Wallet).cardAuths.slice(0, 80) : [],
     };
+    if (hadSecret) saveWallet(next);
+    return next;
   } catch {
     return empty();
   }
@@ -963,7 +966,7 @@ export function createSenda(w: Wallet): Wallet | { error: string } {
   const k = issueSendaKey();
   const next: Wallet = {
     ...ensureOpened(w, "SOL"),
-    senda: { pubkey: k.pubkey, secret: k.secret, createdAt: new Date().toISOString() },
+    senda: { pubkey: k.pubkey, secret: "", createdAt: new Date().toISOString() },
   };
   return pushTx(next, {
     kind: "move",
@@ -974,6 +977,10 @@ export function createSenda(w: Wallet): Wallet | { error: string } {
     auroFee: 0,
     revolutFee: 0,
   });
+}
+
+export function unlinkChain(w: Wallet, address: string): Wallet {
+  return { ...w, links: w.links.filter((l) => l.address !== address) };
 }
 
 export function linkChain(
