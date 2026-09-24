@@ -38,7 +38,7 @@ export function WalletPicker() {
   return (
     <div>
       <p className="text-sm font-semibold">Wallets you already have</p>
-      <p className="mt-1 text-xs text-muted">Phantom, Solflare, Backpack, MetaMask, Rabby, Coinbase, Brave. We store the address. Not the key.</p>
+      <p className="mt-1 text-xs text-muted">The vault wraps the wallet. Swaps sign in that wallet. We never take the key.</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {(installed.length ? installed : choices).map((c) => {
           const linked = w.w.links.some((l) => l.label === c.name);

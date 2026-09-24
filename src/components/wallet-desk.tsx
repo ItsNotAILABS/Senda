@@ -6,6 +6,7 @@ import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, PRESTOCK_MINTS, readChain, type ChainWallet } from "@/lib/phantom";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
+import { unwrapUsdc, wrapUsdc, wrappedUsdc } from "@/lib/vault-wrap";
 import { getHouse, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,8 @@ export function WalletDesk({ buy }: { buy?: string }) {
   const [quote, setQuote] = useState<RouteQuote | null>(null);
   const [qErr, setQErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [wrapRaw, setWrapRaw] = useState("25");
+  const [wrapTick, setWrapTick] = useState(0);
 
   useEffect(() => setCap(spendCap()), []);
   useEffect(() => {
@@ -76,6 +79,8 @@ export function WalletDesk({ buy }: { buy?: string }) {
   }, [house]);
 
   const usdc = snap?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
+  const wrapped = useMemo(() => (owner ? wrappedUsdc(owner) : 0), [owner, wrapTick]);
+  const usdcFree = Math.max(0, usdc - wrapped);
   const sol = snap?.sol ?? 0;
   const solUsd = sol * solPx;
   const invested = PRESTOCK_MINTS.reduce((s, [, mint]) => {
@@ -83,7 +88,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
     return s + ui * (marks.get(mint) ?? 0);
   }, 0);
   const cash = wallet.w.balances.USD || 0;
-  const total = cash + usdc + solUsd + invested;
+  const total = cash + usdcFree + solUsd + invested;
 
   const payMint = pay === "SOL" ? SOL : pay === "USDC" ? USDC : pay;
   const recvMint = recv === "USDC" ? USDC : PRESTOCK_MINTS.find(([s]) => s === recv)?.[1] || "";
@@ -124,6 +129,50 @@ export function WalletDesk({ buy }: { buy?: string }) {
       window.clearTimeout(t);
     };
   }, [amount, pay, payMint, recv, recvMint]);
+
+  async function onWrap() {
+    if (!owner) return;
+    const n = Number(wrapRaw);
+    if (!(n > 0)) {
+      toast.error("Enter an amount.");
+      return;
+    }
+    try {
+      wrapUsdc(owner, link?.label || "Wallet", n, usdc);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not wrap.");
+      return;
+    }
+    const r = wallet.add(n, "USD", "usdc");
+    if (!r.ok) {
+      unwrapUsdc(owner, n);
+      toast.error(r.error);
+      return;
+    }
+    setWrapTick((t) => t + 1);
+    toast.success(`Wrapped $${n.toFixed(2)}. It is still in the wallet.`);
+  }
+
+  async function onPush() {
+    if (!owner) return;
+    const n = Number(wrapRaw);
+    if (!(n > 0)) {
+      toast.error("Enter an amount.");
+      return;
+    }
+    if (n - wrapped > 0.001) {
+      toast.error("Only wrapped USDC can be pushed back. Other Senda cash was not taken from this wallet.");
+      return;
+    }
+    const r = wallet.release(n, link?.label || "Phantom");
+    if (!r.ok) {
+      toast.error(r.error);
+      return;
+    }
+    unwrapUsdc(owner, n);
+    setWrapTick((t) => t + 1);
+    toast.success(`Pushed $${n.toFixed(2)} back to ${link?.label || "the wallet"}.`);
+  }
 
   async function go() {
     if (!quote || !recvMint) return;
@@ -166,7 +215,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
         </p>
         <ul className="mt-6 max-w-md divide-y divide-border">
           <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." />
-          <Source name="Phantom USDC" value={usdc} hint={owner ? owner : "Not connected"} />
+          <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} is in the vault` : owner || "Not connected"} />
           <Source name="SOL" value={solUsd} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} />
           <Source name="PreStocks" value={invested} hint="Held in this wallet, at the live token price" />
         </ul>
@@ -175,6 +224,28 @@ export function WalletDesk({ buy }: { buy?: string }) {
           <Link to="/pre" className="rounded-lg bg-elevated px-3 py-2">Buy</Link>
           <Link to="/payments" className="rounded-lg bg-elevated px-3 py-2">Send</Link>
           <Link to="/agents" className="rounded-lg bg-elevated px-3 py-2">Agents</Link>
+        </div>
+        <div className="mt-8 max-w-xl">
+          <h2 className="text-sm font-semibold">Vault</h2>
+          <p className="mt-1 text-sm text-muted">
+            The vault wraps {link?.label || "the wallet"}. The USDC stays in that wallet. Senda cash is the claim. Push sends the claim back, so the same USDC is spendable there again.
+          </p>
+          <p className="mt-2 font-mono text-sm">Wrapped ${wrapped.toFixed(2)}</p>
+          <input
+            value={wrapRaw}
+            onChange={(e) => setWrapRaw(e.target.value)}
+            inputMode="decimal"
+            className="mt-3 min-h-11 w-full rounded-lg bg-elevated px-3 font-mono outline-none"
+            aria-label="Amount to wrap or push"
+          />
+          <div className="mt-2 flex gap-2">
+            <button type="button" disabled={!owner} onClick={() => void onWrap()} className="min-h-11 rounded-lg bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50">
+              Wrap
+            </button>
+            <button type="button" disabled={!owner} onClick={() => void onPush()} className="min-h-11 rounded-lg bg-elevated px-4 text-sm font-semibold disabled:opacity-50">
+              Push back
+            </button>
+          </div>
         </div>
         <div className="mt-8 max-w-xl">
           <h2 className="text-sm font-semibold">Send cap</h2>

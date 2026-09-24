@@ -5,6 +5,8 @@ type SolProvider = {
   isSolflare?: boolean;
   isBackpack?: boolean;
   connect: () => Promise<{ publicKey?: { toString: () => string } }>;
+  signAndSendTransaction?: (tx: unknown) => Promise<{ signature: string | Uint8Array }>;
+  signTransaction?: (tx: unknown) => Promise<{ serialize: () => Uint8Array }>;
 };
 
 type EvmProvider = {
@@ -19,6 +21,11 @@ export type WalletId =
   | "phantom"
   | "solflare"
   | "backpack"
+  | "glow"
+  | "okx"
+  | "bitget"
+  | "trust"
+  | "coinbase-sol"
   | "metamask"
   | "rabby"
   | "coinbase"
@@ -35,6 +42,11 @@ const SOL: { id: WalletId; name: string; pick: (w: Window) => SolProvider | unde
   { id: "phantom", name: "Phantom", pick: (w) => (w as Win).phantom?.solana },
   { id: "solflare", name: "Solflare", pick: (w) => (w as Win).solflare },
   { id: "backpack", name: "Backpack", pick: (w) => (w as Win).backpack },
+  { id: "glow", name: "Glow", pick: (w) => (w as Win).glowSolana },
+  { id: "okx", name: "OKX", pick: (w) => (w as Win).okxwallet?.solana },
+  { id: "bitget", name: "Bitget", pick: (w) => (w as Win).bitkeep?.solana },
+  { id: "trust", name: "Trust", pick: (w) => (w as Win).trustwallet?.solana },
+  { id: "coinbase-sol", name: "Coinbase", pick: (w) => (w as Win).coinbaseSolana },
 ];
 
 const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] = [
@@ -48,6 +60,11 @@ type Win = Window & {
   phantom?: { solana?: SolProvider };
   solflare?: SolProvider;
   backpack?: SolProvider;
+  glowSolana?: SolProvider;
+  okxwallet?: { solana?: SolProvider };
+  bitkeep?: { solana?: SolProvider };
+  trustwallet?: { solana?: SolProvider };
+  coinbaseSolana?: SolProvider;
   ethereum?: EvmProvider & { providers?: EvmProvider[] };
 };
 
@@ -78,6 +95,33 @@ export function detectWallets(): WalletChoice[] {
   return [...sol, ...evm];
 }
 
+const ACTIVE = "senda.activeWallet";
+
+export function rememberWallet(id: WalletId) {
+  try {
+    sessionStorage.setItem(ACTIVE, id);
+  } catch {
+    /* private mode */
+  }
+}
+
+/** The wallet the person connected. Swaps sign there, not in a Senda key. */
+export function activeSolProvider(): SolProvider | null {
+  if (typeof window === "undefined") return null;
+  let id: string | null = null;
+  try {
+    id = sessionStorage.getItem(ACTIVE);
+  } catch {
+    id = null;
+  }
+  const ordered = SOL.filter((s) => s.id === id).concat(SOL.filter((s) => s.id !== id));
+  for (const s of ordered) {
+    const p = s.pick(window);
+    if (p?.connect && (p.signAndSendTransaction || p.signTransaction)) return p;
+  }
+  return null;
+}
+
 export async function connectWallet(id: WalletId): Promise<{ address: string; label: string; chain: "solana" | "evm" }> {
   const choice = detectWallets().find((w) => w.id === id);
   if (!choice?.installed) throw new Error(`${choice?.name ?? "That wallet"} is not in this browser.`);
@@ -88,6 +132,7 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
     const res = await provider.connect();
     const address = res?.publicKey?.toString();
     if (!address) throw new Error(`${choice.name} returned no account.`);
+    rememberWallet(id);
     return { address, label: choice.name, chain: "solana" };
   }
   const spec = EVM.find((e) => e.id === id);

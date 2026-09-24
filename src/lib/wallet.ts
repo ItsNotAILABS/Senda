@@ -633,6 +633,25 @@ export function withdraw(w: Wallet, amount: number, ccy: Ccy = "USD"): Wallet | 
   });
 }
 
+export function releaseToWallet(w: Wallet, amount: number, label: string): Wallet | { error: string } {
+  const amt = roundCcy(amount, "USD");
+  if (!(amt > 0)) return { error: "Enter an amount." };
+  if ((w.balances.USD || 0) < amt) return { error: "Not enough Senda cash." };
+  const next = {
+    ...w,
+    balances: { ...w.balances, USD: roundCcy((w.balances.USD || 0) - amt, "USD") },
+  };
+  return pushTx(next, {
+    kind: "withdraw",
+    amount: amt,
+    ccy: "USD",
+    counterparty: label,
+    note: `Pushed to ${label}`,
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 export function sendTo(
   w: Wallet,
   amount: number,

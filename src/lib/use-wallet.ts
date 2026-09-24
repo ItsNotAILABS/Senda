@@ -41,6 +41,7 @@ import {
   vaultIn,
   vaultOut,
   withdraw,
+  releaseToWallet,
   type CardKind,
   type Ccy,
   type Contact,
@@ -125,6 +126,7 @@ export function useWallet() {
         return { ok: true as const };
       },
       withdraw: (amount: number, ccy: Ccy = "USD") => commit(withdraw(w, amount, ccy)),
+      release: (amount: number, label: string) => commit(releaseToWallet(w, amount, label)),
       send: (amount: number, ccy: Ccy, contact: Contact, note: string) => {
         const { wallet } = upsertContact(w, contact.name, contact.tag);
         const amountUsd = amount * (usdPer[ccy] || 0);

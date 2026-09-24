@@ -1,4 +1,4 @@
-/** Phantom in this browser. The address is public. Keys never leave the extension. */
+import { activeSolProvider } from "@/lib/wallets";
 
 type Pub = { toString: () => string };
 
@@ -32,7 +32,7 @@ export async function connectPhantom(): Promise<string> {
 
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
   await simulateFirst(tx);
-  const p = phantomProvider();
+  const p = (activeSolProvider() as PhantomProvider | null) ?? phantomProvider();
   if (!p) throw new Error("Phantom is not connected.");
   if (p.signAndSendTransaction) {
     const out = await p.signAndSendTransaction(tx);
