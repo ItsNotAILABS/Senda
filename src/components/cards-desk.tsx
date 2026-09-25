@@ -33,16 +33,24 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
 
   return (
     <main className="px-3 py-3 lg:px-4">
-      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cards</p>
-        <h1 className="mt-2 max-w-xl text-4xl">Numbers you can spend. The token stays put.</h1>
-        <p className="mt-3 max-w-2xl text-sm text-muted">
-          A card for the month, a number for one store, or a fleet card. The full number shows once. What stays is the last four. This is not a bank card.
-        </p>
-        <button type="button" onClick={() => setStep(step === "issue" ? "list" : "issue")} className="mt-4 min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-          {step === "issue" ? "Back to the cards" : "Issue a card"}
-        </button>
-      </header>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cards</p>
+          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            A number for the store. <span className="text-accent">Not the token.</span>
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-muted">
+            Pick the kind of store, set the cap, and mint a number. It is shown once. A second charge is declined. This is not a bank card, and it does not sell the PreStock.
+          </p>
+          <button type="button" onClick={() => setStep(step === "issue" ? "list" : "issue")} className="mt-6 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+            {step === "issue" ? "Back to the numbers" : "Issue a card you keep"}
+          </button>
+        </div>
+        <div className="relative min-h-64 overflow-hidden rounded-[28px] border border-white/10">
+          <img src="/images/metal-card.jpg" alt="" className="h-full min-h-64 w-full object-cover" />
+          <p className="absolute right-4 bottom-4 text-xs tracking-widest text-white/80 uppercase">Shown once</p>
+        </div>
+      </section>
 
       {step === "issue" ? (
         <section className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-5">

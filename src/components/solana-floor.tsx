@@ -13,18 +13,29 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Solana</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-4xl">PRE8 {idx.level.toFixed(1)}</h1>
-            <p className="mt-2 max-w-xl text-sm text-muted">
-              {idx.n} PreStocks, weighted by mark value. 1000 means the token price matches the mark. These are SPL tokens. You buy them in this app.
-            </p>
-          </div>
-          <p className="font-mono text-sm text-muted">Mark value {formatValuation(idx.tv)}</p>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Solana</p>
+          <h1 className="mt-3 text-5xl tracking-tight lg:text-6xl">
+            PRE8 <span className="text-accent">{idx.level.toFixed(1)}</span>
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-muted">
+            {idx.n} PreStocks, weighted by mark value. 1000 means the token price matches the mark. They are SPL tokens. You buy them here. Jupiter builds the route. You sign.
+          </p>
+          <p className="mt-4 font-mono text-sm text-muted">Mark value {formatValuation(idx.tv)}</p>
         </div>
-      </header>
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <p className="text-sm font-semibold">Your signer</p>
+          <p className="mt-2 text-sm text-muted">
+            {link ? `${link.label} · ${link.address.slice(0, 4)}…${link.address.slice(-4)}` : "No wallet yet. The index is live. A buy waits until you connect."}
+          </p>
+          <div className="mt-4">{link ? null : <WalletPicker />}</div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Link to="/pre" className="flex min-h-12 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">Buy a name</Link>
+            <Link to="/wallet" className="flex min-h-12 items-center justify-center rounded-full bg-[#9945ff]/20 text-sm font-semibold text-[#d8b4fe]">Convert SOL</Link>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
@@ -51,21 +62,6 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         </section>
 
         <div className="space-y-3">
-          <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-            <h2 className="text-lg">Your signer</h2>
-            <p className="mt-1 text-sm text-muted">
-              {link ? `${link.label} · ${link.address.slice(0, 4)}…${link.address.slice(-4)}` : "No wallet yet. Connect the one that already holds SOL or USDC."}
-            </p>
-            <div className="mt-3">{link ? null : <WalletPicker />}</div>
-            <div className="mt-3 flex flex-col gap-2">
-              <Link to="/pre" className="flex min-h-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
-                Buy a PreStock
-              </Link>
-              <Link to="/wallet" className="flex min-h-11 items-center justify-center rounded-full bg-white/10 text-sm font-semibold">
-                Convert SOL
-              </Link>
-            </div>
-          </section>
           <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
             <h2 className="text-lg">What a buy actually does</h2>
             <ul className="mt-3 space-y-2 text-sm text-muted">

@@ -42,7 +42,13 @@ export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promis
   }
   if (!p.signTransaction) throw new Error("This Phantom cannot send a transaction.");
   const signed = await p.signTransaction(tx);
-  const raw = signed.serialize();
+  return broadcastSigned(signed);
+}
+
+/** Simulate and submit a transaction that is already signed. Does not ask the wallet again. */
+export async function broadcastSigned(tx: { serialize: () => Uint8Array }): Promise<string> {
+  await simulateFirst(tx);
+  const raw = tx.serialize();
   const body = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false }]);
   if (typeof body !== "string") throw new Error("RPC did not return a signature.");
   return body;
