@@ -1,15 +1,23 @@
+import { finishGrant, listBlobs, openNonce, putBlob } from "@/lib/sealed-store";
+
 /**
  * The wallet is the account. What the desk remembers is ciphertext.
  * The key lives in memory for this visit. It is the signature of one fixed line.
- * This file cannot open a note from another wallet, and it does not keep the signature.
+ * Postgres stores that ciphertext and nothing else. Flags the desk needs before
+ * a wallet exists stay in the clear, and they are not uploaded.
  */
 
 const MARK = "sen1.";
 const EVENT = "senda-seal";
+const PLAIN = new Set(["senda.seen.v1", "senda.howto.v1"]);
 
 let aes: CryptoKey | null = null;
+let who = "";
+let grant = "";
 const open = new Map<string, string>();
 const pending = new Map<string, string>();
+const dirty = new Map<string, string>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let installed = false;
 
 const native =
@@ -22,6 +30,7 @@ const native =
       };
 
 function own(key: string): boolean {
+  if (PLAIN.has(key)) return false;
   return key.startsWith("senda.") || key.startsWith("the-pit.");
 }
 
@@ -76,7 +85,55 @@ async function unpack(stored: string): Promise<string | null> {
 }
 
 async function writeCipher(key: string, value: string) {
-  rawSet(key, await pack(value));
+  const box = await pack(value);
+  rawSet(key, box);
+  schedule(key, box);
+}
+
+function schedule(key: string, box: string) {
+  if (!who || !grant) return;
+  dirty.set(key, box);
+  if (flushTimer != null) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    const batch = [...dirty];
+    dirty.clear();
+    void Promise.all(batch.map(([slot, packed]) => putBlob({ data: { wallet: who, nonce: grant, slot, box: packed } }))).catch(() => {
+      /* the browser copy is already sealed */
+    });
+  }, 400);
+}
+
+async function authorize(owner: string) {
+  const opened = await openNonce({ data: { wallet: owner } });
+  const provider = walletProvider();
+  if (!provider?.signMessage) return;
+  const out = await provider.signMessage(new TextEncoder().encode(`senda-grant:v1:${owner}:${opened.nonce}`), "utf8");
+  const sig = out instanceof Uint8Array ? out : out.signature;
+  if (!(sig instanceof Uint8Array)) return;
+  const done = await finishGrant({ data: { wallet: owner, nonce: opened.nonce, sig: b64(sig) } });
+  if (done.ok) grant = opened.nonce;
+}
+
+async function pull() {
+  if (!who || !grant) return;
+  const listed = await listBlobs({ data: { wallet: who, nonce: grant } });
+  for (const row of listed.rows) {
+    if (!own(row.slot) || open.has(row.slot)) continue;
+    const clear = await unpack(row.box);
+    if (clear == null) continue;
+    open.set(row.slot, clear);
+    rawSet(row.slot, row.box);
+  }
+}
+
+async function pushOpen() {
+  if (!who || !grant) return;
+  for (const key of open.keys()) {
+    const box = rawGet(key);
+    if (!box || !box.startsWith(MARK)) continue;
+    await putBlob({ data: { wallet: who, nonce: grant, slot: key, box } });
+  }
 }
 
 function install() {
@@ -113,11 +170,7 @@ function install() {
 }
 
 async function signVault(owner: string): Promise<Uint8Array> {
-  const w = window as unknown as {
-    phantom?: { solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> } };
-    solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> };
-  };
-  const provider = w.phantom?.solana ?? w.solana;
+  const provider = walletProvider();
   if (!provider?.signMessage) throw new Error("This wallet has to sign before the desk opens.");
   const out = await provider.signMessage(new TextEncoder().encode(`senda-vault:v1:${owner}`), "utf8");
   const sig = out instanceof Uint8Array ? out : out.signature;
@@ -125,8 +178,20 @@ async function signVault(owner: string): Promise<Uint8Array> {
   return sig;
 }
 
+function walletProvider(): {
+  signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array>;
+} | null {
+  const w = window as unknown as {
+    phantom?: { solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> } };
+    solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> };
+  };
+  return w.phantom?.solana ?? w.solana ?? null;
+}
+
 export async function unlockSeal(owner: string): Promise<void> {
   install();
+  who = owner;
+  grant = "";
   aes = await aesFrom(await signVault(owner));
   const keys: string[] = [];
   for (let i = 0; i < localStorage.length; i += 1) {
@@ -149,6 +214,13 @@ export async function unlockSeal(owner: string): Promise<void> {
     await writeCipher(key, value);
   }
   pending.clear();
+  try {
+    await authorize(owner);
+    await pull();
+    await pushOpen();
+  } catch {
+    /* local seal still holds. the database is the copy, not the door. */
+  }
   tell();
 }
 
