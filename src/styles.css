@@ -2,28 +2,29 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-bg: #0c110e;
-  --color-surface: #131a16;
-  --color-elevated: #1b231e;
-  --color-fg: #f3efe4;
-  --color-muted: #a8b0a4;
-  --color-subtle: #6f776c;
-  --color-paper: #f3efe4;
-  --color-ink: #141812;
-  --color-accent: #d4ff4a;
-  --color-accent-fg: #141812;
-  --color-up: #3dd68c;
+  --color-bg: #05050a;
+  --color-surface: #0e0e16;
+  --color-elevated: #171722;
+  --color-fg: #f4f4f8;
+  --color-muted: #b7b7c9;
+  --color-subtle: #7d7d92;
+  --color-paper: #f4f4f8;
+  --color-ink: #07070c;
+  --color-accent: #14f195;
+  --color-accent-fg: #04140c;
+  --color-sol: #9945ff;
+  --color-up: #14f195;
   --color-up-fg: #04140c;
-  --color-down: #e24b3a;
-  --color-down-fg: #fff5f3;
-  --color-lime: #d4ff4a;
-  --color-lime-fg: #141812;
-  --color-border: #2a332c;
-  --color-felt: #131a16;
-  --color-felt-ink: #0c110e;
-  --color-chip: #d4ff4a;
-  --color-chip-ink: #141812;
-  --font-display: "Newsreader", ui-serif, Georgia, serif;
+  --color-down: #ff5d73;
+  --color-down-fg: #2a060c;
+  --color-lime: #14f195;
+  --color-lime-fg: #04140c;
+  --color-border: #2a2a3d;
+  --color-felt: #0e0e16;
+  --color-felt-ink: #05050a;
+  --color-chip: #14f195;
+  --color-chip-ink: #04140c;
+  --font-display: "Space Grotesk", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --radius-sm: 0.5rem;
@@ -54,7 +55,7 @@
     font-family: var(--font-display);
     letter-spacing: -0.03em;
     line-height: 1.05;
-    font-weight: 500;
+    font-weight: 600;
     text-wrap: balance;
   }
   button:not(:disabled),

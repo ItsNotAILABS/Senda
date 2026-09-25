@@ -1,19 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { EquitiesDesk } from "@/components/equities-desk";
-import { getEquityBook } from "@/lib/equities";
+import { HomeDesk } from "@/components/home-desk";
+import { getHouse } from "@/lib/sol-house";
 
 export const Route = createFileRoute("/")({
-  loader: () => getEquityBook(),
+  loader: () => getHouse(),
   component: Home,
   errorComponent: HomeError,
 });
 
 function Home() {
-  const book = Route.useLoaderData();
+  const names = Route.useLoaderData();
   return (
     <AppShell>
-      <EquitiesDesk book={book} />
+      <HomeDesk names={names} />
     </AppShell>
   );
 }

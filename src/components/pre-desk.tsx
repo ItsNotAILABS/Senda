@@ -91,9 +91,11 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px]">
       <section className="border-b border-border xl:border-r xl:border-b-0">
         <header className="px-5 pt-6 pb-4 lg:px-8">
-          <h1 className="font-display text-4xl">Pre-IPO</h1>
-          <p className="mt-2 text-sm text-muted">
-            {owner ? "Buy with the USDC in this wallet, or pay with SOL on Your money." : "Phantom is a source of funds. Open Your money to use the SOL and USDC already there."}
+          <h1 className="font-display text-4xl">The book</h1>
+          <p className="mt-2 max-w-xl text-sm text-muted">
+            {owner
+              ? "Buy with the USDC in this wallet. Or pay with SOL from Your money. Jupiter builds it. You sign."
+              : "Connect the wallet that already holds the money. Then buy the mint. Nothing else to deposit."}
           </p>
         </header>
         <table className="w-full text-left text-sm">

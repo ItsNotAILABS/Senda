@@ -24,7 +24,7 @@ const GROUPS = [
   {
     label: "Desk",
     tabs: [
-      { to: "/", label: "Portfolio", icon: LayoutGrid },
+      { to: "/", label: "Home", icon: LayoutGrid },
       { to: "/pre", label: "Pre-IPO", icon: Sparkles },
       { to: "/invest", label: "Trade", icon: Waypoints },
       { to: "/agents", label: "Agents", icon: Bot },
@@ -64,9 +64,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
       <aside className="sticky top-0 h-dvh w-60 shrink-0 overflow-y-auto border-r border-border bg-surface">
-        <Link to="/" className="flex items-center gap-2 px-4 pt-4 pb-1">
-          <span className="size-2 rounded-sm bg-accent" />
-          <span className="font-display text-xl tracking-tight">Senda</span>
+        <Link to="/" className="block px-4 pt-4 pb-2">
+          <span className="flex items-center gap-2">
+            <span className="size-2.5 rounded-sm bg-gradient-to-br from-[#9945FF] to-[#14F195]" />
+            <span className="font-display text-xl tracking-tight">Senda</span>
+          </span>
+          <span className="mt-1 block pl-4 text-[11px] text-subtle">Pre-IPO on Solana</span>
         </Link>
         <nav className="mt-3 flex flex-col gap-3 px-2 pb-2">
           {GROUPS.map((g) => (
