@@ -225,9 +225,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   ];
 
   return (
-    <div className="grid min-h-[70vh] grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className="border-b border-border lg:border-r lg:border-b-0">
-        <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-5 py-4">
+    <div className="grid min-h-[70vh] grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-4">
+      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
+        <header className="px-5 py-4">
           <h1 className="text-3xl">Agents</h1>
           <p className="mt-2 text-sm text-muted">Make one. The envelope is the bound. You still sign the send.</p>
         </header>
@@ -281,7 +281,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           ))}
         </ul>
       </aside>
-      <section className="px-5 py-6 lg:px-10">
+      <section className="rounded-[28px] border border-white/10 bg-[#101018] px-5 py-6 lg:px-8">
         <AgentComputer names={book} envelopeId={env?.id ?? null} />
         {env ? (
           <>

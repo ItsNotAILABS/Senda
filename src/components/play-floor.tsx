@@ -24,8 +24,8 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
   const move = (n?: HouseListing) => (n && open[n.symbol] ? (n.last - open[n.symbol]) / open[n.symbol] : null);
 
   return (
-    <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-2">
-      <section className="m-3 rounded-[28px] border border-white/10 bg-[#101018] p-6 lg:m-3">
+    <div className="grid gap-3 px-3 py-3 lg:grid-cols-2 lg:px-4">
+      <section className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
         <h1 className="mt-2 text-4xl">Which name moves</h1>
         <p className="mt-2 max-w-md text-sm text-muted">
@@ -35,7 +35,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
           <Pick value={a} names={live} onChange={setA} />
           <Pick value={b} names={live} onChange={setB} />
         </div>
-        <button type="button" onClick={arm} className="mt-3 min-h-11 rounded-lg bg-fg px-5 text-sm font-semibold text-bg">
+        <button type="button" onClick={arm} className="mt-3 min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
           Arm on this print
         </button>
         {left && right && open[left.symbol] ? (
@@ -50,15 +50,15 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      <section className="p-6">
-        <p className="text-xs tracking-wide text-subtle uppercase">Off the mark</p>
-        <h2 className="mt-1 font-display text-4xl">Two fills from the print</h2>
+      <section className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">On the print</p>
+        <h2 className="mt-2 text-4xl">Buy it here</h2>
         <p className="mt-2 max-w-md text-sm text-muted">
-          Closest name is the tight book. Cheapest vs the SPV mark is the discount. Both open a real Jupiter swap.
+          Closest to the mark, and cheapest versus the mark. The button is a Jupiter swap of that PreStock. It does not leave Senda.
         </p>
         <div className="mt-5 grid gap-3">
           {tight ? (
-            <article className="rounded-xl bg-elevated p-4">
+            <article className="rounded-2xl bg-black/40 p-4">
               <p className="text-xs text-subtle">Closest to mark</p>
               <p className="mt-1 font-display text-3xl">{tight.symbol}</p>
               <p className="mt-1 font-mono text-xs">
@@ -68,7 +68,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
             </article>
           ) : null}
           {cheap ? (
-            <article className="rounded-xl bg-elevated p-4">
+            <article className="rounded-2xl bg-black/40 p-4">
               <p className="text-xs text-subtle">Cheapest vs mark</p>
               <p className="mt-1 font-display text-3xl">{cheap.symbol}</p>
               <p className="mt-1 font-mono text-xs">
@@ -113,7 +113,7 @@ function Fill({ mint, label, side = "buy" }: { mint: string; label: string; side
       usd={10}
       side={side}
       label={label}
-      className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
+      className="mt-3 inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
     />
   );
 }

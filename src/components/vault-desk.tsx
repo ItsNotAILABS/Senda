@@ -75,18 +75,18 @@ export function VaultDesk() {
       </p>
       </header>
 
-      <div className="mt-3 grid gap-4 lg:grid-cols-3">
-        <section className="rounded-2xl border border-border bg-surface p-5">
+      <div className="mt-3 grid gap-3 lg:grid-cols-3">
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <p className="text-xs text-subtle">On-chain USDC</p>
           <p className="mt-1 font-mono text-3xl">{owner ? `$${usdc.toFixed(2)}` : "—"}</p>
           <p className="mt-2 text-xs text-muted">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "No wallet connected."}</p>
         </section>
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <p className="text-xs text-subtle">Wrapped</p>
           <p className="mt-1 font-mono text-3xl text-accent">${wrapped.toFixed(2)}</p>
           <p className="mt-2 text-xs text-muted">Still sitting in the wallet. Counted once.</p>
         </section>
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <p className="text-xs text-subtle">Send cap</p>
           <p className="mt-1 font-mono text-3xl">${cap}</p>
           <div className="mt-3 flex gap-1">
@@ -104,21 +104,21 @@ export function VaultDesk() {
         </section>
       </div>
 
-      <section className="mt-6 max-w-xl">
+      <section className="mt-3 max-w-xl rounded-[28px] border border-white/10 bg-[#101018] p-5">
         {owner ? (
           <>
             <input
               value={raw}
               onChange={(e) => setRaw(e.target.value)}
               inputMode="decimal"
-              className="min-h-11 w-full rounded-lg bg-elevated px-3 font-mono outline-none"
+              className="min-h-11 w-full rounded-2xl bg-black/40 px-3 font-mono outline-none"
               aria-label="Amount"
             />
             <div className="mt-2 flex gap-2">
-              <button type="button" onClick={wrap} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg">
+              <button type="button" onClick={wrap} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
                 Wrap
               </button>
-              <button type="button" onClick={push} className="min-h-11 rounded-lg bg-elevated px-4 text-sm font-semibold">
+              <button type="button" onClick={push} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold">
                 Push back
               </button>
               <Link to="/agents" className="inline-flex min-h-11 items-center px-3 text-sm text-muted">
@@ -131,8 +131,19 @@ export function VaultDesk() {
         )}
       </section>
 
-      <section className="mt-10 max-w-xl">
-        <h2 className="text-lg">Cash vaults</h2>
+      <section className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <h2 className="text-lg">How a PreStock swap is signed</h2>
+          <ul className="mt-3 space-y-2 text-sm text-muted">
+            <li>Jupiter builds it inside Senda. There is no trip out to the issuer.</li>
+            <li>Only SOL, USDC, and the PreStock mints are allowed. Anything else never reaches the wallet.</li>
+            <li>The chain simulates it first. If it would fail, Phantom is not asked.</li>
+            <li>Impact over 5%, or a size over the cap, is refused.</li>
+            <li>You sign. The key never comes here.</li>
+          </ul>
+        </div>
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <h2 className="text-lg">Cash vaults</h2>
         <p className="mt-1 text-sm text-muted">A named pocket of Senda cash. It is not a second wallet and it does not mint USDC.</p>
         <ul className="mt-3 divide-y divide-border">
           {wallet.w.vaults.length === 0 ? <li className="py-3 text-sm text-subtle">None yet.</li> : null}
@@ -169,6 +180,7 @@ export function VaultDesk() {
           >
             Open
           </button>
+        </div>
         </div>
       </section>
     </main>

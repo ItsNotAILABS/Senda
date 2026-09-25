@@ -1,6 +1,7 @@
 /** Jupiter builds the swap. Phantom signs it. Senda never holds the key. */
 
 import { USDC } from "@/lib/jup-exec";
+import { PRESTOCK_MINTS } from "@/lib/phantom";
 import { sendVersioned } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
 
@@ -10,6 +11,15 @@ const SWAP = "https://api.jup.ag/swap/v1/swap";
 const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
 
 export const SOL = "So11111111111111111111111111111111111111112";
+
+const ALLOWED = new Set<string>([SOL, USDC, ...PRESTOCK_MINTS.map(([, mint]) => mint)]);
+
+/** A swap may only be SOL, USDC, or a PreStock mint. Anything else never reaches the wallet. */
+export function assertPrestockRoute(inputMint: string, outputMint: string) {
+  if (!ALLOWED.has(inputMint) || !ALLOWED.has(outputMint)) {
+    throw new Error("That pair is not SOL, USDC, or a PreStock. The wallet was not asked to sign.");
+  }
+}
 
 export type RouteQuote = {
   inAmount: string;
@@ -83,6 +93,7 @@ export async function signRoute(input: {
   usd: number;
 }): Promise<{ signature: string; outUi: number }> {
   if (!(input.usd > 0)) throw new Error("Enter an amount.");
+  assertPrestockRoute(input.inputMint, input.outputMint);
   const cap = spendCap();
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
   const quoted = await quoteRoute(input);
