@@ -1,259 +1,273 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { connectPhantom } from "@/lib/phantom";
-import { runPrestock } from "@/lib/prestock";
-import { FillButton } from "@/components/fill-button";
-import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-const SLIPS = "senda.slips.v2";
+const LOGO: Record<string, string> = {
+  SPACEX: "/logos/spacex.png",
+  OPENAI: "/logos/openai.png",
+  ANTHROPIC: "/logos/anthropic.png",
+  ANDURIL: "/logos/anduril.png",
+  NEURALINK: "/logos/neuralink.png",
+  FIGUREAI: "/logos/figureai.png",
+  KALSHI: "/logos/kalshi.png",
+  POLYMARKET: "/logos/polymarket.png",
+};
 
-type Slip = { id: string; symbol: string; mint: string; dir: "up" | "down"; stake: number; start: number; open: boolean };
+type Game = "wheel" | "slots" | "table";
 
-function loadSlips(): Slip[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const p = JSON.parse(window.localStorage.getItem(SLIPS) || "[]") as Slip[];
-    return Array.isArray(p) ? p : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSlips(rows: Slip[]) {
-  try {
-    window.localStorage.setItem(SLIPS, JSON.stringify(rows.slice(0, 12)));
-  } catch {
-    /* quota */
-  }
+function pocket(book: HouseListing[]): number {
+  const n = book.reduce((s, x) => s + Math.round(x.last * 100), 0);
+  return n % book.length;
 }
 
 export function PlayFloor({ names }: { names: HouseListing[] }) {
-  const live = names.filter((n) => n.last > 0 && !/xai/i.test(n.symbol));
+  const book = names.filter((n) => n.venue === "prestocks" && n.last > 0 && !/xai/i.test(n.symbol));
   const wallet = useWallet();
-  const [a, setA] = useState(live[0]?.symbol ?? "");
-  const [b, setB] = useState(live[1]?.symbol ?? live[0]?.symbol ?? "");
-  const [back, setBack] = useState(live[0]?.symbol ?? "");
-  const [open, setOpen] = useState<Record<string, number>>({});
-  const [size, setSize] = useState(25);
-  const [slipName, setSlipName] = useState(live[0]?.symbol ?? "");
-  const [dir, setDir] = useState<"up" | "down">("up");
+  const cash = wallet.w.balances.USD || 0;
+  const [game, setGame] = useState<Game>("wheel");
   const [stake, setStake] = useState(10);
-  const [slips, setSlips] = useState<Slip[]>([]);
-  const [slipBusy, setSlipBusy] = useState(false);
-  const left = live.find((n) => n.symbol === a);
-  const right = live.find((n) => n.symbol === b);
-  const ranked = [...live].sort((x, y) => (y.change24h ?? 0) - (x.change24h ?? 0));
+  const [pick, setPick] = useState(book[0]?.symbol ?? "");
+  const [lit, setLit] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [landed, setLanded] = useState("");
+  const [reels, setReels] = useState<string[]>(["", "", ""]);
+  const [dir, setDir] = useState<"up" | "down">("up");
+  const [locked, setLocked] = useState<{ symbol: string; start: number } | null>(null);
+  const timer = useRef<number | null>(null);
+  const face = book.find((n) => n.symbol === pick) ?? book[0];
+  const pays = Math.max(2, book.length - 1);
 
-  useEffect(() => setSlips(loadSlips()), []);
+  useEffect(() => {
+    if (!pick && book[0]) setPick(book[0].symbol);
+  }, [book, pick]);
 
-  function arm() {
-    const snap: Record<string, number> = {};
-    for (const n of live) snap[n.symbol] = n.last;
-    setOpen(snap);
-    setBack(a);
-    toast.success("Race is live from this print.");
+  useEffect(() => () => {
+    if (timer.current) window.clearInterval(timer.current);
+  }, []);
+
+  function take(payout: number, note: string) {
+    const r = wallet.playRound(stake, payout, note);
+    if (!r.ok) {
+      toast.error(r.error || "Not enough cash.");
+      return false;
+    }
+    return true;
   }
 
-  const move = (n?: HouseListing) => (n && open[n.symbol] ? (n.last - open[n.symbol]) / open[n.symbol] : n?.change24h ?? 0);
-  const leftMove = move(left) ?? 0;
-  const rightMove = move(right) ?? 0;
-  const leader = Math.abs(leftMove) === Math.abs(rightMove) ? null : Math.abs(leftMove) > Math.abs(rightMove) ? left : right;
-
-  async function lockSlip() {
-    const name = live.find((n) => n.symbol === slipName);
-    if (!name || slipBusy) return;
-    setSlipBusy(true);
-    try {
-      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-      const owner = existing || (await connectPhantom());
-      if (!existing) {
-        const linked = wallet.linkChain(owner, "Phantom", "phantom");
-        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
-      }
-      const done = await runPrestock({ owner, mint: name.mint, side: "buy", usd: stake, price: name.last });
-      const row: Slip = { id: crypto.randomUUID(), symbol: name.symbol, mint: name.mint, dir, stake, start: name.last, open: true };
-      const next = [row, ...slips];
-      setSlips(next);
-      saveSlips(next);
-      toast.success(`Bought $${stake} of ${name.symbol}. ${done.signature.slice(0, 8)}… That's the stake.`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The stake did not send.");
-    } finally {
-      setSlipBusy(false);
+  function spinWheel() {
+    if (!book.length || busy) return;
+    if (!(cash >= stake)) {
+      toast.error("Not enough cash. Add it on Send.");
+      return;
     }
+    setBusy(true);
+    setLanded("");
+    const idx = pocket(book);
+    let step = 0;
+    const total = book.length * 3 + idx;
+    const id = window.setInterval(() => {
+      setLit(step % book.length);
+      step += 1;
+      if (step > total) {
+        window.clearInterval(id);
+        timer.current = null;
+        const hit = book[idx];
+        setLanded(hit.symbol);
+        setLit(idx);
+        setBusy(false);
+        const won = hit.symbol === pick;
+        if (take(won ? stake * pays : 0, `Wheel ${hit.symbol}`)) {
+          toast.success(won ? `${hit.symbol} hit. Paid ${pays}×.` : `Landed on ${hit.symbol}.`);
+        }
+      }
+    }, 70);
+    timer.current = id;
   }
 
-  async function settle(row: Slip) {
-    const name = live.find((n) => n.symbol === row.symbol);
-    if (!name || slipBusy) return;
-    const won = row.dir === "up" ? name.last > row.start : name.last < row.start;
-    if (!won) {
-      setSlipBusy(true);
-      try {
-        const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-        const owner = existing || (await connectPhantom());
-        await runPrestock({ owner, mint: row.mint || name.mint, side: "sell", usd: row.stake, price: name.last });
-        toast.success(`${row.symbol} did not. Sold the stake back to USDC.`);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Could not sell the stake back.");
-        return;
-      } finally {
-        setSlipBusy(false);
-      }
-    } else {
-      toast.success(`${row.symbol} went your way. The tokens stay in the wallet.`);
+  function spinSlots() {
+    if (book.length < 3 || busy) return;
+    if (!(cash >= stake)) {
+      toast.error("Not enough cash. Add it on Send.");
+      return;
     }
-    const next = slips.map((s) => (s.id === row.id ? { ...s, open: false } : s));
-    setSlips(next);
-    saveSlips(next);
+    setBusy(true);
+    const base = pocket(book);
+    const stops = [base % book.length, Math.floor((base * 7) % book.length), Math.floor((base * 13) % book.length)];
+    let step = 0;
+    const id = window.setInterval(() => {
+      setReels([
+        book[(step + stops[0]) % book.length].symbol,
+        book[(step + stops[1]) % book.length].symbol,
+        book[(step * 2 + stops[2]) % book.length].symbol,
+      ]);
+      step += 1;
+      if (step > 18) {
+        window.clearInterval(id);
+        timer.current = null;
+        const faces = stops.map((i) => book[i].symbol);
+        setReels(faces);
+        setBusy(false);
+        const same = faces[0] === faces[1] && faces[1] === faces[2];
+        const pair = faces[0] === faces[1] || faces[1] === faces[2] || faces[0] === faces[2];
+        const payout = same ? stake * 12 : pair ? stake * 2 : 0;
+        if (take(payout, `Slots ${faces.join(" ")}`)) {
+          toast.success(same ? "Three of a kind. 12×." : pair ? "A pair. 2×." : "No line.");
+        }
+      }
+    }, 80);
+    timer.current = id;
+  }
+
+  function deal() {
+    if (!face) return;
+    setLocked({ symbol: face.symbol, start: face.last });
+    toast.success(`${face.symbol} locked at ${formatUsd(face.last)}.`);
+  }
+
+  function stand() {
+    if (!locked) return;
+    const now = book.find((n) => n.symbol === locked.symbol);
+    if (!now) return;
+    const won = dir === "up" ? now.last > locked.start : now.last < locked.start;
+    if (take(won ? stake * 2 : 0, `Table ${locked.symbol} ${dir}`)) {
+      toast.success(won ? `${locked.symbol} went ${dir}. Paid 2×.` : `${locked.symbol} did not. Stake stays with the house.`);
+    }
+    setLocked(null);
   }
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
-        <h1 className="mt-2 text-4xl">Games on the live print</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          A race and a board on the live print. A slip buys the name. If it goes your way, the tokens stay. If it doesn't, settling sells them back to USDC.
-        </p>
-      </header>
-
-      <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">Race</p>
-            <p className="text-xs text-muted">Two names. The one that moves more from the armed print is ahead. Buy the one you backed.</p>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
+          <h1 className="mt-2 text-4xl tracking-tight">The floor</h1>
+          <p className="mt-2 max-w-xl text-sm text-muted">
+            The faces are the PreStocks. The stake is the same cash you send. A hit pays back into that cash. Nothing else is minted.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(
+              [
+                ["wheel", "Wheel"],
+                ["slots", "Slots"],
+                ["table", "Table"],
+              ] as const
+            ).map(([id, label]) => (
+              <button key={id} type="button" onClick={() => setGame(id)} className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", game === id ? "bg-accent text-accent-fg" : "bg-white/10")}>
+                {label}
+              </button>
+            ))}
           </div>
-          <div className="flex gap-1">
-            {[10, 25, 50].map((n) => (
-              <button key={n} type="button" onClick={() => setSize(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", size === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
+        </div>
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <p className="text-xs text-subtle">Cash on the account</p>
+          <p className="mt-1 font-mono text-4xl">${cash.toFixed(0)}</p>
+          <div className="mt-4 flex gap-1">
+            {[5, 10, 25, 100].map((n) => (
+              <button key={n} type="button" onClick={() => setStake(n)} className={cn("min-h-9 flex-1 rounded-full font-mono text-xs", stake === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
                 ${n}
               </button>
             ))}
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <Lane name={left} pct={leftMove} on={back === left?.symbol} onPick={() => left && setBack(left.symbol)} armed={Boolean(open[left?.symbol || ""])} />
-          <Lane name={right} pct={rightMove} on={back === right?.symbol} onPick={() => right && setBack(right.symbol)} armed={Boolean(open[right?.symbol || ""])} />
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <select value={a} onChange={(e) => setA(e.target.value)} className="min-h-11 rounded-full bg-black/40 px-3 text-sm">
-            {live.map((n) => (
-              <option key={n.symbol}>{n.symbol}</option>
-            ))}
-          </select>
-          <select value={b} onChange={(e) => setB(e.target.value)} className="min-h-11 rounded-full bg-black/40 px-3 text-sm">
-            {live.map((n) => (
-              <option key={`b-${n.symbol}`}>{n.symbol}</option>
-            ))}
-          </select>
-          <button type="button" onClick={arm} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold">
-            Arm the race
-          </button>
-          {leader ? (
-            <FillButton mint={leader.mint} usd={size} price={leader.last} label={`Buy ${leader.symbol} · $${size}`} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg" />
-          ) : null}
-        </div>
-        <p className="mt-3 text-xs text-subtle">{leader ? `${leader.symbol} is ahead.` : "Arm it and the lanes start from this print."}</p>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <p className="text-sm font-semibold">The board</p>
-          <p className="text-xs text-muted">Every name, by the day. Buy is Jupiter.</p>
-          <ul className="mt-3 space-y-2">
-            {ranked.map((n) => {
-              const pct = (n.change24h ?? 0) * 100;
-              const width = Math.min(100, Math.abs(pct) * 4 + 8);
-              return (
-                <li key={n.id} className="rounded-2xl bg-black/30 px-3 py-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <span>
-                      <span className="block text-sm font-semibold">{n.symbol}</span>
-                      <span className="font-mono text-[11px] text-subtle">{formatUsd(n.last)} · {formatPremium(n.premium)}</span>
-                    </span>
-                    <span className={cn("font-mono text-sm", pct < 0 ? "text-down" : "text-accent")}>{pct.toFixed(1)}%</span>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                    <div className={cn("h-full", pct < 0 ? "bg-down" : "bg-accent")} style={{ width: `${width}%` }} />
-                  </div>
-                  <FillButton mint={n.mint} usd={10} price={n.last} label={`Buy $10`} className="mt-2 inline-flex min-h-8 items-center rounded-full bg-white/10 px-3 text-xs font-semibold" />
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-
-        <div className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <p className="text-sm font-semibold">Slip</p>
-          <p className="mt-1 text-xs text-muted">
-            Locking buys ${stake} of the name. Right, and you keep the tokens. Wrong, and settle sells them back.
-          </p>
-          <select value={slipName} onChange={(e) => setSlipName(e.target.value)} className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm">
-            {live.map((n) => (
-              <option key={n.symbol}>{n.symbol}</option>
+      {game === "wheel" ? (
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl">Wheel</h2>
+              <p className="mt-1 text-sm text-muted">Pick a face. The pocket is the live print. A hit pays {pays}×.</p>
+            </div>
+            <button type="button" disabled={busy || !face} onClick={spinWheel} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-40">
+              {busy ? "Spinning…" : `Spin $${stake}`}
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+            {book.map((n, i) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setPick(n.symbol)}
+                className={cn(
+                  "flex items-center gap-3 rounded-2xl px-3 py-3 text-left",
+                  landed === n.symbol ? "bg-accent text-accent-fg" : pick === n.symbol ? "bg-white/15" : "bg-black/40",
+                  lit === i && busy ? "ring-2 ring-accent" : "",
+                )}
+              >
+                <Face symbol={n.symbol} />
+                <span>
+                  <span className="block text-sm font-semibold">{n.symbol}</span>
+                  <span className="block font-mono text-[11px] opacity-70">{formatUsd(n.last)}</span>
+                </span>
+              </button>
             ))}
-          </select>
-          <div className="mt-2 flex gap-2">
+          </div>
+        </section>
+      ) : null}
+
+      {game === "slots" ? (
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl">Slots</h2>
+              <p className="mt-1 text-sm text-muted">Three faces. A pair pays 2×. Three of a kind pays 12×. The stops come off the print.</p>
+            </div>
+            <button type="button" disabled={busy} onClick={spinSlots} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-40">
+              {busy ? "Spinning…" : `Pull $${stake}`}
+            </button>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            {reels.map((sym, i) => (
+              <div key={i} className="grid min-h-36 place-items-center rounded-[24px] bg-black/50">
+                {sym ? (
+                  <div className="text-center">
+                    <Face symbol={sym} />
+                    <p className="mt-2 text-sm font-semibold">{sym}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-subtle">—</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {game === "table" ? (
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <h2 className="text-2xl">Table</h2>
+          <p className="mt-1 text-sm text-muted">Pick a face and a side. Deal locks this print. Stand pays 2× if it moved that way. The stake leaves when you stand.</p>
+          <div className="mt-4 flex gap-2 overflow-x-auto">
+            {book.map((n) => (
+              <button key={n.id} type="button" onClick={() => setPick(n.symbol)} className={cn("min-w-28 shrink-0 rounded-2xl px-3 py-3 text-left", pick === n.symbol ? "bg-accent text-accent-fg" : "bg-black/40")}>
+                <Face symbol={n.symbol} />
+                <p className="mt-2 text-sm font-semibold">{n.symbol}</p>
+                <p className="font-mono text-[11px] opacity-70">{formatUsd(n.last)}</p>
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
             {(["up", "down"] as const).map((d) => (
-              <button key={d} type="button" onClick={() => setDir(d)} className={cn("min-h-10 flex-1 rounded-full text-sm font-semibold", dir === d ? "bg-accent text-accent-fg" : "bg-black/40")}>
+              <button key={d} type="button" onClick={() => setDir(d)} className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", dir === d ? "bg-white text-black" : "bg-black/40")}>
                 {d === "up" ? "Up" : "Down"}
               </button>
             ))}
+            <button type="button" onClick={deal} className="min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold">Deal</button>
+            <button type="button" disabled={!locked} onClick={stand} className="min-h-10 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-40">
+              Stand · ${stake}
+            </button>
           </div>
-          <div className="mt-2 flex gap-1">
-            {[5, 10, 25].map((n) => (
-              <button key={n} type="button" onClick={() => setStake(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", stake === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
-                ${n}
-              </button>
-            ))}
-          </div>
-          <button type="button" disabled={slipBusy} onClick={() => void lockSlip()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
-            {slipBusy ? "Waiting for the wallet…" : `Buy $${stake} as the stake`}
-          </button>
-          <ul className="mt-4 space-y-2">
-            {slips.filter((s) => s.open).map((s) => (
-              <li key={s.id} className="rounded-2xl bg-black/30 px-3 py-2 text-sm">
-                <p className="font-semibold">{s.symbol} {s.dir} · ${s.stake}</p>
-                <p className="font-mono text-[11px] text-subtle">from {formatUsd(s.start)}</p>
-                <button type="button" onClick={() => settle(s)} className="mt-2 text-xs font-semibold text-accent">
-                  Settle on this print
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
+          {locked ? <p className="mt-3 font-mono text-sm">{locked.symbol} from {formatUsd(locked.start)}</p> : null}
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function Lane({
-  name,
-  pct,
-  on,
-  onPick,
-  armed,
-}: {
-  name?: HouseListing;
-  pct: number;
-  on: boolean;
-  onPick: () => void;
-  armed: boolean;
-}) {
-  if (!name) return <div className="rounded-2xl bg-black/30 p-4 text-sm text-subtle">No name</div>;
-  const width = Math.min(100, Math.abs(pct) * 400 + 12);
-  return (
-    <button type="button" onClick={onPick} className={cn("rounded-2xl p-4 text-left", on ? "bg-accent/15 ring-1 ring-accent" : "bg-black/30")}>
-      <p className="text-xs text-subtle">{armed ? "From the armed print" : "Today"}</p>
-      <p className="mt-1 text-2xl font-semibold">{name.symbol}</p>
-      <p className="font-mono text-sm">{formatUsd(name.last)}</p>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-        <div className={cn("h-full", pct < 0 ? "bg-down" : "bg-accent")} style={{ width: `${width}%` }} />
-      </div>
-      <p className={cn("mt-2 font-mono text-sm", pct < 0 ? "text-down" : "text-accent")}>{(pct * 100).toFixed(2)}%</p>
-    </button>
-  );
+function Face({ symbol }: { symbol: string }) {
+  const src = LOGO[symbol];
+  if (!src) return <span className="grid size-10 place-items-center rounded-full bg-black/40 text-[10px] font-semibold">{symbol.slice(0, 2)}</span>;
+  return <img src={src} alt="" className="size-10 rounded-full bg-white object-contain p-1" />;
 }

@@ -989,6 +989,24 @@ export function payCover(w: Wallet, amount: number, title: string): Wallet | { e
   });
 }
 
+/** One round. Stake leaves, payout is added, both in the same save. */
+export function playRound(w: Wallet, stake: number, payout: number, note: string): Wallet | { error: string } {
+  const st = roundCcy(stake, "USD");
+  if (!(st > 0)) return { error: "Set a stake." };
+  if (w.balances.USD < st) return { error: "Not enough cash for that stake." };
+  const pay = roundCcy(Math.max(0, payout), "USD");
+  const next = { ...w, balances: { ...w.balances, USD: roundCcy(w.balances.USD - st + pay, "USD") } };
+  return pushTx(next, {
+    kind: "move",
+    amount: pay > 0 ? pay : st,
+    ccy: "USD",
+    counterparty: note,
+    note: pay > 0 ? "Play paid" : "Play stake",
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 /** Stake leaves Senda cash. A win pays the stake back twice. A loss keeps it. */
 export function playStake(w: Wallet, amount: number, note: string): Wallet | { error: string } {
   const amt = roundCcy(amount, "USD");

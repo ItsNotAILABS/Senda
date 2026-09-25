@@ -26,11 +26,11 @@ import { cn } from "@/lib/utils";
 
 const PRIMARY = [
   { to: "/", label: "Home", icon: LayoutGrid },
+  { to: "/pre", label: "PreStocks", icon: Sparkles },
   { to: "/payments", label: "Send", icon: Wallet },
   { to: "/cards", label: "Cards", icon: CreditCard },
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },
   { to: "/vault", label: "Vault", icon: Lock },
-  { to: "/pre", label: "PreStocks", icon: Sparkles },
   { to: "/social", label: "Play", icon: Gamepad2 },
   { to: "/agents", label: "Agents", icon: Bot },
 ] as const;
@@ -67,12 +67,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="font-display text-lg tracking-tight">Senda</span>
         </Link>
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
-          <p className="px-3 pt-1 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Money</p>
-          {PRIMARY.slice(0, 5).map((t) => (
+          <p className="px-3 pt-1 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Account</p>
+          {PRIMARY.slice(0, 6).map((t) => (
             <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
           ))}
-          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">With it</p>
-          {PRIMARY.slice(5).map((t) => (
+          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Floor</p>
+          {PRIMARY.slice(6).map((t) => (
             <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
           ))}
           <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">More</p>

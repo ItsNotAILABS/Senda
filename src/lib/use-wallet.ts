@@ -17,6 +17,7 @@ import {
   payCover,
   playStake,
   playWin,
+  playRound,
   claimNearby,
   convert,
   createSenda,
@@ -187,6 +188,7 @@ export function useWallet() {
         saveWallet(next);
         return { ok: true as const };
       },
+      playRound: (stake: number, payout: number, note: string) => commit(playRound(w, stake, payout, note)),
       investOut: (amount: number, name: string) => commit(investDebit(w, amount, name)),
       investFromVault: (vaultId: string, amount: number, name: string) =>
         commit(investFromVault(w, vaultId, amount, name)),
