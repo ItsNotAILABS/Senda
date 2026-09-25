@@ -9,3 +9,4 @@ pglite.data
 .pglite/
 dist/
 routeTree.gen.ts
+.cursor/
