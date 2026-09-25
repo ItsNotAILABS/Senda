@@ -1,4 +1,4 @@
-/** Borrow USD against PreStocks holdings. 50% LTV. Paper. */
+/** Cash against a PreStock that stays in the wallet. Half the print. Not a sale. */
 
 const KEY = "senda.lend.v1";
 

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { LTV, loadLoans, repay } from "@/lib/lend";
+import { LANE } from "@/lib/explain";
+import { LTV, loadLoans, borrow, repay } from "@/lib/lend";
 import { connectPhantom, splHolding } from "@/lib/phantom";
-import { runPrestock, spendable } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { formatMoney } from "@/lib/wallet";
@@ -29,15 +29,27 @@ export function LendDesk({
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
       const held = await splHolding(owner, h.mint);
-      const room = spendable(held.ui, h.last) * LTV;
-      if (room < 1) {
-        toast.error(`No ${h.symbol} in this wallet to draw against.`);
+      const full = Math.round(held.ui * h.last * LTV * 100) / 100;
+      const already = loans.find((l) => l.stockId === h.id)?.borrowed ?? 0;
+      const draw = Math.round((full - already) * 100) / 100;
+      if (draw < 1) {
+        toast.error(full < 1 ? `No ${h.symbol} in this wallet.` : `${h.symbol} is already drawn. The token is still there.`);
         return;
       }
-      const done = await runPrestock({ owner, mint: h.mint, side: "sell", usd: room, price: h.last });
-      toast.success(`Sold $${room.toFixed(2)} of ${h.symbol}. ${done.signature.slice(0, 8)}…`);
+      const credited = await onCredit(draw, `borrow ${h.symbol}`);
+      if (!credited.ok) {
+        toast.error(credited.error || "The loan did not credit.");
+        return;
+      }
+      const next = borrow(loans, h.id, h.symbol, held.ui, h.last);
+      if (!Array.isArray(next)) {
+        toast.error(next.error);
+        return;
+      }
+      setLoans(next);
+      toast.success(`$${draw.toFixed(2)} against ${h.symbol}. You still hold it. Spending this does not sell it.`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The sale did not send.");
+      toast.error(e instanceof Error ? e.message : "The loan did not open.");
     }
   }
 
@@ -56,17 +68,18 @@ export function LendDesk({
   return (
     <div className="px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        Sell up to {Math.round(LTV * 100)}% of the {`PreStock`} this wallet actually holds. The USDC lands in the wallet. The rest of the token stays.
+        Half of what this wallet holds, as cash you can spend. The PreStock does not move. You owe the cash back. Listed shares that Kamino already lends against stay on that market. This draw is the loan on the name you just bought.
       </p>
+      <p className="mt-3 text-xs leading-relaxed text-subtle">{LANE}</p>
       <ul className="mt-4 divide-y divide-border">
         {names.map((h) => (
           <li key={h.id} className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm font-semibold">{h.symbol}</p>
-              <p className="font-mono text-xs text-subtle">{formatUsd(h.last)} · draw is a sale, not a new loan</p>
+              <p className="font-mono text-xs text-subtle">{formatUsd(h.last)} · the token stays</p>
             </div>
             <button type="button" onClick={() => void take(h)} className="min-h-11 rounded-full bg-elevated px-4 text-xs font-semibold">
-              Sell to spend
+              Borrow against it
             </button>
           </li>
         ))}

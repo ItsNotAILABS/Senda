@@ -89,7 +89,7 @@ export function HouseTable({
       setBook(next);
       setTicket(null);
       toast.success(
-        `${side === "yes" ? "Bought" : "Sold"} ${stock.symbol} · $${spend} @ ${formatUsd(stock.last)}`,
+        `${side === "yes" ? "Bought" : "Sold"} ${stock.symbol} · $${spend} @ ${formatUsd(stock.last)}${side === "yes" ? ". It stays. You can borrow against it without selling." : ""}`,
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not fill.");

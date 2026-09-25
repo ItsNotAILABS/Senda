@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Solana-mainnet-111111?style=flat-square&logo=solana&logoColor=14F195" alt="Solana">
+  <img src="https://img.shields.io/badge/devnet-4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta-111111?style=flat-square&labelColor=14F195&color=111111" alt="Devnet program">
   <img src="https://img.shields.io/badge/wallet-you%20sign-c6f135?style=flat-square&labelColor=111111" alt="You sign">
   <img src="https://img.shields.io/badge/route-Jupiter-111111?style=flat-square" alt="Jupiter">
   <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC">
@@ -27,7 +27,30 @@
 
 A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. Senda is the layer in between: buy the name, hold it in your wallet, cover a drop, pay someone in USDC, play the print, or hand an agent a job it cannot sign.
 
-There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs. Cover terms can be written on devnet to `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta` (deploy `2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay`). Nothing on mainnet moves until the wallet you control signs.
+There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
+
+## Devnet
+
+The cover program is deployed.
+
+| | |
+| --- | --- |
+| Cluster | devnet |
+| Program | [`4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`](https://explorer.solana.com/address/4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta?cluster=devnet) |
+| Deploy | [`2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay`](https://explorer.solana.com/tx/2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay?cluster=devnet) |
+| Ref | [chain/devnet.json](chain/devnet.json) |
+
+The wallet signs. The program writes the cover account. It does not hold the PreStock.
+
+## After the buy
+
+The token stays in the wallet. Half the print can be drawn as cash. Spending that cash does not sell the name, and the name is what you still owe against. Listed shares that Kamino already lends on stay on that market. A PreStock uses this loan, because that mint is not in the xStocks market.
+
+## The lane
+
+A holder gets the price, not the company. No legal share, no vote, no dividend. OpenAI and Anthropic have voided unauthorized SPV transfers. Those prints fell 34–40%, and the book on the chain is thin next to the valuation on the wrapper.
+
+Minting, redemption, and most of the issuer interfaces block a U.S. address or ask for a non-U.S. declaration. Solana does not. A U.S. person can still buy on Jupiter, then sits in the Regulation S resale window, forty days or a year, and carries the risk that the marketing is later called a U.S. offer. Forge and EquityZen remain the compliant route for American retail and institutions. The September 2026 Innovation Exemption does not cover these wrappers. It is for already-listed stocks that come with votes and dividends and that trade on a permissioned U.S. venue. Pre-IPO tokens stay offshore.
 
 ## Tonight
 
