@@ -34,6 +34,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
+  const [watch, setWatch] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [series, setSeries] = useState<number[]>([]);
   const wallet = useWallet();
@@ -219,7 +220,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     const row = createEnvelope({
       name: draftName,
       mandate: draftSay,
-      symbols: [],
+      symbols: watch,
       maxUsd: usd,
       side: draftJob === "rich" ? "sell" : "buy",
       job: draftJob,
@@ -228,6 +229,20 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setMade(row.id);
     setDraftName("");
     setDraftSay("");
+  }
+
+  function lookNow() {
+    for (const e of listEnvelopes()) {
+      if (e.armed === false) continue;
+      patchEnvelope(e.id, { lastTick: "" });
+      const fresh = listEnvelopes().find((x) => x.id === e.id);
+      if (!fresh) continue;
+      const out = think(fresh, book);
+      if (!out) continue;
+      writeLog(e.id, out.log);
+      patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue: out.queue ?? null });
+    }
+    setEnvs(listEnvelopes());
   }
 
   const rows: { id: Id; title: string; line: string }[] = [
@@ -249,39 +264,71 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   ];
 
   return (
-    <div className="grid min-h-[70vh] grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:px-4">
-      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
-        <header className="px-5 py-4">
-          <h1 className="text-3xl">Agents</h1>
-          <p className="mt-2 text-sm text-muted">A shift watches the book. It queues. You still sign.</p>
-        </header>
-        <div className="grid grid-cols-2 gap-1 px-3 pb-3">
+    <div className="space-y-3 px-3 py-3 lg:px-4">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Agents</p>
+          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            They watch the book. <span className="text-accent">You sign.</span>
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-muted">
+            A shift reads the print and writes a queue. Nothing leaves the wallet until you press sign. The cap is the most it can ask for.
+          </p>
+          <button type="button" onClick={lookNow} className="mt-6 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+            Look at the book now
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           {JOBS.map((j) => (
             <button
               key={j.id}
               type="button"
               onClick={() => setDraftJob(j.id)}
-              className={cn("rounded-xl px-2 py-2 text-left", draftJob === j.id ? "bg-accent text-accent-fg" : "bg-black/30")}
+              className={cn("rounded-2xl border px-3 py-3 text-left", draftJob === j.id ? "border-accent bg-[#101018]" : "border-white/10 bg-[#101018]")}
             >
-              <span className="block text-xs font-semibold">{j.title}</span>
-              <span className="block text-[10px] opacity-80">{j.line}</span>
+              <span className="block text-sm font-semibold">{j.title}</span>
+              <span className="mt-1 block text-[11px] text-muted">{j.line}</span>
             </button>
           ))}
         </div>
-        <div className="px-3 pb-4">
+      </section>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
+        <div className="px-4 py-4">
+          <p className="text-sm font-semibold">New shift</p>
+          <p className="mt-1 text-xs text-muted">{JOBS.find((j) => j.id === draftJob)?.title}. Max ${usd}. {watch.length ? watch.join(" ") : "Every name."}</p>
           <input
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
             placeholder="Name"
-            className="min-h-10 w-full rounded-lg bg-elevated px-3 text-sm outline-none"
+            className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none"
           />
           <input
             value={draftSay}
             onChange={(e) => setDraftSay(e.target.value)}
             placeholder="What it watches"
-            className="mt-2 min-h-10 w-full rounded-lg bg-elevated px-3 text-sm outline-none"
+            className="mt-2 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none"
           />
-          <button type="button" onClick={makeAgent} className="mt-2 min-h-10 w-full rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg">
+          <div className="mt-2 flex flex-wrap gap-1">
+            {book.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setWatch((cur) => (cur.includes(n.symbol) ? cur.filter((s) => s !== n.symbol) : [...cur, n.symbol]))}
+                className={cn("min-h-8 rounded-full px-2 font-mono text-[11px]", watch.includes(n.symbol) ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
+              >
+                {n.symbol}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-1">
+            {[10, 25, 100].map((n) => (
+              <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
+                ${n}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={makeAgent} className="mt-3 min-h-11 w-full rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg">
             Start this shift
           </button>
         </div>
@@ -471,6 +518,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           </>
         )}
       </section>
+      </div>
     </div>
   );
 }

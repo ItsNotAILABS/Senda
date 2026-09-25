@@ -23,78 +23,93 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
   const w = useWallet();
   const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
 
+  const total = CCYS.reduce((s, c) => s + (w.w.balances[c] || 0) * (w.usdPer[c] || (c === "USD" || c === "USDC" ? 1 : 0)), 0);
+  const pockets = (w.w.opened.length ? w.w.opened : (["USD"] as Ccy[])).map((c) => ({
+    c,
+    v: w.w.balances[c] || 0,
+  }));
+
   return (
-    <main className="grid grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-4">
-      <div className="min-h-0">
-      <header className="rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Send</p>
-        <h1 className="mt-2 text-4xl">Cash, in the currencies you hold</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted">Send it, ask for it, change it, or add it. A PreStock is not this cash. You buy that on the book.</p>
-      </header>
-      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-        {(w.w.opened.length ? w.w.opened : (["USD"] as Ccy[])).map((c) => (
-          <button key={c} type="button" onClick={() => setAct("exchange")} className="rounded-[24px] border border-white/10 bg-[#101018] px-4 py-4 text-left">
-            <p className="text-xs text-subtle">{c}</p>
-            <p className="mt-1 font-mono text-xl tabular-nums">{formatMoney(w.w.balances[c] || 0, c)}</p>
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-4 py-3 text-sm">
-        <p className="font-medium">{w.w.tag}</p>
-        <p className="mt-1 font-mono text-xs text-muted">
-          {sendaDeposit(w.w.tag).routing} · {sendaDeposit(w.w.tag).account}
-        </p>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {ACTS.map((a) => (
+    <div className="space-y-3 px-3 py-3 lg:px-4">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Send</p>
+          <h1 className="mt-3 text-5xl tracking-tight">${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}</h1>
+          <p className="mt-3 max-w-md text-sm text-muted">
+            {w.w.tag}. This is cash you can send, request, or change. A PreStock is not in this number. You buy that on the book.
+          </p>
+          <p className="mt-4 font-mono text-xs text-subtle">
+            {sendaDeposit(w.w.tag).routing} · {sendaDeposit(w.w.tag).account}
+          </p>
+        </div>
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+          <p className="text-sm font-semibold">Held</p>
+          <ul className="mt-3 space-y-2">
+            {pockets.map((p) => (
+              <li key={p.c}>
+                <button type="button" onClick={() => setAct("exchange")} className="flex w-full items-center justify-between rounded-2xl bg-black/30 px-3 py-3 text-left">
+                  <span>
+                    <span className="block text-sm font-semibold">{p.c}</span>
+                    <span className="block text-[11px] text-subtle">Tap to change it</span>
+                  </span>
+                  <span className="font-mono text-sm">{formatMoney(p.v, p.c)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section className="grid gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        {(
+          [
+            ["send", "Send", "To an @tag", "bg-[#14f195]/15"],
+            ["nearby", "Nearby", "A note, not an account", "bg-[#9945ff]/20"],
+            ["request", "Request", "Ask for the same cash", "bg-[#3b82f6]/15"],
+            ["exchange", "Exchange", "Hold another currency", "bg-[#eab308]/15"],
+            ["add", "Add", "Card, bank, or USDC", "bg-[#06b6d4]/15"],
+          ] as const
+        ).map(([id, label, hint, tint]) => (
           <button
-            key={a.id}
+            key={id}
             type="button"
-            onClick={() => setAct(a.id)}
-            className={cn(
-              "min-h-10 rounded-full px-4 text-sm font-semibold",
-              act === a.id ? "bg-accent text-accent-fg" : "bg-[#101018] text-muted",
-            )}
+            onClick={() => setAct(id)}
+            className={cn("rounded-2xl border px-3 py-3 text-left", act === id ? "border-accent bg-[#101018]" : "border-white/10 bg-[#101018]")}
           >
-            {a.label}
+            <span className={cn("mb-2 grid size-8 place-items-center rounded-lg text-[10px] font-semibold", tint)}>{label.slice(0, 1)}</span>
+            <span className="block text-sm font-semibold">{label}</span>
+            <span className="block text-[11px] text-muted">{hint}</span>
           </button>
         ))}
-      </div>
-      <div className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-4">
-      {act === "send" ? <SendForm w={w} /> : null}
-      {act === "nearby" ? <NearbyDesk /> : null}
-      {act === "request" ? <RequestForm w={w} /> : null}
-      {act === "exchange" ? <ExchangeForm w={w} fromInit={fromInit} /> : null}
-      {act === "add" ? <AddForm w={w} /> : null}
-      </div>
-      </div>
-      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-4">
-        <h2 className="text-sm font-semibold">Activity</h2>
-        {w.w.txs.length === 0 ? (
-          <p className="px-1 py-4 text-sm text-subtle">Nothing yet.</p>
-        ) : (
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+          {act === "send" ? <SendForm w={w} /> : null}
+          {act === "nearby" ? <NearbyDesk /> : null}
+          {act === "request" ? <RequestForm w={w} /> : null}
+          {act === "exchange" ? <ExchangeForm w={w} fromInit={fromInit} /> : null}
+          {act === "add" ? <AddForm w={w} /> : null}
+        </div>
+        <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-4">
+          <h2 className="text-sm font-semibold">Activity</h2>
+          {w.w.txs.length === 0 ? <p className="py-4 text-sm text-subtle">Nothing sent from this account yet.</p> : null}
           <ul>
-            {w.w.txs.map((t) => (
-              <li key={t.id} className="border-t border-white/10 px-1 py-3">
+            {w.w.txs.slice(0, 12).map((t) => (
+              <li key={t.id} className="border-t border-white/10 py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="truncate text-sm font-medium">{t.counterparty}</p>
                   <p className="font-mono text-xs tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
                 </div>
-                <p className="text-xs text-subtle">{t.kind} · {t.note}</p>
-                {t.uetr ? (
-                  <p className="truncate font-mono text-[10px] text-subtle">
-                    {t.iso} · {t.uetr}
-                  </p>
-                ) : null}
+                <p className="text-xs text-subtle">{t.kind}{t.note ? ` · ${t.note}` : ""}</p>
               </li>
             ))}
           </ul>
-        )}
-      </aside>
-    </main>
+        </aside>
+      </section>
+    </div>
   );
 }
-
 function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const [tag, setTag] = useState("");
   const [name, setName] = useState("");
