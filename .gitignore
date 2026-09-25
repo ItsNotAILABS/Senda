@@ -10,3 +10,6 @@ pglite.data
 dist/
 routeTree.gen.ts
 .cursor/
+chain/senda-chain/target/
+**/__pycache__/
+*.pyc
