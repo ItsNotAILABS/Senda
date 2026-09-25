@@ -1,8 +1,6 @@
 /**
- * Venue plugins — read-only street.
- * Stocklana house: Tessera T-Tokens + PreStocks (Solana) lead the floor.
- * Polymarket / Kalshi / Manifold remain as CLOB street.
- * Trading is NOT wired. Chips stay paper. Live path is Jupiter.
+ * Read-only street books. PreStocks lead. Polymarket, Kalshi, and Manifold stay as a second tape.
+ * A live PreStock buy is a Jupiter route the wallet signs. It is not a paper chip.
  */
 
 import {
@@ -62,7 +60,7 @@ export type VenuePlugin = {
 const POLY_GAMMA = "https://gamma-api.polymarket.com";
 const MANIFOLD = "https://api.manifold.markets/v0";
 const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
-const UA = "ThePIT/1.0 (paper prediction pit; simulated chips; no trading)";
+const UA = "Senda/1.0 (read-only tape; no custody)";
 
 const CACHE_MS = 45_000;
 const SEARCH_CACHE_MS = 30_000;

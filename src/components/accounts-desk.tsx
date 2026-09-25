@@ -177,8 +177,7 @@ export function AccountsDesk() {
           </p>
           <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight">Wallet</h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Street ¢ books stay on the floor as a second tape. Live CLOB is
-            not the Stocklana path.
+            Street books stay on the floor as a second tape. They are not the PreStocks path.
           </p>
           <div className="mt-auto pt-5">
             {poly ? (

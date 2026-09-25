@@ -113,7 +113,7 @@ npm install
 npm run dev
 ```
 
-The desk is on port 8080. `npm run typecheck` has to pass. No env var is required to read the book or to ask a wallet to sign. A Jupiter API key is optional. The public RPC is the default, and it rate-limits. Point a private RPC at the same calls in [src/lib/phantom.ts](src/lib/phantom.ts) if you are past a demo.
+The desk is on port 8080. `npm run typecheck` has to pass. No env var is required to read the book or to ask a wallet to sign. A Jupiter API key is optional. The public RPC is the default, and it rate-limits. Point a private RPC at the same calls in [src/lib/phantom.ts](src/lib/phantom.ts) when you need a higher limit.
 
 Open the book. Load practice cash and play a print. Connect a wallet and quote the same name. On Shop, paste an address and sign a dollar of USDC. The three moments use the same wallet.
 

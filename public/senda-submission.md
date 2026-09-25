@@ -8,7 +8,7 @@ Submission note. ItsNotAILABS. Repository: https://github.com/ItsNotAILABS/Senda
 
 Senda is a desk for tokenized pre-IPO names that already trade on Solana. The person using it already has a wallet. The names already have mints. The routes already exist on Jupiter. What did not exist is a place that treats those names as something you can buy, hold, cover, spend against, play, and hand to an agent, without first becoming a brokerage customer.
 
-This note is the submission document for that desk. It says what the product is, who it is for, how a session actually runs, what is signed on Solana, what stays in the browser, and what is deliberately not claimed. The app is the demo. This file is the map a judge can read without clicking.
+This note is the submission document for that desk. It says what the product is, who it is for, how a session actually runs, what is signed on Solana, what stays in the browser, and what is deliberately not claimed. The app is the product. This file is the map a judge can read without clicking.
 
 The project is original work by ItsNotAILABS. The repository is github.com/ItsNotAILABS/Senda. Open-source pieces it stands on are named where they are used: the Solana wallet providers a person already installed, Jupiter for routes, and the public PreStocks market data for prints. Senda does not reimplement a chain. It is the layer in front of one.
 

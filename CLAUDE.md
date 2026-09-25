@@ -1,137 +1,56 @@
 # Senda — read this before you edit anything
 
-You are working in the Senda repository. This file is the whole manual. You do not need a briefing, a ticket, or another document. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/senda.mdc`, `.windsurfrules`, `.clinerules`, and `llms.txt`, because different agents only auto-load their own filename. If you can read this, you already have it. Trust the code when it disagrees with a memory from some other project.
+You are working in the Senda repository. This file is the manual. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/senda.mdc`, `.windsurfrules`, `.clinerules`, and `llms.txt`. Trust the code when it disagrees with a memory from another project.
 
 ## What Senda is
 
-Senda is a web app for one job: hold a tokenized stock on Solana, borrow against it, and pay a store without selling the share and without revealing a bank card.
+Senda is a desk for tokenized pre-IPO names that already trade on Solana. The wallet the person connects is the account. A buy is a Jupiter route they sign. A holding is the token balance in that wallet, marked at the live print. A payment is a USDC transfer they sign. There is no Senda program and no program id.
 
-The person opens Portfolio. The large figure is how much they can spend without selling the share they have selected. Under it is the market. The ticket on the side is the only action: buy on Jupiter, borrow on Kamino, mint a one-time number.
-
-It is a financial product. It is not a casino, not a game skin on a brokerage, and not an event site. Do not write a venue, a rooftop, tickets, an RSVP, speakers, or a guest list back into this repo. That was a different project and it was deleted on purpose.
+It is not a broker, not a bank, and not a card network. It is not an event site. Do not add a venue, a rooftop, tickets, an RSVP, speakers, or a guest list. That project was removed.
 
 ## What is real
 
-Be exact. Judges and users can tell when a button pretends.
-
-- The share list and the session (open, closed, halted, 24/5) come from `https://api.xstocks.fi/api/v2/public/assets`. Loaded in `src/lib/equities.ts` by `fetchEquityBook`.
-- Loan terms come from Kamino's public metrics for market `5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua`. The constant is `XSTOCKS_MARKET` in `src/lib/equities.ts`. The link the person clicks is `KAMINO_MARKET`.
-- The buy quote is Jupiter's lite quote API in `src/lib/jup-exec.ts` (`quoteJup`). The button opens `jupFillUrl`. Senda does not sign that swap.
-- The borrow button opens Kamino. Senda does not sign that borrow.
-- Cash, FX, sends, and cards live in `localStorage` under the wallet in `src/lib/wallet.ts`. A fresh browser is at zero. Never seed a balance, a card, or a contact to make the screen look full.
-- The one-time card is issued by `issueCheckout` in `src/lib/wallet.ts`. The PAN is Luhn-valid, shown once in the component state, and not persisted. `src/lib/card-mask.ts` can seal it with AES-GCM in the browser. The server must not receive the PAN or the CVV.
-- The books in `src/lib/books.ts` replay the journal. `digestBooks` returns `tied: false` and a suspense figure when the replay does not match. Do not force `tied` to true.
-
-If you add an execution path, it has to call a real venue or change the local ledger with a balanced journal entry. A toast that says "filled" is not a fill.
+- Prints come from `https://prestocks.com/api/prestocks`, loaded in `src/lib/sol-house.ts`.
+- A buy, sell, or convert is quoted on Jupiter, simulated, then signed. `src/lib/jup-sign.ts` and `src/lib/prestock.ts`. The wallet signs. Senda does not invent a fill.
+- Portfolio reads token accounts. Empty means the wallet holds none.
+- Pay is an SPL transfer of USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) plus a memo. `src/lib/solana-pay.ts`.
+- Cover premium is a USDC transfer the user signs. `src/lib/cover-chain.ts`. It is not a licensed policy.
+- Senda cash, practice play, the sheet, the agent log, listings, and the desk-number last four live in this browser. A fresh browser is at zero. Never seed a balance, a card, or a position.
+- The desk number is issued by `issueCheckout`. The full number is shown once and is not a BIN. A terminal will decline it.
+- An agent can read the book and queue a trade. It cannot sign. `src/components/agent-workspace.tsx`.
 
 ## The pages
 
 Defined in `src/components/app-shell.tsx`.
 
-Primary, the product:
-
-- `/pre` Pre-IPO. Live `https://prestocks.com/api/prestocks`. Discover by discount to the SPV mark, read the company, buy on Jupiter, copy the print, or take a one-day contract that debits the wallet and settles on the next print. `src/components/pre-desk.tsx`.
-- `/invest` Trade. `src/components/pit-floor.tsx` and the desks it imports.
-- `/payments` Move. `src/components/payments-desk.tsx`. Search `act` can be `send`, `nearby`, `request`, `exchange`, `add`.
-- `/cards` Cards. `src/components/cards-desk.tsx`. Search `spend` is a number, default 0.
-
-Secondary, the same account:
-
-- `/social` Play. Short windows on PreStocks names. Logic in `src/lib/play-book.ts` and `src/lib/play.ts`.
-- `/cover` Cover. Plans in `src/lib/cover.ts`.
-- `/solana` Solana venues and connected accounts. `src/components/ecosystem-desk.tsx`, `src/components/launch-desk.tsx`, `src/components/accounts-desk.tsx`.
-- `/books` The digest. `src/components/books-desk.tsx`.
-- `/more` Account. `src/components/more-desk.tsx`.
-
-Other routes that already exist and should keep working: `/login`, `/market`, `/lab`, `/cage`, `/accounts`, `/equities`, `/house/$id`, `/table/$id`.
-
-## The ledger
-
-`src/lib/wallet.ts` is the source of truth for money on this machine.
-
-Currencies: `USD`, `EUR`, `GBP`, `MXN`, `USDC`, `SOL`. Fiat FX is `src/lib/wallet-fx.ts`. USDC is one dollar. `totalUsd` is what the header prints.
-
-A send builds an ISO 20022 pain.001 reference with a UETR (`src/lib/iso20022.ts`). A card authorization has the shape of an ISO 8583 0100/0110 (`src/lib/iso8583.ts`). Those messages are the record. Do not replace them with a plain string that says "sent".
-
-Nearby transfer is in `src/lib/nearby.ts` (Bluetooth, NFC, a broadcast channel). It moves the same cash.
-
-Wallet connect, separate from the ledger, is `src/lib/wallets.ts` and `src/components/wallet-picker.tsx`. Providers: Phantom, Solflare, Backpack, and the injected EIP-1193 wallets (MetaMask, Rabby, Coinbase). Connecting does not custody the local journal.
-
-## Internal tokens
-
-`src/lib/books.ts`. These are not assets a person buys. They are how the app closes its own books.
-
-- Cash tokens, one per currency held.
-- `sSTK` stock at cost.
-- `sGHOST` one-time numbers still outstanding. Ghost outstanding must not exceed the USD and USDC cash that backs it.
-- `sCAP` reserved capacity.
-- `sSUSP` suspense. Non-zero means the books do not tie. Show it.
-
-Read `replay` and `digestBooks` before adding a transaction kind. Every new `TxKind` needs a replay line or the books will break.
-
-## Trade, play, and the house
-
-`src/lib/sol-house.ts` loads the PreStocks house. Trade, Play, and Solana all filter `venue === "prestocks"` when they mean the stock book.
-
-`src/lib/pit.ts` is the trade floor server: sit a book, journal, paper credit and debit. The floor UI is `src/components/pit-floor.tsx`. Desks under it include options (`src/lib/option-chain.ts`, `src/components/option-chain.tsx`), perps (`src/lib/perp.ts`), baskets (`src/lib/basket.ts`), curves (`src/lib/curve.ts`), lending (`src/lib/lend.ts`), and launch (`src/lib/minty.ts` for pump.fun, LetsBonk, Clanker, Flaunch, Uniswap links).
-
-Play contracts are short. Tenors live in `src/lib/play-book.ts`. A contract settles from the price print, not from a random draw. Do not add a wheel, a chip stack that is not the wallet, or a market that cannot be tied to a listed name.
+- `/` Home. The line, the planet, the book, a buy, the card.
+- `/pre` PreStocks.
+- `/wallet` Convert.
+- `/social` Play. Ten games on the live print. Practice cash is separate.
+- `/cards` Shop. A desk number, and Pay USDC.
+- `/agents` The agent workspace.
+- `/payments` Send.
+- `/vault` Portfolio.
+- `/make` Work other people pay for in USDC.
+- `/cover` `/work` `/invest` `/solana` `/books` `/docs` `/more`
 
 ## Stack
 
-- React 19, TypeScript, Vite 8, TanStack Start and Router.
-- Tailwind v4. Tokens are in `src/styles.css` under `@theme`. Use `bg-bg`, `text-fg`, `bg-accent`, `font-display`, `font-mono`. Do not add a new color for decoration.
-- Postgres when `DATABASE_URL` is set, otherwise PGLite. Access through `getSql()` in `src/lib/db.ts`, from server functions only.
-- Auth: Better Auth at `/api/auth/*`, Google and X. UI gates are `SignedIn`, `SignedOut`, `UserButton` from `src/lib/auth/gates`. Do not mock a user.
-- Server functions use `createServerFn` from `@tanstack/react-start`. Protected ones use `authMiddleware` from `src/lib/auth/middleware` and scope by `context.userId`.
+React 19, TypeScript, Vite, TanStack Start and Router. Tailwind v4 tokens are in `src/styles.css`. Auth is optional and is not the wallet.
 
 ## Commands
 
 ```bash
 npm install
-npm run dev          # http://0.0.0.0:8080
+npm run dev
 npm run typecheck
-npm run build
 ```
 
-Leave the dev server running if you are in an environment whose preview reads port 8080. Do not move the app to another port.
-
-## How to change it
-
-1. Read the file you are about to edit. Match its types. Do not invent a parallel wallet.
-2. Keep the Portfolio figure as the first thing on `/`. One primary action. Buy and borrow stay links, because they happen on Jupiter and Kamino.
-3. Empty states stay empty. Offer the next real action (add money, pick a share Kamino lends against).
-4. User-facing copy is plain. Say "share", "borrow", "number". Do not say "rail", "primitive", or "unlock".
-5. After a type change, `npm run typecheck` must pass.
-6. Do not commit `.env`, secrets, `node_modules`, `.vercel`, or chat attachments.
-7. Do not store a PAN, a CVV, or a seed phrase. The placeholder in the account form is not an invitation to persist one.
-
-## Where the behavior lives
-
-If you are looking for a skill, it is a file, not a hidden prompt.
-
-| You need | Open |
-| --- | --- |
-| The portfolio screen | `src/components/equities-desk.tsx` |
-| Listed shares and Kamino | `src/lib/equities.ts` |
-| Jupiter | `src/lib/jup-exec.ts` |
-| The ledger and the card | `src/lib/wallet.ts` |
-| Masking | `src/lib/card-mask.ts` |
-| The close | `src/lib/books.ts` |
-| Sends | `src/lib/iso20022.ts`, `src/components/payments-desk.tsx` |
-| Card auth shape | `src/lib/iso8583.ts` |
-| Connected wallets | `src/lib/wallets.ts` |
-| The trade floor | `src/components/pit-floor.tsx`, `src/lib/pit.ts` |
-| Short contracts | `src/lib/play-book.ts` |
-| The shell | `src/components/app-shell.tsx` |
-
-`.grok/skills/` is builder guidance for design, auth, and games. It is not the product. If it conflicts with this file or with `src/`, this file and `src/` win.
+The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_modules`, or chat attachments. Do not store a PAN, a CVV, or a seed.
 
 ## A change is done when
 
-- The page a person opens still answers "how much can I spend without selling?"
-- No balance or card appears that they did not create.
-- Jupiter and Kamino are still live links, not simulated fills.
-- The books report tie or break from the replay.
-- The deleted event site is still gone.
+- A buy still asks the wallet to sign a Jupiter route.
+- No balance, card, or position appears that the person did not create.
+- The event site is still gone.
 - `npm run typecheck` passes.

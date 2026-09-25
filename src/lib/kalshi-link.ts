@@ -7,7 +7,7 @@ import { constants, createPrivateKey, sign as nodeSign } from "node:crypto";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const UA = "ThePIT/1.0 (paper prediction pit; venue link check; no order routing)";
+const UA = "Senda/1.0 (read-only tape; no custody)";
 const HOSTS = [
   "https://external-api.kalshi.com/trade-api/v2",
   "https://api.elections.kalshi.com/trade-api/v2",

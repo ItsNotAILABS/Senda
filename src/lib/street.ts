@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { Side } from "@/lib/lmsr";
 import type { Venue } from "@/lib/feeds";
 
-const UA = "ThePIT/1.0 (paper prediction pit; simulated chips; no trading)";
+const UA = "Senda/1.0 (read-only tape; no custody)";
 const CLOB = "https://clob.polymarket.com";
 const POLY_DATA = "https://data-api.polymarket.com";
 const POLY_GAMMA = "https://gamma-api.polymarket.com";

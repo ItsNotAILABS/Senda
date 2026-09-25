@@ -17,7 +17,7 @@ import type { Side } from "@/lib/lmsr";
 const POLY_TRADES = "https://data-api.polymarket.com/trades?limit=40";
 const KALSHI_TRADES =
   "https://api.elections.kalshi.com/trade-api/v2/markets/trades?limit=40";
-const UA = "ThePIT/1.0 (paper prediction pit; simulated chips; no trading)";
+const UA = "Senda/1.0 (read-only tape; no custody)";
 
 export type TapeSource = "street" | "pit" | "house";
 

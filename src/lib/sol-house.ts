@@ -49,7 +49,7 @@ type Seed = {
   description: string;
 };
 
-const UA = "ThePIT/1.0 (paper pit; Stocklana house tape; no custody)";
+const UA = "Senda/1.0 (PreStocks desk; no custody)";
 const TESSERA = "https://rest-api.tessera.pe/v1/public/token-details";
 const PRESTOCKS = "https://prestocks.com/api/prestocks";
 const JUP = "https://api.jup.ag/price/v3?ids=";
