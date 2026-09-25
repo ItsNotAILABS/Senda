@@ -1,6 +1,6 @@
 /**
- * Deployed-app (Nitro) half of the platform PWA chrome. Auto-registered as
- * global h3 middleware because vite.config.ts sets `serverDir: "./server"` —
+ * Senda. PWA and social-card tags for the deployed desk.
+ * Registered as global h3 middleware because vite.config.ts sets `serverDir: "./server"`.
  * without that option Nitro v3 never scans this directory.
  *
  * - `?install=1&platform=ios` on a document path → the Home Screen tutorial,

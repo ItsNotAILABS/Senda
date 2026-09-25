@@ -1,3 +1,4 @@
+// Senda. The PreStocks desk. Dev server stays on 8080.
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
