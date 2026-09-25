@@ -61,6 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [q, setQ] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
   const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
+  const home = pathname === "/";
 
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
@@ -104,8 +105,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="senda-stage min-w-0 flex-1">
-        <header className="sticky top-0 z-20 px-4 py-3">
-          <div className="flex items-center gap-3">
+        <header className={cn("sticky top-0 z-20 px-4 py-3", home && "pointer-events-none")}>
+          <div className={cn("flex items-center gap-3", home && "justify-end")}>
+            {home ? null : (
             <form
               className="mx-auto min-w-0 w-full max-w-xl"
               onSubmit={(e) => {
@@ -134,10 +136,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className="min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none"
               />
             </form>
+            )}
+            {home ? null : (
             <span className="grid size-10 place-items-center rounded-full border border-white/10 text-muted">
               <Bell className="size-4" />
             </span>
-            <div className="relative">
+            )}
+            <div className={cn("relative", home && "pointer-events-auto")}>
               {link ? (
                 <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface px-3 text-sm">
                   {link.label} · {link.address.slice(0, 4)}…
