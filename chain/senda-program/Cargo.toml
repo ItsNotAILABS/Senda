@@ -1,0 +1,12 @@
+[package]
+name = "senda-program"
+version = "0.1.0"
+edition = "2021"
+description = "Devnet program. A cover is an account. The wallet signs and pays rent."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "=2.2.1"

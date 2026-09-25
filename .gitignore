@@ -11,5 +11,6 @@ dist/
 routeTree.gen.ts
 .cursor/
 chain/senda-chain/target/
+chain/senda-program/target/
 **/__pycache__/
 *.pyc
