@@ -101,7 +101,7 @@ export function Cage({ pit }: { pit: PitModel }) {
   const plaqueOk = !pit.frozen;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 py-6 sm:px-6">
+    <div className="flex w-full flex-1 flex-col gap-8 px-5 py-6 lg:px-8">
       <div className="flex items-center gap-3">
         <Link
           to="/"

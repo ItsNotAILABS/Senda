@@ -12,6 +12,7 @@ import {
   Lock,
   Shield,
   Sparkles,
+  Store,
   SquarePen,
   UserRound,
   Wallet,
@@ -32,6 +33,7 @@ const PRIMARY = [
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },
   { to: "/social", label: "Play", icon: Gamepad2 },
   { to: "/cards", label: "Shop", icon: CreditCard },
+  { to: "/make", label: "Make", icon: Store },
   { to: "/agents", label: "AI Agent", icon: Bot },
   { to: "/payments", label: "Send", icon: Wallet },
   { to: "/vault", label: "Portfolio", icon: Lock },
@@ -109,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className={cn("flex items-center gap-3", home && "justify-end")}>
             {home ? null : (
             <form
-              className="mx-auto min-w-0 w-full max-w-xl"
+              className="min-w-0 w-full flex-1"
               onSubmit={(e) => {
                 e.preventDefault();
                 const key = q.trim().toLowerCase();
@@ -180,7 +182,7 @@ function NavLink({
   on,
   quiet,
 }: {
-  to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
+  to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

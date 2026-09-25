@@ -135,7 +135,7 @@ export function HouseTable({
   const atm = chainFor(stock, tenor).find((c) => c.atm && c.kind === "call");
 
   return (
-    <main className="mx-auto flex w-full max-w-xl flex-1 flex-col">
+    <main className="flex w-full flex-1 flex-col">
       <div className="px-4 pt-4 pb-36">
         <Link to="/invest" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted">
           <ArrowLeft className="size-4" strokeWidth={1.75} />
@@ -268,7 +268,7 @@ export function HouseTable({
       </div>
 
       <div className="fixed inset-x-0 bottom-16 z-30 border-t border-border bg-bg/95 px-4 pt-3 pb-3">
-        <div className="mx-auto grid max-w-xl grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <button
             type="button"
             disabled={frozen || busy}
