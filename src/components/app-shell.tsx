@@ -10,6 +10,7 @@ import {
   Hexagon,
   LayoutGrid,
   Lock,
+  PanelLeft,
   Shield,
   Sparkles,
   Store,
@@ -65,6 +66,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [q, setQ] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
   const [sealed, setSealed] = useState(true);
+  const [rail, setRail] = useState(true);
   const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
   const home = pathname === "/";
 
@@ -75,26 +77,60 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("senda-seal", sync);
   }, []);
 
+  useEffect(() => {
+    const saved = window.localStorage.getItem("rail.open");
+    if (saved === "0") setRail(false);
+    else if (saved == null && window.innerWidth < 1180) setRail(false);
+  }, []);
+
+  function toggleRail() {
+    setRail((open) => {
+      const next = !open;
+      window.localStorage.setItem("rail.open", next ? "1" : "0");
+      return next;
+    });
+  }
+
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
-      <aside className="sticky top-0 flex h-dvh w-56 shrink-0 flex-col border-r border-border bg-[#07070f]">
-        <Link to="/" className="flex items-center gap-2 px-4 pt-5 pb-4">
-          <span className="grid size-8 place-items-center rounded-xl bg-accent text-accent-fg">
+      <aside className={cn("sticky top-0 flex h-dvh shrink-0 flex-col border-r border-border bg-[#07070f] transition-[width] duration-200", rail ? "w-52" : "w-[68px]")}>
+        <div className={cn("flex items-center pt-4 pb-3", rail ? "gap-2 px-3" : "justify-center px-2")}>
+          <Link to="/" className="grid size-8 shrink-0 place-items-center rounded-xl bg-accent text-accent-fg" title="Senda">
             <Zap className="size-4" />
-          </span>
-          <span className="font-display text-lg tracking-tight">Senda</span>
-        </Link>
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+          </Link>
+          {rail ? <span className="font-display text-[15px] tracking-tight">Senda</span> : null}
+          <button
+            type="button"
+            onClick={toggleRail}
+            aria-label={rail ? "Collapse the column" : "Open the column"}
+            title={rail ? "Collapse" : "Open"}
+            className={cn("grid size-8 place-items-center rounded-lg text-subtle hover:bg-white/5 hover:text-fg", rail ? "ml-auto" : "hidden")}
+          >
+            <PanelLeft className="size-4" />
+          </button>
+        </div>
+        {!rail ? (
+          <button
+            type="button"
+            onClick={toggleRail}
+            aria-label="Open the column"
+            title="Open"
+            className="mx-auto mb-2 grid size-8 place-items-center rounded-lg text-subtle hover:bg-white/5 hover:text-fg"
+          >
+            <PanelLeft className="size-4" />
+          </button>
+        ) : null}
+        <nav className={cn("flex flex-1 flex-col gap-0.5 overflow-y-auto", rail ? "px-2" : "px-2")}>
           {PRIMARY.map((t) => (
-            <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
+            <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} compact={!rail} />
           ))}
-          <div className="mt-4 border-t border-white/8 pt-3">
+          <div className="mt-3 border-t border-white/8 pt-2">
             {MORE.map((t) => (
-              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet />
+              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet compact={!rail} />
             ))}
           </div>
         </nav>
-        <div className="border-t border-border px-3 py-3">
+        <div className={cn("border-t border-border py-3", rail ? "px-2" : "px-2")}>
           {sealed ? (
             <button
               type="button"
@@ -106,15 +142,16 @@ export function AppShell({ children }: { children: ReactNode }) {
                   })
                   .catch((e) => toast.error(e instanceof Error ? e.message : "The desk stayed sealed."));
               }}
-              className="mb-2 min-h-10 w-full rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg"
+              title="Open with wallet"
+              className={cn("mb-2 min-h-9 rounded-full bg-accent font-semibold text-accent-fg", rail ? "w-full px-3 text-[12px]" : "mx-auto grid size-9 place-items-center")}
             >
-              Open with wallet
+              {rail ? "Open with wallet" : <Lock className="size-3.5" />}
             </button>
-          ) : (
-            <p className="mb-2 px-1 text-[11px] text-subtle">Open. This browser can read your desk until you leave.</p>
-          )}
-          <ChainChip owner={owner} />
-          <div className="mt-2 px-1">
+          ) : rail ? (
+            <p className="mb-2 px-1 text-[11px] text-subtle">Open on this browser.</p>
+          ) : null}
+          {rail ? <ChainChip owner={owner} /> : null}
+          <div className={cn("mt-2", rail ? "px-1" : "flex justify-center")}>
             {isPending ? (
               <div className="size-6 animate-pulse rounded-full bg-elevated" />
             ) : user ? (
@@ -123,14 +160,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               </SignedIn>
             ) : (
               <SignedOut>
-                <Link to="/login" className="text-xs text-muted hover:text-fg">
-                  Sign in
+                <Link to="/login" className="text-[12px] text-muted hover:text-fg">
+                  {rail ? "Sign in" : ""}
                 </Link>
               </SignedOut>
             )}
-            <Link to="/legal" className="mt-2 block px-1 text-[11px] text-subtle hover:text-fg">
-              Privacy
-            </Link>
+            {rail ? (
+              <Link to="/legal" className="mt-2 block px-1 text-[11px] text-subtle hover:text-fg">
+                Privacy
+              </Link>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -163,7 +202,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search companies, tickers, or anything…"
-                className="min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none"
+                className="min-h-9 w-full rounded-full border border-white/10 bg-black/40 px-4 text-[13px] outline-none"
               />
             </form>
             )}
@@ -209,23 +248,27 @@ function NavLink({
   icon: Icon,
   on,
   quiet,
+  compact,
 }: {
   to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;
   quiet?: boolean;
+  compact?: boolean;
 }) {
   return (
     <Link
       to={to}
+      title={label}
       className={cn(
-        "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm",
+        "flex items-center rounded-xl text-[13px] leading-none",
+        compact ? "justify-center px-0 py-2" : "gap-2.5 px-2.5 py-2",
         on ? "bg-white/8 font-medium text-fg" : quiet ? "text-subtle hover:bg-white/5 hover:text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
       )}
     >
       <Icon className={cn("size-4 shrink-0", on ? "text-accent" : "")} strokeWidth={1.75} />
-      {label}
+      {compact ? <span className="sr-only">{label}</span> : label}
     </Link>
   );
 }

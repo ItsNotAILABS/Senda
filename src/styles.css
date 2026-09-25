@@ -55,13 +55,14 @@
     background: var(--color-bg);
     color: var(--color-fg);
     font-family: var(--font-sans);
-    line-height: 1.5;
+    font-size: 14.5px;
+    line-height: 1.45;
     overflow-x: hidden;
   }
   h1, h2, h3 {
     font-family: var(--font-display);
     letter-spacing: -0.03em;
-    line-height: 1.05;
+    line-height: 1.08;
     font-weight: 600;
     text-wrap: balance;
   }
@@ -100,3 +101,9 @@
 }
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
+
+/* Density. The desks were set like a poster. This pulls type back to a terminal. */
+.senda-stage .text-5xl { font-size: 2rem; line-height: 1.08; }
+.senda-stage .text-4xl { font-size: 1.6rem; line-height: 1.12; }
+.senda-stage .text-3xl { font-size: 1.3rem; line-height: 1.15; }
+.senda-stage .text-2xl { font-size: 1.12rem; line-height: 1.2; }
