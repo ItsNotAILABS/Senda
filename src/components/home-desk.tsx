@@ -21,6 +21,12 @@ const NEXT = [
     title: "They can send. You sign.",
     body: "An agent picks a name off the mark. Your wallet approves the size. The key never leaves Phantom.",
   },
+  {
+    to: "/vault",
+    kicker: "Vault",
+    title: "Wrap the wallet",
+    body: "USDC stays in Phantom. The wrap is the claim. Push it back when you want it in the wallet again.",
+  },
 ] as const;
 
 export function HomeDesk({ names }: { names: HouseListing[] }) {
@@ -104,7 +110,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         {pre.length === 0 ? <p className="px-6 py-8 text-sm text-muted">PreStocks did not answer.</p> : null}
       </section>
 
-      <section className="grid gap-3 px-6 py-8 lg:grid-cols-3 lg:px-10">
+      <section className="grid gap-3 px-6 py-8 lg:grid-cols-2 lg:px-10 xl:grid-cols-4">
         {NEXT.map((c) => (
           <Link key={c.to} to={c.to} className="rounded-2xl border border-border bg-surface px-5 py-5 hover:border-[#9945FF]">
             <p className="font-mono text-[11px] tracking-widest text-accent uppercase">{c.kicker}</p>

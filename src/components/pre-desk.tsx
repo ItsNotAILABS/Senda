@@ -91,10 +91,10 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px]">
       <section className="border-b border-border xl:border-r xl:border-b-0">
         <header className="px-5 pt-6 pb-4 lg:px-8">
-          <h1 className="font-display text-4xl">The book</h1>
+          <h1 className="font-display text-4xl">Pre-IPO terminal</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
             {owner
-              ? "Buy with the USDC in this wallet. Or pay with SOL from Your money. Jupiter builds it. You sign."
+              ? "The print, the mark, and a Jupiter ticket. You are not the broker. You sign the swap."
               : "Connect the wallet that already holds the money. Then buy the mint. Nothing else to deposit."}
           </p>
         </header>
@@ -105,6 +105,7 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
               <th className="px-2 py-2 text-right font-medium">Token</th>
               <th className="px-2 py-2 text-right font-medium">Mark</th>
               <th className="px-2 py-2 text-right font-medium">Vs mark</th>
+              <th className="px-2 py-2 text-right font-medium">24h</th>
               <th className="px-5 py-2 text-right font-medium lg:px-8">Route</th>
             </tr>
           </thead>
@@ -127,6 +128,9 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
                 <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
                   {formatPremium(r.premium)}
                 </td>
+                <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (r.change24h ?? 0) < 0 ? "text-down" : "text-up")}>
+                  {r.change24h == null ? "—" : `${r.change24h > 0 ? "+" : ""}${(r.change24h * 100).toFixed(1)}%`}
+                </td>
                 <td className="px-5 py-3 text-right font-mono text-[11px] text-muted lg:px-8">
                   {routes.find((x) => x.mint === r.mint)?.route || "—"}
                 </td>
@@ -142,7 +146,30 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
             <p className="font-mono text-[11px] text-subtle">{name.mint}</p>
             <h2 className="font-display text-4xl">{name.symbol}</h2>
             <p className="mt-2 text-sm text-muted">{name.description}</p>
-            <div className="mt-4 flex gap-1">
+            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-xl bg-elevated px-3 py-2">
+                <p className="text-subtle">24h</p>
+                <p className="font-mono">{name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`}</p>
+              </div>
+              <div className="rounded-xl bg-elevated px-3 py-2">
+                <p className="text-subtle">Holders</p>
+                <p className="font-mono">{name.holders.toLocaleString()}</p>
+              </div>
+              <div className="rounded-xl bg-elevated px-3 py-2">
+                <p className="text-subtle">Liquidity</p>
+                <p className="font-mono">{formatUsd(name.liquidity)}</p>
+              </div>
+            </div>
+            <label className="mt-4 block text-xs text-subtle">
+              Size
+              <input
+                value={usd}
+                onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
+                inputMode="decimal"
+                className="mt-1 min-h-11 w-full rounded-lg bg-elevated px-3 font-mono text-sm text-fg outline-none"
+              />
+            </label>
+            <div className="mt-2 flex gap-1">
               {[10, 25, 100].map((n) => (
                 <button
                   key={n}

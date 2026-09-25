@@ -198,6 +198,13 @@ export function PitFloor({
   ] as const;
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-baseline justify-between gap-4 border-b border-border px-4 py-3">
+        <div>
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade terminal</p>
+          <p className="text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
+        </div>
+      </header>
     <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
       <nav className="border-b border-border lg:overflow-auto lg:border-r lg:border-b-0">
@@ -308,5 +315,6 @@ export function PitFloor({
       ) : null}
       </div>
     </main>
+    </div>
   );
 }
