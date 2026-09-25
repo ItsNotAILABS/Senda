@@ -54,6 +54,7 @@ import {
   type Wallet,
 } from "@/lib/wallet";
 import { decodeNote } from "@/lib/nearby";
+import "@/lib/seal";
 
 export function useWallet() {
   const blank: Wallet = {
@@ -93,6 +94,12 @@ export function useWallet() {
         });
     }, 45_000);
     return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const open = () => setW(loadWallet());
+    window.addEventListener("senda-seal", open);
+    return () => window.removeEventListener("senda-seal", open);
   }, []);
 
   const commit = useCallback((next: Wallet | { error: string }): { ok: boolean; error?: string } => {

@@ -19,11 +19,13 @@ import {
   Zap,
   Bell,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Onboard } from "@/components/onboard";
 import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { readChain } from "@/lib/phantom";
+import { readChain, connectPhantom } from "@/lib/phantom";
+import { sealOpen } from "@/lib/seal";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -58,12 +60,20 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const { user, isPending } = useCurrentUserState();
-  const { w } = useWallet();
+  const { w, linkChain } = useWallet();
   const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [q, setQ] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
+  const [sealed, setSealed] = useState(true);
   const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
   const home = pathname === "/";
+
+  useEffect(() => {
+    const sync = () => setSealed(!sealOpen());
+    sync();
+    window.addEventListener("senda-seal", sync);
+    return () => window.removeEventListener("senda-seal", sync);
+  }, []);
 
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
@@ -85,6 +95,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </nav>
         <div className="border-t border-border px-3 py-3">
+          {sealed ? (
+            <button
+              type="button"
+              onClick={() => {
+                void connectPhantom()
+                  .then((addr) => {
+                    const linked = linkChain(addr, "Phantom", "phantom");
+                    if (!linked.ok) toast.error(linked.error || "The wallet did not stay.");
+                  })
+                  .catch((e) => toast.error(e instanceof Error ? e.message : "The desk stayed sealed."));
+              }}
+              className="mb-2 min-h-10 w-full rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg"
+            >
+              Open with wallet
+            </button>
+          ) : (
+            <p className="mb-2 px-1 text-[11px] text-subtle">Open. This browser can read your desk until you leave.</p>
+          )}
           <ChainChip owner={owner} />
           <div className="mt-2 px-1">
             {isPending ? (

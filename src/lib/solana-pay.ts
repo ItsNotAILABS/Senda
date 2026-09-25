@@ -67,7 +67,7 @@ async function accountExists(address: PublicKey): Promise<boolean> {
 }
 
 /** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
-export async function payUsdc(input: { owner: string; to: string; usd: number }): Promise<{ signature: string; reference: string }> {
+export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string }): Promise<{ signature: string; reference: string }> {
   const usd = Math.round(input.usd * 100) / 100;
   if (!(usd > 0)) throw new Error("Enter an amount.");
   const cap = spendCap();
@@ -114,7 +114,7 @@ export async function payUsdc(input: { owner: string; to: string; usd: number })
       data: Buffer.from(u64(raw)),
     }),
   );
-  const memo = `Senda USDC ${usd} ref=${reference.toBase58()}`;
+  const memo = `${input.memo ?? `Senda USDC ${usd}`} ref=${reference.toBase58()}`;
   ix.push(
     new TransactionInstruction({
       programId: MEMO,

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Plus, RefreshCw } from "lucide-react";
 import { AddMoneyScreen } from "@/components/add-money";
+import { SpaceDesk } from "@/components/space-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
 import { CCYS, CCY_META, formatMoney, revolutFee, type Ccy, type Contact, type Tx } from "@/lib/wallet";
@@ -76,6 +77,8 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
         live={["Send", "Request", "Nearby", "Exchange", "Add"]}
         coming={["Bank wires", "A handle that exists outside this browser"]}
       />
+
+      <SpaceDesk />
 
       <section className={cn("rounded-[22px] border border-white/10 bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
         {act === "send" ? <SendForm w={w} /> : null}

@@ -1,4 +1,5 @@
 import { activeSolProvider } from "@/lib/wallets";
+import { unlockSeal } from "@/lib/seal";
 
 type Pub = { toString: () => string };
 
@@ -27,6 +28,7 @@ export async function connectPhantom(): Promise<string> {
   const res = await p.connect();
   const addr = res?.publicKey?.toString() || p.publicKey?.toString();
   if (!addr) throw new Error("Phantom returned no account.");
+  await unlockSeal(addr);
   return addr;
 }
 
