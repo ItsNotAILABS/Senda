@@ -1,6 +1,6 @@
 {
   "name": "senda",
-  "description": "Hold a tokenized stock on Solana, borrow against it on Kamino, and pay with a one-time number that is never stored.",
+  "description": "A Solana desk for tokenized pre-IPO names. The wallet signs. Jupiter quotes. USDC pays.",
   "private": true,
   "sideEffects": false,
   "type": "module",

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
+import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -69,8 +70,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         title="A number for the store"
         accent="not the token."
         line="This number caps the cash on this account. A store network does not clear it."
-        live={["Make a number", "One charge", "Debit this cash", "Freeze"]}
-        coming={["A Visa from Rain or Bridge", "That needs a program and KYC"]}
+        live={["Make a number", "Pay USDC", "One charge", "Freeze"]}
+        coming={["A Visa from Rain or Bridge"]}
       />
 
       <CheckoutPay
@@ -83,6 +84,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
+
+      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
 
       <CardRails />
 
@@ -350,6 +353,70 @@ function ChipMark() {
   );
 }
 
+function PayOnChain({ owner }: { owner: string }) {
+  const [to, setTo] = useState("");
+  const [usd, setUsd] = useState("20");
+  const [sig, setSig] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <section className={cn(PANEL, "grid gap-3 p-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end")}>
+      <div>
+        <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Solana Pay</p>
+        <h2 className="mt-1 text-lg">Pay the address in USDC</h2>
+        <p className="mt-1 max-w-xl text-sm text-muted">
+          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number above is a cap on this browser. This one moves on mainnet.
+        </p>
+      </div>
+      <div className="grid gap-2">
+        <input
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="Merchant Solana address"
+          spellCheck={false}
+          className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
+        />
+        <div className="flex gap-2">
+          <input
+            value={usd}
+            onChange={(e) => setUsd(e.target.value)}
+            inputMode="decimal"
+            aria-label="USDC"
+            className="min-h-12 w-28 rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (!owner) {
+                toast.error("Connect a Solana wallet.");
+                return;
+              }
+              setBusy(true);
+              setSig("");
+              void payUsdc({ owner, to, usd: Number(usd) })
+                .then((r) => {
+                  setSig(r.signature);
+                  toast.success("Signed. USDC is on the way.");
+                })
+                .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The transfer did not send."))
+                .finally(() => setBusy(false));
+            }}
+            className="min-h-12 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            {busy ? "Waiting on the wallet" : owner ? "Sign USDC" : "Connect a wallet first"}
+          </button>
+        </div>
+        {sig ? (
+          <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
+            {sig}
+          </a>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function McMark() {
   return (
     <span className="font-mono text-[11px] tracking-[0.16em] text-white/70" aria-label="Senda number">
@@ -365,6 +432,13 @@ const RAILS: { name: string; spend: string; holds: string; clears: string; here:
     holds: "This browser",
     clears: "Nothing. The number never reaches Visa.",
     here: "Live. Cap, charge, freeze.",
+  },
+  {
+    name: "Solana Pay",
+    spend: "USDC on mainnet",
+    holds: "Your wallet, until you sign",
+    clears: "The merchant's USDC account. A memo carries the reference.",
+    here: "Live. Sign USDC above.",
   },
   {
     name: "Phantom Cash",
