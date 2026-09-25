@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
+import { ChevronRight, Gamepad2, RefreshCw, ShoppingBag, Sparkles } from "lucide-react";
 import { connectPhantom, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { writeUsing } from "@/lib/using";
@@ -99,45 +99,54 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
     }
   }
 
-  const total = usdc + held + (wallet.w.balances.USD || 0);
   const activity = wallet.w.txs.slice(0, 4);
 
   return (
-    <main className="space-y-3 px-4 py-3 lg:px-5">
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4 lg:p-5">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold">Your wallet</p>
-              <p className="font-mono text-[10px] tracking-[0.14em] text-subtle uppercase">
-                {owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Not connected"}
-              </p>
-            </div>
-            <p className="mt-2 font-mono text-5xl tracking-tight tabular-nums">
-              ${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}
-            </p>
-            <p className="mt-1 text-xs text-subtle">
-              {owner ? "Cash, USDC, and PreStocks at the live price." : "Connect a wallet. This stays zero until you do."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
-              {owner ? "Open" : "Connect Phantom"}
-            </Link>
-            <Link to="/pre" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
-              Get started
-            </Link>
-            <Link to="/payments" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
-              Send
-            </Link>
-          </div>
+    <main className="space-y-4 px-4 py-4 lg:px-6">
+      <section>
+        <h1 className="max-w-3xl font-display text-4xl leading-[0.95] tracking-tight sm:text-6xl">
+          Your pre-IPO shouldn’t sit still after you buy it.
+        </h1>
+        <p className="mt-4 max-w-md text-sm text-muted sm:text-base">
+          The mint already trades. Pay anyone on Solana in USDC. Cover a drop. The wallet you have is the account.
+        </p>
+      </section>
+
+      <section className="relative overflow-hidden rounded-[28px] border border-white/10">
+        <video
+          src="/video/desk.mp4"
+          poster="/images/orbit.jpg"
+          autoPlay
+          muted
+          loop
+          playsInline
+          className="h-[340px] w-full object-cover sm:h-[460px]"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+        <div className="absolute inset-x-3 bottom-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Tile to="/pre" icon={Sparkles} tint="bg-[#14f195] text-black" title="Buy" hint="The mint" />
+          <Tile to="/cards" search={{ spend: 0 }} icon={ShoppingBag} tint="bg-white text-black" title="Pay USDC" hint="They receive it" />
+          <Tile to="/social" icon={Gamepad2} tint="bg-white/15 text-white" title="Play" hint="The live print" />
+          <Tile to="/wallet" icon={RefreshCw} tint="bg-white/15 text-white" title="Convert" hint="SOL into the name" />
         </div>
-        <ul className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-          <Bal k="SOL" v={sol.toFixed(3)} sub={owner ? "In Phantom" : "Not connected"} tint="bg-[#9945ff]" />
-          <Bal k="USDC" v={usdc.toFixed(2)} sub="Spendable" tint="bg-[#2775ca]" />
-          <Bal k="Cash" v={`$${(wallet.w.balances.USD || 0).toFixed(0)}`} sub="Send and shop" tint="bg-white/30" />
-          <Bal k="PreStocks" v={`$${held.toFixed(0)}`} sub="Still in the wallet" tint="bg-accent" />
-        </ul>
+      </section>
+
+      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#10131c]">
+        <MoneyRow to="/payments" k="Cash" sub={owner ? "This browser" : "Connect to see the wallet"} v={`$${(wallet.w.balances.USD || 0).toFixed(0)}`} tint="bg-[#14f195]" />
+        <MoneyRow to="/vault" k="PreStocks" sub="Still in the wallet" v={`$${held.toFixed(0)}`} tint="bg-white" />
+        <MoneyRow to="/wallet" k="USDC" sub={owner ? `${usdc.toFixed(2)} ready to send` : "Not connected"} v={owner ? `${sol.toFixed(2)} SOL` : "—"} tint="bg-[#2775ca]" />
+      </section>
+
+      <section className="grid overflow-hidden rounded-[28px] border border-white/10 bg-[#10131c] md:grid-cols-[220px_minmax(0,1fr)]">
+        <video src="/video/card.mp4" poster="/images/metal-card.jpg" autoPlay muted loop playsInline className="h-52 w-full object-cover md:h-full" />
+        <div className="flex flex-col justify-center p-6">
+          <p className="text-[11px] tracking-[0.18em] text-accent uppercase">The card for this market</p>
+          <h2 className="mt-2 max-w-lg font-display text-3xl leading-none tracking-tight">Anyone who can receive USDC can be paid from here.</h2>
+          <p className="mt-3 max-w-md text-sm text-muted">No bank. No BIN. Their address, your signature, USDC on mainnet. The number on Shop is only a cap. The transfer is the card.</p>
+          <Link to="/cards" search={{ spend: 0 }} className="mt-5 inline-flex w-fit min-h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+            Pay someone
+          </Link>
+        </div>
       </section>
 
       <section>
@@ -171,15 +180,6 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
             ))}
           </div>
         )}
-      </section>
-
-      <section className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
-        <Tile to="/pre" icon={Sparkles} tint="bg-[#14f195]/15 text-[#7dffa8]" title="Buy a company" hint="The mint, not a brokerage" />
-        <Tile to="/wallet" icon={RefreshCw} tint="bg-[#9945ff]/20 text-[#d8b4fe]" title="Convert money" hint="SOL or USDC into the name" />
-        <Tile to="/social" icon={Gamepad2} tint="bg-[#3b82f6]/15 text-[#93c5fd]" title="Play" hint="The faces are the book" />
-        <Tile to="/cards" search={{ spend: 0 }} icon={ShoppingBag} tint="bg-[#eab308]/15 text-[#fde047]" title="Shop" hint="A number. Not the token." />
-        <Tile to="/payments" icon={Send} tint="bg-[#22d3ee]/15 text-[#67e8f9]" title="Send" hint="Same cash, to a person" />
-        <Tile to="/agents" icon={Bot} tint="bg-[#a855f7]/20 text-[#e9d5ff]" title="Give an AI a budget" hint="It asks. You sign." />
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -312,7 +312,7 @@ function Tile({
   hint: string;
 }) {
   return (
-    <Link to={to} search={search} className="flex items-center gap-3 rounded-[18px] border border-white/10 bg-[#10131c] px-3 py-3">
+    <Link to={to} search={search} className="flex items-center gap-3 rounded-[20px] bg-[#10131c]/90 px-3 py-3 backdrop-blur-md">
       <span className={cn("grid size-10 place-items-center rounded-xl", tint)}>
         <Icon className="size-4" />
       </span>
@@ -330,15 +330,16 @@ function Mark({ symbol }: { symbol: string }) {
   return <img src={src} alt="" className="size-8 rounded-full bg-white object-contain p-1" />;
 }
 
-function Bal({ k, v, sub, tint }: { k: string; v: string; sub: string; tint: string }) {
+function MoneyRow({ to, k, sub, v, tint }: { to: "/payments" | "/vault" | "/wallet"; k: string; sub: string; v: string; tint: string }) {
   return (
-    <li className="flex items-center gap-3 rounded-2xl bg-black/30 px-3 py-2">
-      <span className={cn("size-8 rounded-full", tint)} />
+    <Link to={to} className="flex items-center gap-3 border-t border-white/10 px-4 py-4 first:border-t-0">
+      <span className={cn("size-10 rounded-full", tint)} />
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{k}</span>
-        <span className="block text-[11px] text-subtle">{sub}</span>
+        <span className="block text-xs text-muted">{sub}</span>
       </span>
-      <span className="font-mono text-sm">{v}</span>
-    </li>
+      <span className="font-mono text-sm tabular-nums">{v}</span>
+      <ChevronRight className="size-4 text-white/40" />
+    </Link>
   );
 }
