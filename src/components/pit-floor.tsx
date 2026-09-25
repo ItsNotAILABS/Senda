@@ -199,11 +199,9 @@ export function PitFloor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-baseline justify-between gap-4 border-b border-border px-4 py-3">
-        <div>
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade terminal</p>
-          <p className="text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
-        </div>
+      <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade</p>
+        <p className="mt-2 text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
       </header>
     <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}

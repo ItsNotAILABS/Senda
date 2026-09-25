@@ -7,15 +7,17 @@ export function BooksDesk() {
   const d = digestBooks(w, usdPer);
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-6 py-6">
-      <p className="text-xs tracking-wide text-subtle uppercase">Books</p>
-      <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-        <h1 className="font-display text-4xl">Digest {d.id}</h1>
-        <p className={cn("text-sm font-semibold", d.tied ? "text-up" : "text-down")}>{d.tied ? "Ties" : "Does not tie"}</p>
-      </div>
-      <p className="mt-2 max-w-xl text-sm text-muted">
-        sUSD and the other cash tokens are the balances the app spends. sSTK is stock at cost. sGHOST is what live one-time numbers can still charge. sCAP is what remains. Suspense is the journal minus those balances.
-      </p>
+    <main className="min-h-0 flex-1 overflow-auto px-3 py-3">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-4xl">Digest {d.id}</h1>
+          <p className={cn("text-sm font-semibold", d.tied ? "text-up" : "text-down")}>{d.tied ? "Ties" : "Does not tie"}</p>
+        </div>
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          Cash the app spends, stock at cost, and what a one-time number can still charge. One digest.
+        </p>
+      </header>
       <dl className="mt-6 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat k="Assets" v={d.assets} />
         <Stat k="Capital" v={d.equity} />

@@ -66,14 +66,16 @@ export function VaultDesk() {
   }
 
   return (
-    <main className="px-6 py-8 lg:px-10">
-      <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Vault</p>
-      <h1 className="mt-2 max-w-2xl text-4xl">The wallet stays the wallet.</h1>
+    <main className="px-3 py-3 lg:px-4">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Vault</p>
+        <h1 className="mt-2 max-w-2xl text-4xl">The wallet stays the wallet.</h1>
       <p className="mt-3 max-w-xl text-sm text-muted">
         A wrap is a claim on USDC that never leaves Phantom. Senda cash is that claim. Push sends the claim back. Agents can only send inside the cap.
       </p>
+      </header>
 
-      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+      <div className="mt-3 grid gap-4 lg:grid-cols-3">
         <section className="rounded-2xl border border-border bg-surface p-5">
           <p className="text-xs text-subtle">On-chain USDC</p>
           <p className="mt-1 font-mono text-3xl">{owner ? `$${usdc.toFixed(2)}` : "—"}</p>

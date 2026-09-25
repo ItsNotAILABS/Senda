@@ -26,9 +26,9 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
   return (
     <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-h-0 overflow-auto border-b border-border lg:border-r lg:border-b-0">
-      <header className="px-5 pt-6 pb-3">
-        <h1 className="font-display text-4xl tracking-tight">Pay</h1>
-        <p className="mt-1 text-sm text-muted">Send, nearby, exchange, or add. Same cash you trade with. A send is a pain.001.</p>
+      <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+        <h1 className="text-4xl">Send</h1>
+        <p className="mt-2 text-sm text-muted">Send, nearby, exchange, or add. Same cash you trade with.</p>
       </header>
       <div className="mx-5 mb-4 rounded-xl bg-elevated px-4 py-3 text-sm">
         <p className="font-medium">{w.w.tag}</p>

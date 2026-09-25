@@ -23,12 +23,17 @@ export function MoreDesk() {
   const ach = sendaDeposit(w.tag);
 
   return (
-    <main className="flex flex-1 flex-col px-5 pt-6 pb-8">
-      <h1 className="font-display text-4xl tracking-tight">Account</h1>
-      <p className="mt-1 text-sm text-muted">
-        One cash account. ISO 20022 on send (pain.001 / UETR). ISO 8583 on card auth. PreStocks fills on Jupiter — we
-        don’t take the other side.
-      </p>
+    <main className="flex flex-1 flex-col px-3 py-3">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Account</p>
+        <h1 className="mt-2 text-4xl">One account</h1>
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          Same cash for a send, a card, and a PreStock. The wallet signs the trade.
+        </p>
+        <Link to="/legal" className="mt-3 inline-flex text-sm text-accent">
+          Privacy
+        </Link>
+      </header>
 
       <dl className="mt-6 divide-y divide-border rounded-2xl bg-elevated">
         <Row k="Tag" v={w.tag} />

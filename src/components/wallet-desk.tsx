@@ -205,15 +205,17 @@ export function WalletDesk({ buy }: { buy?: string }) {
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <section className="border-b border-border px-5 py-6 lg:px-8 xl:border-r xl:border-b-0">
-        <p className="text-sm text-muted">Your money</p>
-        <h1 className="mt-1 font-display text-6xl tabular-nums tracking-tight">
+      <section className="border-b border-border px-3 py-3 lg:px-4 xl:border-r xl:border-b-0">
+        <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+          <p className="text-sm text-muted">Your money</p>
+          <h1 className="mt-1 font-display text-6xl tabular-nums tracking-tight">
           ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
         </h1>
         <p className="mt-2 max-w-lg text-sm text-muted">
           Phantom is already money. You do not deposit it into another account before you can buy, swap, or sell.
         </p>
-        <ul className="mt-6 max-w-md divide-y divide-border">
+        </header>
+        <ul className="mt-4 max-w-md divide-y divide-border">
           <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." />
           <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} is in the vault` : owner || "Not connected"} />
           <Source name="SOL" value={solUsd} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} />

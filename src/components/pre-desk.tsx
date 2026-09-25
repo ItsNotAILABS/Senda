@@ -93,8 +93,9 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px]">
       <section className="border-b border-border xl:border-r xl:border-b-0">
-        <header className="px-5 pt-6 pb-4 lg:px-8">
-          <h1 className="font-display text-4xl">Pre-IPO terminal</h1>
+        <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">PreStocks</p>
+          <h1 className="mt-2 text-4xl">The book</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
             {owner
               ? "The print, the mark, and a Jupiter ticket. You are not the broker. You sign the swap."

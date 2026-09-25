@@ -16,6 +16,7 @@ import {
   Wallet,
   Waypoints,
 } from "lucide-react";
+import { Onboard } from "@/components/onboard";
 import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -90,10 +91,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
               </SignedOut>
             )}
+            <Link to="/legal" className="mt-2 block px-1 text-[11px] text-subtle hover:text-fg">
+              Privacy
+            </Link>
           </div>
         </div>
       </aside>
-      <div className="min-w-0 flex-1">
+      <div className="senda-stage min-w-0 flex-1">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
           <form
             className="min-w-0 flex-1"
@@ -131,6 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         {children}
+        <Onboard />
       </div>
     </div>
   );

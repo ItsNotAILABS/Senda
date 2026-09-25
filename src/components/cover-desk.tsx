@@ -11,13 +11,13 @@ export function CoverDesk() {
   const empty = w.balances.USD < 1;
 
   return (
-    <main className="flex flex-1 flex-col px-5 pt-6 pb-8">
+    <main className="flex flex-1 flex-col px-3 py-3">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <img src="/images/term-sheet.jpg" alt="" className="mb-5 h-36 w-full rounded-2xl object-cover" />
-      <h1 className="font-display text-4xl tracking-tight">Cover</h1>
-      <p className="mt-2 text-sm text-muted">
-        Life first. Phone, travel, rent. Puts on PreStocks live under Trade.
-      </p>
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
+        <h1 className="mt-2 text-4xl">Cover the life stuff</h1>
+        <p className="mt-2 max-w-xl text-sm text-muted">Phone, travel, rent. Puts on a PreStock live under Trade.</p>
+      </header>
       {empty ? (
         <button
           type="button"

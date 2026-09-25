@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { MCC, SENDA_IIN } from "@/lib/card-issuing";
+import { MCC } from "@/lib/card-issuing";
 import { formatMoney, luhnOk, type Card, type CardKind } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -32,12 +32,14 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   }
 
   return (
-    <main className="flex flex-1 flex-col px-6 pt-6 pb-8 lg:px-8">
-      <h1 className="font-display text-4xl tracking-tight">Cards</h1>
-      <p className="mt-2 text-sm text-muted">
-        Senda issuer. ISO 7812 PAN, Luhn check, Mastercard IIN {SENDA_IIN}. Auth hits USD/USDC on this book. Not a
-        bank BIN on VisaNet — the processor is here.
-      </p>
+    <main className="px-3 py-3 lg:px-4">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cards</p>
+        <h1 className="mt-2 max-w-xl text-4xl">A number for the store. Not the token.</h1>
+        <p className="mt-3 max-w-xl text-sm text-muted">
+          Virtual, one-time, or fleet. The full number is shown once. What stays is the last four. Not a bank card.
+        </p>
+      </header>
 
       {step === "issue" ? (
         <section className="mt-5">
@@ -192,7 +194,7 @@ function CheckoutPay({
   const [spent, setSpent] = useState(false);
 
   return (
-    <section className="mt-4 grid gap-4 rounded-2xl bg-elevated p-4 lg:grid-cols-2">
+    <section className="mt-3 grid gap-4 rounded-[28px] border border-white/10 bg-[#101018] p-4 lg:grid-cols-2">
       <div>
         <p className="text-xs tracking-wide text-subtle uppercase">Ghost</p>
         <h2 className="mt-1 font-display text-3xl">One number. One charge.</h2>
@@ -318,7 +320,7 @@ function CardFace({
   const [lim, setLim] = useState(String(card.dailyLimit));
 
   return (
-    <article className="overflow-hidden rounded-3xl bg-fg text-bg">
+    <article className="overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-br from-[#16161f] to-[#0c2418] text-fg">
       <div className="px-5 py-6">
         <div className="flex items-center justify-between">
           <p className="text-xs font-medium tracking-wide uppercase opacity-70">{card.label}</p>

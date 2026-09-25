@@ -36,6 +36,12 @@
   --shadow-border-hover: 0 0 0 1px rgb(243 239 228 / 0.16);
 }
 
+.senda-stage {
+  background:
+    radial-gradient(720px 280px at 100% -40px, rgb(153 69 255 / 0.16), transparent 60%),
+    var(--color-bg);
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;

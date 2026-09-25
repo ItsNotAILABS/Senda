@@ -35,14 +35,16 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
   }
 
   return (
-    <main className="px-6 py-8 lg:px-10">
-      <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Workspace</p>
-      <h1 className="mt-2 text-4xl">Work next to the book.</h1>
+    <main className="px-3 py-3 lg:px-4">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Workspace</p>
+        <h1 className="mt-2 text-4xl">Work next to the book.</h1>
       <p className="mt-3 max-w-xl text-sm text-muted">
         A sheet of the live print, and a page that is yours. Prices come from PreStocks. Notes stay in this browser. Agents keep their own log on the Agents tab.
       </p>
+      </header>
 
-      <div className="mt-8 overflow-x-auto rounded-2xl border border-border">
+      <div className="mt-3 overflow-x-auto rounded-[28px] border border-white/10">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-xs text-subtle">
             <tr>

@@ -43,8 +43,8 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
 
   return (
     <main className="flex flex-1 flex-col">
-      <header className="px-5 pt-6 pb-3">
-        <h1 className="font-display text-4xl tracking-tight">Social</h1>
+      <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+        <h1 className="text-4xl">Play</h1>
         <p className="mt-1 text-sm text-muted">
           Games, copy a name, tape of the book. Same cash. PreStocks only.
         </p>

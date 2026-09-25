@@ -25,9 +25,9 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-1 overflow-auto lg:grid-cols-2">
-      <section className="border-b border-border p-6 lg:border-r lg:border-b-0">
-        <p className="text-xs tracking-wide text-subtle uppercase">Race</p>
-        <h1 className="mt-1 font-display text-4xl">Which name moves</h1>
+      <section className="m-3 rounded-[28px] border border-white/10 bg-[#101018] p-6 lg:m-3">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
+        <h1 className="mt-2 text-4xl">Which name moves</h1>
         <p className="mt-2 max-w-md text-sm text-muted">
           Arm on the live last. The name that moves more from that print wins. The fill, if you want one, is Jupiter.
         </p>
