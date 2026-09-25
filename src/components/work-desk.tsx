@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { readUsing } from "@/lib/using";
 
 const SHEET = "senda.sheet.v1";
 const DOC = "senda.doc.v1";
@@ -18,7 +19,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const [sheet, setSheet] = useState<Record<string, string>>({});
   const [doc, setDoc] = useState("");
-  const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
+  const [symbol, setSymbol] = useState(readUsing()?.symbol || book[0]?.symbol || "");
   const [size, setSize] = useState(100);
   const [other, setOther] = useState("");
   const [mode, setMode] = useState<"desk" | "sheet" | "page">("desk");

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
-import { readChain } from "@/lib/phantom";
+import { WalletPicker } from "@/components/wallet-picker";
+import { connectPhantom, readChain } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
+import { writeUsing } from "@/lib/using";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -20,15 +22,6 @@ const LOGO: Record<string, string> = {
   XAI: "/logos/xai.png",
 };
 
-const ACTIONS = [
-  { to: "/pre", label: "Buy a company", hint: "The mint, not a brokerage", icon: Sparkles, bg: "bg-[#14f195]/15", tint: "text-accent" },
-  { to: "/wallet", label: "Convert money", hint: "SOL or USDC into the name", icon: RefreshCw, bg: "bg-[#9945ff]/20", tint: "text-[#c084fc]" },
-  { to: "/social", label: "Play the print", hint: "Which name actually moves", icon: Gamepad2, bg: "bg-[#3b82f6]/15", tint: "text-[#60a5fa]" },
-  { to: "/cards", label: "Spend it", hint: "A number. Not the token.", icon: ShoppingBag, bg: "bg-[#eab308]/15", tint: "text-[#facc15]" },
-  { to: "/payments", label: "Send", hint: "Same cash, to a person", icon: Send, bg: "bg-[#06b6d4]/15", tint: "text-[#22d3ee]" },
-  { to: "/agents", label: "Give an agent a cap", hint: "It asks. You sign.", icon: Bot, bg: "bg-[#a855f7]/20", tint: "text-[#d8b4fe]" },
-] as const;
-
 export function HomeDesk({ names }: { names: HouseListing[] }) {
   const pre = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const featured = [...pre].sort((a, b) => Math.abs(b.premium ?? 0) - Math.abs(a.premium ?? 0));
@@ -44,6 +37,10 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
   const [merchant, setMerchant] = useState("");
   const [spend, setSpend] = useState("40");
   const [reveal, setReveal] = useState<{ pan: string; cvv: string; expiry: string } | null>(null);
+  const [pick, setPick] = useState("");
+  const [buyUsd, setBuyUsd] = useState(25);
+  const [buying, setBuying] = useState(false);
+  const chosen = pre.find((n) => n.symbol === pick) ?? featured[0];
 
   useEffect(() => setCap(spendCap()), []);
   useEffect(() => {
@@ -79,58 +76,104 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
     toast.success("One number. This screen is the only place it is shown.");
   }
 
+  function choose(n: HouseListing) {
+    setPick(n.symbol);
+    writeUsing({ symbol: n.symbol, name: n.name, last: n.last, premium: n.premium, mint: n.mint });
+  }
+
+  async function buyChosen() {
+    if (!chosen) return;
+    setBuying(true);
+    try {
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = wallet.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      choose(chosen);
+      const done = await runPrestock({ owner: who, mint: chosen.mint, side: "buy", usd: buyUsd, price: chosen.last });
+      toast.success(`${chosen.symbol} is in the wallet. ${done.signature.slice(0, 8)}…`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The buy did not send.");
+    } finally {
+      setBuying(false);
+    }
+  }
+
   const activity = wallet.w.txs.slice(0, 4);
 
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
-          <h1 className="max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            Your money shouldn’t <span className="text-accent">stop working</span> after you buy it.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            A brokerage lets you hold. This is the part after that. Spend a slice, play the print, or hand an agent a cap. The token stays in your wallet.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/pre" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
-              Get started
+      <section className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Start here</p>
+        <h1 className="mt-3 max-w-3xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+          Buy a pre-IPO company. <span className="text-accent">Then use it.</span>
+        </h1>
+        <p className="mt-4 max-w-2xl text-sm text-muted">
+          {owner
+            ? `Phantom has ${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC${held > 0 ? `, plus $${held.toFixed(0)} of PreStocks` : ""}. Pick a name, sign the buy, and the same company is what you spend from, cover, play, or hand to an agent.`
+            : "Connect Phantom. The SOL and USDC already in it are the money. You do not fund a second account first."}
+        </p>
+        {!owner ? (
+          <div className="mt-5 max-w-sm"><WalletPicker /></div>
+        ) : null}
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+          <p className="text-sm font-semibold">1 · Pick the company</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+            {pre.slice(0, 8).map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => choose(n)}
+                className={cn("rounded-2xl px-3 py-3 text-left", chosen?.symbol === n.symbol ? "bg-accent text-accent-fg" : "bg-black/40")}
+              >
+                <span className="block text-sm font-semibold">{n.symbol}</span>
+                <span className="block font-mono text-[11px] opacity-80">{formatUsd(n.last)} · {formatPremium(n.premium)}</span>
+              </button>
+            ))}
+          </div>
+          {chosen ? (
+            <div className="mt-4">
+              <p className="text-sm font-semibold">2 · Buy {chosen.symbol}</p>
+              <p className="mt-1 text-xs text-muted">{chosen.name}. Token {formatUsd(chosen.last)}, mark {formatUsd(chosen.mark)}. Jupiter builds it. You sign. The token lands in Phantom.</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {[10, 25, 100].map((n) => (
+                  <button key={n} type="button" onClick={() => setBuyUsd(n)} className={cn("min-h-10 rounded-full px-4 font-mono text-sm", buyUsd === n ? "bg-white text-black" : "bg-black/40")}>${n}</button>
+                ))}
+                <button type="button" disabled={buying} onClick={() => void buyChosen()} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-60">
+                  {buying ? "Waiting for Phantom…" : `Sign the buy · $${buyUsd}`}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted">PreStocks did not answer, so there is nothing to buy.</p>
+          )}
+        </div>
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+          <p className="text-sm font-semibold">3 · Use {chosen?.symbol || "it"}</p>
+          <p className="mt-1 text-xs text-muted">These are the reasons to hold it here instead of at a brokerage.</p>
+          <div className="mt-3 space-y-2">
+            <Link to="/cards" search={{ spend: 40 }} className="block rounded-2xl bg-[#eab308]/15 px-3 py-3">
+              <span className="block text-sm font-semibold">Spend without selling</span>
+              <span className="block text-[11px] text-muted">Mint one number for a store. The token stays in the wallet.</span>
             </Link>
-            <Link to="/social" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
-              Play the print
+            <Link to="/cover" className="block rounded-2xl bg-[#ff5d73]/15 px-3 py-3">
+              <span className="block text-sm font-semibold">Cover a 10% drop</span>
+              <span className="block text-[11px] text-muted">The premium leaves Phantom. If the print falls, you sign the buy.</span>
+            </Link>
+            <Link to="/social" className="block rounded-2xl bg-[#3b82f6]/15 px-3 py-3">
+              <span className="block text-sm font-semibold">Play the print</span>
+              <span className="block text-[11px] text-muted">Two names. The one that moves is the one that moved. The stake is cash.</span>
+            </Link>
+            <Link to="/agents" className="block rounded-2xl bg-[#a855f7]/20 px-3 py-3">
+              <span className="block text-sm font-semibold">Let an agent watch it</span>
+              <span className="block text-[11px] text-muted">It queues a trade. You sign it. It cannot move money alone.</span>
             </Link>
           </div>
         </div>
-        <div className="relative min-h-72 overflow-hidden rounded-[28px] border border-white/10">
-          <video
-            src="/video/desk.mp4"
-            poster="/images/orbit.jpg"
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="h-full min-h-72 w-full object-cover"
-          />
-          <p className="absolute right-4 bottom-4 max-w-48 text-right text-xs tracking-widest text-white/80 uppercase">
-            Same money. More uses.
-          </p>
-        </div>
-      </section>
-
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
-        {ACTIONS.map((a) => {
-          const Icon = a.icon;
-          return (
-            <Link key={a.to} to={a.to} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3 hover:border-[#9945ff]">
-              <span className={cn("grid size-10 place-items-center rounded-xl", a.bg)}>
-                <Icon className={cn("size-4", a.tint)} />
-              </span>
-              <span>
-                <span className="block text-sm font-semibold">{a.label}</span>
-                <span className="block text-[11px] text-muted">{a.hint}</span>
-              </span>
-            </Link>
-          );
-        })}
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-[#101018] p-4">

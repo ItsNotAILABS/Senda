@@ -21,6 +21,7 @@ import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { readChain } from "@/lib/phantom";
+import { readUsing, type Using } from "@/lib/using";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -134,9 +135,38 @@ export function AppShell({ children }: { children: ReactNode }) {
             ) : null}
           </div>
         </header>
+        <UseBar />
         {children}
         <Onboard />
       </div>
+    </div>
+  );
+}
+
+function UseBar() {
+  const [row, setRow] = useState<Using | null>(null);
+  useEffect(() => {
+    const pull = () => setRow(readUsing());
+    pull();
+    window.addEventListener("senda-using", pull);
+    return () => window.removeEventListener("senda-using", pull);
+  }, []);
+  if (!row) {
+    return (
+      <div className="border-b border-white/10 bg-[#0c0c14] px-4 py-2 text-sm text-muted">
+        Pick a company on Home. Buy it with the wallet you already have. Then spend from it, cover a drop, play it, or let an agent watch it.
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0c0c14] px-4 py-2">
+      <span className="text-sm font-semibold">{row.symbol}</span>
+      <span className="text-xs text-muted">is the company you're using</span>
+      <Link to="/pre" search={{ q: row.symbol }} className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-fg">Buy</Link>
+      <Link to="/cards" search={{ spend: 40 }} className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Spend</Link>
+      <Link to="/cover" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Cover</Link>
+      <Link to="/social" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Play</Link>
+      <Link to="/agents" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Watch</Link>
     </div>
   );
 }

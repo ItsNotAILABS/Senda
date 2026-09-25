@@ -13,6 +13,7 @@ import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
 
 type Id = "cheap" | "rich" | "daily";
@@ -34,7 +35,10 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
-  const [watch, setWatch] = useState<string[]>([]);
+  const [watch, setWatch] = useState<string[]>(() => {
+    const u = readUsing();
+    return u ? [u.symbol] : [];
+  });
   const [busy, setBusy] = useState(false);
   const [series, setSeries] = useState<number[]>([]);
   const wallet = useWallet();

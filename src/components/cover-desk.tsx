@@ -14,6 +14,7 @@ import {
 } from "@/lib/cover-chain";
 import { connectPhantom, readChain } from "@/lib/phantom";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
+import { readUsing } from "@/lib/using";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +52,9 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
 
   useEffect(() => {
     refresh();
-  }, []);
+    const u = readUsing();
+    if (u && names.some((n) => n.symbol === u.symbol)) setSymbol(u.symbol);
+  }, [names]);
 
   useEffect(() => {
     if (!owner) return;

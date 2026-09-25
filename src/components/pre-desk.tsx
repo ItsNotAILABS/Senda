@@ -8,6 +8,7 @@ import { WalletPicker } from "@/components/wallet-picker";
 import { lockDrop, listDrops, markDropPaid } from "@/lib/drop-cover";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { writeUsing, readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
 
 const LOGO: Record<string, string> = {
@@ -31,6 +32,13 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
       .sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0));
   }, [names, query]);
   const [symbol, setSymbol] = useState(rows[0]?.symbol ?? "");
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    const fromSearch = q ? rows.find((r) => r.symbol.toLowerCase() === q || r.name.toLowerCase().includes(q)) : null;
+    const fromUse = readUsing();
+    const hit = fromSearch ?? (fromUse ? rows.find((r) => r.symbol === fromUse.symbol) : null);
+    if (hit) setSymbol(hit.symbol);
+  }, [query, rows]);
   const [usd, setUsd] = useState(10);
   const [quote, setQuote] = useState<JupQuote | { error: string } | null>(null);
   const [held, setHeld] = useState<{ ui: number; raw: string; decimals: number } | null>(null);
@@ -160,6 +168,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 setSymbol(r.symbol);
                 setSig(null);
                 setReveal(null);
+                writeUsing({ symbol: r.symbol, name: r.name, last: r.last, premium: r.premium, mint: r.mint });
               }}
               className={cn("flex w-full items-center gap-3 border-t border-white/10 px-3 py-3 text-left first:border-0", r.symbol === name?.symbol ? "bg-white/5" : "hover:bg-white/5")}
             >
