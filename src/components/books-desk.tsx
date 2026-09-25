@@ -7,55 +7,60 @@ export function BooksDesk() {
   const d = digestBooks(w, usdPer);
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto px-3 py-3">
+    <div className="space-y-3 px-3 py-3 lg:px-4">
       <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-4xl">Digest {d.id}</h1>
-          <p className={cn("text-sm font-semibold", d.tied ? "text-up" : "text-down")}>{d.tied ? "Ties" : "Does not tie"}</p>
+          <p className={cn("rounded-full px-3 py-1 text-sm font-semibold", d.tied ? "bg-accent text-accent-fg" : "bg-down/20 text-down")}>
+            {d.tied ? "The books tie" : "The books do not tie"}
+          </p>
         </div>
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          Cash the app spends, stock at cost, and what a one-time number can still charge. One digest.
+        <p className="mt-3 max-w-2xl text-sm text-muted">
+          This replays every send, card, cover, and buy in this account and checks it against the cash you can still spend. Suspense is the gap. Ghost is what a one-time number can still charge. It is the app's own book, not a chain balance.
         </p>
       </header>
-      <dl className="mt-6 grid max-w-3xl grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat k="Assets" v={d.assets} />
-        <Stat k="Capital" v={d.equity} />
-        <Stat k="Suspense" v={d.suspense} />
-        <Stat k="Ghost" v={d.ghost} />
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat k="Assets" v={d.assets} line="Cash plus stock at cost" />
+        <Stat k="Capital" v={d.equity} line="What the books say you own" />
+        <Stat k="Suspense" v={d.suspense} line="Journal versus the balance" />
+        <Stat k="Ghost" v={d.ghost} line="Still chargeable on a number" />
       </dl>
-      <table className="mt-6 w-full max-w-3xl text-left text-sm">
-        <thead className="text-xs text-subtle">
-          <tr>
-            <th className="py-2 font-medium">Token</th>
-            <th className="py-2 font-medium">Role</th>
-            <th className="py-2 text-right font-medium">Supply</th>
-            <th className="py-2 text-right font-medium">USD</th>
-          </tr>
-        </thead>
-        <tbody>
-          {d.tokens.map((t) => (
-            <tr key={t.code} className="border-t border-border">
-              <td className="py-2">
-                <span className="font-mono">{t.code}</span>
-                <span className="ml-2 text-muted">{t.name}</span>
-              </td>
-              <td className="py-2 text-muted">{t.role}</td>
-              <td className="py-2 text-right font-mono">{t.supply.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-              <td className="py-2 text-right font-mono">{t.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
+        <table className="w-full text-left text-sm">
+          <thead className="text-xs text-subtle">
+            <tr>
+              <th className="px-4 py-3 font-medium">Token</th>
+              <th className="px-2 py-3 font-medium">Role</th>
+              <th className="px-2 py-3 text-right font-medium">Supply</th>
+              <th className="px-4 py-3 text-right font-medium">USD</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
+          </thead>
+          <tbody>
+            {d.tokens.map((t) => (
+              <tr key={t.code} className="border-t border-white/10">
+                <td className="px-4 py-3">
+                  <span className="font-mono">{t.code}</span>
+                  <span className="mt-0.5 block text-xs text-muted">{t.name}</span>
+                </td>
+                <td className="px-2 py-3 text-muted">{t.role}</td>
+                <td className="px-2 py-3 text-right font-mono">{t.supply.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
+                <td className="px-4 py-3 text-right font-mono">{t.usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+    </div>
   );
 }
 
-function Stat({ k, v }: { k: string; v: number }) {
+function Stat({ k, v, line }: { k: string; v: number; line: string }) {
   return (
-    <div className="rounded-xl bg-elevated px-3 py-3">
+    <div className="rounded-[24px] border border-white/10 bg-[#101018] px-4 py-4">
       <dt className="text-xs text-subtle">{k}</dt>
-      <dd className="mt-1 font-mono text-lg">{v.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
+      <dd className="mt-1 font-mono text-2xl">{v.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
+      <p className="mt-1 text-xs text-muted">{line}</p>
     </div>
   );
 }
