@@ -26,7 +26,7 @@ import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
 const PRIMARY = [
-  { to: "/", label: "Use", icon: LayoutGrid },
+  { to: "/", label: "Home", icon: LayoutGrid },
   { to: "/pre", label: "PreStocks", icon: Sparkles },
   { to: "/invest", label: "Trade", icon: Waypoints },
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },

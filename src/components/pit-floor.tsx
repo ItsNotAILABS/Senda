@@ -15,9 +15,11 @@ import { RadarDesk } from "@/components/radar-desk";
 import { OptionChain } from "@/components/option-chain";
 import { type DeskMode } from "@/components/watchlist";
 import { applyHouseDrop, loadHouseBook, markHouse, saveHouseBook, type HouseBook } from "@/lib/house-paper";
+import { openChainCover } from "@/lib/cover-chain";
+import { connectPhantom } from "@/lib/phantom";
 import type { Side } from "@/lib/lmsr";
 import { chainFor, formatStrike, type OptContract, type OptTenor } from "@/lib/option-chain";
-import { placeOption, settleOptions } from "@/lib/option-book";
+import { settleOptions } from "@/lib/option-book";
 import { getHouse, HOUSE_FALLBACK, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -153,32 +155,27 @@ export function PitFloor({
 
   async function liftOpt(c: OptContract) {
     const spend = armed;
+    const stock = pre.find((h) => h.id === c.underlyingId);
     setBusyKey(c.id);
     try {
-      if (!(await ensureStack(spend))) return;
-      const deb = await onDebit(spend, c.id);
-      if (!deb.ok) {
-        toast.error(deb.error ?? "Could not lift.");
-        return;
-      }
-      const ticket = placeOption({
-        underlyingId: c.underlyingId,
-        symbol: c.symbol,
-        kind: c.kind,
+      if (!(spend > 0)) throw new Error("Enter the size. The premium is a slice of it.");
+      if (!stock) throw new Error("That name is not on the book.");
+      const owner = await connectPhantom();
+      const premium = Math.max(1, Math.round(spend * c.ask));
+      const row = await openChainCover({
+        owner,
+        kind: c.kind === "put" ? "drop" : "life",
+        title: `${c.symbol} ${c.kind} ${formatStrike(c.strike)}`,
+        symbol: stock.symbol,
+        mint: stock.mint,
         strike: c.strike,
-        tenor: c.tenor,
-        expiryAt: c.expiryAt,
-        spend,
-        ask: c.ask,
+        cover: spend,
+        premium,
+        days: c.tenor === "7d" ? 7 : 1,
       });
-      if ("error" in ticket) {
-        toast.error(ticket.error);
-        await onCredit(spend, "opt:rollback");
-        return;
-      }
-      toast.success(
-        `${c.kind === "call" ? "Call" : "Put"} ${c.symbol} ${formatStrike(c.strike)} · $${spend}`,
-      );
+      toast.success(`Premium signed. ${row.sig.slice(0, 8)}… Settle it on Cover.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "The premium did not send.");
     } finally {
       setBusyKey(null);
     }

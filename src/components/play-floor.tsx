@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { connectPhantom } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { FillButton } from "@/components/fill-button";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -7,7 +9,7 @@ import { cn } from "@/lib/utils";
 
 const SLIPS = "senda.slips.v2";
 
-type Slip = { id: string; symbol: string; dir: "up" | "down"; stake: number; start: number; open: boolean };
+type Slip = { id: string; symbol: string; mint: string; dir: "up" | "down"; stake: number; start: number; open: boolean };
 
 function loadSlips(): Slip[] {
   if (typeof window === "undefined") return [];
@@ -39,6 +41,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
   const [dir, setDir] = useState<"up" | "down">("up");
   const [stake, setStake] = useState(10);
   const [slips, setSlips] = useState<Slip[]>([]);
+  const [slipBusy, setSlipBusy] = useState(false);
   const left = live.find((n) => n.symbol === a);
   const right = live.find((n) => n.symbol === b);
   const ranked = [...live].sort((x, y) => (y.change24h ?? 0) - (x.change24h ?? 0));
@@ -58,30 +61,53 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
   const rightMove = move(right) ?? 0;
   const leader = Math.abs(leftMove) === Math.abs(rightMove) ? null : Math.abs(leftMove) > Math.abs(rightMove) ? left : right;
 
-  function lockSlip() {
+  async function lockSlip() {
     const name = live.find((n) => n.symbol === slipName);
-    if (!name) return;
-    const r = wallet.playStake(stake, `${name.symbol} ${dir}`);
-    if (!r.ok) {
-      toast.error(r.error || "That stake did not leave cash.");
-      return;
+    if (!name || slipBusy) return;
+    setSlipBusy(true);
+    try {
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const done = await runPrestock({ owner, mint: name.mint, side: "buy", usd: stake, price: name.last });
+      const row: Slip = { id: crypto.randomUUID(), symbol: name.symbol, mint: name.mint, dir, stake, start: name.last, open: true };
+      const next = [row, ...slips];
+      setSlips(next);
+      saveSlips(next);
+      toast.success(`Bought $${stake} of ${name.symbol}. ${done.signature.slice(0, 8)}… That's the stake.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The stake did not send.");
+    } finally {
+      setSlipBusy(false);
     }
-    const row: Slip = { id: crypto.randomUUID(), symbol: name.symbol, dir, stake, start: name.last, open: true };
-    const next = [row, ...slips];
-    setSlips(next);
-    saveSlips(next);
-    toast.success(`$${stake} is on ${name.symbol} ${dir}.`);
   }
 
-  function settle(row: Slip) {
+  async function settle(row: Slip) {
     const name = live.find((n) => n.symbol === row.symbol);
-    if (!name) return;
+    if (!name || slipBusy) return;
     const won = row.dir === "up" ? name.last > row.start : name.last < row.start;
-    if (won) wallet.playWin(row.stake * 2, `${row.symbol} slip`);
+    if (!won) {
+      setSlipBusy(true);
+      try {
+        const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+        const owner = existing || (await connectPhantom());
+        await runPrestock({ owner, mint: row.mint || name.mint, side: "sell", usd: row.stake, price: name.last });
+        toast.success(`${row.symbol} did not. Sold the stake back to USDC.`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not sell the stake back.");
+        return;
+      } finally {
+        setSlipBusy(false);
+      }
+    } else {
+      toast.success(`${row.symbol} went your way. The tokens stay in the wallet.`);
+    }
     const next = slips.map((s) => (s.id === row.id ? { ...s, open: false } : s));
     setSlips(next);
     saveSlips(next);
-    toast.success(won ? `${row.symbol} went your way. Paid $${row.stake * 2}.` : `${row.symbol} did not. The stake stays.`);
   }
 
   return (
@@ -90,7 +116,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
         <h1 className="mt-2 text-4xl">Games on the live print</h1>
         <p className="mt-2 max-w-xl text-sm text-muted">
-          A race, a board, and a slip. The print is the PreStock price. A buy is a Jupiter swap. A slip is your cash.
+          A race and a board on the live print. A slip buys the name. If it goes your way, the tokens stay. If it doesn't, settling sells them back to USDC.
         </p>
       </header>
 
@@ -163,7 +189,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         <div className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <p className="text-sm font-semibold">Slip</p>
           <p className="mt-1 text-xs text-muted">
-            Your cash leaves now. If the token goes the way you said, you are paid twice the stake. If it doesn't, the stake stays. This is Senda's book, not other people's money.
+            Locking buys ${stake} of the name. Right, and you keep the tokens. Wrong, and settle sells them back.
           </p>
           <select value={slipName} onChange={(e) => setSlipName(e.target.value)} className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm">
             {live.map((n) => (
@@ -184,8 +210,8 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
               </button>
             ))}
           </div>
-          <button type="button" onClick={lockSlip} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
-            Lock ${stake}
+          <button type="button" disabled={slipBusy} onClick={() => void lockSlip()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
+            {slipBusy ? "Waiting for the wallet…" : `Buy $${stake} as the stake`}
           </button>
           <ul className="mt-4 space-y-2">
             {slips.filter((s) => s.open).map((s) => (

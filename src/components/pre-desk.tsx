@@ -5,7 +5,7 @@ import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
 import { WalletPicker } from "@/components/wallet-picker";
-import { lockDrop, listDrops, markDropPaid } from "@/lib/drop-cover";
+import { listChainCovers, openChainCover } from "@/lib/cover-chain";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { writeUsing, readUsing } from "@/lib/using";
@@ -88,18 +88,6 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
       live = false;
     };
   }, [name?.mint, owner, sig]);
-
-  useEffect(() => {
-    for (const d of listDrops()) {
-      if (d.paid) continue;
-      const row = rows.find((r) => r.symbol === d.symbol);
-      if (!row || !(row.last > 0) || row.last > d.strike * 0.9) continue;
-      const paid = wallet.payCover(d.cover, `${d.symbol} drop cover`);
-      if (!paid.ok) continue;
-      markDropPaid(d.symbol);
-      toast.success(`${d.symbol} fell 10%. Cover paid $${d.cover}.`);
-    }
-  }, [rows, wallet]);
 
   async function swap(side: "buy" | "sell") {
     if (!name) return;
@@ -235,7 +223,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
               <div className="mt-5 max-w-lg">
                 <h2 className="text-2xl">Cover a 10% drop</h2>
                 <p className="mt-2 text-sm text-muted">
-                  Premium is 4% of the size, taken from Senda cash now. If {name.symbol} falls from {formatUsd(name.last)} to {formatUsd(name.last * 0.9)}, the cover pays ${usd} back into cash. The token stays in the wallet. Not a licensed policy.
+                  Premium is 4% of the size, in USDC, signed out of Phantom. If {name.symbol} falls from {formatUsd(name.last)} to {formatUsd(name.last * 0.9)}, you come back to Cover and sign the buy. The token you already hold stays put. Not a licensed policy.
                 </p>
                 <Size usd={usd} setUsd={setUsd} />
                 <dl className="mt-4 space-y-1 text-sm">
@@ -247,29 +235,44 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 <button
                   type="button"
                   onClick={() => {
-                    const premium = Math.max(1, Math.round(usd * 0.04));
-                    const r = wallet.cover({
-                      id: `drop-${name.symbol}`,
-                      title: `${name.symbol} drop cover`,
-                      premium,
-                      cover: usd,
-                      term: "pays if the token falls 10% from this print",
-                    });
-                    if (!r.ok) {
-                      toast.error(r.error || "Not enough cash for the premium.");
-                      return;
-                    }
-                    lockDrop({ symbol: name.symbol, strike: name.last, cover: usd, paid: false });
-                    toast.success(`Covered. $${premium} now. Pays $${usd} if ${name.symbol} falls 10%.`);
+                    if (!name) return;
+                    setBusy(true);
+                    void (async () => {
+                      try {
+                        const who = owner || (await connectPhantom());
+                        if (!owner) {
+                          const linked = wallet.linkChain(who, "Phantom", "phantom");
+                          if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+                        }
+                        const premium = Math.max(1, Math.round(usd * 0.04));
+                        const row = await openChainCover({
+                          owner: who,
+                          kind: "drop",
+                          title: `${name.symbol} drop`,
+                          symbol: name.symbol,
+                          mint: name.mint,
+                          strike: name.last,
+                          cover: usd,
+                          premium,
+                          days: 1,
+                        });
+                        setSig(row.sig);
+                        toast.success(`Premium signed. ${row.sig.slice(0, 8)}…`);
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "The premium did not send.");
+                      } finally {
+                        setBusy(false);
+                      }
+                    })();
                   }}
                   className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
                 >
                   Buy the cover
                 </button>
                 <ul className="mt-4 space-y-2">
-                  {listDrops().filter((d) => d.symbol === name.symbol).map((d) => (
-                    <li key={d.strike} className="rounded-2xl bg-black/40 px-3 py-2 text-sm">
-                      Locked {formatUsd(d.strike)} · pays ${d.cover} · {d.paid ? "paid" : "open"}
+                  {listChainCovers().filter((d) => d.symbol === name.symbol && d.status === "open").map((d) => (
+                    <li key={d.id} className="rounded-2xl bg-black/40 px-3 py-2 text-sm">
+                      Strike {formatUsd(d.strike)} · size ${d.cover} · premium ${d.premium}
                     </li>
                   ))}
                 </ul>
