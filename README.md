@@ -77,6 +77,21 @@ Senda cash, practice play, the sheet, the agent log, and the desk-number last fo
 
 A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift that keeps running after the tab closes. A second computer that inherits this browser’s cash.
 
+## The chain, in Rust and Python
+
+The page is TypeScript because the browser is where the wallet signs. The payment and the book are not.
+
+[chain/senda-chain](chain/senda-chain) is Rust. It builds the SPL Token transfer of USDC (instruction 3, six decimals) and the cover memo. `cargo test --manifest-path chain/senda-chain/Cargo.toml`
+
+[chain/python](chain/python) is Python. It reads `https://prestocks.com/api/prestocks`, ranks the print against the mark, and builds the same transfer and the same memo. The tests lock those bytes to the Rust crate.
+
+```bash
+PYTHONPATH=chain/python python3 -m unittest discover -s chain/python/tests
+PYTHONPATH=chain/python python3 -m senda
+```
+
+There is still no Senda program and no program id. Rust and Python build the transaction. The wallet signs it.
+
 ## Run
 
 ```bash

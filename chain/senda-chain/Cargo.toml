@@ -1,0 +1,8 @@
+[package]
+name = "senda-chain"
+version = "0.1.0"
+edition = "2021"
+description = "USDC pay and cover terms for the Senda desk. No program id. The wallet signs."
+license = "MIT"
+
+[dependencies]
