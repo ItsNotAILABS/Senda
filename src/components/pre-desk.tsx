@@ -116,69 +116,114 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   }
 
   return (
-    <div className="space-y-3 px-3 py-3 lg:px-4">
-      {name ? (
-        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-          <div className="flex flex-wrap items-start justify-between gap-6">
-            <div className="flex items-center gap-4">
-              {LOGO[name.symbol] ? (
-                <img src={LOGO[name.symbol]} alt="" className="size-16 rounded-2xl bg-white object-contain p-2" />
-              ) : null}
-              <div>
-                <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">PreStock</p>
-                <h1 className="text-4xl">{name.symbol}</h1>
-                <p className="text-sm text-muted">{name.name}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="font-mono text-5xl tabular-nums">{formatUsd(name.last)}</p>
-              <p className={cn("mt-1 font-mono text-sm", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
-                {formatPremium(name.premium)} vs mark {formatUsd(name.mark)}
+    <div className="space-y-4 px-3 py-3 lg:px-4">
+      <section className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,400px)]">
+        <div className="flex flex-col justify-center py-1">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">PreStock</p>
+          <h1 className="mt-3 text-4xl tracking-tight">
+            {name ? (
+              <>
+                Buy <span className="text-accent">{name.symbol}</span>
+              </>
+            ) : (
+              <>
+                No <span className="text-accent">live</span> price
+              </>
+            )}
+          </h1>
+          {name ? (
+            <>
+              <p className="mt-2 text-sm text-muted">{name.name}</p>
+              <p className="mt-6 font-mono text-5xl tabular-nums tracking-tight">{formatUsd(name.last)}</p>
+              <p className={cn("mt-2 font-mono text-sm tabular-nums", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                {formatPremium(name.premium)} <span className="text-subtle">vs mark {formatUsd(name.mark)}</span>
               </p>
-            </div>
-          </div>
-          <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4">
-            <Stat k="24h" v={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} />
-            <Stat k="Holders" v={name.holders.toLocaleString()} />
-            <Stat k="Liquidity" v={formatUsd(name.liquidity)} />
-            <Stat k="You hold" v={held && held.ui > 0 ? held.ui.toFixed(4) : "none"} />
-          </div>
-          <p className="mt-4 max-w-2xl text-sm text-muted">{name.description}</p>
-        </section>
-      ) : null}
-      <FilmBand poster="/images/markets-desk.jpg" label="A mint. Not a brokerage." />
-
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
-          {rows.map((r) => (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => {
-                setSymbol(r.symbol);
-                setSig(null);
-                setReveal(null);
-                writeUsing({ symbol: r.symbol, name: r.name, last: r.last, premium: r.premium, mint: r.mint });
-              }}
-              className={cn("flex w-full items-center gap-3 border-t border-white/10 px-3 py-3 text-left first:border-0", r.symbol === name?.symbol ? "bg-white/5" : "hover:bg-white/5")}
-            >
-              {LOGO[r.symbol] ? <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" /> : <span className="grid size-8 place-items-center rounded-full bg-black/40 text-[10px]">{r.symbol.slice(0, 2)}</span>}
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{r.symbol}</span>
-                <span className="block truncate text-[11px] text-subtle">{r.name}</span>
-              </span>
-              <span className="text-right">
-                <span className="block font-mono text-xs">{formatUsd(r.last)}</span>
-                <span className={cn("block font-mono text-[11px]", (r.change24h ?? 0) < 0 ? "text-down" : "text-accent")}>
-                  {r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`}
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-muted">Nothing on the book is priced.</p>
+          )}
+        </div>
+        <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          {name ? (
+            <>
+              <div className="flex items-center gap-3">
+                {LOGO[name.symbol] ? (
+                  <img src={LOGO[name.symbol]} alt="" className="size-12 rounded-2xl bg-white object-contain p-1.5" />
+                ) : (
+                  <span className="grid size-12 place-items-center rounded-2xl bg-black/40 font-mono text-xs">{name.symbol.slice(0, 2)}</span>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{name.name}</p>
+                  <p className="font-mono text-xs text-subtle">{name.symbol}</p>
+                </div>
+                <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.14em] text-accent uppercase">
+                  <span className="senda-dot size-1.5 rounded-full bg-accent" />
+                  Live
                 </span>
-              </span>
-            </button>
-          ))}
+              </div>
+              <p className="mt-5 font-mono text-4xl tabular-nums tracking-tight">{formatUsd(name.last)}</p>
+              <p className={cn("mt-1 font-mono text-xs tabular-nums", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                {formatPremium(name.premium)} · mark {formatUsd(name.mark)}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Stat k="24h" v={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} />
+                <Stat k="Holders" v={name.holders.toLocaleString()} />
+                <Stat k="Liquidity" v={formatUsd(name.liquidity)} />
+                <Stat k="You hold" v={held && held.ui > 0 ? held.ui.toFixed(4) : "none"} />
+              </div>
+              {name.description ? <p className="mt-4 line-clamp-3 text-sm text-muted">{name.description}</p> : null}
+            </>
+          ) : (
+            <p className="text-sm text-muted">The live print shows up when a name is priced.</p>
+          )}
+        </aside>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <div className="flex items-baseline justify-between">
+            <p className="text-sm font-semibold">Book</p>
+            <p className="font-mono text-xs tabular-nums text-subtle">{rows.length}</p>
+          </div>
+          <div className="mt-3">
+            {rows.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => {
+                  setSymbol(r.symbol);
+                  setSig(null);
+                  setReveal(null);
+                  writeUsing({ symbol: r.symbol, name: r.name, last: r.last, premium: r.premium, mint: r.mint });
+                }}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl border-t border-white/[0.06] px-2 py-3 text-left first:border-0",
+                  r.symbol === name?.symbol ? "bg-accent/10" : "hover:bg-white/[0.03]",
+                )}
+              >
+                {LOGO[r.symbol] ? (
+                  <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
+                ) : (
+                  <span className="grid size-8 place-items-center rounded-full bg-black/40 text-[10px]">{r.symbol.slice(0, 2)}</span>
+                )}
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{r.symbol}</span>
+                  <span className="block truncate text-[11px] text-subtle">{r.name}</span>
+                </span>
+                <span className="text-right">
+                  <span className="block font-mono text-xs tabular-nums">{formatUsd(r.last)}</span>
+                  <span className={cn("block font-mono text-[11px] tabular-nums", (r.change24h ?? 0) < 0 ? "text-down" : "text-accent")}>
+                    {r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`}
+                  </span>
+                </span>
+              </button>
+            ))}
+            {rows.length === 0 ? <p className="py-6 text-sm text-muted">No priced names.</p> : null}
+          </div>
         </div>
 
         {name ? (
-          <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
             <div className="flex flex-wrap gap-2">
               {(
                 [
@@ -192,7 +237,10 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                   key={id}
                   type="button"
                   onClick={() => setMode(id)}
-                  className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", mode === id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
+                  className={cn(
+                    "min-h-11 rounded-full px-4 text-sm font-semibold",
+                    mode === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                  )}
                 >
                   {label}
                 </button>
@@ -200,40 +248,59 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             </div>
 
             {mode === "buy" ? (
-              <div className="mt-5 max-w-lg">
-                <p className="text-sm text-muted">Jupiter quotes {name.symbol}. You sign. Senda does not take the other side.</p>
+              <div className="mt-5">
                 <Size usd={usd} setUsd={setUsd} />
                 <QuoteLine quote={quote} usd={usd} decimals={decimals} />
                 {owner ? (
-                  <button type="button" disabled={busy} onClick={() => void swap("buy")} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void swap("buy")}
+                    className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+                  >
                     {busy ? "Waiting for the wallet…" : `Buy $${usd} of ${name.symbol}`}
                   </button>
                 ) : (
-                  <div className="mt-4"><WalletPicker /></div>
+                  <div className="mt-4">
+                    <WalletPicker />
+                  </div>
                 )}
-                <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">Pay with SOL instead</Link>
+                <Link
+                  to="/wallet"
+                  search={{ buy: name.symbol }}
+                  className="mt-2 flex min-h-11 w-full items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-muted"
+                >
+                  Pay with SOL instead
+                </Link>
                 {held && held.ui > 0 ? (
-                  <button type="button" disabled={busy} onClick={() => void swap("sell")} className="mt-2 min-h-11 w-full rounded-full bg-white/10 text-sm font-semibold">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void swap("sell")}
+                    className="mt-2 min-h-11 w-full rounded-full border border-white/10 text-sm font-semibold"
+                  >
                     Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
                   </button>
-                ) : owner ? <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p> : null}
-                <p className="mt-3 font-mono text-[11px] text-subtle break-all">{routes.find((x) => x.mint === name.mint)?.route || name.mint}</p>
+                ) : owner ? (
+                  <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
+                ) : null}
+                <p className="mt-3 font-mono text-[11px] break-all text-subtle">{routes.find((x) => x.mint === name.mint)?.route || name.mint}</p>
               </div>
             ) : null}
 
             {mode === "cover" ? (
-              <div className="mt-5 max-w-lg">
-                <h2 className="text-2xl">Cover a 10% drop</h2>
-                <p className="mt-2 text-sm text-muted">
-                  Premium is 4% of the size, in USDC, signed out of Phantom. If {name.symbol} falls from {formatUsd(name.last)} to {formatUsd(name.last * 0.9)}, you come back to Cover and sign the buy. The token you already hold stays put. Not a licensed policy.
-                </p>
+              <div className="mt-5">
+                <h2 className="text-2xl tracking-tight">
+                  Cover a <span className="text-accent">10% drop</span>
+                </h2>
                 <Size usd={usd} setUsd={setUsd} />
-                <dl className="mt-4 space-y-1 text-sm">
+                <dl className="mt-4 divide-y divide-white/[0.06]">
                   <Row k="Print you lock" v={formatUsd(name.last)} />
                   <Row k="Pays if last is at or under" v={formatUsd(name.last * 0.9)} />
                   <Row k="Premium now" v={`$${Math.max(1, Math.round(usd * 0.04))}`} />
                   <Row k="Pays" v={`$${usd}`} />
                 </dl>
+                <p className="mt-3 text-xs text-subtle">Premium is USDC from Phantom. Not a licensed policy. The token you hold stays put.</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -267,28 +334,40 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                       }
                     })();
                   }}
-                  className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+                  className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
                 >
                   Buy the cover
                 </button>
                 <ul className="mt-4 space-y-2">
-                  {listChainCovers().filter((d) => d.symbol === name.symbol && d.status === "open").map((d) => (
-                    <li key={d.id} className="rounded-2xl bg-black/40 px-3 py-2 text-sm">
-                      Strike {formatUsd(d.strike)} · size ${d.cover} · premium ${d.premium}
-                    </li>
-                  ))}
+                  {listChainCovers()
+                    .filter((d) => d.symbol === name.symbol && d.status === "open")
+                    .map((d) => (
+                      <li key={d.id} className="flex items-center justify-between rounded-2xl border border-white/[0.06] px-3 py-2 text-sm">
+                        <span>
+                          Strike <span className="font-mono tabular-nums">{formatUsd(d.strike)}</span>
+                        </span>
+                        <span className="font-mono text-xs tabular-nums">
+                          ${d.cover} · premium ${d.premium}
+                        </span>
+                      </li>
+                    ))}
                 </ul>
               </div>
             ) : null}
 
             {mode === "spend" ? (
-              <div className="mt-5 max-w-lg">
-                <h2 className="text-2xl">A number, not the token</h2>
-                <p className="mt-2 text-sm text-muted">
-                  Mint a one-time card capped at this size. The store sees the number. {name.symbol} stays in the wallet. The full number is shown once.
-                </p>
+              <div className="mt-5">
+                <h2 className="text-2xl tracking-tight">
+                  A number, <span className="text-accent">not the token</span>
+                </h2>
+                <p className="mt-2 text-sm text-muted">{name.symbol} stays in the wallet. The full number is shown once.</p>
                 <Size usd={usd} setUsd={setUsd} />
-                <input value={store} onChange={(e) => setStore(e.target.value)} placeholder="Store, optional" className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none" />
+                <input
+                  value={store}
+                  onChange={(e) => setStore(e.target.value)}
+                  placeholder="Store, optional"
+                  className="mt-3 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 text-sm outline-none"
+                />
                 <button
                   type="button"
                   onClick={() => {
@@ -296,14 +375,16 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                     if (!r.ok) toast.error(r.error || "Could not mint a number.");
                     else setReveal(r.reveal);
                   }}
-                  className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+                  className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
                 >
                   Mint a ${usd} number
                 </button>
                 {reveal ? (
-                  <div className="mt-4 rounded-2xl bg-gradient-to-br from-[#16161f] to-[#0c2418] p-5 font-mono">
+                  <div className="mt-4 rounded-[22px] border border-white/[0.08] bg-gradient-to-br from-[#16161f] to-[#0c2418] p-5 font-mono">
                     <p className="tracking-[0.16em]">{reveal.pan}</p>
-                    <p className="mt-2 text-sm">{reveal.expiry} · {reveal.cvv}</p>
+                    <p className="mt-2 text-sm tabular-nums">
+                      {reveal.expiry} · {reveal.cvv}
+                    </p>
                     <p className="mt-2 text-xs text-subtle">Shown once. A second charge is declined.</p>
                   </div>
                 ) : null}
@@ -312,34 +393,50 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
 
             {mode === "stand" ? (
               <div className="mt-5">
-                <h2 className="text-2xl">Where {name.symbol} stands</h2>
-                <p className="mt-2 max-w-lg text-sm text-muted">Against the other names on this book, right now. Not a link.</p>
-                <ol className="mt-4 space-y-2">
-                  {[...rows].sort((a, b) => (b.change24h ?? -9) - (a.change24h ?? -9)).map((r, i) => (
-                    <li key={r.id} className={cn("flex items-center justify-between rounded-2xl px-3 py-2 text-sm", r.symbol === name.symbol ? "bg-accent/15" : "bg-black/30")}>
-                      <span>{i + 1}. {r.symbol}</span>
-                      <span className="font-mono text-xs">{r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`} · {formatPremium(r.premium)}</span>
-                    </li>
-                  ))}
+                <h2 className="text-2xl tracking-tight">
+                  Where <span className="text-accent">{name.symbol}</span> stands
+                </h2>
+                <ol className="mt-4">
+                  {[...rows]
+                    .sort((a, b) => (b.change24h ?? -9) - (a.change24h ?? -9))
+                    .map((r, i) => (
+                      <li
+                        key={r.id}
+                        className={cn(
+                          "flex items-center justify-between border-t border-white/[0.06] py-2.5 text-sm first:border-0",
+                          r.symbol === name.symbol ? "text-accent" : "",
+                        )}
+                      >
+                        <span>
+                          <span className="font-mono text-xs tabular-nums text-subtle">{i + 1}</span> {r.symbol}
+                        </span>
+                        <span className="font-mono text-xs tabular-nums">
+                          {r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`} · {formatPremium(r.premium)}
+                        </span>
+                      </li>
+                    ))}
                 </ol>
               </div>
             ) : null}
 
             {sig ? (
-              <a href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer" className="mt-4 block font-mono text-xs text-accent break-all">{sig}</a>
+              <a href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer" className="mt-4 block font-mono text-xs break-all text-accent">
+                {sig}
+              </a>
             ) : null}
           </section>
         ) : null}
       </div>
+      <FilmBand poster="/images/markets-desk.jpg" label="A mint. Not a brokerage." />
     </div>
   );
 }
 
 function Stat({ k, v }: { k: string; v: string }) {
   return (
-    <div className="rounded-2xl bg-black/40 px-3 py-2">
+    <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2">
       <p className="text-[11px] text-subtle">{k}</p>
-      <p className="font-mono text-sm">{v}</p>
+      <p className="font-mono text-sm tabular-nums">{v}</p>
     </div>
   );
 }
@@ -347,10 +444,27 @@ function Stat({ k, v }: { k: string; v: string }) {
 function Size({ usd, setUsd }: { usd: number; setUsd: (n: number) => void }) {
   return (
     <div className="mt-4">
-      <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="min-h-12 w-full rounded-2xl bg-black/40 px-3 font-mono text-lg outline-none" />
-      <div className="mt-2 flex gap-1">
+      <p className="text-[11px] text-subtle">Size</p>
+      <input
+        value={usd}
+        onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
+        inputMode="decimal"
+        aria-label="Size in dollars"
+        className="mt-2 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
+      />
+      <div className="mt-2 flex gap-2">
         {[10, 25, 100, 250].map((n) => (
-          <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>${n}</button>
+          <button
+            key={n}
+            type="button"
+            onClick={() => setUsd(n)}
+            className={cn(
+              "min-h-9 rounded-full px-3 font-mono text-xs tabular-nums",
+              usd === n ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+            )}
+          >
+            ${n}
+          </button>
         ))}
       </div>
     </div>
@@ -359,21 +473,28 @@ function Size({ usd, setUsd }: { usd: number; setUsd: (n: number) => void }) {
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-muted">{k}</dt>
-      <dd className="font-mono text-xs">{v}</dd>
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <dt className="text-sm text-muted">{k}</dt>
+      <dd className="text-right font-mono text-xs tabular-nums">{v}</dd>
     </div>
   );
 }
 
 function QuoteLine({ quote, usd, decimals }: { quote: JupQuote | { error: string } | null; usd: number; decimals: number }) {
-  if (!quote) return <p className="mt-4 text-sm text-muted">Asking Jupiter for a route…</p>;
+  if (!quote) return <p className="mt-4 font-mono text-sm text-muted">Asking Jupiter for a route…</p>;
   if ("error" in quote) return <p className="mt-4 text-sm text-down">{quote.error}</p>;
   const impact = Math.abs(Number(quote.priceImpactPct) || 0);
   const impactPct = impact > 1 ? impact : impact * 100;
   return (
-    <p className="mt-4 font-mono text-sm">
-      ${usd} → {outUi(quote, decimals).toFixed(4)} · {quote.route[0] || "Jupiter"} · {impactPct.toFixed(2)}% impact
-    </p>
+    <div className="mt-4 rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-xs text-subtle">${usd}</span>
+        <span className="font-mono text-sm tabular-nums">{outUi(quote, decimals).toFixed(4)}</span>
+      </div>
+      <div className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+        <span className="text-subtle">{quote.route[0] || "Jupiter"}</span>
+        <span className="font-mono tabular-nums text-muted">{impactPct.toFixed(2)}% impact</span>
+      </div>
+    </div>
   );
 }

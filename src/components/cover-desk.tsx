@@ -132,7 +132,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
           <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
             The premium <span className="text-accent">leaves Phantom</span>.
@@ -150,12 +150,12 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          <figure className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
             <p className="text-xs text-subtle">Phantom USDC</p>
             <p className="mt-2 font-mono text-4xl">{owner ? usdc.toFixed(2) : "—"}</p>
             <p className="mt-1 text-xs text-muted">{owner ? "This is what can pay a premium." : "Connect Phantom. Nothing is covered until you sign."}</p>
           </figure>
-          <figure className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
             <p className="text-xs text-subtle">Cover account</p>
             <p className="mt-2 font-mono text-4xl">{locked.toFixed(2)}</p>
             <p className="mt-1 break-all font-mono text-[11px] text-subtle">{coverPubkey()}</p>
@@ -165,32 +165,32 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
       <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
 
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <button type="button" onClick={() => setMode("drop")} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3 text-left">
+        <button type="button" onClick={() => setMode("drop")} className="flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left">
           <span className="grid size-10 place-items-center rounded-xl bg-[#ff5d73]/15 text-[#ff8fa3]"><TrendingDown className="size-4" /></span>
           <span>
             <span className="block text-sm font-semibold">Drop</span>
             <span className="block text-[11px] text-muted">10% under this print</span>
           </span>
         </button>
-        <button type="button" onClick={() => setMode("life")} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3 text-left">
+        <button type="button" onClick={() => setMode("life")} className="flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left">
           <span className="grid size-10 place-items-center rounded-xl bg-[#14f195]/15 text-accent"><Shield className="size-4" /></span>
           <span>
             <span className="block text-sm font-semibold">Life</span>
             <span className="block text-[11px] text-muted">Phone, travel, rent, a haul</span>
           </span>
         </button>
-        <div className="rounded-2xl border border-white/10 bg-[#101018] px-4 py-3">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
           <p className="text-[11px] text-subtle">Premium</p>
           <p className="font-mono text-xl">${premium}</p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-[#101018] px-4 py-3">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
           <p className="text-[11px] text-subtle">Open</p>
           <p className="font-mono text-xl">{rows.filter((r) => r.status === "open").length}</p>
         </div>
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-2">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2">
           {mode === "drop"
             ? book.map((n) => (
                 <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className={cn("flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left", n.symbol === name?.symbol ? "bg-white/10" : "")}>
@@ -207,7 +207,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
               ))}
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6">
           {mode === "drop" && name ? (
             <>
               <p className="text-xs text-subtle">Locks this print for a day</p>
@@ -215,7 +215,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
               <p className="mt-2 text-sm text-muted">
                 Premium ${premium} USDC leaves now. Strike {formatUsd(name.last)}. If the token is at or under {formatUsd(name.last * 0.9)}, settle returns the premium and you sign a buy of ${usd}. If it does not fall, cancel returns the USDC. Nothing is paid from a local balance.
               </p>
-              <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-4 min-h-12 w-full rounded-2xl bg-black/40 px-3 font-mono text-lg outline-none" />
+              <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-4 min-h-12 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono text-lg outline-none" />
             </>
           ) : (
             <>
@@ -235,7 +235,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           )}
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
           <p className="text-sm font-semibold">Signed covers</p>
           {rows.length === 0 ? <p className="mt-3 text-xs text-subtle">None. A cover does not exist until the USDC moves.</p> : null}
           <ul className="mt-2 space-y-2">
@@ -245,9 +245,9 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
                 <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
                 <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
                 {r.status === "open" ? (
-                  <div className="mt-2 flex gap-2">
-                    <button type="button" disabled={busy} onClick={() => void settle(r, false)} className="text-xs font-semibold text-accent">Settle</button>
-                    <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="text-xs font-semibold text-muted">Cancel</button>
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" disabled={busy} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
+                    <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
                   </div>
                 ) : null}
               </li>

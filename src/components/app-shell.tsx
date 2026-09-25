@@ -14,7 +14,8 @@ import {
   SquarePen,
   UserRound,
   Wallet,
-  Waypoints,
+  Zap,
+  Bell,
 } from "lucide-react";
 import { Onboard } from "@/components/onboard";
 import { WalletPicker } from "@/components/wallet-picker";
@@ -27,18 +28,18 @@ import { cn } from "@/lib/utils";
 const PRIMARY = [
   { to: "/", label: "Home", icon: LayoutGrid },
   { to: "/pre", label: "PreStocks", icon: Sparkles },
-  { to: "/payments", label: "Send", icon: Wallet },
-  { to: "/cards", label: "Cards", icon: CreditCard },
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },
-  { to: "/vault", label: "Vault", icon: Lock },
   { to: "/social", label: "Play", icon: Gamepad2 },
-  { to: "/agents", label: "Agents", icon: Bot },
+  { to: "/cards", label: "Shop", icon: CreditCard },
+  { to: "/agents", label: "AI Agent", icon: Bot },
+  { to: "/payments", label: "Send", icon: Wallet },
+  { to: "/vault", label: "Portfolio", icon: Lock },
 ] as const;
 
 const MORE = [
   { to: "/cover", label: "Cover", icon: Shield },
   { to: "/work", label: "Work", icon: SquarePen },
-  { to: "/invest", label: "Trade", icon: Waypoints },
+  { to: "/invest", label: "Trade", icon: Hexagon },
   { to: "/solana", label: "Solana", icon: Hexagon },
   { to: "/books", label: "Books", icon: BookOpen },
   { to: "/more", label: "Account", icon: UserRound },
@@ -62,23 +63,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
       <aside className="sticky top-0 flex h-dvh w-56 shrink-0 flex-col border-r border-border bg-[#07070f]">
-        <Link to="/" className="flex items-center gap-2 px-4 pt-4 pb-3">
-          <span className="size-6 rounded-lg bg-gradient-to-br from-[#9945FF] to-[#14F195]" />
+        <Link to="/" className="flex items-center gap-2 px-4 pt-5 pb-4">
+          <span className="grid size-8 place-items-center rounded-xl bg-accent text-accent-fg">
+            <Zap className="size-4" />
+          </span>
           <span className="font-display text-lg tracking-tight">Senda</span>
         </Link>
-        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
-          <p className="px-3 pt-1 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Account</p>
-          {PRIMARY.slice(0, 6).map((t) => (
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3">
+          {PRIMARY.map((t) => (
             <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
           ))}
-          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Floor</p>
-          {PRIMARY.slice(6).map((t) => (
-            <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
-          ))}
-          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">More</p>
-          {MORE.map((t) => (
-            <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet />
-          ))}
+          <div className="mt-4 border-t border-white/8 pt-3">
+            {MORE.map((t) => (
+              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet />
+            ))}
+          </div>
         </nav>
         <div className="border-t border-border px-3 py-3">
           <ChainChip owner={owner} />
@@ -103,32 +102,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="senda-stage min-w-0 flex-1">
-        <header className="sticky top-0 z-20 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-3">
-            <Link to="/" className="min-w-36">
-              <p className="text-[11px] text-subtle">{w.tag}</p>
-              <p className="font-mono text-lg leading-none tracking-tight">
-                ${(w.balances.USD || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
-                <span className="ml-1 text-xs text-subtle">cash</span>
-              </p>
-            </Link>
-            <div className="flex flex-wrap gap-1">
-              <Link to="/payments" className="inline-flex min-h-9 items-center rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg">Send</Link>
-              <Link to="/payments" search={{ act: "add" }} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Add</Link>
-              <Link to="/cards" search={{ spend: 0 }} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Card</Link>
-              <Link to="/wallet" className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Exchange</Link>
-            </div>
+        <header className="sticky top-0 z-20 px-4 py-3">
+          <div className="flex items-center gap-3">
             <form
-              className="min-w-0 flex-1"
+              className="mx-auto min-w-0 w-full max-w-xl"
               onSubmit={(e) => {
                 e.preventDefault();
                 const key = q.trim().toLowerCase();
                 setQ("");
                 if (key === "send") void navigate({ to: "/payments" });
                 else if (key === "add") void navigate({ to: "/payments", search: { act: "add" } });
-                else if (key === "card" || key === "cards") void navigate({ to: "/cards", search: { spend: 0 } });
+                else if (key === "card" || key === "cards" || key === "shop") void navigate({ to: "/cards", search: { spend: 0 } });
                 else if (key === "exchange" || key === "convert") void navigate({ to: "/wallet" });
-                else if (key === "vault") void navigate({ to: "/vault" });
+                else if (key === "vault" || key === "portfolio") void navigate({ to: "/vault" });
                 else if (key === "cover") void navigate({ to: "/cover" });
                 else if (key === "play") void navigate({ to: "/social" });
                 else if (key === "agent" || key === "agents") void navigate({ to: "/agents" });
@@ -141,10 +127,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search money, a card, or a company"
-                className="min-h-10 w-full rounded-full border border-border bg-surface px-4 text-sm outline-none"
+                placeholder="Search companies, tickers, or anything…"
+                className="min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none"
               />
             </form>
+            <span className="grid size-10 place-items-center rounded-full border border-white/10 text-muted">
+              <Bell className="size-4" />
+            </span>
             <div className="relative">
               {link ? (
                 <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface px-3 text-sm">
@@ -191,11 +180,11 @@ function NavLink({
     <Link
       to={to}
       className={cn(
-        "flex items-center gap-2 rounded-xl px-3 py-2 text-sm",
-        on ? "bg-accent font-semibold text-accent-fg" : quiet ? "text-subtle hover:bg-elevated hover:text-fg" : "text-muted hover:bg-elevated hover:text-fg",
+        "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm",
+        on ? "bg-white/8 font-medium text-fg" : quiet ? "text-subtle hover:bg-white/5 hover:text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
       )}
     >
-      <Icon className="size-4 shrink-0" strokeWidth={1.75} />
+      <Icon className={cn("size-4 shrink-0", on ? "text-accent" : "")} strokeWidth={1.75} />
       {label}
     </Link>
   );

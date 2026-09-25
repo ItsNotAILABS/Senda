@@ -12,11 +12,7 @@ const STEPS = [
 export function Onboard() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    try {
-      if (!localStorage.getItem(KEY)) setOpen(true);
-    } catch {
-      /* private */
-    }
+    setOpen(false);
   }, []);
   if (!open) return null;
   function close() {

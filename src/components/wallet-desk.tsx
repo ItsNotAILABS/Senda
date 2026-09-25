@@ -205,69 +205,191 @@ export function WalletDesk({ buy }: { buy?: string }) {
   const payLabel = pay === "SOL" ? "SOL" : pay === "USDC" ? "USDC" : house.find((h) => h.mint === pay)?.symbol || "Token";
 
   return (
-    <div className="grid grid-cols-1 gap-3 px-3 py-3 xl:grid-cols-[minmax(0,1fr)_420px] lg:px-4">
-      <section>
-        <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Convert</p>
-          <h1 className="mt-2 font-mono text-5xl tabular-nums tracking-tight">
-            ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+    <div className="space-y-4 px-3 py-3 lg:px-4">
+      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
+        <div className="py-1">
+          <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">Convert</p>
+          <h1 className="mt-3 text-4xl tracking-tight">
+            Swap <span className="text-accent">on Jupiter</span>
           </h1>
-          <p className="mt-2 max-w-lg text-sm text-muted">
-            Phantom is already money. Convert it here. You do not deposit it into another account first.
+          <p className="mt-4 font-mono text-5xl tabular-nums tracking-tight">
+            ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
           </p>
-        </header>
-        <FilmBand poster="/images/markets-desk.jpg" label="Already in the wallet." />
-        <ul className="mt-3 space-y-2">
-          <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." tint="bg-white/20" />
-          <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} wrapped` : owner || "Not connected"} tint="bg-[#2775ca]" />
-          <Source name="SOL" value={solUsd} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} tint="bg-[#9945ff]" />
-          <Source name="PreStocks" value={invested} hint="Held in this wallet, at the live token price" tint="bg-accent" />
-        </ul>
-        {err ? <p className="mt-3 text-sm text-down">{err}</p> : null}
-        <div className="mt-6 flex flex-wrap gap-2 text-sm">
-          <Link to="/pre" className="rounded-lg bg-elevated px-3 py-2">Buy</Link>
-          <Link to="/payments" className="rounded-lg bg-elevated px-3 py-2">Send</Link>
-          <Link to="/agents" className="rounded-lg bg-elevated px-3 py-2">Agents</Link>
+          <p className="mt-2 font-mono text-xs text-subtle">
+            {owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Phantom not connected"}
+          </p>
+          {err ? <p className="mt-3 text-sm text-down">{err}</p> : null}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link to="/pre" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+              Buy
+            </Link>
+            <Link to="/payments" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+              Send
+            </Link>
+            <Link to="/agents" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+              Agents
+            </Link>
+          </div>
         </div>
-        <div className="mt-3 max-w-xl rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <h2 className="text-sm font-semibold">Vault</h2>
-          <p className="mt-1 text-sm text-muted">
-            The vault wraps {link?.label || "the wallet"}. The USDC stays in that wallet. Senda cash is the claim. Push sends the claim back, so the same USDC is spendable there again.
+        <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <h2 className="text-2xl tracking-tight">
+            Convert <span className="text-accent">{payLabel}</span>
+          </h2>
+          <p className="mt-4 text-[11px] text-subtle">You pay</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(["SOL", "USDC"] as const).map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setPay(id)}
+                className={cn(
+                  "min-h-9 rounded-full px-3 text-xs font-semibold",
+                  pay === id ? "bg-accent text-accent-fg" : "border border-white/10",
+                )}
+              >
+                {id}
+              </button>
+            ))}
+            {PRESTOCK_MINTS.filter(([, mint]) => (snap?.tokens.find((t) => t.mint === mint)?.ui ?? 0) > 0).map(([symbol, mint]) => (
+              <button
+                key={mint}
+                type="button"
+                onClick={() => setPay(mint)}
+                className={cn(
+                  "min-h-9 rounded-full px-3 text-xs font-semibold",
+                  pay === mint ? "bg-accent text-accent-fg" : "border border-white/10",
+                )}
+              >
+                {symbol}
+              </button>
+            ))}
+          </div>
+          <input
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            inputMode="decimal"
+            className="mt-3 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
+            aria-label="Amount to pay"
+          />
+          <p className="mt-4 text-[11px] text-subtle">You receive</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setRecv("USDC")}
+              className={cn(
+                "min-h-9 rounded-full px-3 text-xs font-semibold",
+                recv === "USDC" ? "bg-accent text-accent-fg" : "border border-white/10",
+              )}
+            >
+              USDC
+            </button>
+            {PRESTOCK_MINTS.map(([symbol]) => (
+              <button
+                key={symbol}
+                type="button"
+                onClick={() => setRecv(symbol)}
+                className={cn(
+                  "min-h-9 rounded-full px-3 text-xs font-semibold",
+                  recv === symbol ? "bg-accent text-accent-fg" : "border border-white/10",
+                )}
+              >
+                {symbol}
+              </button>
+            ))}
+          </div>
+          <dl className="mt-4 divide-y divide-white/[0.06]">
+            <Row k="You pay" v={amount > 0 ? `${amount} ${payLabel}` : "—"} />
+            <Row k="You receive" v={quote ? quote.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : qErr || "—"} />
+            <Row k="Minimum received" v={quote ? quote.minUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"} />
+            <Row k="Route" v={quote?.route || "—"} />
+            <Row k="Impact" v={quote ? `${quote.impact.toFixed(2)}%` : "—"} />
+          </dl>
+          <button
+            type="button"
+            disabled={busy || !quote}
+            onClick={() => void go()}
+            className="mt-5 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            {busy ? "Waiting for the wallet…" : `Convert ${payLabel}`}
+          </button>
+          <p className="mt-3 font-mono text-xs tabular-nums text-muted">≈ ${payUsd.toFixed(2)}</p>
+        </aside>
+      </section>
+
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold">Sources</h2>
+          <p className="font-mono text-xs tabular-nums text-subtle">
+            ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
           </p>
-          <p className="mt-2 font-mono text-sm">Wrapped ${wrapped.toFixed(2)}</p>
+        </div>
+        <ul className="mt-2 divide-y divide-white/[0.06]">
+          <Source name="Senda cash" value={cash} total={total} hint="In-app balance. It does not become USDC in Phantom." tint="bg-white/20" />
+          <Source
+            name="Phantom USDC"
+            value={usdcFree}
+            total={total}
+            hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} wrapped` : owner || "Not connected"}
+            tint="bg-[#2775ca]"
+          />
+          <Source name="SOL" value={solUsd} total={total} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} tint="bg-[#9945ff]" />
+          <Source name="PreStocks" value={invested} total={total} hint="Held in this wallet, at the live token price" tint="bg-accent" />
+        </ul>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <h2 className="text-sm font-semibold">Vault</h2>
+          <p className="mt-1 text-sm text-muted">USDC stays in {link?.label || "the wallet"}. Wrap is the claim. Push sends it back.</p>
+          <p className="mt-3 font-mono text-2xl tabular-nums">${wrapped.toFixed(2)}</p>
+          <p className="text-[11px] text-subtle">Wrapped</p>
           <input
             value={wrapRaw}
             onChange={(e) => setWrapRaw(e.target.value)}
             inputMode="decimal"
-            className="mt-3 min-h-11 w-full rounded-lg bg-elevated px-3 font-mono outline-none"
+            className="mt-3 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono tabular-nums outline-none"
             aria-label="Amount to wrap or push"
           />
-          <div className="mt-2 flex gap-2">
-            <button type="button" disabled={!owner} onClick={() => void onWrap()} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50">
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              disabled={!owner}
+              onClick={() => void onWrap()}
+              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+            >
               Wrap
             </button>
-            <button type="button" disabled={!owner} onClick={() => void onPush()} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold disabled:opacity-50">
+            <button
+              type="button"
+              disabled={!owner}
+              onClick={() => void onPush()}
+              className="min-h-11 rounded-full border border-white/10 px-5 text-sm font-semibold disabled:opacity-50"
+            >
               Push back
             </button>
           </div>
         </div>
-        <div className="mt-3 max-w-xl rounded-[28px] border border-white/10 bg-[#101018] p-5">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
           <h2 className="text-sm font-semibold">Send cap</h2>
-          <p className="mt-1 text-sm text-muted">A bigger send is refused. The key never leaves Phantom. Every send is simulated first.</p>
-          <div className="mt-3 flex gap-1">
+          <p className="mt-3 font-mono text-2xl tabular-nums">${cap}</p>
+          <p className="mt-1 text-sm text-muted">A bigger send is refused. The key stays in Phantom.</p>
+          <div className="mt-3 flex gap-2">
             {[25, 100, 500].map((n) => (
               <button
                 key={n}
                 type="button"
                 onClick={() => setCap(setSpendCap(n))}
-                className={cn("min-h-9 rounded-full px-3 font-mono text-xs", cap === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
+                className={cn(
+                  "min-h-9 rounded-full px-3 font-mono text-xs tabular-nums",
+                  cap === n ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                )}
               >
                 ${n}
               </button>
             ))}
           </div>
           {owner ? (
-            <button type="button" onClick={() => wallet.unlink(owner)} className="mt-3 text-sm text-down">
+            <button type="button" onClick={() => wallet.unlink(owner)} className="mt-4 text-sm text-down">
               Disconnect Phantom
             </button>
           ) : (
@@ -276,82 +398,36 @@ export function WalletDesk({ buy }: { buy?: string }) {
             </div>
           )}
         </div>
-      </section>
-      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
-        <h2 className="text-3xl">Convert</h2>
-        <p className="mt-1 text-sm text-muted">SOL, USDC, or a PreStock you hold. One signature.</p>
-        <p className="mt-4 text-xs text-subtle">You pay</p>
-        <div className="mt-1 flex flex-wrap gap-1">
-          {(["SOL", "USDC"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setPay(id)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", pay === id ? "bg-accent text-accent-fg" : "bg-black/40")}>
-              {id}
-            </button>
-          ))}
-          {PRESTOCK_MINTS.filter(([, mint]) => (snap?.tokens.find((t) => t.mint === mint)?.ui ?? 0) > 0).map(([symbol, mint]) => (
-            <button key={mint} type="button" onClick={() => setPay(mint)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", pay === mint ? "bg-accent text-accent-fg" : "bg-black/40")}>
-              {symbol}
-            </button>
-          ))}
-        </div>
-        <input
-          value={raw}
-          onChange={(e) => setRaw(e.target.value)}
-          inputMode="decimal"
-          className="mt-3 min-h-12 w-full rounded-2xl bg-black/40 px-3 font-mono text-lg outline-none"
-          aria-label="Amount to pay"
-        />
-        <p className="mt-4 text-xs text-subtle">You receive</p>
-        <div className="mt-1 flex flex-wrap gap-1">
-          <button type="button" onClick={() => setRecv("USDC")} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", recv === "USDC" ? "bg-accent text-accent-fg" : "bg-black/40")}>
-            USDC
-          </button>
-          {PRESTOCK_MINTS.map(([symbol]) => (
-            <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", recv === symbol ? "bg-accent text-accent-fg" : "bg-black/40")}>
-              {symbol}
-            </button>
-          ))}
-        </div>
-        <dl className="mt-4 space-y-1 text-sm">
-          <Row k="You pay" v={amount > 0 ? `${amount} ${payLabel}` : "—"} />
-          <Row k="You receive" v={quote ? quote.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : qErr || "—"} />
-          <Row k="Minimum received" v={quote ? quote.minUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"} />
-          <Row k="Route" v={quote?.route || "—"} />
-          <Row k="Impact" v={quote ? `${quote.impact.toFixed(2)}%` : "—"} />
-        </dl>
-        <button
-          type="button"
-          disabled={busy || !quote}
-          onClick={() => void go()}
-          className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-        >
-          {busy ? "Waiting for the wallet…" : `Convert ${payLabel}`}
-        </button>
-        <p className="mt-3 text-xs text-muted">
-          About ${payUsd.toFixed(2)}. Borrowing against these names is not on a lend market, so raising cash is this sale.
-        </p>
-      </aside>
+      </div>
+      <FilmBand poster="/images/markets-desk.jpg" label="Already in the wallet." />
     </div>
   );
 }
 
-function Source({ name, value, hint, tint }: { name: string; value: number; hint: string; tint: string }) {
+function Source({ name, value, hint, tint, total }: { name: string; value: number; hint: string; tint: string; total: number }) {
+  const share = total > 0 ? Math.max(0, Math.min(100, (value / total) * 100)) : 0;
   return (
-    <li className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3">
-      <span className={cn("size-8 rounded-full", tint)} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{name}</span>
-        <span className="block text-xs text-subtle">{hint}</span>
-      </span>
-      <span className="font-mono text-sm tabular-nums">${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>
+    <li className="py-3 first:pt-2">
+      <div className="flex items-center gap-3">
+        <span className={cn("size-8 shrink-0 rounded-full", tint)} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{name}</span>
+          <span className="block text-xs text-subtle">{hint}</span>
+        </span>
+        <span className="font-mono text-sm tabular-nums">${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>
+      </div>
+      <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+        <div className={cn("h-full rounded-full", tint)} style={{ width: `${share}%` }} />
+      </div>
     </li>
   );
 }
 
 function Row({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-muted">{k}</dt>
-      <dd className="text-right font-mono text-xs">{v}</dd>
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <dt className="text-sm text-muted">{k}</dt>
+      <dd className="text-right font-mono text-xs tabular-nums">{v}</dd>
     </div>
   );
 }

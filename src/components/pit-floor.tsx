@@ -39,7 +39,7 @@ function Dollars({
         value={value ? String(value) : ""}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         placeholder="0"
-        className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-lg font-semibold tabular-nums outline-none"
+        className="mt-1 min-h-12 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono text-lg tabular-nums outline-none"
       />
     </label>
   );
@@ -197,14 +197,17 @@ export function PitFloor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+      <header className="mx-3 mt-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-6 py-6 lg:px-8 lg:py-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade</p>
-        <p className="mt-2 text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
+        <h1 className="mt-3 max-w-xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+          Spot, options, <span className="text-accent">the live book.</span>
+        </h1>
+        <p className="mt-4 max-w-md text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
       </header>
       <FilmBand poster="/images/markets-desk.jpg" label="The book is live." />
     <main className="m-3 grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <nav className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-2 lg:overflow-auto">
+      <nav className="h-fit rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2 lg:overflow-auto">
         <div className="px-3 py-3">
           <p className="text-[11px] tracking-wide text-subtle uppercase">Cash</p>
           <p className="mt-1 font-mono text-3xl tabular-nums" suppressHydrationWarning>
@@ -231,7 +234,7 @@ export function PitFloor({
           </button>
         ))}
       </nav>
-      <div className="min-h-0 overflow-auto rounded-[28px] border border-white/10 bg-[#101018]">
+      <div className="min-h-0 overflow-auto rounded-[22px] border border-white/[0.08] bg-[#10131c]">
 
       {desk === "spot" ? <JupBoard names={pre} /> : null}
       {desk === "minty" ? <LaunchDesk /> : null}
@@ -256,7 +259,7 @@ export function PitFloor({
                   onClick={() => setUnderId(r.id)}
                   className={cn(
                     "min-h-10 shrink-0 rounded-full px-3 text-sm font-medium",
-                    under?.id === r.id ? "bg-fg text-bg" : "bg-elevated text-muted",
+                    under?.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
                   )}
                 >
                   {r.symbol}
@@ -280,7 +283,7 @@ export function PitFloor({
                 <Link
                   to="/wallet"
                   search={{ buy: under.symbol }}
-                  className="inline-flex min-h-11 items-center rounded-full bg-elevated px-4 text-sm font-semibold"
+                  className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm font-semibold"
                 >
                   Pay with SOL
                 </Link>
@@ -291,7 +294,7 @@ export function PitFloor({
                     const put = chainFor(under, tenor).find((c) => c.atm && c.kind === "put");
                     if (put) void liftOpt(put);
                   }}
-                  className="min-h-11 rounded-full bg-fg px-4 text-sm font-semibold text-bg"
+                  className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
                 >
                   Insure last
                 </button>

@@ -15,17 +15,17 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Solana</p>
-          <h1 className="mt-3 text-5xl tracking-tight lg:text-6xl">
-            PRE8 <span className="text-accent">{idx.level.toFixed(1)}</span>
+          <h1 className="mt-3 text-4xl leading-[1.05] tracking-tight lg:text-6xl">
+            PRE8 <span className="font-mono text-accent">{idx.level.toFixed(1)}</span>
           </h1>
           <p className="mt-4 max-w-md text-sm text-muted">
             {idx.n} PreStocks, weighted by mark value. 1000 means the token price matches the mark. They are SPL tokens. You buy them here. Jupiter builds the route. You sign.
           </p>
           <p className="mt-4 font-mono text-sm text-muted">Mark value {formatValuation(idx.tv)}</p>
         </div>
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
           <p className="text-sm font-semibold">Your signer</p>
           <p className="mt-2 text-sm text-muted">
             {link ? `${link.label} · ${link.address.slice(0, 4)}…${link.address.slice(-4)}` : "No wallet yet. The index is live. A buy waits until you connect."}
@@ -40,7 +40,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
       <FilmBand poster="/images/orbit.jpg" label="SPL. On Solana." />
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+        <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
           <h2 className="text-lg">The names</h2>
           <ul className="mt-3 space-y-3">
             {legs.map((r) => {
@@ -64,7 +64,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         </section>
 
         <div className="space-y-3">
-          <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
             <h2 className="text-lg">What a buy actually does</h2>
             <ul className="mt-3 space-y-2 text-sm text-muted">
               <li>Jupiter builds the route inside Senda.</li>
@@ -77,7 +77,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         </div>
       </div>
 
-      <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
         <h2 className="text-lg">Mints</h2>
         <ul className="mt-3 grid gap-2 md:grid-cols-2">
           {PRESTOCK_MINTS.map(([symbol, mint]) => (

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { FilmBand } from "@/components/film-band";
+import { Binoculars, CalendarClock, FileText, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
@@ -18,6 +18,23 @@ import { readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
 
 type Id = "cheap" | "rich" | "daily";
+
+const JOB_ICON = {
+  scout: Binoculars,
+  discount: TrendingDown,
+  rich: TrendingUp,
+  daily: CalendarClock,
+  cover: Shield,
+  clerk: FileText,
+} as const satisfies Record<Job, unknown>;
+
+const BUILT_ICON = {
+  cheap: TrendingDown,
+  rich: TrendingUp,
+  daily: CalendarClock,
+} as const satisfies Record<Id, unknown>;
+
+const field = "min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 text-sm outline-none placeholder:text-subtle";
 
 export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const book = useMemo(
@@ -56,7 +73,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
 
   useEffect(() => {
     if (!book.length) return;
-    const id = window.setInterval(() => {
+    const timer = window.setInterval(() => {
       let changed = false;
       for (const e of listEnvelopes()) {
         const out = think(e, book);
@@ -67,7 +84,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       }
       if (changed) setEnvs(listEnvelopes());
     }, 20_000);
-    return () => window.clearInterval(id);
+    return () => window.clearInterval(timer);
   }, [book]);
 
   const focus = id === "rich" ? rich : id === "daily" ? picked : cheap;
@@ -182,38 +199,40 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
 
   const env = envs.find((e) => e.id === made) ?? null;
 
-  async function runMade() {
-    if (!env) return;
+  async function runMade(target?: Envelope) {
+    const row = target ?? env;
+    if (!row) return;
+    setMade(row.id);
     setBusy(true);
     try {
       const who = await owner();
-      const queued = env.queue ? book.find((n) => n.symbol === env.queue?.symbol) : null;
-      const pool = env.symbols.length ? book.filter((n) => env.symbols.includes(n.symbol)) : book;
+      const queued = row.queue ? book.find((n) => n.symbol === row.queue?.symbol) : null;
+      const pool = row.symbols.length ? book.filter((n) => row.symbols.includes(n.symbol)) : book;
       const pick =
         queued ??
-        [...pool].sort((a, b) => (env.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
+        [...pool].sort((a, b) => (row.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
       if (!pick) throw new Error("No name inside this envelope.");
-      const side = env.queue?.side ?? env.side;
+      const side = row.queue?.side ?? row.side;
       const g = review({
         symbol: pick.symbol,
         side,
-        usd: Math.min(env.queue?.usd ?? env.maxUsd, spendCap()),
+        usd: Math.min(row.queue?.usd ?? row.maxUsd, spendCap()),
         premium: pick.premium,
         change24h: pick.change24h,
         series,
-        cap: Math.min(env.maxUsd, spendCap()),
+        cap: Math.min(row.maxUsd, spendCap()),
       });
       if (g.blocked) throw new Error(g.blocked);
       const done = await runPrestock({ owner: who, mint: pick.mint, side, usd: g.usd, price: pick.last });
       const line = `${side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
-      writeLog(env.id, line);
-      patchEnvelope(env.id, { queue: null });
+      writeLog(row.id, line);
+      patchEnvelope(row.id, { queue: null });
       setEnvs(listEnvelopes());
       note(pick.symbol, side, g.usd, pick);
-      toast.success(`${env.name} sent ${pick.symbol}. ${done.signature.slice(0, 8)}…`);
+      toast.success(`${row.name} sent ${pick.symbol}. ${done.signature.slice(0, 8)}…`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "It did not send.";
-      if (env) writeLog(env.id, msg);
+      writeLog(row.id, msg);
       setEnvs(listEnvelopes());
       toast.error(msg);
     } finally {
@@ -268,263 +287,311 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     },
   ];
 
+  const capNow = spendCap();
+  const ask = env?.queue ? Math.min(env.queue.usd, capNow) : env ? Math.min(env.maxUsd, capNow) : sendUsd;
+  const barPct = Math.max(0, Math.min(100, (ask / Math.max(capNow, 1)) * 100));
+  const ordered = [...envs].sort((a, b) => Number(Boolean(b.queue)) - Number(Boolean(a.queue)));
+  const waiting = ordered.filter((e) => e.queue).length;
+  const move = rows.find((r) => r.id === id);
+
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Agents</p>
-          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            They watch the book. <span className="text-accent">You sign.</span>
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            A shift reads the print and writes a queue. Nothing leaves the wallet until you press sign. The cap is the most it can ask for.
-          </p>
-          <button type="button" onClick={lookNow} className="mt-6 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
-            Look at the book now
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Agents</p>
+            <h1 className="mt-2 text-4xl leading-[1.05] tracking-tight">
+              They watch. <span className="text-accent">You sign.</span>
+            </h1>
+          </div>
+          <button type="button" onClick={lookNow} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+            Look now
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {JOBS.map((j) => (
+      </section>
+
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {JOBS.map((j) => {
+          const Icon = JOB_ICON[j.id];
+          const on = draftJob === j.id;
+          return (
             <button
               key={j.id}
               type="button"
               onClick={() => setDraftJob(j.id)}
-              className={cn("rounded-2xl border px-3 py-3 text-left", draftJob === j.id ? "border-accent bg-[#101018]" : "border-white/10 bg-[#101018]")}
+              className={cn(
+                "rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left",
+                on && "ring-1 ring-accent",
+              )}
             >
-              <span className="block text-sm font-semibold">{j.title}</span>
-              <span className="mt-1 block text-[11px] text-muted">{j.line}</span>
+              <span className={cn("grid size-9 place-items-center rounded-full", on ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
+                <Icon className="size-4" strokeWidth={1.75} />
+              </span>
+              <span className="mt-3 block text-sm font-semibold">{j.title}</span>
+              <span className="mt-1 block text-[11px] leading-snug text-muted">{j.line}</span>
             </button>
-          ))}
-        </div>
+          );
+        })}
       </section>
-      <FilmBand poster="/images/orbit.jpg" label="They watch. You sign." />
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
-      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
-        <div className="px-4 py-4">
-          <p className="text-sm font-semibold">New shift</p>
-          <p className="mt-1 text-xs text-muted">{JOBS.find((j) => j.id === draftJob)?.title}. Max ${usd}. {watch.length ? watch.join(" ") : "Every name."}</p>
-          <input
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-            placeholder="Name"
-            className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none"
-          />
-          <input
-            value={draftSay}
-            onChange={(e) => setDraftSay(e.target.value)}
-            placeholder="What it watches"
-            className="mt-2 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none"
-          />
-          <div className="mt-2 flex flex-wrap gap-1">
-            {book.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => setWatch((cur) => (cur.includes(n.symbol) ? cur.filter((s) => s !== n.symbol) : [...cur, n.symbol]))}
-                className={cn("min-h-8 rounded-full px-2 font-mono text-[11px]", watch.includes(n.symbol) ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
-              >
-                {n.symbol}
-              </button>
-            ))}
-          </div>
-          <div className="mt-2 flex gap-1">
-            {[10, 25, 100].map((n) => (
-              <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
-                ${n}
-              </button>
-            ))}
-          </div>
-          <button type="button" onClick={makeAgent} className="mt-3 min-h-11 w-full rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg">
-            Start this shift
-          </button>
-        </div>
-        <ul>
-          {envs.map((e) => (
-            <li key={e.id}>
-              <button
-                type="button"
-                onClick={() => setMade(e.id)}
-                className={cn("w-full px-5 py-3 text-left", made === e.id ? "bg-elevated" : "hover:bg-surface")}
-              >
-                <span className="block text-sm font-semibold">{e.name}</span>
-                <span className="mt-0.5 block text-xs text-muted">{e.job} · {e.armed === false ? "paused" : "on shift"} · ${e.maxUsd}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="px-5 pt-4 pb-1 font-mono text-[10px] tracking-widest text-subtle uppercase">Built in</p>
-        <ul>
-          {rows.map((r) => (
-            <li key={r.id}>
-              <button
-                type="button"
-                onClick={() => {
-                  setMade(null);
-                  setId(r.id);
-                }}
-                className={cn("w-full px-5 py-4 text-left", id === r.id ? "bg-elevated" : "hover:bg-surface")}
-              >
-                <span className="block text-sm font-semibold">{r.title}</span>
-                <span className="mt-1 block text-xs text-muted">{r.line}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-      <section className="rounded-[28px] border border-white/10 bg-[#101018] px-5 py-6 lg:px-8">
-        <AgentComputer names={book} envelopeId={env?.id ?? null} />
-        {env ? (
-          <>
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="font-mono text-[11px] tracking-widest text-accent uppercase">Envelope</p>
-                <h2 className="mt-1 font-display text-4xl">{env.name}</h2>
-                <p className="mt-2 max-w-lg text-sm text-muted">{env.mandate || "No mandate yet."}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  dropEnvelope(env.id);
-                  setEnvs(listEnvelopes());
-                  setMade(null);
-                }}
-                className="text-xs text-down"
-              >
-                Remove
-              </button>
-            </div>
-            <dl className="mt-4 grid max-w-lg grid-cols-3 gap-2 text-sm">
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <dt className="text-[11px] text-subtle">Max send</dt>
-                <dd className="font-mono">${env.maxUsd}</dd>
-              </div>
-              <div className="rounded-xl bg-black/30 px-3 py-2">
-                <dt className="text-[11px] text-subtle">Job</dt>
-                <dd className="font-mono">{env.job}</dd>
-              </div>
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <dt className="text-[11px] text-subtle">Names</dt>
-                <dd className="font-mono">{env.symbols.length ? env.symbols.join(" ") : "All"}</dd>
-              </div>
-            </dl>
-            <p className="mt-6 text-xs text-subtle">Computer</p>
-            <div className="mt-2 max-w-lg rounded-xl border border-border bg-surface p-3 font-mono text-xs">
-              {env.log.length === 0 ? <p className="text-subtle">Nothing written yet. Run it and the gate writes here.</p> : null}
-              {env.log.map((l, i) => (
-                <p key={i} className="border-t border-border py-1.5 first:border-0">
-                  {l.text}
-                </p>
-              ))}
-            </div>
+
+      <section className="grid gap-2 sm:grid-cols-3">
+        {rows.map((r) => {
+          const Icon = BUILT_ICON[r.id];
+          const on = !env && id === r.id;
+          return (
             <button
+              key={r.id}
               type="button"
               onClick={() => {
-                patchEnvelope(env.id, { armed: env.armed === false });
-                setEnvs(listEnvelopes());
+                setMade(null);
+                setId(r.id);
               }}
-              className="mt-4 min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold"
+              className={cn(
+                "flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left",
+                on && "ring-1 ring-accent",
+              )}
             >
-              {env.armed === false ? "Put it back on shift" : "Pause the shift"}
+              <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", on ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
+                <Icon className="size-4" strokeWidth={1.75} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{r.title}</span>
+                <span className="mt-0.5 block truncate text-xs text-muted">{r.line}</span>
+              </span>
             </button>
-            {env.queue ? (
-              <div className="mt-4 rounded-2xl bg-black/40 p-4">
-                <p className="text-xs text-subtle">Waiting on you</p>
-                <p className="mt-1 text-sm font-semibold">
-                  {env.queue.side} {env.queue.symbol} · ${env.queue.usd}
-                </p>
-                <p className="text-xs text-muted">{env.queue.why}</p>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void runMade()}
-                  className="mt-3 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
-                >
-                  {busy ? "Waiting for the wallet…" : "Sign it"}
-                </button>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-subtle">On shift. It will write here when the book moves. Nothing is signed until you do.</p>
-            )}
-          </>
-        ) : (
-          <>
-        <h2 className="font-display text-4xl">{rows.find((r) => r.id === id)?.title}</h2>
-        <p className="mt-3 max-w-lg text-sm text-muted">{rows.find((r) => r.id === id)?.line}</p>
-        {id === "daily" ? (
-          <select
-            value={picked?.symbol ?? ""}
-            onChange={(e) => setSymbol(e.target.value)}
-            className="mt-4 min-h-11 rounded-lg bg-elevated px-3 text-sm"
-          >
-            {book.map((n) => (
-              <option key={n.id} value={n.symbol}>
-                {n.symbol} · {formatUsd(n.last)}
-              </option>
-            ))}
-          </select>
-        ) : null}
-        {id === "cheap" && cheap ? (
-          <p className="mt-4 font-mono text-sm">
-            {formatUsd(cheap.last)} token · {formatUsd(cheap.mark)} mark
+          );
+        })}
+      </section>
+
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-sm font-semibold">Cap</p>
+          <p className="font-mono text-sm tabular-nums">
+            ${ask.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+            <span className="text-subtle"> / ${capNow}</span>
           </p>
-        ) : null}
-        <div className="mt-4 flex gap-1">
-          {(["USDC", "SOL"] as const).map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setPayWith(id)}
-              className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", payWith === id ? "bg-fg text-bg" : "bg-elevated text-muted")}
-            >
-              Pay with {id}
-            </button>
-          ))}
         </div>
-        <div className="mt-2 flex gap-1">
+        <div
+          className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.08]"
+          role="meter"
+          aria-label="Amount against the cap"
+          aria-valuemin={0}
+          aria-valuemax={capNow}
+          aria-valuenow={Math.min(ask, capNow)}
+        >
+          <div className="h-full rounded-full bg-accent" style={{ width: `${barPct}%` }} />
+        </div>
+        <div className="mt-3 flex gap-2">
           {[10, 25, 100].map((n) => (
             <button
               key={n}
               type="button"
               onClick={() => setUsd(n)}
-              className={cn("min-h-9 rounded-lg px-3 font-mono text-xs", usd === n ? "bg-fg text-bg" : "bg-elevated text-muted")}
+              className={cn("min-h-9 rounded-full px-3 font-mono text-xs", usd === n ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
             >
               ${n}
             </button>
           ))}
         </div>
-        <div className="mt-6 max-w-lg space-y-2 text-sm">
-          <p>
-            <span className="text-muted">Tape. </span>
-            {gate?.tape || "Waiting on the book."}
-          </p>
-          <p>
-            <span className="text-muted">Risk. </span>
-            {gate?.risk || "—"}
-          </p>
-          <p>
-            <span className="text-muted">Send. </span>
-            {gate?.blocked ? "Blocked." : `$${sendUsd} after the gate. You still approve it.`}
-          </p>
-          <p>
-            <span className="text-muted">Memory. </span>
-            {prior
-              ? `Last time it looked like this: ${prior.memory.side} ${prior.memory.symbol} for $${prior.memory.usd}.`
-              : "No similar past send yet."}
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={busy || book.length === 0 || Boolean(gate?.blocked)}
-          onClick={() => void run()}
-          className="mt-6 min-h-12 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
-        >
-          {busy ? "Waiting for the wallet…" : gate?.blocked ? "Blocked" : `Run · $${sendUsd}`}
-        </button>
-        {book.length === 0 ? <p className="mt-4 text-sm text-muted">PreStocks did not answer. Nothing to run.</p> : null}
-          </>
-        )}
       </section>
-      </div>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <p className="text-sm font-semibold">New shift</p>
+          <p className="mt-1 font-mono text-xs text-subtle">
+            {JOBS.find((j) => j.id === draftJob)?.title} · ${usd}
+            {watch.length ? ` · ${watch.join(" ")}` : " · every name"}
+          </p>
+          <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Name" className={cn(field, "mt-3")} />
+          <input value={draftSay} onChange={(e) => setDraftSay(e.target.value)} placeholder="What it watches" className={cn(field, "mt-2")} />
+          <div className="mt-3 flex flex-wrap gap-1">
+            {book.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setWatch((cur) => (cur.includes(n.symbol) ? cur.filter((s) => s !== n.symbol) : [...cur, n.symbol]))}
+                className={cn("min-h-8 rounded-full px-2 font-mono text-[11px]", watch.includes(n.symbol) ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+              >
+                {n.symbol}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={makeAgent} className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
+            Start this shift
+          </button>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4 sm:p-5">
+            <div className="flex items-baseline justify-between">
+              <h2 className="text-sm font-semibold">Queue</h2>
+              <p className="font-mono text-[11px] text-subtle">{waiting} waiting</p>
+            </div>
+            {ordered.length === 0 ? <p className="mt-3 text-sm text-muted">Nothing is waiting on a signature.</p> : null}
+            <ul className="mt-2">
+              {ordered.map((e) => {
+                const Icon = JOB_ICON[e.job] ?? Binoculars;
+                const on = made === e.id;
+                return (
+                  <li key={e.id} className={cn("mt-2 rounded-2xl", on ? "bg-white/[0.05]" : "")}>
+                    <button
+                      type="button"
+                      onClick={() => setMade(on ? null : e.id)}
+                      className="flex w-full items-center gap-3 px-2 py-2.5 text-left"
+                    >
+                      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", e.queue ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
+                        <Icon className="size-4" strokeWidth={1.75} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{e.name}</span>
+                        <span className="block truncate text-xs text-muted">
+                          {e.queue
+                            ? `${e.queue.side} ${e.queue.symbol} · ${e.queue.why}`
+                            : e.armed === false
+                              ? "Paused"
+                              : "Watching"}
+                        </span>
+                      </span>
+                      <span className="font-mono text-sm tabular-nums">{e.queue ? `$${e.queue.usd}` : `$${e.maxUsd}`}</span>
+                    </button>
+                    {on && e.queue ? (
+                      <div className="px-2 pb-3">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void runMade(e)}
+                          className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+                        >
+                          {busy ? "Waiting for the wallet…" : `Sign · $${e.queue.usd}`}
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {env ? (
+              <div className="mt-4 border-t border-white/[0.08] pt-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">{env.job}</p>
+                    <h3 className="mt-1 text-2xl tracking-tight">{env.name}</h3>
+                    {env.mandate ? <p className="mt-1 text-sm text-muted">{env.mandate}</p> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      dropEnvelope(env.id);
+                      setEnvs(listEnvelopes());
+                      setMade(null);
+                    }}
+                    className="text-xs text-down"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Max</dt>
+                    <dd className="font-mono">${env.maxUsd}</dd>
+                  </div>
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Side</dt>
+                    <dd className="font-mono">{env.side}</dd>
+                  </div>
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Names</dt>
+                    <dd className="truncate font-mono">{env.symbols.length ? env.symbols.join(" ") : "All"}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  onClick={() => {
+                    patchEnvelope(env.id, { armed: env.armed === false });
+                    setEnvs(listEnvelopes());
+                  }}
+                  className="mt-3 min-h-10 rounded-full border border-white/15 px-4 text-sm font-semibold"
+                >
+                  {env.armed === false ? "Put it back on shift" : "Pause the shift"}
+                </button>
+                <div className="mt-3 max-h-36 overflow-y-auto font-mono text-xs">
+                  {env.log.length === 0 ? <p className="text-subtle">Nothing written yet.</p> : null}
+                  {env.log.map((l, i) => (
+                    <p key={`${l.at}-${i}`} className="border-t border-white/[0.06] py-1.5 text-muted first:border-0">
+                      {l.text}
+                    </p>
+                  ))}
+                </div>
+                {!env.queue ? <p className="mt-3 text-xs text-subtle">On shift. Nothing moves until you sign.</p> : null}
+              </div>
+            ) : (
+              <div className="mt-4 border-t border-white/[0.08] pt-4">
+                <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Sign</p>
+                <h3 className="mt-1 text-2xl tracking-tight">{move?.title}</h3>
+                <p className="mt-1 text-sm text-muted">{move?.line}</p>
+                {id === "daily" ? (
+                  <select
+                    value={picked?.symbol ?? ""}
+                    onChange={(e) => setSymbol(e.target.value)}
+                    className={cn(field, "mt-3")}
+                  >
+                    {book.map((n) => (
+                      <option key={n.id} value={n.symbol}>
+                        {n.symbol} · {formatUsd(n.last)}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+                {id === "cheap" && cheap ? (
+                  <p className="mt-3 font-mono text-sm tabular-nums">
+                    {formatUsd(cheap.last)} token · {formatUsd(cheap.mark)} mark
+                  </p>
+                ) : null}
+                <div className="mt-3 flex gap-1">
+                  {(["USDC", "SOL"] as const).map((pay) => (
+                    <button
+                      key={pay}
+                      type="button"
+                      onClick={() => setPayWith(pay)}
+                      className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", payWith === pay ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+                    >
+                      Pay with {pay}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-4 space-y-1.5 text-sm">
+                  <p>
+                    <span className="text-muted">Tape </span>
+                    {gate?.tape || "Waiting on the book."}
+                  </p>
+                  <p>
+                    <span className="text-muted">Risk </span>
+                    {gate?.risk || "—"}
+                  </p>
+                  {prior ? (
+                    <p>
+                      <span className="text-muted">Last </span>
+                      {prior.memory.side} {prior.memory.symbol} ${prior.memory.usd}
+                    </p>
+                  ) : null}
+                  {gate?.blocked ? <p className="text-xs text-down">{gate.blocked}</p> : null}
+                </div>
+                <button
+                  type="button"
+                  disabled={busy || book.length === 0 || Boolean(gate?.blocked)}
+                  onClick={() => void run()}
+                  className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+                >
+                  {busy ? "Waiting for the wallet…" : gate?.blocked ? "Blocked" : `Sign · $${sendUsd}`}
+                </button>
+                {book.length === 0 ? <p className="mt-3 text-sm text-muted">PreStocks did not answer. Nothing to sign.</p> : null}
+              </div>
+            )}
+          </div>
+          <AgentComputer names={book} envelopeId={env?.id ?? null} />
+        </div>
+      </section>
     </div>
   );
 }

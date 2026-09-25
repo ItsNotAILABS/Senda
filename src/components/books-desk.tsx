@@ -9,10 +9,12 @@ export function BooksDesk() {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+      <header className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-4xl">Digest {d.id}</h1>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            Digest <span className="font-mono text-accent">{d.id}</span>
+          </h1>
           <p className={cn("rounded-full px-3 py-1 text-sm font-semibold", d.tied ? "bg-accent text-accent-fg" : "bg-down/20 text-down")}>
             {d.tied ? "The books tie" : "The books do not tie"}
           </p>
@@ -28,7 +30,7 @@ export function BooksDesk() {
         <Stat k="Suspense" v={d.suspense} line="Journal versus the balance" />
         <Stat k="Ghost" v={d.ghost} line="Still chargeable on a number" />
       </dl>
-      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
+      <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#10131c]">
         <table className="w-full text-left text-sm">
           <thead className="text-xs text-subtle">
             <tr>
@@ -59,7 +61,7 @@ export function BooksDesk() {
 
 function Stat({ k, v, line }: { k: string; v: number; line: string }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-[#101018] px-4 py-4">
+    <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-4">
       <dt className="text-xs text-subtle">{k}</dt>
       <dd className="mt-1 font-mono text-2xl">{v.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
       <p className="mt-1 text-xs text-muted">{line}</p>

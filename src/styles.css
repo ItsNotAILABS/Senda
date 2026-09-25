@@ -2,28 +2,28 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-bg: #05050a;
-  --color-surface: #0e0e16;
-  --color-elevated: #171722;
-  --color-fg: #f4f4f8;
-  --color-muted: #b7b7c9;
-  --color-subtle: #7d7d92;
+  --color-bg: #07080d;
+  --color-surface: #10131c;
+  --color-elevated: #171b27;
+  --color-fg: #f5f7fb;
+  --color-muted: #a7adbe;
+  --color-subtle: #6f768a;
   --color-paper: #f4f4f8;
   --color-ink: #07070c;
-  --color-accent: #14f195;
-  --color-accent-fg: #04140c;
+  --color-accent: #d6ff4a;
+  --color-accent-fg: #10140a;
   --color-sol: #9945ff;
-  --color-up: #14f195;
+  --color-up: #d6ff4a;
   --color-up-fg: #04140c;
   --color-down: #ff5d73;
   --color-down-fg: #2a060c;
-  --color-lime: #14f195;
-  --color-lime-fg: #04140c;
-  --color-border: #2a2a3d;
+  --color-lime: #d6ff4a;
+  --color-lime-fg: #10140a;
+  --color-border: #232838;
   --color-felt: #0e0e16;
   --color-felt-ink: #05050a;
-  --color-chip: #14f195;
-  --color-chip-ink: #04140c;
+  --color-chip: #d6ff4a;
+  --color-chip-ink: #10140a;
   --font-display: "Space Grotesk", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -38,7 +38,8 @@
 
 .senda-stage {
   background:
-    radial-gradient(720px 280px at 100% -40px, rgb(153 69 255 / 0.16), transparent 60%),
+    radial-gradient(900px 420px at 80% -10%, rgb(80 40 180 / 0.28), transparent 55%),
+    radial-gradient(700px 320px at 10% 0%, rgb(214 255 74 / 0.06), transparent 50%),
     var(--color-bg);
 }
 

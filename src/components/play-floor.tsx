@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { FilmBand } from "@/components/film-band";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -15,6 +14,9 @@ const LOGO: Record<string, string> = {
   KALSHI: "/logos/kalshi.png",
   POLYMARKET: "/logos/polymarket.png",
 };
+
+const PANEL = "rounded-[22px] border border-white/[0.08] bg-[#10131c]";
+const STAKES = [5, 10, 25, 100] as const;
 
 type Game = "wheel" | "slots" | "table";
 
@@ -31,6 +33,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
   const [stake, setStake] = useState(10);
   const [pick, setPick] = useState(book[0]?.symbol ?? "");
   const [lit, setLit] = useState(0);
+  const [turn, setTurn] = useState(0);
   const [busy, setBusy] = useState(false);
   const [landed, setLanded] = useState("");
   const [reels, setReels] = useState<string[]>(["", "", ""]);
@@ -39,6 +42,9 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
   const timer = useRef<number | null>(null);
   const face = book.find((n) => n.symbol === pick) ?? book[0];
   const pays = Math.max(2, book.length - 1);
+  const under = book[lit] ?? book[0];
+  const lockedNow = locked ? book.find((n) => n.symbol === locked.symbol) : undefined;
+  const tableFace = (locked ? lockedNow : face) ?? face;
 
   useEffect(() => {
     if (!pick && book[0]) setPick(book[0].symbol);
@@ -65,24 +71,28 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
     }
     setBusy(true);
     setLanded("");
+    const n = book.length;
     const idx = pocket(book);
     let step = 0;
-    const total = book.length * 3 + idx;
+    const total = n * 3 + idx;
     const id = window.setInterval(() => {
-      setLit(step % book.length);
-      step += 1;
       if (step > total) {
         window.clearInterval(id);
         timer.current = null;
         const hit = book[idx];
         setLanded(hit.symbol);
         setLit(idx);
+        setTurn(-(total * 360) / n);
         setBusy(false);
         const won = hit.symbol === pick;
         if (take(won ? stake * pays : 0, `Wheel ${hit.symbol}`)) {
           toast.success(won ? `${hit.symbol} hit. Paid ${pays}×.` : `Landed on ${hit.symbol}.`);
         }
+        return;
       }
+      setLit(step % n);
+      setTurn(-(step * 360) / n);
+      step += 1;
     }, 70);
     timer.current = id;
   }
@@ -138,138 +148,277 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
     setLocked(null);
   }
 
+  const rule =
+    game === "wheel"
+      ? `${face ? face.symbol : "A face"}. Hit pays ${pays}×.`
+      : game === "slots"
+        ? "Pair pays 2×. Three of a kind pays 12×."
+        : locked
+          ? `${locked.symbol} locked at ${formatUsd(locked.start)}.`
+          : "Up or down. Stand pays 2×.";
+
+  const actLabel =
+    game === "wheel" ? (busy ? "Spinning" : `Spin $${stake}`) : game === "slots" ? (busy ? "Spinning" : `Pull $${stake}`) : locked ? `Stand $${stake}` : "Deal";
+
+  function act() {
+    if (game === "wheel") spinWheel();
+    else if (game === "slots") spinSlots();
+    else if (locked) stand();
+    else deal();
+  }
+
   return (
-    <div className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Play</p>
-          <h1 className="mt-2 text-4xl tracking-tight">The floor</h1>
-          <p className="mt-2 max-w-xl text-sm text-muted">
-            The faces are the PreStocks. The stake is the same cash you send. A hit pays back into that cash. Nothing else is minted.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(
-              [
-                ["wheel", "Wheel"],
-                ["slots", "Slots"],
-                ["table", "Table"],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setGame(id)} className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", game === id ? "bg-accent text-accent-fg" : "bg-white/10")}>
-                {label}
-              </button>
-            ))}
+    <div className="senda-rise space-y-3 px-3 py-3 lg:px-4">
+      <header className={cn(PANEL, "px-6 py-6 lg:px-8")}>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.18em] text-accent uppercase">Play</p>
+            <h1 className="mt-2 text-5xl tracking-tight lg:text-6xl">The floor</h1>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Cash</p>
+            <p className="font-mono text-4xl">${cash.toFixed(0)}</p>
           </div>
         </div>
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <p className="text-xs text-subtle">Cash on the account</p>
-          <p className="mt-1 font-mono text-4xl">${cash.toFixed(0)}</p>
-          <div className="mt-4 flex gap-1">
-            {[5, 10, 25, 100].map((n) => (
-              <button key={n} type="button" onClick={() => setStake(n)} className={cn("min-h-9 flex-1 rounded-full font-mono text-xs", stake === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
-                ${n}
-              </button>
-            ))}
-          </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {(
+            [
+              ["wheel", "Wheel"],
+              ["slots", "Slots"],
+              ["table", "Table"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setGame(id)}
+              className={cn("min-h-11 rounded-full px-4 text-sm font-semibold", game === id ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      </section>
-      <FilmBand src="/video/desk.mp4" poster="/images/venue.jpg" label="The faces are the book." />
+      </header>
 
       {game === "wheel" ? (
-        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-2xl">Wheel</h2>
-              <p className="mt-1 text-sm text-muted">Pick a face. The pocket is the live print. A hit pays {pays}×.</p>
-            </div>
-            <button type="button" disabled={busy || !face} onClick={spinWheel} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-40">
-              {busy ? "Spinning…" : `Spin $${stake}`}
-            </button>
+        <Felt>
+          {book.length ? (
+            <Wheel book={book} lit={lit} turn={turn} pick={pick} landed={landed} pays={pays} under={under} busy={busy} onPick={setPick} />
+          ) : (
+            <p className="grid min-h-80 place-items-center text-sm text-muted">No faces on the book.</p>
+          )}
+        </Felt>
+      ) : null}
+
+      {game === "slots" ? (
+        <Felt className="px-4 py-6 sm:px-8">
+          <div className="relative mx-auto grid max-w-3xl grid-cols-3 gap-3">
+            <div className="pointer-events-none absolute inset-x-3 top-1/2 z-10 h-px -translate-y-1/2 bg-accent" />
+            {[0, 1, 2].map((i) => {
+              const sym = reels[i] || book[i]?.symbol || "";
+              return (
+                <div key={i} className="relative grid min-h-56 place-items-center overflow-hidden rounded-[18px] border border-white/10 bg-black/45 sm:min-h-72">
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-black/80 to-transparent" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/80 to-transparent" />
+                  {sym ? (
+                    <div className="text-center">
+                      <Face symbol={sym} className="mx-auto size-16 sm:size-28" />
+                      <p className="mt-3 text-xs font-semibold tracking-wide sm:text-sm">{sym}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-subtle">—</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
-            {book.map((n, i) => (
+          <p className="mt-4 text-center font-mono text-[11px] tracking-[0.16em] text-accent uppercase">2× pair · 12× three</p>
+        </Felt>
+      ) : null}
+
+      {game === "table" ? (
+        <Felt className="px-4 py-6 sm:px-8">
+          <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto pb-5">
+            {book.map((n) => (
               <button
                 key={n.id}
                 type="button"
                 onClick={() => setPick(n.symbol)}
+                aria-pressed={pick === n.symbol}
                 className={cn(
-                  "flex items-center gap-3 rounded-2xl px-3 py-3 text-left",
-                  landed === n.symbol ? "bg-accent text-accent-fg" : pick === n.symbol ? "bg-white/15" : "bg-black/40",
-                  lit === i && busy ? "ring-2 ring-accent" : "",
+                  "grid w-24 shrink-0 place-items-center rounded-[18px] border px-2 py-3",
+                  pick === n.symbol ? "border-accent bg-accent/10" : "border-white/10 bg-black/30",
                 )}
               >
-                <Face symbol={n.symbol} />
-                <span>
-                  <span className="block text-sm font-semibold">{n.symbol}</span>
-                  <span className="block font-mono text-[11px] opacity-70">{formatUsd(n.last)}</span>
-                </span>
+                <Face symbol={n.symbol} className="size-14" />
+                <span className="mt-2 text-xs font-semibold">{n.symbol}</span>
               </button>
             ))}
           </div>
-        </section>
-      ) : null}
-
-      {game === "slots" ? (
-        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <div className="flex items-end justify-between gap-3">
-            <div>
-              <h2 className="text-2xl">Slots</h2>
-              <p className="mt-1 text-sm text-muted">Three faces. A pair pays 2×. Three of a kind pays 12×. The stops come off the print.</p>
+          <div className="mx-auto grid w-full max-w-xl place-items-center rounded-[36px] border border-white/10 bg-black/30 px-6 py-10 text-center shadow-[inset_0_0_80px_rgb(0_0_0/0.45)] sm:rounded-[999px] sm:px-16">
+            {tableFace ? (
+              <>
+                <Face symbol={tableFace.symbol} className="size-28 sm:size-36" />
+                <p className="mt-4 text-3xl">{tableFace.symbol}</p>
+                <p className="mt-1 font-mono text-lg text-accent">{formatUsd(lockedNow?.last ?? tableFace.last)}</p>
+                {locked ? <p className="mt-2 font-mono text-xs text-muted">From {formatUsd(locked.start)}</p> : null}
+              </>
+            ) : (
+              <p className="text-sm text-muted">No face on the book.</p>
+            )}
+            <div className="mt-6 flex gap-2">
+              {(["up", "down"] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDir(d)}
+                  className={cn("min-h-11 min-w-24 rounded-full px-5 text-sm font-semibold", dir === d ? "bg-accent text-accent-fg" : "bg-black/50 text-muted")}
+                >
+                  {d === "up" ? "Up" : "Down"}
+                </button>
+              ))}
             </div>
-            <button type="button" disabled={busy} onClick={spinSlots} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-40">
-              {busy ? "Spinning…" : `Pull $${stake}`}
-            </button>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-3">
-            {reels.map((sym, i) => (
-              <div key={i} className="grid min-h-36 place-items-center rounded-[24px] bg-black/50">
-                {sym ? (
-                  <div className="text-center">
-                    <Face symbol={sym} />
-                    <p className="mt-2 text-sm font-semibold">{sym}</p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-subtle">—</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+        </Felt>
       ) : null}
 
-      {game === "table" ? (
-        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <h2 className="text-2xl">Table</h2>
-          <p className="mt-1 text-sm text-muted">Pick a face and a side. Deal locks this print. Stand pays 2× if it moved that way. The stake leaves when you stand.</p>
-          <div className="mt-4 flex gap-2 overflow-x-auto">
-            {book.map((n) => (
-              <button key={n.id} type="button" onClick={() => setPick(n.symbol)} className={cn("min-w-28 shrink-0 rounded-2xl px-3 py-3 text-left", pick === n.symbol ? "bg-accent text-accent-fg" : "bg-black/40")}>
-                <Face symbol={n.symbol} />
-                <p className="mt-2 text-sm font-semibold">{n.symbol}</p>
-                <p className="font-mono text-[11px] opacity-70">{formatUsd(n.last)}</p>
+      <section className={cn(PANEL, "flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5")}>
+        <div>
+          <p className="text-sm text-muted">{rule}</p>
+          <div className="mt-3 flex gap-2">
+            {STAKES.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setStake(n)}
+                aria-pressed={stake === n}
+                className={cn(
+                  "grid size-14 place-items-center rounded-full font-mono text-sm font-semibold",
+                  "shadow-[inset_0_0_0_3px_rgb(255_255_255/0.28),inset_0_0_0_7px_rgb(7_8_13/0.55)]",
+                  stake === n ? "bg-accent text-accent-fg" : "bg-[#171c12] text-accent",
+                )}
+              >
+                {n}
               </button>
             ))}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(["up", "down"] as const).map((d) => (
-              <button key={d} type="button" onClick={() => setDir(d)} className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", dir === d ? "bg-white text-black" : "bg-black/40")}>
-                {d === "up" ? "Up" : "Down"}
-              </button>
-            ))}
-            <button type="button" onClick={deal} className="min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold">Deal</button>
-            <button type="button" disabled={!locked} onClick={stand} className="min-h-10 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-40">
-              Stand · ${stake}
-            </button>
-          </div>
-          {locked ? <p className="mt-3 font-mono text-sm">{locked.symbol} from {formatUsd(locked.start)}</p> : null}
-        </section>
-      ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={act}
+          disabled={game === "table" ? !locked && !face : busy || !face || (game === "slots" && book.length < 3)}
+          className="min-h-14 rounded-full bg-accent px-8 text-base font-semibold text-accent-fg disabled:opacity-40 sm:min-w-52"
+        >
+          {actLabel}
+        </button>
+      </section>
     </div>
   );
 }
 
-function Face({ symbol }: { symbol: string }) {
-  const src = LOGO[symbol];
-  if (!src) return <span className="grid size-10 place-items-center rounded-full bg-black/40 text-[10px] font-semibold">{symbol.slice(0, 2)}</span>;
-  return <img src={src} alt="" className="size-10 rounded-full bg-white object-contain p-1" />;
+function Felt({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <section
+      className={cn("overflow-hidden rounded-[22px] border border-white/[0.08]", className)}
+      style={{
+        backgroundColor: "#07110e",
+        backgroundImage: "linear-gradient(180deg, rgb(8 16 13 / 0.72), rgb(5 9 8 / 0.88)), url(/felt.jpg)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function Wheel({
+  book,
+  lit,
+  turn,
+  pick,
+  landed,
+  pays,
+  under,
+  busy,
+  onPick,
+}: {
+  book: HouseListing[];
+  lit: number;
+  turn: number;
+  pick: string;
+  landed: string;
+  pays: number;
+  under?: HouseListing;
+  busy: boolean;
+  onPick: (symbol: string) => void;
+}) {
+  const n = book.length;
+  return (
+    <div className="relative mx-auto aspect-square w-full max-w-[560px]">
+      <div className="absolute top-3 left-1/2 z-20 -translate-x-1/2">
+        <div className="h-0 w-0 border-x-[11px] border-x-transparent border-t-[18px] border-t-accent" />
+      </div>
+      <div
+        className="absolute inset-[7%] rounded-full border border-white/10 shadow-[inset_0_0_70px_rgb(0_0_0/0.55)]"
+        style={{ transform: `rotate(${turn}deg)`, transition: "transform 60ms linear" }}
+      >
+        {book.map((item, i) => {
+          const ang = ((i / n) * Math.PI * 2) - Math.PI / 2;
+          const x = 50 + Math.cos(ang) * 38;
+          const y = 50 + Math.sin(ang) * 38;
+          const chosen = pick === item.symbol;
+          const hit = landed === item.symbol;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              aria-label={item.symbol}
+              aria-pressed={chosen}
+              onClick={() => onPick(item.symbol)}
+              className="absolute"
+              style={{
+                left: `${x}%`,
+                top: `${y}%`,
+                transform: `translate(-50%, -50%) rotate(${-turn}deg)`,
+                transition: "transform 60ms linear",
+              }}
+            >
+              <span
+                className={cn(
+                  "grid size-14 place-items-center rounded-full sm:size-[4.5rem]",
+                  chosen && "ring-2 ring-accent ring-offset-2 ring-offset-[#07110e]",
+                  (hit || (busy && lit === i)) && "ring-4 ring-accent",
+                )}
+              >
+                <Face symbol={item.symbol} className="size-14 sm:size-[4.5rem]" />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div
+        className={cn(
+          "pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full border bg-[#10131c]/92 text-center sm:size-32",
+          landed && landed === pick ? "border-accent" : "border-white/10",
+        )}
+      >
+        {under ? <Face symbol={under.symbol} className="size-10 sm:size-12" /> : null}
+        <p className="mt-1 text-[11px] font-semibold leading-none">{under?.symbol}</p>
+        <p className="mt-1 font-mono text-[10px] tracking-[0.14em] text-accent uppercase">{pays}×</p>
+      </div>
+    </div>
+  );
+}
+
+function Face({ symbol, className }: { symbol: string; className?: string }) {
+  const src = LOGO[symbol] ?? LOGO[symbol.toUpperCase()];
+  if (!src) {
+    return (
+      <span className={cn("grid place-items-center rounded-full bg-white text-[10px] font-semibold text-black", className)}>
+        {symbol.slice(0, 2)}
+      </span>
+    );
+  }
+  return <img src={src} alt="" className={cn("rounded-full bg-white object-contain p-1.5", className)} />;
 }
