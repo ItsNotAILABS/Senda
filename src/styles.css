@@ -102,8 +102,33 @@
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
 
-/* Density. The desks were set like a poster. This pulls type back to a terminal. */
-.senda-stage .text-5xl { font-size: 2rem; line-height: 1.08; }
-.senda-stage .text-4xl { font-size: 1.6rem; line-height: 1.12; }
-.senda-stage .text-3xl { font-size: 1.3rem; line-height: 1.15; }
-.senda-stage .text-2xl { font-size: 1.12rem; line-height: 1.2; }
+/* Content type only. The side column is outside this box, so it stays as it is.
+   Phone and laptop use the same steps. A wider window does not jump back to poster size. */
+.senda-stage .text-xs { font-size: 11px; line-height: 1.35; }
+.senda-stage .text-sm { font-size: 12.5px; line-height: 1.4; }
+.senda-stage .text-base { font-size: 13.5px; line-height: 1.45; }
+.senda-stage .text-lg { font-size: 15px; line-height: 1.4; }
+.senda-stage .text-xl { font-size: 16.5px; line-height: 1.3; }
+.senda-stage .text-2xl { font-size: 18px; line-height: 1.2; }
+.senda-stage .text-3xl { font-size: 20px; line-height: 1.15; }
+.senda-stage .text-4xl { font-size: 24px; line-height: 1.12; }
+.senda-stage .text-5xl { font-size: 28px; line-height: 1.08; }
+.senda-stage .text-6xl { font-size: 32px; line-height: 1.05; }
+
+@media (min-width: 40rem) {
+  .senda-stage .sm\:text-xl { font-size: 16.5px; line-height: 1.3; }
+  .senda-stage .sm\:text-2xl { font-size: 18px; line-height: 1.2; }
+  .senda-stage .sm\:text-3xl { font-size: 20px; line-height: 1.15; }
+  .senda-stage .sm\:text-4xl { font-size: 24px; line-height: 1.12; }
+  .senda-stage .sm\:text-5xl { font-size: 28px; line-height: 1.08; }
+}
+@media (min-width: 64rem) {
+  .senda-stage .lg\:text-2xl { font-size: 18px; line-height: 1.2; }
+  .senda-stage .lg\:text-3xl { font-size: 20px; line-height: 1.15; }
+  .senda-stage .lg\:text-4xl { font-size: 24px; line-height: 1.12; }
+  .senda-stage .lg\:text-5xl { font-size: 28px; line-height: 1.08; }
+  .senda-stage .lg\:text-6xl { font-size: 32px; line-height: 1.05; }
+}
+@media (min-width: 80rem) {
+  .senda-stage .xl\:text-6xl { font-size: 32px; line-height: 1.05; }
+}
