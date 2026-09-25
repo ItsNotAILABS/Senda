@@ -27,7 +27,7 @@
 
 A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. Senda is the layer in between: buy the name, hold it in your wallet, cover a drop, pay someone in USDC, play the print, or hand an agent a job it cannot sign.
 
-There is no Senda program. There is no program id. Nothing moves until the wallet you control signs, except the cash ledger that lives in this browser.
+There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs. Cover terms can be written on devnet to `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta` (deploy `2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay`). Nothing on mainnet moves until the wallet you control signs.
 
 ## Tonight
 
@@ -90,7 +90,7 @@ PYTHONPATH=chain/python python3 -m unittest discover -s chain/python/tests
 PYTHONPATH=chain/python python3 -m senda
 ```
 
-There is still no Senda program and no program id. Rust and Python build the transaction. The wallet signs it.
+The devnet cover program is `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`. A holder of a PreStock has the price, not the company: no legal share, no vote, no dividend. These wrappers sit outside the SEC’s September 2026 Innovation Exemption, which is for real tokenized public stocks. Most exclude U.S. persons under Regulation S. Rust and Python build the payment. The wallet signs it.
 
 ## Run
 

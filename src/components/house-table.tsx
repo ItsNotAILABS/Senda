@@ -6,7 +6,7 @@ import { OrderTicket } from "@/components/order-ticket";
 import { TokenMark } from "@/components/token-mark";
 import { TokenRails } from "@/components/token-rails";
 import { OptionChain } from "@/components/option-chain";
-import { counterpartOf, vsMarkLine } from "@/lib/explain";
+import { counterpartOf, EXPOSURE, vsMarkLine } from "@/lib/explain";
 import { applyHouseDrop, loadHouseBook, markHouse, saveHouseBook } from "@/lib/house-paper";
 import type { Side } from "@/lib/lmsr";
 import {
@@ -161,7 +161,7 @@ export function HouseTable({
           <p className="text-[11px] font-semibold tracking-wide uppercase text-ink/50">Token vs SPV mark</p>
           <p className="mt-1 font-display text-2xl leading-snug">Peg {stock.symbol} last to the SPV</p>
           <p className="mt-2 text-sm text-ink/60">
-            Buy SPL economic exposure (not a share). Peg pays if |token − mark| widens this minute. Live size is a Jupiter USDC swap.
+            Buy the print, not the company. {EXPOSURE} Live size is a Jupiter USDC swap.
           </p>
           <p className="mt-2 font-mono text-xs text-ink/45">{vsMarkLine(stock)}</p>
           <button

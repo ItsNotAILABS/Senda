@@ -10,7 +10,11 @@ export function structureOf(stock: HouseListing): "Loan" | "SPV" {
 export function structureLine(stock: HouseListing): string {
   return stock.venue === "tessera"
     ? "A Tessera T-Token is a loan-participation right. It is not a share of the company."
-    : "A PreStock is SPV economic exposure. It is not a share of the company.";
+    : "A PreStock is SPV economic exposure. It is not a share, a vote, or a dividend.";
+
+/** What a holder actually has. Pre-IPO wrappers are outside the 2026 public-stock exemption. */
+export const EXPOSURE =
+  "Holders get the price, not the company. No legal share, no vote, no dividend. OpenAI and Anthropic have voided unauthorized SPV transfers. Those prints fell 34–40%, and the on-chain book is thin next to the valuation on the wrapper. Most of these offerings exclude U.S. persons under Regulation S. The SEC’s September 2026 Innovation Exemption lets real tokenized public stocks trade with shareholder rights. Pre-IPO wrappers sit outside that. This market is earlier and thinner. An IPO allocation is the path that comes with the rights.";
 }
 
 export function vsMarkLine(stock: HouseListing): string {

@@ -1,0 +1,9 @@
+{
+  "cluster": "devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "programId": "4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta",
+  "deploySignature": "2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay",
+  "programData": "7F9xg6MtzTpBCn1SmCBVXKzAg9aLaaqNUKje4Nc4nhfw",
+  "slot": 504160084,
+  "upgradeAuthority": "E1YYAJtZ9UkWRRotj8FU4NBfkyaSM1yNfqK4fNkdZ73c"
+}
