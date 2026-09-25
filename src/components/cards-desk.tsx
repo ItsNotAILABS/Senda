@@ -59,7 +59,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   function issueNow() {
     const r = issue(kind, nameOn || w.tag.replace("@", "").toUpperCase() || "SENDA", Number(limitRaw) || 1500);
     if (!r.ok) toast.error(r.error);
-    else toast.success("That card is on the account. The store charges this cash.");
+    else toast.success("On this cash. A store network will not clear it.");
   }
 
   return (
@@ -68,9 +68,9 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         kicker="Shop"
         title="A number for the store"
         accent="not the token."
-        line="The store sees a number. The charge takes the cash on this account."
-        live={["Make a card", "One-time number", "Charge Senda cash", "Freeze"]}
-        coming={["A licensed card network", "Apple Pay", "The charge actually reaching a merchant"]}
+        line="This number caps the cash on this account. A store network does not clear it."
+        live={["Make a number", "One charge", "Debit this cash", "Freeze"]}
+        coming={["A Visa from Rain or Bridge", "That needs a program and KYC"]}
       />
 
       <CheckoutPay
@@ -83,6 +83,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
+
+      <CardRails />
 
       <section className={cn(PANEL, "p-4")}>
         <h2 className="text-sm font-semibold">Expenses</h2>
@@ -350,10 +352,92 @@ function ChipMark() {
 
 function McMark() {
   return (
-    <span className="inline-flex items-center" aria-label="Mastercard-format">
-      <span className="size-6 rounded-full bg-[#eb001b]" />
-      <span className="-ml-3 size-6 rounded-full bg-[#f79e1b] mix-blend-screen" />
+    <span className="font-mono text-[11px] tracking-[0.16em] text-white/70" aria-label="Senda number">
+      SENDA
     </span>
+  );
+}
+
+const RAILS: { name: string; spend: string; holds: string; clears: string; here: string }[] = [
+  {
+    name: "This desk",
+    spend: "Senda cash",
+    holds: "This browser",
+    clears: "Nothing. The number never reaches Visa.",
+    here: "Live. Cap, charge, freeze.",
+  },
+  {
+    name: "Phantom Cash",
+    spend: "CASH, a Bridge dollar on Solana",
+    holds: "Your Phantom balance until the swipe",
+    clears: "Lead Bank debit. Apple Pay and Google Pay.",
+    here: "Not ours. KYC inside Phantom.",
+  },
+  {
+    name: "Jupiter",
+    spend: "USDC",
+    holds: "The Jupiter card balance",
+    clears: "Visa. Issuer is Rain or DCS, depending on the card.",
+    here: "Not ours. The card lives in Jupiter.",
+  },
+  {
+    name: "KAST",
+    spend: "USDC, USDT, or PYUSD, deposited on Solana",
+    holds: "KAST. Custodial.",
+    clears: "Visa, including a Solana-branded physical card.",
+    here: "Not ours. KYC in the KAST app.",
+  },
+  {
+    name: "Solflare",
+    spend: "USDC from the wallet",
+    holds: "Was the wallet",
+    clears: "Paused 28 Jul 2026. The issuer, Kulipa, wound down.",
+    here: "No card to use.",
+  },
+];
+
+function CardRails() {
+  return (
+    <section className={cn(PANEL, "p-4")}>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div>
+          <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">1 · Make</p>
+          <p className="mt-1 text-sm text-muted">A 16-digit number, shown once. We keep the last four and the cap. Not the full number.</p>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">2 · Charge</p>
+          <p className="mt-1 text-sm text-muted">The charge debits Senda cash on this browser. It does not ask a bank, and a terminal will decline it.</p>
+        </div>
+        <div>
+          <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">3 · A real swipe</p>
+          <p className="mt-1 text-sm text-muted">A store clears only a number from an issuer. The pipes under Solana cards are Rain and Bridge. Both need a program and KYC. There is no button for that yet.</p>
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="text-[11px] tracking-[0.14em] text-subtle uppercase">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Card</th>
+              <th className="py-2 pr-3 font-medium">Spends</th>
+              <th className="py-2 pr-3 font-medium">Who holds it</th>
+              <th className="py-2 pr-3 font-medium">What a store sees</th>
+              <th className="py-2 font-medium">On this desk</th>
+            </tr>
+          </thead>
+          <tbody>
+            {RAILS.map((r) => (
+              <tr key={r.name} className="border-t border-white/10 align-top">
+                <td className="py-3 pr-3 font-semibold">{r.name}</td>
+                <td className="py-3 pr-3 text-muted">{r.spend}</td>
+                <td className="py-3 pr-3 text-muted">{r.holds}</td>
+                <td className="py-3 pr-3 text-muted">{r.clears}</td>
+                <td className="py-3 text-muted">{r.here}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
