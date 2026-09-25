@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
+import { AccountDetails } from "@/components/account-details";
 import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
@@ -69,10 +70,12 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         kicker="Shop"
         title="A number for the store"
         accent="not the token."
-        line="This number caps the cash on this account. A store network does not clear it."
-        live={["Make a number", "Pay USDC", "One charge", "Freeze"]}
-        coming={["A Visa from Rain or Bridge"]}
+        line="The dollar number is a Lead Bank account. Deposits become USDC in the wallet. The Visa is Rain’s, not a number made here."
+        live={["Account details", "USDC address", "One charge"]}
+        coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
+
+      <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
 
       <CheckoutPay
         initialSpend={initialSpend}
