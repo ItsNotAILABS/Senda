@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { FilmBand } from "@/components/film-band";
 import { AddMoneyScreen } from "@/components/add-money";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { CCYS, formatMoney, revolutFee, sendaDeposit, type Ccy } from "@/lib/wallet";
@@ -59,6 +60,7 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
           </ul>
         </div>
       </section>
+      <FilmBand poster="/images/venue.jpg" label="Same cash. Any currency." />
 
       <section className="grid gap-2 sm:grid-cols-3 xl:grid-cols-5">
         {(

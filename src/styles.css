@@ -80,3 +80,19 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes senda-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes senda-film {
+  from { transform: scale(1.14); }
+  to { transform: scale(1); }
+}
+@keyframes senda-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.senda-rise { animation: senda-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
+.senda-dot { animation: senda-live 1.8s ease-in-out infinite; }

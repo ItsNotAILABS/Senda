@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { FilmBand } from "@/components/film-band";
 import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
@@ -200,6 +201,7 @@ export function PitFloor({
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade</p>
         <p className="mt-2 text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
       </header>
+      <FilmBand poster="/images/markets-desk.jpg" label="The book is live." />
     <main className="m-3 grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
       <nav className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-2 lg:overflow-auto">

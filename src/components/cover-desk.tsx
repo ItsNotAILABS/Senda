@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Shield, TrendingDown } from "lucide-react";
+import { FilmBand } from "@/components/film-band";
 import { WalletPicker } from "@/components/wallet-picker";
 import { COVERS, formatCover } from "@/lib/cover";
 import {
@@ -161,6 +162,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           </figure>
         </div>
       </section>
+      <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
 
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <button type="button" onClick={() => setMode("drop")} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3 text-left">

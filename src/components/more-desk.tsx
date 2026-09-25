@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { FilmBand } from "@/components/film-band";
 import { BIC, sendaIban } from "@/lib/iso20022";
 import { PROGRAM_ID } from "@/lib/senda-program";
 import { formatMoney, sendaDeposit } from "@/lib/wallet";
@@ -34,6 +35,7 @@ export function MoreDesk() {
           <Link to="/login" className="text-muted">Sign in to keep this wallet</Link>
         </div>
       </header>
+      <FilmBand poster="/images/hero.jpg" label="One account." />
 
       <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
         <Pocket k="USD" v={formatMoney(w.balances.USD)} />

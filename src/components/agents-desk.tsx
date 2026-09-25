@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { FilmBand } from "@/components/film-band";
 import { AgentComputer } from "@/components/agent-computer";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
@@ -296,6 +297,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           ))}
         </div>
       </section>
+      <FilmBand poster="/images/orbit.jpg" label="They watch. You sign." />
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-[320px_minmax(0,1fr)]">
       <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
         <div className="px-4 py-4">

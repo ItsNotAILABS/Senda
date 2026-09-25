@@ -104,25 +104,40 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+      <section className="senda-rise grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
-          <h1 className="mt-3 max-w-xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            Your money. <span className="text-accent">Held here. Spent from here.</span>
+          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            Your money shouldn’t <span className="text-accent">stop working</span> after you buy it.
           </h1>
           <p className="mt-4 max-w-md text-sm text-muted">
             {owner
-              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Senda cash is the account you send, spend, and exchange. A PreStock you hold is still yours. It is not the account.`
-              : "Connect Phantom. The money already in it shows up here. Senda cash is what you send to people, put on a card, and hold in another currency."}
+              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Send it, put it on a card, hold another currency, or keep a PreStock and spend from it. The token stays in the wallet.`
+              : "Connect Phantom. The money already in it shows up here. Then send it, card it, or hold a company and spend from it."}
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Send</Link>
+            <Link to="/pre" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Open the book</Link>
+            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Send</Link>
             <Link to="/cards" search={{ spend: 0 }} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Card</Link>
-            <Link to="/wallet" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Exchange</Link>
           </div>
           {!owner ? <div className="mt-5 max-w-sm"><WalletPicker /></div> : null}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="relative min-h-80 overflow-hidden rounded-[28px] border border-white/10">
+          <video
+            src="/video/desk.mp4"
+            poster="/images/orbit.jpg"
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="senda-film h-full min-h-80 w-full object-cover"
+          />
+          <p className="absolute right-4 bottom-4 max-w-48 text-right text-xs tracking-[0.18em] text-white/80 uppercase">
+            Same money. More uses.
+          </p>
+        </div>
+      </section>
+      <section className="senda-rise grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
           {(
             [
               ["/payments", "Send", "To a person, or nearby", "bg-[#14f195]/15"],
@@ -139,7 +154,6 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               <span className="block text-[11px] text-muted">{hint}</span>
             </Link>
           ))}
-        </div>
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-[#101018] p-4">

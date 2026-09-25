@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { FilmBand } from "@/components/film-band";
 import { toast } from "sonner";
 import { WalletPicker } from "@/components/wallet-picker";
 import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
@@ -215,6 +216,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
             Phantom is already money. Convert it here. You do not deposit it into another account first.
           </p>
         </header>
+        <FilmBand poster="/images/markets-desk.jpg" label="Already in the wallet." />
         <ul className="mt-3 space-y-2">
           <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." tint="bg-white/20" />
           <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} wrapped` : owner || "Not connected"} tint="bg-[#2775ca]" />

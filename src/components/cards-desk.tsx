@@ -47,7 +47,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           </button>
         </div>
         <div className="relative min-h-64 overflow-hidden rounded-[28px] border border-white/10">
-          <img src="/images/metal-card.jpg" alt="" className="h-full min-h-64 w-full object-cover" />
+          <img src="/images/metal-card.jpg" alt="" className="senda-film h-full min-h-64 w-full object-cover" />
           <p className="absolute right-4 bottom-4 text-xs tracking-widest text-white/80 uppercase">Shown once</p>
         </div>
       </section>

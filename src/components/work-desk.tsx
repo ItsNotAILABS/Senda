@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { FilmBand } from "@/components/film-band";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 
@@ -100,6 +101,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
           ))}
         </div>
       </section>
+      <FilmBand poster="/images/term-sheet.jpg" label="The book, next to the note." />
 
       {mode === "sheet" ? (
         <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">

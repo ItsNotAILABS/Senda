@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { FilmBand } from "@/components/film-band";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
           </div>
         </div>
       </section>
+      <FilmBand src="/video/desk.mp4" poster="/images/venue.jpg" label="The faces are the book." />
 
       {game === "wheel" ? (
         <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">

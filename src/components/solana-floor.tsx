@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { FilmBand } from "@/components/film-band";
 import { WalletPicker } from "@/components/wallet-picker";
 import { PRESTOCK_MINTS } from "@/lib/phantom";
 import { pre8 } from "@/lib/pre8";
@@ -36,6 +37,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
           </div>
         </div>
       </section>
+      <FilmBand poster="/images/orbit.jpg" label="SPL. On Solana." />
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">

@@ -1,3 +1,4 @@
+import { FilmBand } from "@/components/film-band";
 import { digestBooks } from "@/lib/books";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ export function BooksDesk() {
           This replays every send, card, cover, and buy in this account and checks it against the cash you can still spend. Suspense is the gap. Ghost is what a one-time number can still charge. It is the app's own book, not a chain balance.
         </p>
       </header>
+      <FilmBand poster="/images/term-sheet.jpg" label="The books, replayed." />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat k="Assets" v={d.assets} line="Cash plus stock at cost" />
         <Stat k="Capital" v={d.equity} line="What the books say you own" />

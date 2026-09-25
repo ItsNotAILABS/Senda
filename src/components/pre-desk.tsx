@@ -4,6 +4,7 @@ import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
+import { FilmBand } from "@/components/film-band";
 import { WalletPicker } from "@/components/wallet-picker";
 import { listChainCovers, openChainCover } from "@/lib/cover-chain";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -145,6 +146,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
           <p className="mt-4 max-w-2xl text-sm text-muted">{name.description}</p>
         </section>
       ) : null}
+      <FilmBand poster="/images/markets-desk.jpg" label="A mint. Not a brokerage." />
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">

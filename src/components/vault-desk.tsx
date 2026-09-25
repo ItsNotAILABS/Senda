@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { FilmBand } from "@/components/film-band";
 import { WalletPicker } from "@/components/wallet-picker";
 import { readChain } from "@/lib/phantom";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
@@ -74,6 +75,7 @@ export function VaultDesk() {
         A wrap is a claim on USDC that never leaves Phantom. Senda cash is that claim. Push sends the claim back. Agents can only send inside the cap.
       </p>
       </header>
+      <FilmBand poster="/images/orbit.jpg" label="The wallet stays the wallet." />
 
       <div className="mt-3 grid gap-3 lg:grid-cols-3">
         <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
