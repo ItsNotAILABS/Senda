@@ -4,6 +4,7 @@ import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
+import { WalletPicker } from "@/components/wallet-picker";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -152,14 +153,20 @@ export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreR
               ))}
             </div>
             <QuoteLine quote={quote} usd={usd} decimals={decimals} />
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void swap("buy")}
-              className="mt-4 min-h-12 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
-            >
-              {busy ? "Waiting for the wallet…" : `Buy with $${usd} USDC`}
-            </button>
+            {owner ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void swap("buy")}
+                className="mt-4 min-h-12 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
+              >
+                {busy ? "Waiting for the wallet…" : `Buy with $${usd} USDC`}
+              </button>
+            ) : (
+              <div className="mt-4">
+                <WalletPicker />
+              </div>
+            )}
             <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">
               Pay with SOL instead
             </Link>
