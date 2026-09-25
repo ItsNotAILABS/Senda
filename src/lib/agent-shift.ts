@@ -1,6 +1,9 @@
 /** What an agent does on a shift. It writes. It does not sign. */
 
 import type { Envelope } from "@/lib/agent-envelope";
+import { recall } from "@/lib/agent-memory";
+import { bookLevel, drawdown, pushLevel, review } from "@/lib/agent-risk";
+import { spendCap } from "@/lib/spend-cap";
 import type { HouseListing } from "@/lib/sol-house";
 
 export type Job = "scout" | "discount" | "rich" | "daily" | "cover" | "clerk";
@@ -23,6 +26,29 @@ function pool(env: Envelope, book: HouseListing[]) {
   return env.symbols.length ? rows.filter((n) => env.symbols.includes(n.symbol)) : rows;
 }
 
+function gateQueue(env: Envelope, name: HouseListing, side: "buy" | "sell", book: HouseListing[]): { log: string; queue?: Queue } {
+  const series = pushLevel(bookLevel(book.map((n) => n.last)));
+  const dd = drawdown(series);
+  const hits = recall({ premium: name.premium ?? 0, change24h: name.change24h ?? 0, drawdown: dd, side }, 3);
+  const again = hits.find((h) => h.memory.symbol === name.symbol && h.memory.side === side && h.score > 0.8);
+  const asked = again ? Math.max(1, Math.round(env.maxUsd / 2)) : env.maxUsd;
+  const gate = review({
+    symbol: name.symbol,
+    side,
+    usd: asked,
+    premium: name.premium,
+    change24h: name.change24h,
+    series,
+    cap: spendCap(),
+  });
+  const memory = again ? ` Same tape as the last ${again.memory.side} of ${again.memory.symbol}, so the size is cut.` : "";
+  if (gate.blocked || !(gate.usd > 0)) return { log: `${gate.blocked || gate.risk}${memory}` };
+  return {
+    log: `${name.symbol} queued at $${gate.usd}. ${gate.risk}${memory}`,
+    queue: { symbol: name.symbol, side, usd: gate.usd, why: gate.risk },
+  };
+}
+
 export function think(env: Envelope, book: HouseListing[]): { log: string; queue?: Queue } | null {
   if (env.armed === false) return null;
   if (env.lastTick && Date.now() - Date.parse(env.lastTick) < 18_000) return null;
@@ -34,26 +60,12 @@ export function think(env: Envelope, book: HouseListing[]): { log: string; queue
   if (job === "scout") {
     return { log: `${cheap.symbol} is the cheap one. ${rich.symbol} is the rich one.` };
   }
-  if (job === "discount" && (cheap.premium ?? 0) < -0.03) {
-    return {
-      log: `${cheap.symbol} is under its mark. Queued a buy.`,
-      queue: { symbol: cheap.symbol, side: "buy", usd: env.maxUsd, why: "under the mark" },
-    };
-  }
-  if (job === "rich" && (rich.premium ?? 0) > 0.03) {
-    return {
-      log: `${rich.symbol} is over its mark. Queued a sell.`,
-      queue: { symbol: rich.symbol, side: "sell", usd: env.maxUsd, why: "over the mark" },
-    };
-  }
+  if (job === "discount" && (cheap.premium ?? 0) < -0.03) return gateQueue(env, cheap, "buy", rows);
+  if (job === "rich" && (rich.premium ?? 0) > 0.03) return gateQueue(env, rich, "sell", rows);
   if (job === "daily") {
     const day = new Date().toISOString().slice(0, 10);
     if (env.lastTick?.slice(0, 10) === day) return { log: "Today's buy already queued." };
-    const name = rows[0];
-    return {
-      log: `Daily buy of ${name.symbol} is waiting on you.`,
-      queue: { symbol: name.symbol, side: "buy", usd: env.maxUsd, why: "the daily" },
-    };
+    return gateQueue(env, rows[0], "buy", rows);
   }
   if (job === "cover") {
     const hit = rows.find((n) => (n.change24h ?? 0) < -0.05);

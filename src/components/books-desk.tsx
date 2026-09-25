@@ -20,28 +20,28 @@ export function BooksDesk() {
         live={["The lines already stored on this account."]}
         coming={["An export a CPA would take."]}
       />
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="text-lg">The lines</h2>
+            <h2 className="text-3xl tracking-tight">The lines</h2>
             <p className="mt-1 text-sm text-muted">Stored on this account. Nothing filled in.</p>
           </div>
-          <p className="font-mono text-xs text-subtle">{d.id}</p>
+          <p className="font-mono text-sm text-subtle">{d.id}</p>
         </div>
         {lines.length === 0 ? (
-          <p className="mt-4 rounded-[22px] bg-black/40 px-4 py-4 text-sm text-subtle">No ledger lines yet.</p>
+          <p className="mt-5 text-sm text-subtle">None.</p>
         ) : (
-          <ul className="mt-3">
+          <ul className="mt-4 space-y-2">
             {lines.map((t) => (
-              <li key={t.id} className="flex items-baseline justify-between gap-3 border-t border-white/10 py-3">
+              <li key={t.id} className="flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{t.counterparty || t.kind}</p>
+                  <p className="truncate text-base font-semibold">{t.counterparty || t.kind}</p>
                   <p className="truncate text-xs text-subtle">
                     {t.kind}
                     {t.note ? ` · ${t.note}` : ""} · {t.status}
                   </p>
                 </div>
-                <p className="shrink-0 font-mono text-sm tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
+                <p className="shrink-0 font-mono text-xl tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
               </li>
             ))}
           </ul>

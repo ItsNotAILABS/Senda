@@ -184,6 +184,74 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         ]}
         coming={["A licensed insurer.", "A pooled premium."]}
       />
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <h2 className="text-4xl tracking-tight lg:text-5xl">{name ? name.symbol : "No PreStock"}</h2>
+          <p className="font-mono text-sm text-muted">{name ? `${formatUsd(name.last)} last` : "Nothing priced."}</p>
+        </div>
+        <p className="mt-2 max-w-lg text-sm text-muted">
+          One signature on {name ? name.symbol : "the first name"}. The premium leaves Phantom. Strike, premium, and status come back from that cover. Nothing is paid out here.
+        </p>
+        {book.length > 0 ? (
+          <div className="mt-5 flex gap-2 overflow-x-auto">
+            {book.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => {
+                  setSymbol(n.symbol);
+                  setMode("drop");
+                }}
+                className={cn(
+                  "min-h-12 shrink-0 rounded-full px-4 text-sm font-semibold",
+                  n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                )}
+              >
+                {n.symbol}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <label className="mt-5 block">
+          <span className="text-xs text-subtle">Size</span>
+          <input
+            value={usd}
+            onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
+            inputMode="decimal"
+            className="mt-2 min-h-16 w-full rounded-[22px] border border-white/10 bg-black/40 px-5 font-mono text-3xl tabular-nums outline-none"
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || !name}
+          onClick={() => void coverTen()}
+          className="mt-4 flex min-h-16 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {busy ? "Waiting for Phantom…" : "Cover 10%"}
+        </button>
+        <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+            <dt className="text-[11px] text-subtle">Premium</dt>
+            <dd className="font-mono text-3xl tabular-nums">{shown ? `$${shown.premium}` : name ? `$${Math.max(1, Math.round(usd * 0.04))}` : "—"}</dd>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+            <dt className="text-[11px] text-subtle">Strike</dt>
+            <dd className="font-mono text-3xl tabular-nums">{shown ? formatUsd(shown.strike) : name ? formatUsd(name.last) : "—"}</dd>
+          </div>
+          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+            <dt className="text-[11px] text-subtle">Status</dt>
+            <dd className="font-mono text-3xl">{shown ? shown.status : "—"}</dd>
+          </div>
+        </dl>
+        {shown && shown.strike > 0 ? (
+          <p className="mt-3 text-xs text-muted">
+            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
+          </p>
+        ) : (
+          <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Status stays blank until Phantom signs.</p>
+        )}
+      </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
@@ -216,48 +284,6 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
-            <h2 className="mt-2 text-3xl tracking-tight">{name ? name.symbol : "No PreStock"}</h2>
-            <p className="mt-2 max-w-lg text-sm text-muted">
-              One signature on {name ? name.symbol : "the first name"}. The premium leaves Phantom. Strike, premium, and status come back from that cover. Nothing is paid out here.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={busy || !name}
-            onClick={() => void coverTen()}
-            className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
-          >
-            {busy ? "Waiting for Phantom…" : "Cover 10%"}
-          </button>
-        </div>
-        {shown ? (
-          <dl className="mt-5 grid gap-2 sm:grid-cols-3">
-            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
-              <dt className="text-[11px] text-subtle">Premium</dt>
-              <dd className="font-mono text-2xl tabular-nums">${shown.premium}</dd>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
-              <dt className="text-[11px] text-subtle">Strike</dt>
-              <dd className="font-mono text-2xl tabular-nums">{formatUsd(shown.strike)}</dd>
-            </div>
-            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
-              <dt className="text-[11px] text-subtle">Status</dt>
-              <dd className="font-mono text-2xl">{shown.status}</dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Premium, strike, and status show after Phantom signs.</p>
-        )}
-        {shown && shown.strike > 0 ? (
-          <p className="mt-3 text-xs text-muted">
-            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
-          </p>
-        ) : null}
-      </section>
       <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
 
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">

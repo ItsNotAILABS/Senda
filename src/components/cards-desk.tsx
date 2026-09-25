@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
 import { TabLead } from "@/components/tab-lead";
@@ -52,9 +51,9 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   const [nameOn, setNameOn] = useState("");
   const [limitRaw, setLimitRaw] = useState("1500");
   const [payId, setPayId] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
 
   const openCards = w.cards.filter((c) => c.status !== "terminated");
-  const cash = (w.balances.USD || 0) + (w.balances.USDC || 0);
   const expenses = groupAuths(w.cardAuths ?? []);
 
   function issueNow() {
@@ -74,86 +73,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         coming={["A licensed card network", "Apple Pay", "The charge actually reaching a merchant"]}
       />
 
-      <section className={cn(PANEL, "flex flex-wrap items-end justify-between gap-4 px-5 py-4")}>
-        <div>
-          <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Cash</p>
-          <p className="font-mono text-4xl tabular-nums">${cash.toFixed(0)}</p>
-          <p className="mt-1 text-sm text-muted">
-            {cash > 0 ? "A store charge takes this cash." : "Nothing to charge until cash is on the account."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <a href="#make-card" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
-            Make a card
-          </a>
-          {cash <= 0 ? (
-            <Link to="/payments" className="text-sm font-semibold text-accent">
-              Add cash
-            </Link>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-        <div className="relative min-h-[420px] overflow-hidden rounded-[22px] border border-white/10">
-          <video
-            src="/video/card.mp4"
-            poster="/images/metal-card.jpg"
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="senda-film absolute inset-0 h-full w-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
-          <p className="absolute bottom-5 left-5 text-xs tracking-[0.18em] text-white/85 uppercase">The number. Not the wallet.</p>
-        </div>
-        <div className="relative min-h-72 overflow-hidden rounded-[22px] border border-white/10 lg:min-h-[420px]">
-          <img src="/images/metal-card.jpg" alt="Metal card" className="h-full min-h-72 w-full object-cover lg:min-h-[420px]" />
-        </div>
-      </section>
-
-      <section id="make-card" className={cn(PANEL, "p-5 sm:p-6")}>
-        <h2 className="text-3xl">Make a card</h2>
-        <p className="mt-1 text-sm text-muted">It spends the cash above.</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {KINDS.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              onClick={() => setKind(k.id)}
-              className={cn("rounded-[18px] px-4 py-4 text-left", kind === k.id ? "bg-accent text-accent-fg" : "bg-black/30")}
-            >
-              <span className="block text-sm font-semibold">{k.label}</span>
-              <span className="mt-1 block text-xs opacity-75">{k.line}</span>
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
-          <label className="block">
-            <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Name</span>
-            <input
-              value={nameOn}
-              onChange={(e) => setNameOn(e.target.value.toUpperCase())}
-              placeholder={w.tag.replace("@", "").toUpperCase() || "YOUR NAME"}
-              className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
-            />
-          </label>
-          <label className="block">
-            <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Daily cap</span>
-            <input
-              value={limitRaw}
-              onChange={(e) => setLimitRaw(e.target.value)}
-              inputMode="decimal"
-              className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
-            />
-          </label>
-          <button type="button" onClick={issueNow} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
-            Make this card
-          </button>
-        </div>
-      </section>
-
       <CheckoutPay
         initialSpend={initialSpend}
         onMint={(cap, merchant, name) => issueCheckout(cap, merchant, name)}
@@ -164,6 +83,81 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
+
+      <section className={cn(PANEL, "p-4")}>
+        <h2 className="text-sm font-semibold">Expenses</h2>
+        {expenses.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">none yet</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-white/10">
+            {expenses.map((g) => (
+              <li key={g.merchant} className="py-3">
+                <p className="text-sm font-semibold">{g.merchant}</p>
+                <ul className="mt-2 space-y-2">
+                  {g.rows.map((a) => (
+                    <li key={a.id} className="flex items-baseline justify-between gap-3">
+                      <span className="font-mono text-sm tabular-nums">{formatMoney(a.amount)}</span>
+                      <span className={cn("text-sm", a.status === "declined" ? "text-down" : "text-muted")}>{a.status}</span>
+                      <span className="font-mono text-sm tabular-nums">···· {a.last4 || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setMaking((v) => !v)}
+          className="min-h-10 rounded-full border border-white/10 px-4 text-sm font-semibold"
+        >
+          Make a card
+        </button>
+      </div>
+
+      {making ? (
+        <section className={cn(PANEL, "p-4")}>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setKind(k.id)}
+                className={cn("rounded-[18px] px-4 py-3 text-left", kind === k.id ? "bg-accent text-accent-fg" : "bg-black/30")}
+              >
+                <span className="block text-sm font-semibold">{k.label}</span>
+                <span className="mt-1 block text-xs opacity-75">{k.line}</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem_auto] sm:items-end">
+            <label className="block">
+              <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Name</span>
+              <input
+                value={nameOn}
+                onChange={(e) => setNameOn(e.target.value.toUpperCase())}
+                placeholder={w.tag.replace("@", "").toUpperCase() || "YOUR NAME"}
+                className="mt-1 min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Daily cap</span>
+              <input
+                value={limitRaw}
+                onChange={(e) => setLimitRaw(e.target.value)}
+                inputMode="decimal"
+                className="mt-1 min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
+              />
+            </label>
+            <button type="button" onClick={issueNow} className="min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+              Make this card
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       {openCards.length ? (
         <section className="grid gap-3 lg:grid-cols-2">
@@ -206,30 +200,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           ))}
         </section>
       ) : null}
-
-      <section className={cn(PANEL, "p-5")}>
-        <h2 className="text-sm font-semibold">Expenses</h2>
-        {expenses.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No spend yet.</p>
-        ) : (
-          <ul className="mt-2 divide-y divide-white/10">
-            {expenses.map((g) => (
-              <li key={g.merchant} className="py-3">
-                <p className="text-sm font-semibold">{g.merchant}</p>
-                <ul className="mt-2 space-y-2">
-                  {g.rows.map((a) => (
-                    <li key={a.id} className="flex items-baseline justify-between gap-3">
-                      <span className="font-mono text-sm tabular-nums">{formatMoney(a.amount)}</span>
-                      <span className={cn("text-sm", a.status === "declined" ? "text-down" : "text-muted")}>{a.status}</span>
-                      <span className="font-mono text-sm tabular-nums">···· {a.last4 || "—"}</span>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </main>
   );
 }
@@ -263,16 +233,87 @@ function CheckoutPay({
     setMerchant(s.merchant);
     setCap(String(s.cap));
     setMcc(s.mcc);
+    setName("SENDA");
   }
 
   return (
-    <section className="space-y-3">
-      <div className={cn(PANEL, "p-4 sm:p-5")}>
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold">Stores</h2>
-          <p className="text-xs text-muted">Fills the checkout. Nothing moves until you charge.</p>
+    <section className="grid items-stretch gap-3 lg:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)]">
+      <div className="relative flex min-h-[300px] flex-col justify-between overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.14)] lg:min-h-[340px]">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_28%,rgb(255_255_255/0.07)_46%,transparent_64%)]" />
+        <div className="relative flex items-start justify-between">
+          <ChipMark />
+          <McMark />
         </div>
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="relative mt-6">
+          {reveal ? (
+            <>
+              <p className="font-mono text-xl tracking-[0.14em] sm:text-2xl">{reveal.pan}</p>
+              <p className="mt-3 font-mono text-sm tabular-nums">
+                {reveal.expiry} · {reveal.cvv}
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-white/45">···· {reveal.last4}</p>
+            </>
+          ) : (
+            <p className="font-mono text-xl tracking-[0.18em] text-white/35">•••• •••• •••• ••••</p>
+          )}
+          <p className="mt-3 text-sm">{store}</p>
+          <label className="mt-2 block">
+            <span className="sr-only">Amount</span>
+            <input
+              value={cap}
+              onChange={(e) => setCap(e.target.value)}
+              inputMode="decimal"
+              aria-label="Amount"
+              className="w-full bg-transparent font-mono text-4xl tabular-nums outline-none"
+            />
+          </label>
+          {spent ? <p className="text-sm text-accent">Used</p> : null}
+        </div>
+        <div className="relative mt-4 flex flex-wrap gap-2">
+          {reveal ? (
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(reveal.pan.replace(/\s/g, ""));
+                toast.success("Number copied. It is still not saved.");
+              }}
+              className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold"
+            >
+              Copy number
+            </button>
+          ) : null}
+          {!spent ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!reveal) {
+                  const r = onMint(Number(cap) || 0, merchant, name.trim() || "SENDA");
+                  if (!r.ok) toast.error(r.error);
+                  else {
+                    setReveal(r.reveal);
+                    setSpent(false);
+                  }
+                  return;
+                }
+                const ok = onAuth(reveal.id, Number(cap) || 0, store, mcc);
+                if (ok) setSpent(true);
+              }}
+              className="min-h-11 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
+            >
+              {reveal ? (
+                <>
+                  Charge <span className="font-mono">${Number(cap) || 0}</span>
+                </>
+              ) : (
+                "Make the number"
+              )}
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className={cn(PANEL, "p-3 sm:p-4")}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {STORES.map((s) => {
             const on = picked === s.id;
             return (
@@ -281,157 +322,17 @@ function CheckoutPay({
                 type="button"
                 onClick={() => pickStore(s.id)}
                 className={cn(
-                  "min-w-[7.75rem] shrink-0 rounded-[22px] border border-white/10 px-3 py-3 text-left",
-                  on ? "border-transparent bg-accent text-accent-fg" : "bg-[#10131c]",
+                  "rounded-[22px] border border-white/10 px-3 py-3 text-left",
+                  on ? "border-transparent bg-accent text-accent-fg" : "bg-black/30",
                 )}
               >
                 <span className="block text-sm font-semibold">{s.label}</span>
                 <span className={cn("mt-1 block truncate text-xs", on ? "text-accent-fg/80" : "text-muted")}>{s.merchant}</span>
-                <span className="mt-2 block font-mono text-sm">${s.cap}</span>
+                <span className="mt-2 block font-mono text-sm tabular-nums">${s.cap}</span>
               </button>
             );
           })}
         </div>
-      </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-      <div className={cn(PANEL, "p-5 sm:p-6")}>
-        <h2 className="text-3xl">This checkout</h2>
-        <p className="mt-1 text-sm text-muted">One number. One charge.</p>
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {MCC.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => setMcc(m.id)}
-              className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", mcc === m.id ? "bg-accent text-accent-fg" : "bg-black/30 text-muted")}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {CAPS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setCap(String(n))}
-              className={cn(
-                "grid size-12 place-items-center rounded-full font-mono text-xs font-semibold",
-                "shadow-[inset_0_0_0_2px_rgb(255_255_255/0.22),inset_0_0_0_5px_rgb(7_8_13/0.5)]",
-                Number(cap) === n ? "bg-accent text-accent-fg" : "bg-[#171c12] text-accent",
-              )}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        <label className="mt-4 block">
-          <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
-          <input
-            value={cap}
-            onChange={(e) => setCap(e.target.value)}
-            inputMode="decimal"
-            className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 font-mono text-lg outline-none"
-          />
-        </label>
-        <label className="mt-3 block">
-          <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Store</span>
-          <input
-            value={merchant}
-            onChange={(e) => {
-              const next = e.target.value;
-              setMerchant(next);
-              setPicked((id) => (STORES.find((s) => s.id === id)?.merchant === next ? id : null));
-            }}
-            placeholder="Store name"
-            className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
-          />
-        </label>
-        <label className="mt-3 block">
-          <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Name</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value.toUpperCase())}
-            className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => {
-            const r = onMint(Number(cap) || 0, merchant, name.trim() || "SENDA");
-            if (!r.ok) toast.error(r.error);
-            else {
-              setReveal(r.reveal);
-              setSpent(false);
-            }
-          }}
-          className="mt-4 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg"
-        >
-          Make the number
-        </button>
-      </div>
-
-      <div className="relative flex min-h-[380px] flex-col justify-between overflow-hidden rounded-[22px] border border-white/10 bg-[#141820] p-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_28%,rgb(255_255_255/0.07)_46%,transparent_64%)]" />
-        <div className="relative flex items-start justify-between">
-          <ChipMark />
-          <McMark />
-        </div>
-        {!reveal ? (
-          <div className="relative">
-            <p className="font-mono text-xl tracking-[0.18em] text-white/40">•••• •••• •••• ••••</p>
-            <p className="mt-3 text-sm text-muted">The number shows once.</p>
-          </div>
-        ) : (
-          <div className="relative">
-            <p className="font-mono text-xl tracking-[0.16em] sm:text-2xl">{reveal.pan}</p>
-            <div className="mt-5 flex items-end justify-between text-sm">
-              <div>
-                <p className="text-[10px] tracking-[0.14em] text-white/50 uppercase">Name</p>
-                <p>{name.trim() || "SENDA"}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] tracking-[0.14em] text-white/50 uppercase">Exp / CVV</p>
-                <p className="font-mono">
-                  {reveal.expiry} · {reveal.cvv}
-                </p>
-              </div>
-            </div>
-            <p className="mt-3 font-mono text-[11px] text-white/45">Not stored ···· {reveal.last4}</p>
-            {spent ? <p className="mt-3 text-sm text-accent">Used. That number will not run again.</p> : null}
-          </div>
-        )}
-        <div className="relative mt-6 flex flex-wrap gap-2">
-          {reveal ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(reveal.pan.replace(/\s/g, ""));
-                  toast.success("Number copied. It is still not saved.");
-                }}
-                className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold"
-              >
-                Copy number
-              </button>
-              {!spent ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const ok = onAuth(reveal.id, Number(cap) || 0, store, mcc);
-                    if (ok) setSpent(true);
-                  }}
-                  className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
-                >
-                  Charge <span className="font-mono">${Number(cap) || 0}</span>
-                </button>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-xs tracking-[0.16em] text-white/50 uppercase">{store}</p>
-          )}
-        </div>
-      </div>
       </div>
     </section>
   );
@@ -558,7 +459,7 @@ function CardFace({
             <input
               value={lim}
               onChange={(e) => setLim(e.target.value)}
-              className="min-h-10 w-24 rounded-full border border-white/[0.06] bg-black/30 px-3 text-xs outline-none"
+              className="min-h-10 w-24 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-xs outline-none"
               aria-label="Daily limit"
             />
             <button type="submit" className="min-h-10 rounded-full bg-white/10 px-3 text-xs font-semibold">
@@ -567,7 +468,7 @@ function CardFace({
           </form>
         </div>
         {paying ? (
-          <div className="rounded-[18px] border border-white/[0.06] bg-black/30 p-3">
+          <div className="rounded-[18px] border border-white/10 bg-black/30 p-3">
             <input
               value={merchant}
               onChange={(e) => setMerchant(e.target.value)}
@@ -594,7 +495,7 @@ function CardFace({
               onChange={(e) => setAmt(e.target.value)}
               inputMode="decimal"
               aria-label="Charge amount"
-              className="mt-2 min-h-11 w-full rounded-xl bg-[#10131c] px-3 text-sm outline-none"
+              className="mt-2 min-h-11 w-full rounded-xl bg-[#10131c] px-3 font-mono text-sm outline-none"
             />
             <div className="mt-2 flex flex-wrap gap-1">
               {MCC.map((m) => (

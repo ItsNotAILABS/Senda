@@ -228,6 +228,15 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     }
   }
 
+  function pick(next: string) {
+    const hit = rows.find((r) => r.symbol === next);
+    if (!hit) return;
+    setSymbol(hit.symbol);
+    setSig(null);
+    setReveal(null);
+    writeUsing({ symbol: hit.symbol, name: hit.name, last: hit.last, premium: hit.premium, mint: hit.mint });
+  }
+
   return (
     <div className="space-y-4 px-3 py-3 lg:px-4">
       <TabLead
@@ -238,69 +247,129 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
         coming={["A broker account", "Margin"]}
       />
-      <section className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,400px)]">
-        <div className="flex flex-col justify-center py-1">
-          <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">PreStock</p>
-          <h1 className="mt-3 text-4xl tracking-tight">
-            {name ? (
-              <>
-                Buy <span className="text-accent">{name.symbol}</span>
-              </>
-            ) : (
-              <>
-                No <span className="text-accent">live</span> price
-              </>
-            )}
-          </h1>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">Ticket</p>
           {name ? (
             <>
-              <p className="mt-2 text-sm text-muted">{name.name}</p>
-              <p className="mt-6 font-mono text-5xl tabular-nums tracking-tight">{formatUsd(name.last)}</p>
-              <p className={cn("mt-2 font-mono text-sm tabular-nums", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
-                {formatPremium(name.premium)} <span className="text-subtle">vs mark {formatUsd(name.mark)}</span>
-              </p>
-            </>
-          ) : (
-            <p className="mt-3 text-sm text-muted">Nothing on the book is priced.</p>
-          )}
-        </div>
-        <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-          {name ? (
-            <>
-              <div className="flex items-center gap-3">
+              <label className="mt-4 block">
+                <span className="text-[11px] text-subtle">Name</span>
+                <select
+                  value={name.symbol}
+                  aria-label="Name"
+                  onChange={(e) => pick(e.target.value)}
+                  className="mt-2 min-h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 text-sm font-semibold outline-none"
+                >
+                  {rows.map((r) => (
+                    <option key={r.id} value={r.symbol}>
+                      {r.symbol}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="mt-3 flex items-center gap-3">
                 {LOGO[name.symbol] ? (
-                  <img src={LOGO[name.symbol]} alt="" className="size-12 rounded-2xl bg-white object-contain p-1.5" />
+                  <img src={LOGO[name.symbol]} alt="" className="size-9 rounded-full bg-white object-contain p-1" />
                 ) : (
-                  <span className="grid size-12 place-items-center rounded-2xl bg-black/40 font-mono text-xs">{name.symbol.slice(0, 2)}</span>
+                  <span className="grid size-9 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{name.symbol.slice(0, 2)}</span>
                 )}
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{name.name}</p>
-                  <p className="font-mono text-xs text-subtle">{name.symbol}</p>
-                </div>
-                <span className="ml-auto inline-flex items-center gap-1.5 font-mono text-[11px] tracking-[0.14em] text-accent uppercase">
-                  <span className="senda-dot size-1.5 rounded-full bg-accent" />
-                  Live
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{name.symbol}</span>
+                  <span className="block truncate text-[11px] text-subtle">{name.name}</span>
+                </span>
+                <span className="ml-auto text-right">
+                  <span className="block font-mono text-sm tabular-nums">{formatUsd(name.last)}</span>
+                  <span className={cn("block font-mono text-[11px] tabular-nums", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                    {formatPremium(name.premium)}
+                  </span>
                 </span>
               </div>
-              <p className="mt-5 font-mono text-4xl tabular-nums tracking-tight">{formatUsd(name.last)}</p>
-              <p className={cn("mt-1 font-mono text-xs tabular-nums", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
-                {formatPremium(name.premium)} · mark {formatUsd(name.mark)}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <Stat k="24h" v={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} />
-                <Stat k="Holders" v={name.holders.toLocaleString()} />
-                <Stat k="Liquidity" v={formatUsd(name.liquidity)} />
-                <Stat k="You hold" v={held && held.ui > 0 ? held.ui.toFixed(4) : "none"} />
-              </div>
-              {name.description ? <p className="mt-4 line-clamp-3 text-sm text-muted">{name.description}</p> : null}
+              <Size usd={usd} setUsd={setUsd} />
+              <QuoteLine quote={quote} usd={usd} decimals={decimals} />
+              <button
+                type="button"
+                disabled={busy || trioBusy}
+                onClick={() => void swap("buy")}
+                className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+              >
+                {busy ? "Waiting for the wallet…" : `Buy $${usd} of ${name.symbol}`}
+              </button>
+              {!owner ? (
+                <div className="mt-4">
+                  <WalletPicker />
+                </div>
+              ) : null}
+              <Link
+                to="/wallet"
+                search={{ buy: name.symbol }}
+                className="mt-2 flex min-h-11 w-full items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-muted"
+              >
+                Pay with SOL instead
+              </Link>
+              {held && held.ui > 0 ? (
+                <button
+                  type="button"
+                  disabled={busy || trioBusy}
+                  onClick={() => void swap("sell")}
+                  className="mt-2 min-h-11 w-full rounded-full border border-white/10 text-sm font-semibold"
+                >
+                  Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
+                </button>
+              ) : owner ? (
+                <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
+              ) : null}
+              <p className="mt-3 font-mono text-[11px] break-all text-subtle">{routes.find((x) => x.mint === name.mint)?.route || name.mint}</p>
             </>
           ) : (
-            <p className="text-sm text-muted">The live print shows up when a name is priced.</p>
+            <p className="mt-3 text-sm text-muted">No priced names.</p>
           )}
-        </aside>
-      </section>
+        </section>
 
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-5 py-4">
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <div className="flex items-baseline justify-between">
+            <p className="text-sm font-semibold">Book</p>
+            <p className="font-mono text-xs tabular-nums text-subtle">{rows.length}</p>
+          </div>
+          <div className="mt-3 flex items-center gap-3 px-2 text-[11px] tracking-[0.14em] text-subtle uppercase">
+            <span className="size-8 shrink-0" />
+            <span className="min-w-0 flex-1">Name</span>
+            <span className="w-24 text-right">Last</span>
+            <span className="w-16 text-right">Premium</span>
+          </div>
+          <ul className="mt-1">
+            {rows.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => pick(r.symbol)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left",
+                    r.symbol === name?.symbol ? "bg-accent/10" : "hover:bg-white/[0.03]",
+                  )}
+                >
+                  {LOGO[r.symbol] ? (
+                    <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
+                  ) : (
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{r.symbol.slice(0, 2)}</span>
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold">{r.symbol}</span>
+                    <span className="block truncate text-[11px] text-subtle">{r.name}</span>
+                  </span>
+                  <span className="w-24 text-right font-mono text-sm tabular-nums">{formatUsd(r.last)}</span>
+                  <span className={cn("w-16 text-right font-mono text-xs tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                    {formatPremium(r.premium)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {rows.length === 0 ? <p className="py-6 text-sm text-muted">No priced names.</p> : null}
+        </section>
+      </div>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-4">
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-sm font-semibold">You hold</p>
           <Link to="/vault" className="text-sm font-semibold text-accent">
@@ -321,116 +390,32 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-          <div className="flex items-baseline justify-between">
-            <p className="text-sm font-semibold">Book</p>
-            <p className="font-mono text-xs tabular-nums text-subtle">{rows.length}</p>
-          </div>
-          <div className="mt-3">
-            {rows.map((r) => (
+      {name ? (
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["buy", "Buy"],
+                ["cover", "Cover"],
+                ["spend", "Spend"],
+                ["stand", "Stand"],
+              ] as const
+            ).map(([id, label]) => (
               <button
-                key={r.id}
+                key={id}
                 type="button"
-                onClick={() => {
-                  setSymbol(r.symbol);
-                  setSig(null);
-                  setReveal(null);
-                  writeUsing({ symbol: r.symbol, name: r.name, last: r.last, premium: r.premium, mint: r.mint });
-                }}
+                onClick={() => setMode(id)}
                 className={cn(
-                  "flex w-full items-center gap-3 rounded-xl border-t border-white/[0.06] px-2 py-3 text-left first:border-0",
-                  r.symbol === name?.symbol ? "bg-accent/10" : "hover:bg-white/[0.03]",
+                  "min-h-11 rounded-full px-4 text-sm font-semibold",
+                  mode === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
                 )}
               >
-                {LOGO[r.symbol] ? (
-                  <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
-                ) : (
-                  <span className="grid size-8 place-items-center rounded-full bg-black/40 text-[10px]">{r.symbol.slice(0, 2)}</span>
-                )}
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold">{r.symbol}</span>
-                  <span className="block truncate text-[11px] text-subtle">{r.name}</span>
-                </span>
-                <span className="text-right">
-                  <span className="block font-mono text-xs tabular-nums">{formatUsd(r.last)}</span>
-                  <span className={cn("block font-mono text-[11px] tabular-nums", (r.change24h ?? 0) < 0 ? "text-down" : "text-accent")}>
-                    {r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`}
-                  </span>
-                </span>
+                {label}
               </button>
             ))}
-            {rows.length === 0 ? <p className="py-6 text-sm text-muted">No priced names.</p> : null}
           </div>
-        </div>
 
-        {name ? (
-          <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  ["buy", "Buy"],
-                  ["cover", "Cover"],
-                  ["spend", "Spend"],
-                  ["stand", "Stand"],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMode(id)}
-                  className={cn(
-                    "min-h-11 rounded-full px-4 text-sm font-semibold",
-                    mode === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            {mode === "buy" ? (
-              <div className="mt-5">
-                <Size usd={usd} setUsd={setUsd} />
-                <QuoteLine quote={quote} usd={usd} decimals={decimals} />
-                {owner ? (
-                  <button
-                    type="button"
-                    disabled={busy || trioBusy}
-                    onClick={() => void swap("buy")}
-                    className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
-                  >
-                    {busy ? "Waiting for the wallet…" : `Buy $${usd} of ${name.symbol}`}
-                  </button>
-                ) : (
-                  <div className="mt-4">
-                    <WalletPicker />
-                  </div>
-                )}
-                <Link
-                  to="/wallet"
-                  search={{ buy: name.symbol }}
-                  className="mt-2 flex min-h-11 w-full items-center justify-center rounded-full border border-white/10 text-sm font-semibold text-muted"
-                >
-                  Pay with SOL instead
-                </Link>
-                {held && held.ui > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy || trioBusy}
-                    onClick={() => void swap("sell")}
-                    className="mt-2 min-h-11 w-full rounded-full border border-white/10 text-sm font-semibold"
-                  >
-                    Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
-                  </button>
-                ) : owner ? (
-                  <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
-                ) : null}
-                <p className="mt-3 font-mono text-[11px] break-all text-subtle">{routes.find((x) => x.mint === name.mint)?.route || name.mint}</p>
-              </div>
-            ) : null}
-
-            {mode === "cover" ? (
+          {mode === "cover" ? (
               <div className="mt-5">
                 <h2 className="text-2xl tracking-tight">
                   Cover a <span className="text-accent">10% drop</span>
@@ -567,9 +552,8 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 {sig}
               </a>
             ) : null}
-          </section>
-        ) : null}
-      </div>
+        </section>
+      ) : null}
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
@@ -674,19 +658,10 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   );
 }
 
-function Stat({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-2">
-      <p className="text-[11px] text-subtle">{k}</p>
-      <p className="font-mono text-sm tabular-nums">{v}</p>
-    </div>
-  );
-}
-
 function Size({ usd, setUsd, label = "Size in dollars" }: { usd: number; setUsd: (n: number) => void; label?: string }) {
   return (
     <div className="mt-4">
-      <p className="text-[11px] text-subtle">Size</p>
+      <p className="text-[11px] text-subtle">USD</p>
       <input
         value={usd}
         onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}

@@ -5,6 +5,7 @@ import {
   BookOpen,
   Bot,
   CreditCard,
+  FileText,
   Gamepad2,
   Hexagon,
   LayoutGrid,
@@ -42,6 +43,7 @@ const MORE = [
   { to: "/invest", label: "Trade", icon: Hexagon },
   { to: "/solana", label: "Solana", icon: Hexagon },
   { to: "/books", label: "Books", icon: BookOpen },
+  { to: "/docs", label: "Docs", icon: FileText },
   { to: "/more", label: "Account", icon: UserRound },
 ] as const;
 
@@ -120,6 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 else if (key === "agent" || key === "agents") void navigate({ to: "/agents" });
                 else if (key === "work") void navigate({ to: "/work" });
                 else if (key === "trade") void navigate({ to: "/invest" });
+                else if (key === "docs" || key === "doc") void navigate({ to: "/docs" });
                 else if (key === "home") void navigate({ to: "/" });
                 else void navigate({ to: "/pre", search: { q: key } });
               }}
@@ -156,7 +159,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        {children}
+        <div key={pathname} className="senda-rise">
+          {children}
+        </div>
         <Onboard />
       </div>
     </div>
@@ -170,7 +175,7 @@ function NavLink({
   on,
   quiet,
 }: {
-  to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/cover" | "/solana" | "/books" | "/more";
+  to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

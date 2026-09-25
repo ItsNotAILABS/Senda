@@ -70,6 +70,82 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
         live={["The live sheet, a note on every name, saved in this browser.", "The page you already edit, still on this desk."]}
         coming={["Sharing the sheet with someone else."]}
       />
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
+        {name ? (
+          <>
+            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
+            <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-4xl tracking-tight lg:text-5xl">{name.symbol}</h2>
+                <p className="mt-1 text-sm text-muted">{name.name}</p>
+              </div>
+              <p className="font-mono text-4xl tabular-nums">{formatUsd(name.last)}</p>
+            </div>
+            <p className="mt-2 font-mono text-sm tabular-nums text-muted">
+              Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
+            </p>
+            <label className="mt-5 block text-xs text-subtle">
+              Note
+              <textarea
+                value={sheet[name.symbol] || ""}
+                onChange={(e) => note(name.symbol, e.target.value)}
+                placeholder="Why you care"
+                className="mt-2 min-h-40 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-base outline-none"
+              />
+            </label>
+            <p className="mt-2 text-xs text-muted">Saved on this row. It stays in this browser.</p>
+          </>
+        ) : (
+          <p className="text-sm text-muted">PreStocks did not answer.</p>
+        )}
+        <div className="mt-5 flex gap-2 overflow-x-auto">
+          {book.map((n) => (
+            <button
+              key={n.id}
+              type="button"
+              onClick={() => setSymbol(n.symbol)}
+              className={`min-h-12 shrink-0 rounded-full px-4 text-sm font-semibold ${n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "border border-white/10 text-muted"}`}
+            >
+              {n.symbol}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 overflow-x-auto rounded-[22px] border border-white/10">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="text-xs text-subtle">
+              <tr>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-2 py-3 text-right font-medium">Token</th>
+                <th className="px-2 py-3 text-right font-medium">Mark</th>
+                <th className="px-2 py-3 text-right font-medium">Vs mark</th>
+                <th className="px-4 py-3 font-medium">Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {book.map((n) => (
+                <tr key={n.id} className={`border-t border-white/10 ${n.symbol === name?.symbol ? "bg-white/5" : ""}`}>
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => setSymbol(n.symbol)} className="font-semibold">
+                      {n.symbol}
+                    </button>
+                  </td>
+                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(n.last)}</td>
+                  <td className="px-2 py-3 text-right font-mono tabular-nums text-muted">{formatUsd(n.mark)}</td>
+                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatPremium(n.premium)}</td>
+                  <td className="px-4 py-3">
+                    <input
+                      value={sheet[n.symbol] || ""}
+                      onChange={(e) => note(n.symbol, e.target.value)}
+                      placeholder="Why you care"
+                      className="min-h-12 w-full bg-transparent text-base outline-none placeholder:text-subtle"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>
@@ -122,80 +198,6 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
       <FilmBand poster="/images/term-sheet.jpg" label="The book, next to the note." />
-
-      {mode === "sheet" ? (
-        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          {name ? (
-            <>
-              <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
-              <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <h2 className="text-4xl">{name.symbol}</h2>
-                  <p className="mt-1 text-sm text-muted">{name.name}</p>
-                </div>
-                <p className="font-mono text-3xl">{formatUsd(name.last)}</p>
-              </div>
-              <p className="mt-2 font-mono text-xs text-muted">
-                Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
-              </p>
-              <label className="mt-4 block text-xs text-subtle">
-                Note
-                <textarea
-                  value={sheet[name.symbol] || ""}
-                  onChange={(e) => note(name.symbol, e.target.value)}
-                  placeholder="Why you care"
-                  className="mt-1 min-h-28 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none"
-                />
-              </label>
-              <p className="mt-2 text-xs text-muted">Saved on this row. It stays in this browser.</p>
-            </>
-          ) : (
-            <p className="text-sm text-muted">PreStocks did not answer.</p>
-          )}
-          <div className="mt-4 flex gap-2 overflow-x-auto">
-            {book.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => setSymbol(n.symbol)}
-                className={`min-h-10 shrink-0 rounded-full px-3 text-sm font-semibold ${n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "bg-black/40 text-muted"}`}
-              >
-                {n.symbol}
-              </button>
-            ))}
-          </div>
-          <div className="mt-4 overflow-hidden rounded-[22px] border border-white/10">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs text-subtle">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Name</th>
-                  <th className="px-2 py-3 text-right font-medium">Token</th>
-                  <th className="px-2 py-3 text-right font-medium">Mark</th>
-                  <th className="px-2 py-3 text-right font-medium">Vs mark</th>
-                  <th className="px-4 py-3 font-medium">Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {book.map((n) => (
-                  <tr key={n.id} className={`border-t border-white/10 ${n.symbol === name?.symbol ? "bg-white/5" : ""}`}>
-                    <td className="px-4 py-2">
-                      <button type="button" onClick={() => setSymbol(n.symbol)} className="font-semibold">
-                        {n.symbol}
-                      </button>
-                    </td>
-                    <td className="px-2 py-2 text-right font-mono">{formatUsd(n.last)}</td>
-                    <td className="px-2 py-2 text-right font-mono text-muted">{formatUsd(n.mark)}</td>
-                    <td className="px-2 py-2 text-right font-mono">{formatPremium(n.premium)}</td>
-                    <td className="px-4 py-2">
-                      <input value={sheet[n.symbol] || ""} onChange={(e) => note(n.symbol, e.target.value)} placeholder="Why you care" className="min-h-9 w-full bg-transparent text-sm outline-none placeholder:text-subtle" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
 
       {mode === "page" ? (
         <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">

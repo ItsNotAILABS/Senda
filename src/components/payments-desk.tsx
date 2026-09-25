@@ -83,7 +83,7 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
         {act === "request" ? <RequestForm w={w} /> : null}
         {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
         {act === "add" ? <AddForm w={w} /> : null}
-        <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-5 border-t border-white/10 pt-4")}>
+        <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-4 border-t border-white/10 pt-3")}>
           {ACTS.map((a) => {
             const Icon = a.icon;
             const on = act === a.id;
@@ -125,9 +125,9 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
                       setPocket(p.c);
                       setAct("exchange");
                     }}
-                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left"
                   >
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[11px]">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[11px]">
                       {meta.flag}
                     </span>
                     <span className="min-w-0 flex-1">
@@ -150,7 +150,7 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
           <h2 className="text-sm font-semibold">Activity</h2>
           {w.w.txs.length === 0 ? <p className="py-4 text-sm text-subtle">Nothing sent yet.</p> : null}
           <ul>
-            {w.w.txs.slice(0, 12).map((t) => (
+            {w.w.txs.slice(0, 8).map((t) => (
               <li key={t.id} className="border-t border-white/10 py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="truncate text-sm font-medium">{t.counterparty}</p>
@@ -177,8 +177,6 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const amount = Number(raw) || 0;
-  const amountUsd = amount * (w.usdPer[ccy] || 0);
-  const rev = revolutFee("send", amountUsd, w.weekend);
   const again = payAgainRows(w.w.txs, w.w.contacts);
 
   function go() {
@@ -197,40 +195,16 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <label className="block">
-        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
-        <div className="mt-1 flex items-end gap-3">
-          <input
-            inputMode="decimal"
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            placeholder="0"
-            aria-label="Amount"
-            className="min-h-16 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
-          />
-          <select
-            value={ccy}
-            onChange={(e) => setCcy(e.target.value as Ccy)}
-            aria-label="Currency"
-            className="mb-2 min-h-11 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
-          >
-            {CCYS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <p className="mt-1 font-mono text-xs text-subtle">
-          Available {formatMoney(w.w.balances[ccy], ccy)}
-          {rev > 0 ? ` · Revolut would take ${formatMoney(rev)}` : " · $0"}
-        </p>
-      </label>
-
-      <label className="block">
-        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">To</span>
-        <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" aria-label="Person" className={cn(field, "mt-1 text-lg")} />
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Person</span>
+        <input
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+          placeholder="@someone"
+          aria-label="Person"
+          className={cn(field, "mt-1 text-lg")}
+        />
       </label>
       {w.w.contacts.length > 0 ? (
         <div className="flex gap-1 overflow-x-auto">
@@ -242,13 +216,40 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
                 setTag(c.tag);
                 setName(c.name);
               }}
-              className="min-h-11 shrink-0 rounded-full bg-white/[0.06] px-4 text-sm font-medium"
+              className="min-h-10 shrink-0 rounded-full border border-white/10 px-4 text-sm font-medium"
             >
               {c.tag}
             </button>
           ))}
         </div>
       ) : null}
+
+      <label className="block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
+        <div className="mt-1 flex items-end gap-3">
+          <input
+            inputMode="decimal"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="0"
+            aria-label="Amount"
+            className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
+          />
+          <select
+            value={ccy}
+            onChange={(e) => setCcy(e.target.value as Ccy)}
+            aria-label="Currency"
+            className="mb-1 min-h-11 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
+          >
+            {CCYS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="font-mono text-xs tabular-nums text-subtle">Available {formatMoney(w.w.balances[ccy], ccy)}</p>
+      </label>
 
       <div className="flex gap-2">
         {SEND_PRESETS.map((n) => (
@@ -261,13 +262,22 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
             }}
             className={cn(
               "min-h-11 flex-1 rounded-full font-mono text-sm font-semibold",
-              ccy === "USD" && Number(raw) === n ? "bg-accent text-accent-fg" : "border border-white/10 bg-[#10131c]",
+              ccy === "USD" && Number(raw) === n ? "bg-accent text-accent-fg" : "border border-white/10",
             )}
           >
             ${n}
           </button>
         ))}
       </div>
+
+      <button
+        type="button"
+        disabled={busy || !(amount > 0)}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Send
+      </button>
 
       {again.length > 0 ? (
         <div>
@@ -284,29 +294,15 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
                   setRaw(String(row.amount));
                   setNote(row.note);
                 }}
-                className="min-w-[8.5rem] shrink-0 rounded-[22px] border border-white/10 bg-[#10131c] px-3 py-3 text-left"
+                className="min-w-[8.5rem] shrink-0 rounded-[22px] border border-white/10 bg-black/30 px-3 py-3 text-left"
               >
                 <span className="block truncate text-sm font-semibold">{row.label}</span>
-                <span className="mt-1 block font-mono text-sm">{formatMoney(row.amount, row.ccy)}</span>
+                <span className="mt-1 block font-mono text-sm tabular-nums">{formatMoney(row.amount, row.ccy)}</span>
               </button>
             ))}
           </div>
         </div>
       ) : null}
-
-      <label className="block">
-        <span className="text-xs font-medium text-subtle">Name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Optional" className={cn(field, "mt-1")} />
-      </label>
-      <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" className={field} />
-      <button
-        type="button"
-        disabled={busy || !(amount > 0)}
-        onClick={go}
-        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
-      >
-        Send
-      </button>
     </div>
   );
 }
@@ -330,18 +326,18 @@ function RequestForm({ w }: { w: ReturnType<typeof useWallet> }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted">Lands in the currency you pick.</p>
-      <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" className={field} />
+    <div className="flex flex-col gap-3">
+      <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" aria-label="Person" className={field} />
       <div className="flex gap-2">
         <input
           inputMode="decimal"
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           placeholder="0"
+          aria-label="Amount"
           className={cn(field, "flex-1 font-mono text-lg tabular-nums")}
         />
-        <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} className={cn(field, "w-28")}>
+        <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} aria-label="Currency" className={cn(field, "w-28 font-mono")}>
           {opened.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -384,17 +380,16 @@ function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromIn
   const choices = Array.from(new Set([...opened, from, to]));
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted">It stays in the currency you pick.</p>
+    <div className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2">
-        <select value={from} onChange={(e) => setFrom(e.target.value as Ccy)} className={field}>
+        <select value={from} onChange={(e) => setFrom(e.target.value as Ccy)} aria-label="From" className={cn(field, "font-mono")}>
           {choices.map((c) => (
             <option key={c} value={c}>
               From {c}
             </option>
           ))}
         </select>
-        <select value={to} onChange={(e) => setTo(e.target.value as Ccy)} className={field}>
+        <select value={to} onChange={(e) => setTo(e.target.value as Ccy)} aria-label="Hold" className={cn(field, "font-mono")}>
           {CCYS.map((c) => (
             <option key={c} value={c}>
               Hold {c}
@@ -407,11 +402,12 @@ function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromIn
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
         placeholder="0"
-        className={cn(field, "min-h-14 font-mono text-3xl tabular-nums")}
+        aria-label="Amount"
+        className="min-h-14 w-full bg-transparent font-mono text-4xl tabular-nums outline-none placeholder:text-white/20"
       />
-      <p className="font-mono text-xs text-subtle">Available {formatMoney(w.w.balances[from] ?? 0, from)}</p>
+      <p className="font-mono text-xs tabular-nums text-subtle">Available {formatMoney(w.w.balances[from] ?? 0, from)}</p>
       <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
-        <p className="font-medium">You hold {formatMoney(got, to)}</p>
+        <p className="font-mono font-medium tabular-nums">You hold {formatMoney(got, to)}</p>
         <p className="mt-1 text-muted">
           {oneToOne ? "USDC ↔ USD is 1:1. No spread." : `1 ${from} = ${r.toFixed(4)} ${to} · mid-market · $0`}
         </p>
@@ -432,7 +428,7 @@ function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromIn
 function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {open ? <AddMoneyScreen onClose={() => setOpen(false)} /> : null}
       <button type="button" onClick={() => setOpen(true)} className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg">
         Add money
@@ -448,7 +444,6 @@ function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
       >
         Withdraw to bank
       </button>
-      <p className="text-sm text-muted">A line on this balance. Not a wire.</p>
     </div>
   );
 }

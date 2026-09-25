@@ -94,6 +94,9 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
 }
-.senda-rise { animation: senda-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.senda-rise { animation: senda-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.senda-stage a, .senda-stage button {
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }

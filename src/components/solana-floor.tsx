@@ -32,26 +32,34 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         live={["Copy a live PreStock mint.", idx.n > 0 ? `PRE8 at ${idx.level.toFixed(1)}, from the marks on this book.` : "PRE8 when this book has marks."]}
         coming={["Your own program."]}
       />
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
-            <h2 className="text-lg">Mints</h2>
-            <p className="mt-1 text-sm text-muted">Live PreStock mints. Tap a row to copy it.</p>
+            <h2 className="text-3xl tracking-tight">Mints</h2>
+            <p className="mt-1 text-sm text-muted">Live PreStock mints. Copy puts the address on your clipboard.</p>
           </div>
-          <p className="font-mono text-xs text-subtle">{idx.n > 0 ? `PRE8 ${idx.level.toFixed(1)} · ` : ""}{mints.length}</p>
+          <p className="font-mono text-sm tabular-nums text-subtle">{idx.n > 0 ? `PRE8 ${idx.level.toFixed(1)} · ` : ""}{mints.length}</p>
         </div>
-        <ul className="mt-3 divide-y divide-white/10">
-          {mints.map((row) => (
-            <li key={row.mint}>
-              <button type="button" onClick={() => copyMint(row.symbol, row.mint)} className="flex w-full items-center gap-3 py-3 text-left">
-                <span className="w-28 shrink-0 text-sm font-semibold">{row.symbol}</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-subtle">{row.mint}</span>
-                <span className="shrink-0 font-mono text-xs text-muted">{row.last == null ? "—" : formatUsd(row.last)}</span>
-                <span className="shrink-0 rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-accent-fg">Copy</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+        {mints.length === 0 ? (
+          <p className="mt-5 text-sm text-subtle">None.</p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {mints.map((row) => (
+              <li key={row.mint} className="flex flex-wrap items-center gap-3 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+                <span className="w-32 shrink-0 text-base font-semibold">{row.symbol}</span>
+                <span className="min-w-0 flex-1 break-all font-mono text-sm">{row.mint}</span>
+                <span className="shrink-0 font-mono text-sm tabular-nums text-muted">{row.last == null ? "—" : formatUsd(row.last)}</span>
+                <button
+                  type="button"
+                  onClick={() => copyMint(row.symbol, row.mint)}
+                  className="min-h-12 shrink-0 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
+                >
+                  Copy
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">

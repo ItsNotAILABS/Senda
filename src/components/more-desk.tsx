@@ -38,56 +38,42 @@ export function MoreDesk() {
         coming={["A login that follows you to another computer."]}
       />
       <section className="grid gap-3 lg:grid-cols-3">
-        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Wallets</p>
-          <h2 className="mt-2 text-2xl">The address that signs</h2>
+          <h2 className="mt-2 text-3xl tracking-tight">The address that signs</h2>
           <p className="mt-2 text-sm text-muted">Senda only keeps the address. {w.links.length} connected.</p>
           {w.links.length > 0 ? (
-            <ul className="mt-3 space-y-2">
+            <ul className="mt-4 space-y-2">
               {w.links.map((l) => (
-                <li key={l.id} className="flex items-center justify-between rounded-2xl bg-black/40 px-3 py-2 text-sm">
-                  <span>{l.label}</span>
-                  <span className="font-mono text-xs text-subtle">{shortPk(l.address)}</span>
+                <li key={l.id} className="flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4 text-sm">
+                  <span className="font-semibold">{l.label}</span>
+                  <span className="font-mono text-sm text-subtle">{shortPk(l.address)}</span>
                 </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-3 text-sm text-subtle">None connected.</p>
+            <p className="mt-4 text-sm text-subtle">None connected.</p>
           )}
           <div className="mt-4"><WalletPicker /></div>
-          <Link to="/wallet" className="mt-3 inline-flex min-h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+          <Link to="/wallet" className="mt-4 inline-flex min-h-14 items-center rounded-full bg-accent px-6 text-base font-semibold text-accent-fg">
             Open wallet
           </Link>
         </article>
 
-        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Privacy</p>
-          <h2 className="mt-2 text-2xl">What this account keeps</h2>
-          <p className="mt-2 text-sm text-muted">The key stays in the wallet. Cash, the wrap, and notes stay in this browser.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link to="/legal" className="inline-flex min-h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-              Privacy
-            </Link>
-            <Link to="/login" className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
-              Sign in to keep this wallet
-            </Link>
-          </div>
-        </article>
-
-        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cash</p>
-          <h2 className="mt-2 font-mono text-3xl tabular-nums">{formatMoney(usd)}</h2>
+          <h2 className="mt-2 font-mono text-5xl tabular-nums">{formatMoney(usd)}</h2>
           <p className="mt-2 text-sm text-muted">Same cash. Add it, send it, or hold another currency.</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-2">
             <Pocket k="USD" v={formatMoney(w.balances.USD)} />
             <Pocket k="USDC" v={formatMoney(w.balances.USDC ?? 0, "USDC")} />
             <Pocket k="SOL" v={formatMoney(w.balances.SOL, "SOL")} />
             <Pocket k="Cards" v={String(w.cards.length)} />
           </div>
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-4 space-y-2">
             {CASH.map((l) => (
               <li key={l.label}>
-                <Link to={l.to} search={l.search as never} className="flex items-center justify-between gap-3 rounded-2xl bg-black/40 px-3 py-3">
+                <Link to={l.to} search={l.search as never} className="flex min-h-14 items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
                   <span>
                     <span className="block text-sm font-semibold">{l.label}</span>
                     <span className="block text-xs text-muted">{l.hint}</span>
@@ -97,6 +83,20 @@ export function MoreDesk() {
               </li>
             ))}
           </ul>
+        </article>
+
+        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Privacy</p>
+          <h2 className="mt-2 text-3xl tracking-tight">What this account keeps</h2>
+          <p className="mt-2 text-sm text-muted">The key stays in the wallet. Cash, the wrap, and notes stay in this browser.</p>
+          <div className="mt-5 flex flex-col gap-2">
+            <Link to="/legal" className="inline-flex min-h-14 items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-fg">
+              Privacy
+            </Link>
+            <Link to="/login" className="inline-flex min-h-14 items-center justify-center rounded-full border border-white/15 px-6 text-base font-semibold">
+              Sign in to keep this wallet
+            </Link>
+          </div>
         </article>
       </section>
       <header className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">

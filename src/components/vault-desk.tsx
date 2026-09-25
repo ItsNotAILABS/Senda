@@ -22,7 +22,6 @@ type Position = {
   last: number;
   value: number;
   premium: number | null;
-  mark: number;
 };
 
 function logoSrc(symbol: string): string | null {
@@ -60,7 +59,6 @@ function positionsOf(names: HouseListing[], chain: ChainWallet | null): Position
       last: house.last,
       value: token.ui * house.last,
       premium: house.premium,
-      mark: house.mark,
     });
   }
   rows.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
@@ -171,9 +169,9 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
       />
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">PreStocks held</p>
-        <p className="mt-2 font-mono text-5xl tabular-nums tracking-tight lg:text-6xl">{waiting ? "—" : bookUsd(total)}</p>
-        <p className="mt-2 text-sm text-muted">
+        <p className="font-mono text-5xl tabular-nums tracking-tight lg:text-6xl">{waiting ? "—" : bookUsd(total)}</p>
+        <p className="mt-2 font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">Tokens × last print</p>
+        <p className="mt-2 font-mono text-xs text-subtle">
           {waiting
             ? "Reading the wallet…"
             : owner
@@ -195,11 +193,11 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
             <table className="w-full min-w-[760px] text-left">
               <thead>
                 <tr className="text-[11px] tracking-[0.14em] text-subtle uppercase">
-                  <th className="pb-2 font-normal">Name</th>
+                  <th className="pb-2 font-normal">Symbol</th>
                   <th className="pb-2 text-right font-normal">Tokens</th>
                   <th className="pb-2 text-right font-normal">Last</th>
                   <th className="pb-2 text-right font-normal">Value</th>
-                  <th className="pb-2 text-right font-normal">Premium vs mark</th>
+                  <th className="pb-2 text-right font-normal">Premium</th>
                 </tr>
               </thead>
               <tbody>
@@ -223,16 +221,14 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
                       <td className="py-3 text-right font-mono text-sm tabular-nums">{tokenQty(row.tokens)}</td>
                       <td className="py-3 text-right font-mono text-sm tabular-nums">{formatUsd(row.last)}</td>
                       <td className="py-3 text-right font-mono text-sm tabular-nums">{row.value > 0 ? formatUsd(row.value) : "$0.00"}</td>
-                      <td className="py-3 text-right">
+                      <td className="py-3 text-right font-mono text-sm tabular-nums">
                         <span
                           className={cn(
-                            "font-mono text-xs tabular-nums",
                             row.premium == null ? "text-muted" : row.premium < 0 ? "text-up" : "text-down",
                           )}
                         >
                           {formatPremium(row.premium)}
                         </span>
-                        <span className="font-mono text-xs text-subtle"> vs {formatUsd(row.mark)}</span>
                       </td>
                     </tr>
                   );

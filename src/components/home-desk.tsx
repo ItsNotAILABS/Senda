@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
-import { WalletPicker } from "@/components/wallet-picker";
 import { connectPhantom, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { writeUsing } from "@/lib/using";
@@ -26,7 +25,6 @@ const LOGO: Record<string, string> = {
 export function HomeDesk({ names }: { names: HouseListing[] }) {
   const pre = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const featured = [...pre].sort((a, b) => Math.abs(b.premium ?? 0) - Math.abs(a.premium ?? 0));
-  const lead = featured[0];
   const cheap = [...pre].sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0))[0];
   const rich = [...pre].sort((a, b) => (b.premium ?? 0) - (a.premium ?? 0))[0];
   const wallet = useWallet();
@@ -106,27 +104,73 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <main className="space-y-3 px-4 py-3 lg:px-5">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="flex flex-col justify-center px-2 py-4">
-          <h1 className="max-w-xl text-5xl leading-[1.02] tracking-tight lg:text-6xl">
-            Your money shouldn’t <span className="text-accent">stop working</span> after you invest it.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            Buy it. Play it. Cover it. Send it. Spend it. Hand an agent a cap. The token stays in your wallet.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/pre" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4 lg:p-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold">Your wallet</p>
+              <p className="font-mono text-[10px] tracking-[0.14em] text-subtle uppercase">
+                {owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Not connected"}
+              </p>
+            </div>
+            <p className="mt-2 font-mono text-5xl tracking-tight tabular-nums">
+              ${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}
+            </p>
+            <p className="mt-1 text-xs text-subtle">
+              {owner ? "Cash, USDC, and PreStocks at the live price." : "Connect a wallet. This stays zero until you do."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
+              {owner ? "Open" : "Connect Phantom"}
+            </Link>
+            <Link to="/pre" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
               Get started
             </Link>
-            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
+            <Link to="/payments" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
               Send
             </Link>
           </div>
         </div>
-        <div className="relative min-h-72 overflow-hidden rounded-[24px] border border-white/10">
-          <video src="/video/desk.mp4" poster="/images/orbit.jpg" autoPlay muted loop playsInline className="h-full min-h-72 w-full object-cover" />
-          <p className="absolute top-4 right-4 max-w-32 text-right text-[11px] tracking-[0.18em] text-white/80 uppercase">Same money. More possibilities.</p>
+        <ul className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+          <Bal k="SOL" v={sol.toFixed(3)} sub={owner ? "In Phantom" : "Not connected"} tint="bg-[#9945ff]" />
+          <Bal k="USDC" v={usdc.toFixed(2)} sub="Spendable" tint="bg-[#2775ca]" />
+          <Bal k="Cash" v={`$${(wallet.w.balances.USD || 0).toFixed(0)}`} sub="Send and shop" tint="bg-white/30" />
+          <Bal k="PreStocks" v={`$${held.toFixed(0)}`} sub="Still in the wallet" tint="bg-accent" />
+        </ul>
+      </section>
+
+      <section>
+        <div className="mb-2 flex items-center justify-between px-1">
+          <p className="text-sm font-semibold">Live book</p>
+          <Link to="/pre" className="text-xs text-accent">View all</Link>
         </div>
+        {pre.length === 0 ? (
+          <p className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-6 text-sm text-subtle">No live price on the book.</p>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto">
+            {pre.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => choose(n)}
+                className={cn(
+                  "flex min-w-[132px] flex-1 flex-col rounded-[22px] border border-white/10 bg-[#10131c] p-3 text-left",
+                  chosen?.symbol === n.symbol && "border-accent",
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <Mark symbol={n.symbol} />
+                  <span className="truncate text-sm font-semibold">{n.symbol}</span>
+                </span>
+                <span className="mt-3 font-mono text-lg tabular-nums">{formatUsd(n.last)}</span>
+                <span className={cn("font-mono text-xs tabular-nums", (n.premium ?? 0) < 0 ? "text-accent" : "text-down")}>
+                  {formatPremium(n.premium)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
@@ -138,56 +182,41 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         <Tile to="/agents" icon={Bot} tint="bg-[#a855f7]/20 text-[#e9d5ff]" title="Give an AI a budget" hint="It asks. You sign." />
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[320px_minmax(0,1fr)_300px]">
-        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Your wallet</p>
-            <Link to="/wallet" className="rounded-full border border-white/10 px-3 py-1 text-xs">{owner ? "Open" : "Connect Phantom"}</Link>
-          </div>
-          <p className="mt-3 font-mono text-4xl tracking-tight">${total.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
-          <p className="text-xs text-subtle">{owner ? "Cash, USDC, and PreStocks at the live price." : "Connect a wallet. This stays zero until you do."}</p>
-          <ul className="mt-4 space-y-2">
-            <Bal k="SOL" v={sol.toFixed(3)} sub={owner ? "In Phantom" : "Not connected"} tint="bg-[#9945ff]" />
-            <Bal k="USDC" v={usdc.toFixed(2)} sub="Spendable" tint="bg-[#2775ca]" />
-            <Bal k="Cash" v={`$${(wallet.w.balances.USD || 0).toFixed(0)}`} sub="Send and shop" tint="bg-white/30" />
-            <Bal k="PreStocks" v={`$${held.toFixed(0)}`} sub="Still in the wallet" tint="bg-accent" />
-          </ul>
-        </div>
-
-        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold">Featured PreStocks</p>
-            <Link to="/pre" className="text-xs text-accent">View all</Link>
-          </div>
-          {lead ? (
-            <button type="button" onClick={() => choose(lead)} className="mt-4 flex w-full items-center gap-3 text-left">
-              <Mark symbol={lead.symbol} />
-              <div className="min-w-0 flex-1">
-                <p className="text-lg font-semibold">{lead.symbol}</p>
-                <p className="truncate text-xs text-subtle">{lead.name}</p>
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+          <div className="grid sm:grid-cols-[minmax(0,1fr)_240px]">
+            <div className="p-4">
+              <p className="text-sm font-semibold">Buy {chosen?.symbol || "a name"}</p>
+              {chosen ? (
+                <div className="mt-4 flex items-center gap-3">
+                  <Mark symbol={chosen.symbol} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-lg font-semibold">{chosen.symbol}</p>
+                    <p className="truncate text-xs text-subtle">{chosen.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono text-xl tabular-nums">{formatUsd(chosen.last)}</p>
+                    <p className={cn("font-mono text-xs tabular-nums", (chosen.premium ?? 0) < 0 ? "text-accent" : "text-down")}>
+                      {formatPremium(chosen.premium)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-xs text-subtle">No live name to buy.</p>
+              )}
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                {[10, 25, 100].map((n) => (
+                  <button key={n} type="button" onClick={() => setBuyUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", buyUsd === n ? "bg-white text-black" : "bg-black/40")}>${n}</button>
+                ))}
+                <button type="button" disabled={buying || !chosen} onClick={() => void buyChosen()} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-50">
+                  {buying ? "Waiting…" : `Buy ${chosen?.symbol || ""}`}
+                </button>
               </div>
-              <div className="text-right">
-                <p className="font-mono text-xl">{formatUsd(lead.last)}</p>
-                <p className={cn("font-mono text-xs", (lead.premium ?? 0) < 0 ? "text-accent" : "text-down")}>{formatPremium(lead.premium)}</p>
-              </div>
-            </button>
-          ) : null}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {[10, 25, 100].map((n) => (
-              <button key={n} type="button" onClick={() => setBuyUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", buyUsd === n ? "bg-white text-black" : "bg-black/40")}>${n}</button>
-            ))}
-            <button type="button" disabled={buying || !chosen} onClick={() => void buyChosen()} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-50">
-              {buying ? "Waiting…" : `Buy ${chosen?.symbol || ""}`}
-            </button>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {featured.slice(1, 5).map((n) => (
-              <button key={n.id} type="button" onClick={() => choose(n)} className="rounded-2xl bg-black/40 px-2 py-2 text-left">
-                <Mark symbol={n.symbol} />
-                <p className="mt-2 text-xs font-semibold">{n.symbol}</p>
-                <p className="font-mono text-[11px]">{formatUsd(n.last)}</p>
-              </button>
-            ))}
+            </div>
+            <div className="relative min-h-40 overflow-hidden">
+              <video src="/video/desk.mp4" poster="/images/orbit.jpg" autoPlay muted loop playsInline className="h-full min-h-40 w-full object-cover" />
+              <p className="absolute top-4 right-4 max-w-32 text-right text-[11px] tracking-[0.18em] text-white/80 uppercase">Same money. More possibilities.</p>
+            </div>
           </div>
         </div>
 
