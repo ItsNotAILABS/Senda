@@ -37,6 +37,10 @@ function vec(m: Pick<Memory, "premium" | "change24h" | "drawdown" | "side">): nu
   return [clip(m.premium), clip(m.change24h), Math.max(0, Math.min(1, m.drawdown)), m.side === "buy" ? 1 : -1];
 }
 
+export function recentMemories(): Memory[] {
+  return load().slice(0, 8);
+}
+
 export function cosine(a: number[], b: number[]): number {
   let dot = 0;
   let aa = 0;

@@ -9,11 +9,14 @@ import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export function PreDesk({ names, routes }: { names: HouseListing[]; routes: PreRoute[] }) {
-  const rows = useMemo(
-    () => [...names].filter((n) => n.venue === "prestocks" && n.last > 0).sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0)),
-    [names],
-  );
+export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; routes: PreRoute[]; query?: string }) {
+  const rows = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return [...names]
+      .filter((n) => n.venue === "prestocks" && n.last > 0)
+      .filter((n) => !q || n.symbol.toLowerCase().includes(q) || n.name.toLowerCase().includes(q))
+      .sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0));
+  }, [names, query]);
   const [symbol, setSymbol] = useState(rows[0]?.symbol ?? "");
   const [usd, setUsd] = useState(10);
   const [quote, setQuote] = useState<JupQuote | { error: string } | null>(null);

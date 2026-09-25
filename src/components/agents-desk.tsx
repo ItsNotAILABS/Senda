@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AgentComputer } from "@/components/agent-computer";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
 import { createEnvelope, dropEnvelope, listEnvelopes, writeLog, type Envelope } from "@/lib/agent-envelope";
@@ -281,6 +282,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         </ul>
       </aside>
       <section className="px-5 py-6 lg:px-10">
+        <AgentComputer names={book} envelopeId={env?.id ?? null} />
         {env ? (
           <>
             <div className="flex items-start justify-between gap-4">
