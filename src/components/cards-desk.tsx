@@ -14,89 +14,72 @@ const KINDS: { id: CardKind; label: string; blurb: string }[] = [
 export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   const { w, freeze, cardSpend, issue, terminate, replace, setLimit, sealIssued, issueCheckout } = useWallet();
   const [openId, setOpenId] = useState<string | null>(null);
-  const [step, setStep] = useState<"list" | "issue">("list");
   const [kind, setKind] = useState<CardKind>("virtual");
   const [nameOn, setNameOn] = useState("");
   const [limitRaw, setLimitRaw] = useState("1500");
   const [payId, setPayId] = useState<string | null>(null);
 
   const live = w.cards.filter((c) => c.status !== "terminated");
+  const cash = (w.balances.USD || 0) + (w.balances.USDC || 0);
 
   function issueNow() {
     const r = issue(kind, nameOn || w.tag.replace("@", "").toUpperCase() || "SENDA", Number(limitRaw) || 1500);
     if (!r.ok) toast.error(r.error);
-    else {
-      toast.success("Card issued. Luhn PAN on the Mastercard IIN.");
-      setStep("list");
-    }
+    else toast.success("That card is on the account. The store charges this cash.");
   }
 
   return (
     <main className="px-3 py-3 lg:px-4">
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+      <section className="senda-rise grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cards</p>
           <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            A number for the store. <span className="text-accent">Not the token.</span>
+            Pay a store from <span className="text-accent">this cash.</span>
           </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            Pick the kind of store, set the cap, and mint a number. It is shown once. A second charge is declined. This is not a bank card, and it does not sell the PreStock.
+          <p className="mt-4 font-mono text-5xl">${cash.toFixed(0)}</p>
+          <p className="mt-3 max-w-md text-sm text-muted">
+            {cash > 0
+              ? "A charge comes out of this. The store gets a card number. It never sees your wallet, and it does not sell a PreStock."
+              : "This is $0, so a store cannot charge yet. Add cash on Send, then come back and make the number."}
           </p>
-          <button type="button" onClick={() => setStep(step === "issue" ? "list" : "issue")} className="mt-6 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
-            {step === "issue" ? "Back to the numbers" : "Issue a card you keep"}
-          </button>
+          <a href="#make-card" className="mt-6 inline-flex min-h-12 w-fit items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+            Make a card
+          </a>
         </div>
-        <div className="relative min-h-64 overflow-hidden rounded-[28px] border border-white/10">
-          <img src="/images/metal-card.jpg" alt="" className="senda-film h-full min-h-64 w-full object-cover" />
-          <p className="absolute right-4 bottom-4 text-xs tracking-widest text-white/80 uppercase">Shown once</p>
+        <div className="relative min-h-80 overflow-hidden rounded-[28px] border border-white/10">
+          <video src="/video/card.mp4" poster="/images/metal-card.jpg" autoPlay muted loop playsInline className="senda-film h-full min-h-80 w-full object-cover" />
+          <p className="absolute right-4 bottom-4 text-xs tracking-[0.18em] text-white/80 uppercase">The number. Not the wallet.</p>
         </div>
       </section>
 
-      {step === "issue" ? (
-        <section className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-5">
-          <div className="flex flex-col gap-2">
+      <section id="make-card" className="mt-3 grid gap-3 xl:grid-cols-2">
+        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+          <p className="text-sm font-semibold">A card you keep</p>
+          <p className="mt-1 text-sm text-muted">Use it more than once. Freeze it when you are done. The charge still has to fit in the cash above.</p>
+          <div className="mt-4 grid gap-2">
             {KINDS.map((k) => (
-              <button
-                key={k.id}
-                type="button"
-                onClick={() => setKind(k.id)}
-                className={cn(
-                  "rounded-2xl px-4 py-3 text-left",
-                  kind === k.id ? "bg-accent text-accent-fg" : "bg-black/40",
-                )}
-              >
-                <span className="block text-sm font-semibold">{k.label}</span>
-                <span className="block text-xs opacity-80">{k.blurb}</span>
+              <button key={k.id} type="button" onClick={() => setKind(k.id)} className={cn("rounded-2xl px-4 py-3 text-left", kind === k.id ? "bg-accent text-accent-fg" : "bg-black/40")}>
+                <span className="block text-sm font-semibold">{k.id === "virtual" ? "Everyday" : k.id === "once" ? "Burns after one charge" : "Higher limit"}</span>
+                <span className="block text-xs opacity-80">{k.id === "virtual" ? "For stores you use again." : k.id === "once" ? "One charge, then the number dies." : "Same card, bigger daily cap."}</span>
               </button>
             ))}
           </div>
-          <label className="mt-4 block text-xs font-medium text-subtle">Name on card</label>
-          <input
-            value={nameOn}
-            onChange={(e) => setNameOn(e.target.value.toUpperCase())}
-            placeholder="YOUR NAME"
-            className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-sm outline-none"
-          />
-          <label className="mt-3 block text-xs font-medium text-subtle">Daily limit (USD)</label>
-          <input
-            value={limitRaw}
-            onChange={(e) => setLimitRaw(e.target.value)}
-            inputMode="decimal"
-            className="mt-1 min-h-12 w-full rounded-2xl bg-elevated px-4 text-sm outline-none"
-          />
-          <button
-            type="button"
-            onClick={issueNow}
-            className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
-          >
-            Issue {kind === "once" ? "single-use" : kind} debit
+          <label className="mt-4 block text-xs text-subtle">Name on the card</label>
+          <input value={nameOn} onChange={(e) => setNameOn(e.target.value.toUpperCase())} placeholder={w.tag.replace("@", "").toUpperCase() || "YOUR NAME"} className="mt-1 min-h-12 w-full rounded-2xl bg-black/40 px-4 text-sm outline-none" />
+          <label className="mt-3 block text-xs text-subtle">Most it can spend in a day</label>
+          <input value={limitRaw} onChange={(e) => setLimitRaw(e.target.value)} inputMode="decimal" className="mt-1 min-h-12 w-full rounded-2xl bg-black/40 px-4 text-sm outline-none" />
+          <button type="button" onClick={issueNow} className="mt-4 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
+            Put this card on the account
           </button>
-          <button type="button" onClick={() => setStep("list")} className="mt-2 min-h-11 w-full text-sm text-muted">
-            Cancel
-          </button>
-        </section>
-      ) : (
-        <>
+        </div>
+        <div className="overflow-hidden rounded-[28px] border border-white/10">
+          <img src="/images/metal-card.jpg" alt="The card a store sees" className="h-44 w-full object-cover" />
+          <div className="bg-[#101018] p-5">
+            <p className="text-sm font-semibold">{live.length ? `${live.length} live` : "No card yet"}</p>
+            <p className="mt-1 text-sm text-muted">{live.length ? "The ones below are the numbers a store can charge." : "Nothing to type at checkout until you make one."}</p>
+          </div>
+        </div>
+      </section>
           <CheckoutPay
             initialSpend={initialSpend}
             onMint={(cap, merchant, name) => issueCheckout(cap, merchant, name)}
@@ -107,19 +90,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
               return r.ok;
             }}
           />
-          {live.length === 0 ? (
-            <div className="mt-6 overflow-hidden rounded-2xl">
-              <img src="/images/metal-card.jpg" alt="" className="h-40 w-full object-cover" />
-              <p className="mt-3 text-sm text-subtle">Nothing issued. No PAN until you create one.</p>
-            </div>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => setStep("issue")}
-            className="mt-3 min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
-          >
-            Issue a card
-          </button>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
             {live.map((c) => (
               <CardFace
@@ -179,8 +149,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
               </ul>
             </section>
           ) : null}
-        </>
-      )}
     </main>
   );
 }
@@ -208,10 +176,10 @@ function CheckoutPay({
   return (
     <section className="mt-3 grid gap-4 rounded-[28px] border border-white/10 bg-[#101018] p-4 lg:grid-cols-2">
       <div>
-        <p className="text-xs tracking-wide text-subtle uppercase">Ghost</p>
-        <h2 className="mt-1 font-display text-3xl">One number. One charge.</h2>
+        <p className="text-xs tracking-wide text-subtle uppercase">One store</p>
+        <h2 className="mt-1 font-display text-3xl">A number for this checkout</h2>
         <p className="mt-2 text-sm text-muted">
-          Pick what the store is. Mint a number capped at the amount. Paste it at checkout. A second charge is declined. The number is not saved.
+          Type the store and the amount. The number shows once. Copy it into checkout. The charge comes out of the cash on this page. A second try is declined.
         </p>
         <div className="mt-3 flex flex-wrap gap-1">
           {MCC.map((m) => (

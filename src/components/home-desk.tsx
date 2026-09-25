@@ -108,17 +108,17 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
           <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            Your money shouldn’t <span className="text-accent">stop working</span> after you buy it.
+            Your money. <span className="text-accent">Held here. Spent from here.</span>
           </h1>
           <p className="mt-4 max-w-md text-sm text-muted">
             {owner
-              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Send it, put it on a card, hold another currency, or keep a PreStock and spend from it. The token stays in the wallet.`
-              : "Connect Phantom. The money already in it shows up here. Then send it, card it, or hold a company and spend from it."}
+              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Senda cash is what you send, put on a card, and hold in another currency. A company you hold stays in the wallet.`
+              : "Connect Phantom. The money already in it shows up here. Senda cash is what you send, put on a card, and hold in another currency."}
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/pre" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Open the book</Link>
-            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Send</Link>
+            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Send</Link>
             <Link to="/cards" search={{ spend: 0 }} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Card</Link>
+            <Link to="/wallet" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Exchange</Link>
           </div>
           {!owner ? <div className="mt-5 max-w-sm"><WalletPicker /></div> : null}
         </div>
