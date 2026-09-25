@@ -64,52 +64,52 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
       <aside className="sticky top-0 flex h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface">
-        <Link to="/" className="flex items-center gap-2.5 px-4 pt-5">
-          <span className="size-2.5 rounded-sm bg-accent" />
-          <span className="font-display text-2xl tracking-tight">Senda</span>
+        <Link to="/" className="flex items-center gap-2 px-4 pt-4 pb-1">
+          <span className="size-2 rounded-sm bg-accent" />
+          <span className="font-display text-xl tracking-tight">Senda</span>
         </Link>
-        <nav className="mt-6 flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
+        <nav className="mt-3 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 pb-2">
           {GROUPS.map((g) => (
             <div key={g.label}>
               <p className="px-2 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">{g.label}</p>
-              <div className="mt-1.5 flex flex-col gap-0.5">
+              <div className="mt-0.5 flex flex-col">
                 {g.tabs.map((t) => {
                   const on = tabOn(pathname, t.to);
                   const Icon = t.icon;
                   return (
-                    <Link
+                    <a
                       key={t.to}
-                      to={t.to}
+                      href={t.to}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-lg border-l-2 px-2.5 py-2 text-sm",
+                        "flex items-center gap-2 rounded-md border-l-2 px-2 py-1.5 text-sm",
                         on
                           ? "border-accent bg-elevated font-medium text-fg"
                           : "border-transparent text-muted hover:bg-bg hover:text-fg",
                       )}
                     >
-                      <Icon className={cn("size-4 shrink-0", on ? "text-accent" : "text-subtle")} strokeWidth={1.75} />
+                      <Icon className={cn("size-3.5 shrink-0", on ? "text-accent" : "text-subtle")} strokeWidth={1.75} />
                       {t.label}
-                    </Link>
+                    </a>
                   );
                 })}
               </div>
             </div>
           ))}
         </nav>
-        <div className="border-t border-border p-3">
+        <div className="border-t border-border px-3 py-2">
           <ChainChip owner={owner} />
-          <div className="mt-2 px-1">
+          <div className="mt-1 px-1">
             {isPending ? (
-              <div className="size-8 animate-pulse rounded-full bg-elevated" />
+              <div className="size-6 animate-pulse rounded-full bg-elevated" />
             ) : user ? (
               <SignedIn>
                 <UserButton />
               </SignedIn>
             ) : (
               <SignedOut>
-                <Link to="/login" className="text-sm text-muted hover:text-fg">
+                <a href="/login" className="text-xs text-muted hover:text-fg">
                   Sign in
-                </Link>
+                </a>
               </SignedOut>
             )}
           </div>
@@ -141,10 +141,9 @@ function ChainChip({ owner }: { owner: string }) {
     };
   }, [owner]);
   return (
-    <Link to="/wallet" className="block rounded-xl bg-bg px-3 py-2.5 hover:bg-elevated">
-      <p className="text-[10px] tracking-wide text-subtle uppercase">{owner ? "Phantom USDC" : "Wallet"}</p>
-      <p className="mt-0.5 font-mono text-sm text-fg">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)}`) : "Your money"}</p>
+    <a href="/wallet" className="block rounded-lg bg-bg px-2.5 py-1.5 hover:bg-elevated">
+      <p className="font-mono text-xs text-fg">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)} USDC`) : "Your money"}</p>
       <p className="font-mono text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Not connected"}</p>
-    </Link>
+    </a>
   );
 }
