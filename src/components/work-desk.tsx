@@ -44,7 +44,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
       </p>
       </header>
 
-      <div className="mt-3 overflow-x-auto rounded-[28px] border border-white/10">
+      <div className="mt-3 overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="text-xs text-subtle">
             <tr>
@@ -76,7 +76,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
         </table>
       </div>
 
-      <section className="mt-8">
+      <section className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-5">
         <h2 className="text-lg">Page</h2>
         <textarea
           value={doc}

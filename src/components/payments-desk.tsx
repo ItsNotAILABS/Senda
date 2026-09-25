@@ -24,47 +24,50 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
   const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
 
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <div className="min-h-0 overflow-auto border-b border-border lg:border-r lg:border-b-0">
-      <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
-        <h1 className="text-4xl">Send</h1>
-        <p className="mt-2 text-sm text-muted">Send, nearby, exchange, or add. Same cash you trade with.</p>
+    <main className="grid grid-cols-1 gap-3 px-3 py-3 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-4">
+      <div className="min-h-0">
+      <header className="rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Send</p>
+        <h1 className="mt-2 text-4xl">Same cash</h1>
+        <p className="mt-2 text-sm text-muted">Send it, hold another currency, or add. The PreStock stays a separate thing you buy.</p>
       </header>
-      <div className="mx-5 mb-4 rounded-xl bg-elevated px-4 py-3 text-sm">
+      <div className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-4 py-3 text-sm">
         <p className="font-medium">{w.w.tag}</p>
         <p className="mt-1 font-mono text-xs text-muted">
           {sendaDeposit(w.w.tag).routing} · {sendaDeposit(w.w.tag).account}
         </p>
       </div>
-      <div className="flex flex-wrap gap-1 px-4 pb-3">
+      <div className="mt-3 flex flex-wrap gap-2">
         {ACTS.map((a) => (
           <button
             key={a.id}
             type="button"
             onClick={() => setAct(a.id)}
             className={cn(
-              "min-h-10 rounded-lg px-4 text-sm font-semibold",
-              act === a.id ? "bg-fg text-bg" : "bg-elevated text-muted",
+              "min-h-10 rounded-full px-4 text-sm font-semibold",
+              act === a.id ? "bg-accent text-accent-fg" : "bg-[#101018] text-muted",
             )}
           >
             {a.label}
           </button>
         ))}
       </div>
+      <div className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-4">
       {act === "send" ? <SendForm w={w} /> : null}
       {act === "nearby" ? <NearbyDesk /> : null}
       {act === "request" ? <RequestForm w={w} /> : null}
       {act === "exchange" ? <ExchangeForm w={w} fromInit={fromInit} /> : null}
       {act === "add" ? <AddForm w={w} /> : null}
       </div>
-      <aside className="min-h-0 overflow-auto">
-        <h2 className="px-5 pt-6 pb-2 text-xs font-medium tracking-wide text-subtle uppercase">Activity</h2>
+      </div>
+      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-4">
+        <h2 className="text-sm font-semibold">Activity</h2>
         {w.w.txs.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-subtle">Nothing yet.</p>
+          <p className="px-1 py-4 text-sm text-subtle">Nothing yet.</p>
         ) : (
           <ul>
             {w.w.txs.map((t) => (
-              <li key={t.id} className="border-t border-border px-5 py-3">
+              <li key={t.id} className="border-t border-white/10 px-1 py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="truncate text-sm font-medium">{t.counterparty}</p>
                   <p className="font-mono text-xs tabular-nums">{formatMoney(t.amount, t.ccy)}</p>

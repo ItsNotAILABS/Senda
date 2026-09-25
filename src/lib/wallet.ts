@@ -970,6 +970,25 @@ export function buyCover(
   });
 }
 
+/** Pays a drop cover that already fired. The premium was taken when they bought it. */
+export function payCover(w: Wallet, amount: number, title: string): Wallet | { error: string } {
+  const amt = roundCcy(amount, "USD");
+  if (!(amt > 0)) return { error: "Nothing to pay." };
+  const next = {
+    ...w,
+    balances: { ...w.balances, USD: roundCcy(w.balances.USD + amt, "USD") },
+  };
+  return pushTx(next, {
+    kind: "cover",
+    amount: amt,
+    ccy: "USD",
+    counterparty: title,
+    note: "Drop cover paid",
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 export function openCurrency(w: Wallet, ccy: Ccy): Wallet | { error: string } {
   if (w.opened.includes(ccy)) return { error: `${ccy} is already open.` };
   return { ...w, opened: [...w.opened, ccy] };

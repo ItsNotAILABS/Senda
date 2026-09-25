@@ -13,6 +13,7 @@ import {
   addPayUsdc,
   upsertContact,
   buyCover,
+  payCover,
   claimNearby,
   convert,
   createSenda,
@@ -174,6 +175,7 @@ export function useWallet() {
       },
       cover: (plan: { id: string; title: string; premium: number; cover: number; term: string }) =>
         commit(buyCover(w, plan)),
+      payCover: (amount: number, title: string) => commit(payCover(w, amount, title)),
       investOut: (amount: number, name: string) => commit(investDebit(w, amount, name)),
       investFromVault: (vaultId: string, amount: number, name: string) =>
         commit(investFromVault(w, vaultId, amount, name)),

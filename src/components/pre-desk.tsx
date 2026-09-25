@@ -5,6 +5,7 @@ import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
 import { WalletPicker } from "@/components/wallet-picker";
+import { lockDrop, listDrops, markDropPaid } from "@/lib/drop-cover";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,18 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
       live = false;
     };
   }, [name?.mint, owner, sig]);
+
+  useEffect(() => {
+    for (const d of listDrops()) {
+      if (d.paid) continue;
+      const row = rows.find((r) => r.symbol === d.symbol);
+      if (!row || !(row.last > 0) || row.last > d.strike * 0.9) continue;
+      const paid = wallet.payCover(d.cover, `${d.symbol} drop cover`);
+      if (!paid.ok) continue;
+      markDropPaid(d.symbol);
+      toast.success(`${d.symbol} fell 10%. Cover paid $${d.cover}.`);
+    }
+  }, [rows, wallet]);
 
   async function swap(side: "buy" | "sell") {
     if (!name) return;
@@ -226,6 +239,44 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">
               Pay with SOL instead
             </Link>
+            <div className="mt-5 border-t border-white/10 pt-4">
+              <p className="text-xs text-subtle">Use {name.symbol}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  const premium = Math.max(1, Math.round(usd * 0.04));
+                  const r = wallet.cover({
+                    id: `drop-${name.symbol}`,
+                    title: `${name.symbol} drop cover`,
+                    premium,
+                    cover: usd,
+                    term: "pays if the token falls 10% from this print",
+                  });
+                  if (!r.ok) {
+                    toast.error(r.error || "Not enough cash for the premium.");
+                    return;
+                  }
+                  lockDrop({ symbol: name.symbol, strike: name.last, cover: usd, paid: false });
+                  toast.success(`Covered. $${premium} now. Pays $${usd} if ${name.symbol} falls 10%.`);
+                }}
+                className="mt-2 min-h-11 w-full rounded-full bg-white/10 px-4 text-sm font-semibold"
+              >
+                Cover a 10% drop · ${Math.max(1, Math.round(usd * 0.04))}
+              </button>
+              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                <Link to="/social" className="rounded-2xl bg-black/40 px-3 py-3">
+                  <span className="block font-semibold">Play it</span>
+                  <span className="text-xs text-muted">Which name moves</span>
+                </Link>
+                <Link to="/cards" search={{ spend: 0 }} className="rounded-2xl bg-black/40 px-3 py-3">
+                  <span className="block font-semibold">Spend it</span>
+                  <span className="text-xs text-muted">A number, not the token</span>
+                </Link>
+              </div>
+              <p className="mt-2 text-[11px] text-subtle">
+                Cover pays Senda cash. It is not a licensed policy. The token stays in the wallet.
+              </p>
+            </div>
             {held && held.ui > 0 ? (
               <button
                 type="button"

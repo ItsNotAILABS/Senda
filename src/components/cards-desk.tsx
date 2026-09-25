@@ -42,7 +42,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
       </header>
 
       {step === "issue" ? (
-        <section className="mt-5">
+        <section className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <div className="flex flex-col gap-2">
             {KINDS.map((k) => (
               <button
@@ -51,7 +51,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
                 onClick={() => setKind(k.id)}
                 className={cn(
                   "rounded-2xl px-4 py-3 text-left",
-                  kind === k.id ? "bg-accent text-accent-fg" : "bg-elevated",
+                  kind === k.id ? "bg-accent text-accent-fg" : "bg-black/40",
                 )}
               >
                 <span className="block text-sm font-semibold">{k.label}</span>
@@ -76,7 +76,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           <button
             type="button"
             onClick={issueNow}
-            className="mt-5 min-h-12 w-full rounded-full bg-fg text-sm font-semibold text-bg"
+            className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
           >
             Issue {kind === "once" ? "single-use" : kind} debit
           </button>
@@ -105,7 +105,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           <button
             type="button"
             onClick={() => setStep("issue")}
-            className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+            className="mt-3 min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
           >
             Issue a card
           </button>
