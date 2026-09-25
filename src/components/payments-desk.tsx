@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Plus, RefreshCw } from "lucide-react";
 import { AddMoneyScreen } from "@/components/add-money";
 import { NearbyDesk } from "@/components/nearby-desk";
-import { CCYS, CCY_META, formatMoney, revolutFee, sendaDeposit, type Ccy } from "@/lib/wallet";
+import { TabLead } from "@/components/tab-lead";
+import { CCYS, CCY_META, formatMoney, revolutFee, type Ccy, type Contact, type Tx } from "@/lib/wallet";
 import { rate } from "@/lib/wallet-fx";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -19,7 +20,37 @@ const ACTS: { id: PayAct; label: string; icon: typeof ArrowUpRight }[] = [
 ];
 
 const field =
-  "min-h-12 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-4 text-sm outline-none placeholder:text-subtle";
+  "min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none placeholder:text-subtle";
+
+const SEND_PRESETS = [20, 50, 100, 250] as const;
+
+const PERSON_TX = new Set<Tx["kind"]>(["send", "receive", "request", "nearby", "split"]);
+
+/** Latest person per counterparty. Only rows that already exist on the wallet. */
+function payAgainRows(txs: Tx[], contacts: Contact[]) {
+  const seen = new Set<string>();
+  const rows: { id: string; label: string; tag: string; name: string; amount: number; ccy: Ccy; note: string }[] = [];
+  for (const t of txs) {
+    if (!PERSON_TX.has(t.kind)) continue;
+    const who = t.counterparty.trim();
+    if (!who) continue;
+    if (t.kind === "nearby" && !who.startsWith("@")) continue;
+    const key = who.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const contact = contacts.find((c) => {
+      const raw = who.toLowerCase();
+      const handle = c.tag.trim().toLowerCase();
+      return c.name.trim().toLowerCase() === raw || handle === raw || handle === `@${raw.replace(/^@/, "")}`;
+    });
+    const tag = contact?.tag || who;
+    const name = contact?.name || (who.startsWith("@") ? "" : who);
+    const note = t.note.trim();
+    const userNote = /^pain\.001|^nearby |^iso /i.test(note) ? "" : note;
+    rows.push({ id: t.id, label: who, tag, name, amount: t.amount, ccy: t.ccy, note: userNote });
+  }
+  return rows;
+}
 
 export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string; initialFrom?: string }) {
   const start: PayAct = ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
@@ -34,90 +65,93 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
     c,
     v: w.w.balances[c] || 0,
   }));
-  const ach = sendaDeposit(w.w.tag);
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5 sm:p-6">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Send</p>
-        <h1 className="mt-2 text-4xl tracking-tight">
-          Cash on hand. <span className="text-accent">Send it.</span>
-        </h1>
-        <p className="mt-5 font-mono text-5xl tabular-nums tracking-tight">{formatMoney(total, "USD")}</p>
-        <p className="mt-2 text-sm text-muted">{w.w.tag}</p>
-        <p className="mt-1 font-mono text-xs text-subtle">
-          {ach.routing} · {ach.account}
-        </p>
-      </section>
+      <TabLead
+        kicker="Send"
+        title="Same cash"
+        accent="to a person."
+        line="Your pocket, their tag. It stays in this browser."
+        live={["Send", "Request", "Nearby", "Exchange", "Add"]}
+        coming={["Bank wires", "A handle that exists outside this browser"]}
+      />
 
-      <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#10131c]">
-        <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
-          <h2 className="text-sm font-semibold">Pockets</h2>
-          <p className="font-mono text-[11px] text-subtle">{pockets.length}</p>
-        </div>
-        <ul>
-          {pockets.map((p) => {
-            const meta = CCY_META[p.c];
-            const px = w.usdPer[p.c] || (p.c === "USD" || p.c === "USDC" ? 1 : 0);
+      <section className={cn("rounded-[22px] border border-white/10 bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
+        {act === "send" ? <SendForm w={w} /> : null}
+        {act === "nearby" ? <NearbyDesk /> : null}
+        {act === "request" ? <RequestForm w={w} /> : null}
+        {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
+        {act === "add" ? <AddForm w={w} /> : null}
+        <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-5 border-t border-white/10 pt-4")}>
+          {ACTS.map((a) => {
+            const Icon = a.icon;
+            const on = act === a.id;
             return (
-              <li key={p.c} className="border-t border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPocket(p.c);
-                    setAct("exchange");
-                  }}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                >
-                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[11px]">
-                    {meta.flag}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold">{meta.name}</span>
-                    <span className="block font-mono text-[11px] text-subtle">{p.c}</span>
-                  </span>
-                  <span className="text-right">
-                    <span className="block font-mono text-sm tabular-nums">{formatMoney(p.v, p.c)}</span>
-                    {p.c !== "USD" && px > 0 ? (
-                      <span className="block font-mono text-[11px] text-subtle tabular-nums">{formatMoney(p.v * px, "USD")}</span>
-                    ) : null}
-                  </span>
-                </button>
-              </li>
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => setAct(a.id)}
+                className={cn(
+                  "inline-flex min-h-10 items-center gap-2 rounded-full px-3 text-sm font-semibold",
+                  on ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                )}
+              >
+                <Icon className="size-3.5" strokeWidth={1.9} />
+                {a.label}
+              </button>
             );
           })}
-        </ul>
-      </section>
-
-      <section className="grid grid-cols-5 rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2">
-        {ACTS.map((a) => {
-          const Icon = a.icon;
-          const on = act === a.id;
-          return (
-            <button key={a.id} type="button" onClick={() => setAct(a.id)} className="flex flex-col items-center gap-2 rounded-2xl px-1 py-2">
-              <span className={cn("grid size-10 place-items-center rounded-full", on ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
-                <Icon className="size-4" strokeWidth={1.9} />
-              </span>
-              <span className={cn("text-[11px] font-semibold sm:text-xs", on ? "text-fg" : "text-muted")}>{a.label}</span>
-            </button>
-          );
-        })}
+        </div>
       </section>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <div className={cn("rounded-[22px] border border-white/[0.08] bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
-          {act === "send" ? <SendForm w={w} /> : null}
-          {act === "nearby" ? <NearbyDesk /> : null}
-          {act === "request" ? <RequestForm w={w} /> : null}
-          {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
-          {act === "add" ? <AddForm w={w} /> : null}
-        </div>
-        <aside className="h-fit rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
+        <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+          <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
+            <h2 className="text-sm font-semibold">Pockets</h2>
+            <p className="font-mono text-[11px] text-subtle">
+              {formatMoney(total, "USD")} · {w.w.tag}
+            </p>
+          </div>
+          <ul>
+            {pockets.map((p) => {
+              const meta = CCY_META[p.c];
+              const px = w.usdPer[p.c] || (p.c === "USD" || p.c === "USDC" ? 1 : 0);
+              return (
+                <li key={p.c} className="border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPocket(p.c);
+                      setAct("exchange");
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white/[0.06] font-mono text-[11px]">
+                      {meta.flag}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold">{meta.name}</span>
+                      <span className="block font-mono text-[11px] text-subtle">{p.c}</span>
+                    </span>
+                    <span className="text-right">
+                      <span className="block font-mono text-sm tabular-nums">{formatMoney(p.v, p.c)}</span>
+                      {p.c !== "USD" && px > 0 ? (
+                        <span className="block font-mono text-[11px] text-subtle tabular-nums">{formatMoney(p.v * px, "USD")}</span>
+                      ) : null}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+        <aside className="h-fit rounded-[22px] border border-white/10 bg-[#10131c] p-4">
           <h2 className="text-sm font-semibold">Activity</h2>
           {w.w.txs.length === 0 ? <p className="py-4 text-sm text-subtle">Nothing sent yet.</p> : null}
           <ul>
             {w.w.txs.slice(0, 12).map((t) => (
-              <li key={t.id} className="border-t border-white/[0.08] py-3">
+              <li key={t.id} className="border-t border-white/10 py-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <p className="truncate text-sm font-medium">{t.counterparty}</p>
                   <p className="font-mono text-xs tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
@@ -145,6 +179,7 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const amount = Number(raw) || 0;
   const amountUsd = amount * (w.usdPer[ccy] || 0);
   const rev = revolutFee("send", amountUsd, w.weekend);
+  const again = payAgainRows(w.w.txs, w.w.contacts);
 
   function go() {
     if (busy) return;
@@ -164,8 +199,38 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   return (
     <div className="flex flex-col gap-4">
       <label className="block">
-        <span className="text-xs font-medium text-subtle">To · @tag</span>
-        <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" className={cn(field, "mt-1")} />
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
+        <div className="mt-1 flex items-end gap-3">
+          <input
+            inputMode="decimal"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="0"
+            aria-label="Amount"
+            className="min-h-16 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
+          />
+          <select
+            value={ccy}
+            onChange={(e) => setCcy(e.target.value as Ccy)}
+            aria-label="Currency"
+            className="mb-2 min-h-11 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
+          >
+            {CCYS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-1 font-mono text-xs text-subtle">
+          Available {formatMoney(w.w.balances[ccy], ccy)}
+          {rev > 0 ? ` · Revolut would take ${formatMoney(rev)}` : " · $0"}
+        </p>
+      </label>
+
+      <label className="block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">To</span>
+        <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" aria-label="Person" className={cn(field, "mt-1 text-lg")} />
       </label>
       {w.w.contacts.length > 0 ? (
         <div className="flex gap-1 overflow-x-auto">
@@ -184,37 +249,56 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
           ))}
         </div>
       ) : null}
+
+      <div className="flex gap-2">
+        {SEND_PRESETS.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => {
+              setRaw(String(n));
+              setCcy("USD");
+            }}
+            className={cn(
+              "min-h-11 flex-1 rounded-full font-mono text-sm font-semibold",
+              ccy === "USD" && Number(raw) === n ? "bg-accent text-accent-fg" : "border border-white/10 bg-[#10131c]",
+            )}
+          >
+            ${n}
+          </button>
+        ))}
+      </div>
+
+      {again.length > 0 ? (
+        <div>
+          <p className="text-xs font-medium text-subtle">Pay again</p>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {again.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setTag(row.tag);
+                  setName(row.name);
+                  setCcy(row.ccy);
+                  setRaw(String(row.amount));
+                  setNote(row.note);
+                }}
+                className="min-w-[8.5rem] shrink-0 rounded-[22px] border border-white/10 bg-[#10131c] px-3 py-3 text-left"
+              >
+                <span className="block truncate text-sm font-semibold">{row.label}</span>
+                <span className="mt-1 block font-mono text-sm">{formatMoney(row.amount, row.ccy)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <label className="block">
         <span className="text-xs font-medium text-subtle">Name</span>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Optional" className={cn(field, "mt-1")} />
       </label>
-      <div className="flex gap-2">
-        <label className="flex-1">
-          <span className="text-xs font-medium text-subtle">Amount</span>
-          <input
-            inputMode="decimal"
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            placeholder="0"
-            className={cn(field, "mt-1 font-mono text-lg tabular-nums")}
-          />
-        </label>
-        <label className="w-28">
-          <span className="text-xs font-medium text-subtle">Ccy</span>
-          <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} className={cn(field, "mt-1")}>
-            {CCYS.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" className={field} />
-      <p className="text-sm text-muted">
-        Instant · $0 · available {formatMoney(w.w.balances[ccy], ccy)}
-        {rev > 0 ? ` · Revolut would take ${formatMoney(rev)}` : ""}
-      </p>
       <button
         type="button"
         disabled={busy || !(amount > 0)}
@@ -326,7 +410,7 @@ function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromIn
         className={cn(field, "min-h-14 font-mono text-3xl tabular-nums")}
       />
       <p className="font-mono text-xs text-subtle">Available {formatMoney(w.w.balances[from] ?? 0, from)}</p>
-      <div className="rounded-2xl border border-white/[0.08] bg-black/30 px-4 py-3 text-sm">
+      <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
         <p className="font-medium">You hold {formatMoney(got, to)}</p>
         <p className="mt-1 text-muted">
           {oneToOne ? "USDC ↔ USD is 1:1. No spread." : `1 ${from} = ${r.toFixed(4)} ${to} · mid-market · $0`}
@@ -364,6 +448,7 @@ function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
       >
         Withdraw to bank
       </button>
+      <p className="text-sm text-muted">A line on this balance. Not a wire.</p>
     </div>
   );
 }

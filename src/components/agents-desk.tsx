@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Binoculars, CalendarClock, FileText, Shield, TrendingDown, TrendingUp } from "lucide-react";
+import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
+import { TabLead } from "@/components/tab-lead";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
-import { JOBS, think, type Job } from "@/lib/agent-shift";
+import { JOBS, think, type Job, type Queue } from "@/lib/agent-shift";
 import { createEnvelope, dropEnvelope, listEnvelopes, patchEnvelope, writeLog, type Envelope } from "@/lib/agent-envelope";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
 import { spendCap } from "@/lib/spend-cap";
@@ -34,6 +35,73 @@ const BUILT_ICON = {
   daily: CalendarClock,
 } as const satisfies Record<Id, unknown>;
 
+const SHEET = "senda.sheet.v1";
+
+const READY = [
+  {
+    id: "drop",
+    title: "Watch a drop",
+    job: "cover",
+    side: "buy",
+    holdCap: false,
+    icon: Eye,
+    line: "Flags a hard drop on the live name. It does not buy.",
+    mandate: "Watch the live name. Flag a hard drop. Do not send.",
+  },
+  {
+    id: "cheap",
+    title: "Buy the cheap print",
+    job: "discount",
+    side: "buy",
+    holdCap: false,
+    icon: TrendingDown,
+    line: "Queues a buy when a print is under its mark.",
+    mandate: "Queue a buy when a print is cheap versus its mark. The user signs.",
+  },
+  {
+    id: "cap",
+    title: "Hold the cap",
+    job: "scout",
+    side: "buy",
+    holdCap: true,
+    icon: Lock,
+    line: "Keeps every queued size at or under the spend cap.",
+    mandate: "Hold the spend cap. Write the tape. Do not queue a send above the cap.",
+  },
+  {
+    id: "book",
+    title: "Log the book",
+    job: "clerk",
+    side: "buy",
+    holdCap: false,
+    icon: FileText,
+    line: "Writes the book onto the sheet. No money moves.",
+    mandate: "Log the book onto the sheet. Do not send.",
+  },
+] as const;
+
+function readSheet(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const cur = JSON.parse(window.localStorage.getItem(SHEET) || "{}") as Record<string, string>;
+    return cur && typeof cur === "object" && !Array.isArray(cur) ? cur : {};
+  } catch {
+    return {};
+  }
+}
+
+function heldCap(): number | null {
+  const on = listEnvelopes().some((e) => e.name === "Hold the cap" && e.job === "scout" && e.armed !== false);
+  return on ? spendCap() : null;
+}
+
+function boundQueue<T extends Queue | null>(queue: T): T {
+  if (!queue) return queue;
+  const cap = heldCap();
+  if (cap == null || queue.usd <= cap) return queue;
+  return { ...queue, usd: cap };
+}
+
 const field = "min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 text-sm outline-none placeholder:text-subtle";
 
 export function AgentsDesk({ names }: { names: HouseListing[] }) {
@@ -50,6 +118,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [draftName, setDraftName] = useState("");
   const [draftSay, setDraftSay] = useState("");
   const [draftJob, setDraftJob] = useState<Job>("scout");
+  const [draftSide, setDraftSide] = useState<"buy" | "sell">("buy");
+  const [bring, setBring] = useState("");
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
@@ -59,6 +129,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   });
   const [busy, setBusy] = useState(false);
   const [series, setSeries] = useState<number[]>([]);
+  const [sheet, setSheet] = useState<Record<string, string>>(() => readSheet());
   const wallet = useWallet();
   const picked = book.find((n) => n.symbol === symbol) ?? book[0];
 
@@ -79,10 +150,16 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const out = think(e, book);
         if (!out) continue;
         changed = true;
+        const raw = out.queue ?? e.queue;
+        const queue = boundQueue(raw);
         writeLog(e.id, out.log);
-        patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue: out.queue ?? e.queue });
+        if (raw && queue && queue.usd < raw.usd) writeLog(e.id, `Held ${raw.symbol} at the cap. $${raw.usd} is now $${queue.usd}.`);
+        patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue });
       }
-      if (changed) setEnvs(listEnvelopes());
+      if (changed) {
+        setEnvs(listEnvelopes());
+        setSheet(readSheet());
+      }
     }, 20_000);
     return () => window.clearInterval(timer);
   }, [book]);
@@ -246,13 +323,56 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       mandate: draftSay,
       symbols: watch,
       maxUsd: usd,
-      side: draftJob === "rich" ? "sell" : "buy",
+      side: draftSide,
       job: draftJob,
     });
     setEnvs(listEnvelopes());
     setMade(row.id);
     setDraftName("");
     setDraftSay("");
+    toast.success(`${row.name} is on the roster. Nothing sends until you sign.`);
+  }
+
+  function bringOne() {
+    let raw: unknown;
+    try {
+      raw = JSON.parse(bring);
+    } catch {
+      toast.error("That is not JSON.");
+      return;
+    }
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      toast.error("That is not JSON.");
+      return;
+    }
+    const body = raw as Record<string, unknown>;
+    const job = JOBS.find((j) => j.id === body.job)?.id;
+    if (!job) {
+      toast.error("That job is not one of the desk jobs.");
+      return;
+    }
+    if (body.side !== "buy" && body.side !== "sell") {
+      toast.error("Side has to be buy or sell.");
+      return;
+    }
+    const maxUsd = typeof body.maxUsd === "number" ? body.maxUsd : Number(body.maxUsd);
+    if (!Number.isFinite(maxUsd)) {
+      toast.error("maxUsd has to be a number.");
+      return;
+    }
+    const symbols = Array.isArray(body.symbols) ? body.symbols.filter((s): s is string => typeof s === "string") : [];
+    const row = createEnvelope({
+      name: typeof body.name === "string" ? body.name : "",
+      mandate: typeof body.mandate === "string" ? body.mandate : "",
+      symbols,
+      maxUsd,
+      side: body.side,
+      job,
+    });
+    setEnvs(listEnvelopes());
+    setMade(row.id);
+    setBring("");
+    toast.success(`${row.name} is on the roster. Nothing sends until you sign.`);
   }
 
   function lookNow() {
@@ -263,10 +383,57 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       if (!fresh) continue;
       const out = think(fresh, book);
       if (!out) continue;
-      writeLog(e.id, out.log);
-      patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue: out.queue ?? null });
+      const queue = out.queue ? boundQueue(out.queue) : null;
+      if (out.queue && queue && queue.usd < out.queue.usd) {
+        writeLog(e.id, `${out.log} Held ${out.queue.symbol} at the cap. $${out.queue.usd} is now $${queue.usd}.`);
+      } else writeLog(e.id, out.log);
+      patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue });
     }
     setEnvs(listEnvelopes());
+    setSheet(readSheet());
+  }
+
+  function armReady(desk: (typeof READY)[number]) {
+    const cap = spendCap();
+    const live = book.find((n) => n.symbol === readUsing()?.symbol) ?? book[0];
+    const symbols = desk.id === "drop" && live ? [live.symbol] : [];
+    const maxUsd = desk.holdCap ? cap : Math.min(cap, Math.max(1, Math.round(usd)));
+    const mandate = desk.id === "drop" && live ? `Watch ${live.symbol}. Flag a hard drop. Do not send.` : desk.mandate;
+    const existing = listEnvelopes().find((e) => e.name === desk.title && e.job === desk.job);
+    const row = existing
+      ? patchEnvelope(existing.id, { armed: true, mandate, symbols, maxUsd, side: desk.side, lastTick: "" })
+      : createEnvelope({
+          name: desk.title,
+          mandate,
+          symbols,
+          maxUsd,
+          side: desk.side,
+          job: desk.job,
+        });
+    if (!row) return;
+    const out = think(row, book);
+    if (out) {
+      const queue = out.queue ? boundQueue({ ...out.queue, usd: Math.min(out.queue.usd, cap, maxUsd) }) : null;
+      writeLog(row.id, out.log);
+      patchEnvelope(row.id, { lastTick: new Date().toISOString(), queue });
+    }
+    if (desk.holdCap) {
+      for (const e of listEnvelopes()) {
+        if (!e.queue || e.queue.usd <= cap) continue;
+        writeLog(e.id, `Held ${e.queue.symbol} at the cap. $${e.queue.usd} is now $${cap}.`);
+        patchEnvelope(e.id, { queue: { ...e.queue, usd: cap } });
+      }
+      writeLog(row.id, `Cap held at $${cap}. Nothing moves until you sign.`);
+    }
+    setSheet(readSheet());
+    setEnvs(listEnvelopes());
+    setMade(row.id);
+    const queued = listEnvelopes().find((e) => e.id === row.id)?.queue;
+    toast.success(
+      queued
+        ? `${desk.title} queued ${queued.side} ${queued.symbol} for $${queued.usd}. Sign it in the queue.`
+        : `${desk.title} is armed. Nothing sends until you sign.`,
+    );
   }
 
   const rows: { id: Id; title: string; line: string }[] = [
@@ -296,17 +463,277 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Agents</p>
-            <h1 className="mt-2 text-4xl leading-[1.05] tracking-tight">
-              They watch. <span className="text-accent">You sign.</span>
-            </h1>
+      <TabLead
+        kicker="Agents"
+        title="An agent that watches the book"
+        accent="You still sign."
+        line="You name it, you bound it, it writes a queue. It cannot move money until you press sign."
+        live={["Create an envelope", "Arm a ready desk", "The computer log", "You sign the queue"]}
+        coming={["An agent you host off this browser", "A key of its own"]}
+      />
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              makeAgent();
+            }}
+            className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5"
+          >
+            <p className="text-sm font-semibold">Make an agent</p>
+            <p className="mt-1 text-xs text-muted">You name it and bound it. It writes a queue. You press sign.</p>
+            <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Name" className={cn(field, "mt-3")} />
+            <textarea
+              value={draftSay}
+              onChange={(e) => setDraftSay(e.target.value)}
+              placeholder="Mandate"
+              className={cn(field, "mt-2 min-h-20 py-3")}
+            />
+            <label className="mt-3 block text-[11px] tracking-[0.14em] text-subtle uppercase">Job</label>
+            <select value={draftJob} onChange={(e) => setDraftJob(e.target.value as Job)} className={cn(field, "mt-1")}>
+              {JOBS.map((j) => (
+                <option key={j.id} value={j.id}>
+                  {j.title}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted">{JOBS.find((j) => j.id === draftJob)?.line}</p>
+            <div className="mt-3 flex gap-1">
+              {(["buy", "sell"] as const).map((side) => (
+                <button
+                  key={side}
+                  type="button"
+                  onClick={() => setDraftSide(side)}
+                  className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", draftSide === side ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+                >
+                  {side}
+                </button>
+              ))}
+            </div>
+            <label className="mt-3 block text-[11px] tracking-[0.14em] text-subtle uppercase">Max USD</label>
+            <input
+              type="number"
+              min={1}
+              max={5000}
+              value={usd}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n)) setUsd(n);
+              }}
+              className={cn(field, "mt-1")}
+            />
+            <div className="mt-3 flex flex-wrap gap-1">
+              {(book.length ? book : names).map((n) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => setWatch((cur) => (cur.includes(n.symbol) ? cur.filter((s) => s !== n.symbol) : [...cur, n.symbol]))}
+                  className={cn("min-h-8 rounded-full px-2 font-mono text-[11px]", watch.includes(n.symbol) ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+                >
+                  {n.symbol}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 font-mono text-xs text-subtle">
+              {JOBS.find((j) => j.id === draftJob)?.title} · {draftSide} · ${usd}
+              {watch.length ? ` · ${watch.join(" ")}` : " · every name"}
+            </p>
+            <button type="submit" className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
+              Create
+            </button>
+          </form>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              bringOne();
+            }}
+            className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5"
+          >
+            <p className="text-sm font-semibold">Bring one</p>
+            <p className="mt-1 text-xs text-muted">Paste JSON. name, mandate, job, maxUsd, side, symbols.</p>
+            <textarea
+              value={bring}
+              onChange={(e) => setBring(e.target.value)}
+              placeholder='{"name":"Night desk","mandate":"Watch the cheap print","job":"discount","maxUsd":25,"side":"buy","symbols":["NVDA"]}'
+              className={cn(field, "mt-3 min-h-28 py-3 font-mono text-xs")}
+            />
+            <button type="submit" className="mt-3 min-h-11 w-full rounded-full border border-white/15 text-sm font-semibold">
+              Bring it in
+            </button>
+          </form>
+        </div>
+
+        <div className="space-y-3">
+          <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Roster</h2>
+                <p className="font-mono text-[11px] text-subtle">{waiting} waiting on a signature</p>
+              </div>
+              <button type="button" onClick={lookNow} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+                Look now
+              </button>
+            </div>
+            {ordered.length === 0 ? <p className="mt-3 text-sm text-muted">No agent yet. Name one, or arm a ready desk.</p> : null}
+            <ul className="mt-2">
+              {ordered.map((e) => {
+                const Icon = JOB_ICON[e.job] ?? Binoculars;
+                const on = made === e.id;
+                const last = e.log[0]?.text;
+                return (
+                  <li key={e.id} className={cn("mt-2 rounded-2xl border border-white/[0.06] px-2 py-2", on && "bg-white/[0.05]")}>
+                    <button type="button" onClick={() => setMade(on ? null : e.id)} className="flex w-full items-center gap-3 py-1 text-left">
+                      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", e.queue ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
+                        <Icon className="size-4" strokeWidth={1.75} />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{e.name}</span>
+                        <span className="block truncate text-xs text-muted">
+                          {e.armed === false ? "Paused" : e.queue ? `${e.queue.side} ${e.queue.symbol} · ${e.queue.why}` : "Watching"}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-subtle">{last ?? "Nothing written yet."}</span>
+                      </span>
+                      <span className="font-mono text-sm tabular-nums">{e.queue ? `$${e.queue.usd}` : `$${e.maxUsd}`}</span>
+                    </button>
+                    <div className="mt-2 flex gap-2 px-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          patchEnvelope(e.id, { armed: e.armed === false });
+                          setEnvs(listEnvelopes());
+                        }}
+                        className="min-h-9 rounded-full border border-white/15 px-3 text-xs font-semibold"
+                      >
+                        {e.armed === false ? "Arm" : "Pause"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          dropEnvelope(e.id);
+                          setEnvs(listEnvelopes());
+                          if (made === e.id) setMade(null);
+                        }}
+                        className="min-h-9 rounded-full px-3 text-xs font-semibold text-down"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    {e.queue ? (
+                      <div className="px-1 pt-2 pb-1">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void runMade(e)}
+                          className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+                        >
+                          {busy ? "Waiting for the wallet…" : `Sign · $${e.queue.usd}`}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="px-1 pt-2 text-xs text-subtle">Nothing moves until you sign.</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+
+            {env ? (
+              <div className="mt-4 border-t border-white/[0.08] pt-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">{env.job}</p>
+                    <h3 className="mt-1 text-2xl tracking-tight">{env.name}</h3>
+                    {env.mandate ? <p className="mt-1 text-sm text-muted">{env.mandate}</p> : null}
+                  </div>
+                </div>
+                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Max</dt>
+                    <dd className="font-mono">${env.maxUsd}</dd>
+                  </div>
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Side</dt>
+                    <dd className="font-mono">{env.side}</dd>
+                  </div>
+                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
+                    <dt className="text-[11px] text-subtle">Names</dt>
+                    <dd className="truncate font-mono">{env.symbols.length ? env.symbols.join(" ") : "All"}</dd>
+                  </div>
+                </dl>
+                <div className="mt-3 max-h-36 overflow-y-auto font-mono text-xs">
+                  {env.log.length === 0 ? <p className="text-subtle">Nothing written yet.</p> : null}
+                  {env.log.map((l, i) => (
+                    <p key={`${l.at}-${i}`} className="border-t border-white/[0.06] py-1.5 text-muted first:border-0">
+                      {l.text}
+                    </p>
+                  ))}
+                </div>
+                {env.job === "clerk" ? (
+                  <div className="mt-3 font-mono text-xs">
+                    {Object.keys(sheet).length === 0 ? <p className="text-subtle">The sheet is empty.</p> : null}
+                    {Object.entries(sheet).map(([k, v]) => (
+                      <p key={k} className="truncate border-t border-white/[0.06] py-1.5 text-muted first:border-0">
+                        {k} {v}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          <button type="button" onClick={lookNow} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-            Look now
-          </button>
+          <AgentComputer names={book} envelopeId={env?.id ?? null} />
+        </div>
+      </section>
+
+      <section>
+        <p className="mb-2 px-1 text-sm font-semibold">Ready desks</p>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        {READY.map((desk) => {
+          const Icon = desk.icon;
+          const row = envs.find((e) => e.name === desk.title && e.job === desk.job);
+          const on = Boolean(row && made === row.id);
+          return (
+            <div
+              key={desk.id}
+              className={cn("rounded-[22px] border border-white/10 bg-[#10131c] p-4", on && "ring-1 ring-accent")}
+            >
+              <span className={cn("grid size-9 place-items-center rounded-full", row ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
+                <Icon className="size-4" strokeWidth={1.75} />
+              </span>
+              <p className="mt-3 text-sm font-semibold">{desk.title}</p>
+              <p className="mt-1 text-[11px] leading-snug text-muted">{desk.line}</p>
+              <p className="mt-2 font-mono text-xs tabular-nums text-subtle">
+                {row?.queue
+                  ? `${row.queue.side} ${row.queue.symbol} $${row.queue.usd}`
+                  : row
+                    ? desk.holdCap
+                      ? `cap $${row.maxUsd}`
+                      : "watching"
+                    : "off"}
+              </p>
+              {desk.id === "book" && Object.keys(sheet).length > 0 ? (
+                <ul className="mt-2 space-y-1 font-mono text-[11px] text-muted">
+                  {Object.entries(sheet)
+                    .slice(0, 6)
+                    .map(([k, v]) => (
+                      <li key={k} className="truncate">
+                        {k} {v}
+                      </li>
+                    ))}
+                </ul>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => armReady(desk)}
+                className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+              >
+                Arm
+              </button>
+            </div>
+          );
+        })}
         </div>
       </section>
 
@@ -395,203 +822,65 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-          <p className="text-sm font-semibold">New shift</p>
-          <p className="mt-1 font-mono text-xs text-subtle">
-            {JOBS.find((j) => j.id === draftJob)?.title} · ${usd}
-            {watch.length ? ` · ${watch.join(" ")}` : " · every name"}
-          </p>
-          <input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder="Name" className={cn(field, "mt-3")} />
-          <input value={draftSay} onChange={(e) => setDraftSay(e.target.value)} placeholder="What it watches" className={cn(field, "mt-2")} />
-          <div className="mt-3 flex flex-wrap gap-1">
-            {book.map((n) => (
+      {!env ? (
+        <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4 sm:p-5">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Sign</p>
+          <h3 className="mt-1 text-2xl tracking-tight">{move?.title}</h3>
+          <p className="mt-1 text-sm text-muted">{move?.line}</p>
+          {id === "daily" ? (
+            <select value={picked?.symbol ?? ""} onChange={(e) => setSymbol(e.target.value)} className={cn(field, "mt-3")}>
+              {book.map((n) => (
+                <option key={n.id} value={n.symbol}>
+                  {n.symbol} · {formatUsd(n.last)}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {id === "cheap" && cheap ? (
+            <p className="mt-3 font-mono text-sm tabular-nums">
+              {formatUsd(cheap.last)} token · {formatUsd(cheap.mark)} mark
+            </p>
+          ) : null}
+          <div className="mt-3 flex gap-1">
+            {(["USDC", "SOL"] as const).map((pay) => (
               <button
-                key={n.id}
+                key={pay}
                 type="button"
-                onClick={() => setWatch((cur) => (cur.includes(n.symbol) ? cur.filter((s) => s !== n.symbol) : [...cur, n.symbol]))}
-                className={cn("min-h-8 rounded-full px-2 font-mono text-[11px]", watch.includes(n.symbol) ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
+                onClick={() => setPayWith(pay)}
+                className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", payWith === pay ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
               >
-                {n.symbol}
+                Pay with {pay}
               </button>
             ))}
           </div>
-          <button type="button" onClick={makeAgent} className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
-            Start this shift
-          </button>
-        </div>
-
-        <div className="space-y-3">
-          <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4 sm:p-5">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold">Queue</h2>
-              <p className="font-mono text-[11px] text-subtle">{waiting} waiting</p>
-            </div>
-            {ordered.length === 0 ? <p className="mt-3 text-sm text-muted">Nothing is waiting on a signature.</p> : null}
-            <ul className="mt-2">
-              {ordered.map((e) => {
-                const Icon = JOB_ICON[e.job] ?? Binoculars;
-                const on = made === e.id;
-                return (
-                  <li key={e.id} className={cn("mt-2 rounded-2xl", on ? "bg-white/[0.05]" : "")}>
-                    <button
-                      type="button"
-                      onClick={() => setMade(on ? null : e.id)}
-                      className="flex w-full items-center gap-3 px-2 py-2.5 text-left"
-                    >
-                      <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", e.queue ? "bg-accent text-accent-fg" : "bg-white/[0.06]")}>
-                        <Icon className="size-4" strokeWidth={1.75} />
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">{e.name}</span>
-                        <span className="block truncate text-xs text-muted">
-                          {e.queue
-                            ? `${e.queue.side} ${e.queue.symbol} · ${e.queue.why}`
-                            : e.armed === false
-                              ? "Paused"
-                              : "Watching"}
-                        </span>
-                      </span>
-                      <span className="font-mono text-sm tabular-nums">{e.queue ? `$${e.queue.usd}` : `$${e.maxUsd}`}</span>
-                    </button>
-                    {on && e.queue ? (
-                      <div className="px-2 pb-3">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => void runMade(e)}
-                          className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-                        >
-                          {busy ? "Waiting for the wallet…" : `Sign · $${e.queue.usd}`}
-                        </button>
-                      </div>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {env ? (
-              <div className="mt-4 border-t border-white/[0.08] pt-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">{env.job}</p>
-                    <h3 className="mt-1 text-2xl tracking-tight">{env.name}</h3>
-                    {env.mandate ? <p className="mt-1 text-sm text-muted">{env.mandate}</p> : null}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      dropEnvelope(env.id);
-                      setEnvs(listEnvelopes());
-                      setMade(null);
-                    }}
-                    className="text-xs text-down"
-                  >
-                    Remove
-                  </button>
-                </div>
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Max</dt>
-                    <dd className="font-mono">${env.maxUsd}</dd>
-                  </div>
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Side</dt>
-                    <dd className="font-mono">{env.side}</dd>
-                  </div>
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Names</dt>
-                    <dd className="truncate font-mono">{env.symbols.length ? env.symbols.join(" ") : "All"}</dd>
-                  </div>
-                </dl>
-                <button
-                  type="button"
-                  onClick={() => {
-                    patchEnvelope(env.id, { armed: env.armed === false });
-                    setEnvs(listEnvelopes());
-                  }}
-                  className="mt-3 min-h-10 rounded-full border border-white/15 px-4 text-sm font-semibold"
-                >
-                  {env.armed === false ? "Put it back on shift" : "Pause the shift"}
-                </button>
-                <div className="mt-3 max-h-36 overflow-y-auto font-mono text-xs">
-                  {env.log.length === 0 ? <p className="text-subtle">Nothing written yet.</p> : null}
-                  {env.log.map((l, i) => (
-                    <p key={`${l.at}-${i}`} className="border-t border-white/[0.06] py-1.5 text-muted first:border-0">
-                      {l.text}
-                    </p>
-                  ))}
-                </div>
-                {!env.queue ? <p className="mt-3 text-xs text-subtle">On shift. Nothing moves until you sign.</p> : null}
-              </div>
-            ) : (
-              <div className="mt-4 border-t border-white/[0.08] pt-4">
-                <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Sign</p>
-                <h3 className="mt-1 text-2xl tracking-tight">{move?.title}</h3>
-                <p className="mt-1 text-sm text-muted">{move?.line}</p>
-                {id === "daily" ? (
-                  <select
-                    value={picked?.symbol ?? ""}
-                    onChange={(e) => setSymbol(e.target.value)}
-                    className={cn(field, "mt-3")}
-                  >
-                    {book.map((n) => (
-                      <option key={n.id} value={n.symbol}>
-                        {n.symbol} · {formatUsd(n.last)}
-                      </option>
-                    ))}
-                  </select>
-                ) : null}
-                {id === "cheap" && cheap ? (
-                  <p className="mt-3 font-mono text-sm tabular-nums">
-                    {formatUsd(cheap.last)} token · {formatUsd(cheap.mark)} mark
-                  </p>
-                ) : null}
-                <div className="mt-3 flex gap-1">
-                  {(["USDC", "SOL"] as const).map((pay) => (
-                    <button
-                      key={pay}
-                      type="button"
-                      onClick={() => setPayWith(pay)}
-                      className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", payWith === pay ? "bg-accent text-accent-fg" : "bg-white/[0.06] text-muted")}
-                    >
-                      Pay with {pay}
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-4 space-y-1.5 text-sm">
-                  <p>
-                    <span className="text-muted">Tape </span>
-                    {gate?.tape || "Waiting on the book."}
-                  </p>
-                  <p>
-                    <span className="text-muted">Risk </span>
-                    {gate?.risk || "—"}
-                  </p>
-                  {prior ? (
-                    <p>
-                      <span className="text-muted">Last </span>
-                      {prior.memory.side} {prior.memory.symbol} ${prior.memory.usd}
-                    </p>
-                  ) : null}
-                  {gate?.blocked ? <p className="text-xs text-down">{gate.blocked}</p> : null}
-                </div>
-                <button
-                  type="button"
-                  disabled={busy || book.length === 0 || Boolean(gate?.blocked)}
-                  onClick={() => void run()}
-                  className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-                >
-                  {busy ? "Waiting for the wallet…" : gate?.blocked ? "Blocked" : `Sign · $${sendUsd}`}
-                </button>
-                {book.length === 0 ? <p className="mt-3 text-sm text-muted">PreStocks did not answer. Nothing to sign.</p> : null}
-              </div>
-            )}
+          <div className="mt-4 space-y-1.5 text-sm">
+            <p>
+              <span className="text-muted">Tape </span>
+              {gate?.tape || "Waiting on the book."}
+            </p>
+            <p>
+              <span className="text-muted">Risk </span>
+              {gate?.risk || "—"}
+            </p>
+            {prior ? (
+              <p>
+                <span className="text-muted">Last </span>
+                {prior.memory.side} {prior.memory.symbol} ${prior.memory.usd}
+              </p>
+            ) : null}
+            {gate?.blocked ? <p className="text-xs text-down">{gate.blocked}</p> : null}
           </div>
-          <AgentComputer names={book} envelopeId={env?.id ?? null} />
-        </div>
-      </section>
+          <button
+            type="button"
+            disabled={busy || book.length === 0 || Boolean(gate?.blocked)}
+            onClick={() => void run()}
+            className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            {busy ? "Waiting for the wallet…" : gate?.blocked ? "Blocked" : `Sign · $${sendUsd}`}
+          </button>
+          {book.length === 0 ? <p className="mt-3 text-sm text-muted">PreStocks did not answer. Nothing to sign.</p> : null}
+        </section>
+      ) : null}
     </div>
   );
 }

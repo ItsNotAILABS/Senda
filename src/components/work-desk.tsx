@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 
@@ -23,7 +24,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
   const [symbol, setSymbol] = useState(readUsing()?.symbol || book[0]?.symbol || "");
   const [size, setSize] = useState(100);
   const [other, setOther] = useState("");
-  const [mode, setMode] = useState<"desk" | "sheet" | "page">("desk");
+  const [mode, setMode] = useState<"desk" | "sheet" | "page">("sheet");
   const peer = book.find((n) => n.symbol === other);
   const name = book.find((n) => n.symbol === symbol) ?? book[0];
 
@@ -61,8 +62,16 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      <TabLead
+        kicker="Work"
+        title="Your sheet"
+        accent="next to the book."
+        line="The print is live. The note sits beside it. The page is still yours to write."
+        live={["The live sheet, a note on every name, saved in this browser.", "The page you already edit, still on this desk."]}
+        coming={["Sharing the sheet with someone else."]}
+      />
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
+        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>
           <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
             The book, <span className="text-accent">next to the note.</span>
@@ -71,6 +80,17 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
             {book.length} names on the live print. Size a position, compare two, or keep the page. Notes stay in this browser. A clerk agent writes the sheet, not this page.
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const row = name ?? book[0];
+                if (row) setSymbol(row.symbol);
+                setMode("sheet");
+              }}
+              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
+            >
+              Open {name?.symbol || "sheet"}
+            </button>
             {(
               [
                 ["desk", "Desk"],
@@ -86,14 +106,14 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
           {book.slice().sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0)).slice(0, 1).map((n) => (
-            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/[0.08] bg-[#14f195]/10 p-5 text-left">
+            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/10 bg-[#14f195]/10 p-5 text-left">
               <p className="text-[11px] text-accent">Cheapest versus the mark</p>
               <p className="mt-2 text-2xl font-semibold">{n.symbol}</p>
               <p className="font-mono text-sm">{formatUsd(n.last)} · {formatPremium(n.premium)}</p>
             </button>
           ))}
           {book.slice().sort((a, b) => (b.premium ?? 0) - (a.premium ?? 0)).slice(0, 1).map((n) => (
-            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/[0.08] bg-[#ff5d73]/10 p-5 text-left">
+            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/10 bg-[#ff5d73]/10 p-5 text-left">
               <p className="text-[11px] text-down">Richest versus the mark</p>
               <p className="mt-2 text-2xl font-semibold">{n.symbol}</p>
               <p className="font-mono text-sm">{formatUsd(n.last)} · {formatPremium(n.premium)}</p>
@@ -104,45 +124,90 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
       <FilmBand poster="/images/term-sheet.jpg" label="The book, next to the note." />
 
       {mode === "sheet" ? (
-        <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#10131c]">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-subtle">
-              <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-2 py-3 text-right font-medium">Token</th>
-                <th className="px-2 py-3 text-right font-medium">Mark</th>
-                <th className="px-2 py-3 text-right font-medium">Vs mark</th>
-                <th className="px-4 py-3 font-medium">Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {book.map((n) => (
-                <tr key={n.id} className="border-t border-white/10">
-                  <td className="px-4 py-2 font-semibold">{n.symbol}</td>
-                  <td className="px-2 py-2 text-right font-mono">{formatUsd(n.last)}</td>
-                  <td className="px-2 py-2 text-right font-mono text-muted">{formatUsd(n.mark)}</td>
-                  <td className="px-2 py-2 text-right font-mono">{formatPremium(n.premium)}</td>
-                  <td className="px-4 py-2">
-                    <input value={sheet[n.symbol] || ""} onChange={(e) => note(n.symbol, e.target.value)} placeholder="Why you care" className="min-h-9 w-full bg-transparent text-sm outline-none placeholder:text-subtle" />
-                  </td>
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          {name ? (
+            <>
+              <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
+              <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-4xl">{name.symbol}</h2>
+                  <p className="mt-1 text-sm text-muted">{name.name}</p>
+                </div>
+                <p className="font-mono text-3xl">{formatUsd(name.last)}</p>
+              </div>
+              <p className="mt-2 font-mono text-xs text-muted">
+                Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
+              </p>
+              <label className="mt-4 block text-xs text-subtle">
+                Note
+                <textarea
+                  value={sheet[name.symbol] || ""}
+                  onChange={(e) => note(name.symbol, e.target.value)}
+                  placeholder="Why you care"
+                  className="mt-1 min-h-28 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none"
+                />
+              </label>
+              <p className="mt-2 text-xs text-muted">Saved on this row. It stays in this browser.</p>
+            </>
+          ) : (
+            <p className="text-sm text-muted">PreStocks did not answer.</p>
+          )}
+          <div className="mt-4 flex gap-2 overflow-x-auto">
+            {book.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                onClick={() => setSymbol(n.symbol)}
+                className={`min-h-10 shrink-0 rounded-full px-3 text-sm font-semibold ${n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "bg-black/40 text-muted"}`}
+              >
+                {n.symbol}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 overflow-hidden rounded-[22px] border border-white/10">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-subtle">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-2 py-3 text-right font-medium">Token</th>
+                  <th className="px-2 py-3 text-right font-medium">Mark</th>
+                  <th className="px-2 py-3 text-right font-medium">Vs mark</th>
+                  <th className="px-4 py-3 font-medium">Note</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {book.map((n) => (
+                  <tr key={n.id} className={`border-t border-white/10 ${n.symbol === name?.symbol ? "bg-white/5" : ""}`}>
+                    <td className="px-4 py-2">
+                      <button type="button" onClick={() => setSymbol(n.symbol)} className="font-semibold">
+                        {n.symbol}
+                      </button>
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono">{formatUsd(n.last)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-muted">{formatUsd(n.mark)}</td>
+                    <td className="px-2 py-2 text-right font-mono">{formatPremium(n.premium)}</td>
+                    <td className="px-4 py-2">
+                      <input value={sheet[n.symbol] || ""} onChange={(e) => note(n.symbol, e.target.value)} placeholder="Why you care" className="min-h-9 w-full bg-transparent text-sm outline-none placeholder:text-subtle" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : null}
 
       {mode === "page" ? (
-        <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <h2 className="text-lg">Page</h2>
           <p className="mt-1 text-xs text-muted">Yours. Stays in this browser.</p>
-          <textarea value={doc} onChange={(e) => writeDoc(e.target.value)} placeholder="The note for the desk." className="mt-3 min-h-[28rem] w-full rounded-[22px] border border-white/[0.08] bg-black/40 px-4 py-3 text-sm outline-none" />
+          <textarea value={doc} onChange={(e) => writeDoc(e.target.value)} placeholder="The note for the desk." className="mt-3 min-h-[28rem] w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none" />
         </section>
       ) : null}
 
       {mode === "desk" ? (
         <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
-          <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2">
+          <aside className="rounded-[22px] border border-white/10 bg-[#10131c] p-2">
             {book.map((n) => (
               <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className={`flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm ${n.symbol === name?.symbol ? "bg-white/10" : "hover:bg-white/5"}`}>
                 <span className="font-semibold">{n.symbol}</span>
@@ -150,7 +215,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
               </button>
             ))}
           </aside>
-          <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
             {name ? (
               <>
                 <h2 className="text-4xl">{name.symbol}</h2>
@@ -162,14 +227,14 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
                 </div>
                 <label className="mt-5 block text-xs text-subtle">
                   Size in dollars
-                  <input value={size} onChange={(e) => setSize(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-1 min-h-11 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono outline-none" />
+                  <input value={size} onChange={(e) => setSize(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-1 min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 font-mono outline-none" />
                 </label>
                 <p className="mt-3 font-mono text-sm">
                   {name.last > 0 ? (size / name.last).toFixed(4) : "—"} tokens · {((name.last - name.mark) * (name.last > 0 ? size / name.last : 0)).toFixed(2)} dollars versus the mark
                 </p>
                 <label className="mt-5 block text-xs text-subtle">
                   Note
-                  <textarea value={sheet[name.symbol] || ""} onChange={(e) => note(name.symbol, e.target.value)} placeholder="Why this name" className="mt-1 min-h-24 w-full rounded-[22px] border border-white/[0.08] bg-black/40 px-4 py-3 text-sm outline-none" />
+                  <textarea value={sheet[name.symbol] || ""} onChange={(e) => note(name.symbol, e.target.value)} placeholder="Why this name" className="mt-1 min-h-24 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none" />
                 </label>
                 <button type="button" onClick={pullBrief} className="mt-3 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
                   Put this on the page
@@ -179,9 +244,9 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
               <p className="text-sm text-muted">PreStocks did not answer.</p>
             )}
           </section>
-          <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+          <aside className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
             <p className="text-sm font-semibold">Compare</p>
-            <select value={other} onChange={(e) => setOther(e.target.value)} className="mt-3 min-h-11 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 text-sm outline-none">
+            <select value={other} onChange={(e) => setOther(e.target.value)} className="mt-3 min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none">
               <option value="">Pick a second name</option>
               {book.filter((n) => n.symbol !== name?.symbol).map((n) => (
                 <option key={n.id} value={n.symbol}>{n.symbol}</option>

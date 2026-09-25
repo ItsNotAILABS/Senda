@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
@@ -39,7 +40,7 @@ function Dollars({
         value={value ? String(value) : ""}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         placeholder="0"
-        className="mt-1 min-h-12 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono text-lg tabular-nums outline-none"
+        className="mt-1 min-h-12 w-full rounded-full border border-white/10 bg-black/40 px-4 font-mono text-lg tabular-nums outline-none"
       />
     </label>
   );
@@ -72,6 +73,7 @@ export function PitFloor({
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [tenor, setTenor] = useState<OptTenor>("1d");
   const [underId, setUnderId] = useState<string | null>(null);
+  const [ticketSide, setTicketSide] = useState<"buy" | "sell">("buy");
 
   useEffect(() => {
     setBook(loadHouseBook());
@@ -197,17 +199,79 @@ export function PitFloor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="mx-3 mt-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-6 py-6 lg:px-8 lg:py-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade</p>
-        <h1 className="mt-3 max-w-xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-          Spot, options, <span className="text-accent">the live book.</span>
-        </h1>
-        <p className="mt-4 max-w-md text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
-      </header>
+      <div className="mx-3 mt-3">
+        <TabLead
+          kicker="Trade"
+          title="The ticket"
+          accent="you sign it."
+          line="Your size. Your side. The signature is the ticket already on this book."
+          live={["Set the size in dollars.", "Pick buy or sell.", "Sign it through the ticket on this page."]}
+          coming={["A central limit book."]}
+        />
+      </div>
+      <section className="mx-3 mt-3 rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Ticket</p>
+            <h2 className="mt-1 text-2xl">{under ? under.symbol : "PreStock"}</h2>
+            <p className="mt-1 font-mono text-sm text-muted">
+              {under ? `${formatUsd(under.last)} last` : "Waiting on the book."}
+              {under?.mint ? ` · ${under.mint.slice(0, 4)}…${under.mint.slice(-4)}` : ""}
+            </p>
+          </div>
+          <p className="font-mono text-3xl tabular-nums">${armed ? armed.toFixed(2) : "0.00"}</p>
+        </div>
+        <div className="mt-3 flex gap-1 overflow-x-auto">
+          {pre.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => setUnderId(r.id)}
+              className={cn(
+                "min-h-10 shrink-0 rounded-full px-3 text-sm font-semibold",
+                under?.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
+              )}
+            >
+              {r.symbol}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+          <Dollars value={armed} onChange={setArmed} />
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTicketSide("buy")}
+              className={cn("min-h-12 rounded-full px-5 text-sm font-semibold", ticketSide === "buy" ? "bg-accent text-accent-fg" : "bg-black/40")}
+            >
+              Buy
+            </button>
+            <button
+              type="button"
+              onClick={() => setTicketSide("sell")}
+              className={cn("min-h-12 rounded-full px-5 text-sm font-semibold", ticketSide === "sell" ? "bg-accent text-accent-fg" : "bg-black/40")}
+            >
+              Sell
+            </button>
+          </div>
+        </div>
+        {under ? (
+          <FillButton
+            mint={under.mint}
+            usd={armed}
+            side={ticketSide}
+            price={under.last}
+            label={`Sign ${ticketSide} ${under.symbol}`}
+            className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
+          />
+        ) : (
+          <p className="text-sm text-muted">No PreStock on the book to sign.</p>
+        )}
+      </section>
       <FilmBand poster="/images/markets-desk.jpg" label="The book is live." />
     <main className="m-3 grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <nav className="h-fit rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2 lg:overflow-auto">
+      <nav className="h-fit rounded-[22px] border border-white/10 bg-[#10131c] p-2 lg:overflow-auto">
         <div className="px-3 py-3">
           <p className="text-[11px] tracking-wide text-subtle uppercase">Cash</p>
           <p className="mt-1 font-mono text-3xl tabular-nums" suppressHydrationWarning>
@@ -234,7 +298,7 @@ export function PitFloor({
           </button>
         ))}
       </nav>
-      <div className="min-h-0 overflow-auto rounded-[22px] border border-white/[0.08] bg-[#10131c]">
+      <div className="min-h-0 overflow-auto rounded-[22px] border border-white/10 bg-[#10131c]">
 
       {desk === "spot" ? <JupBoard names={pre} /> : null}
       {desk === "minty" ? <LaunchDesk /> : null}

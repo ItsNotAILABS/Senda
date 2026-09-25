@@ -1,15 +1,53 @@
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { digestBooks } from "@/lib/books";
+import { formatMoney } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
 export function BooksDesk() {
   const { w, usdPer } = useWallet();
   const d = digestBooks(w, usdPer);
+  const lines = w.txs;
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <header className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
+      <TabLead
+        kicker="Books"
+        title="The ledger"
+        accent="of this account."
+        line="What this account already wrote down. No invented lines."
+        live={["The lines already stored on this account."]}
+        coming={["An export a CPA would take."]}
+      />
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg">The lines</h2>
+            <p className="mt-1 text-sm text-muted">Stored on this account. Nothing filled in.</p>
+          </div>
+          <p className="font-mono text-xs text-subtle">{d.id}</p>
+        </div>
+        {lines.length === 0 ? (
+          <p className="mt-4 rounded-[22px] bg-black/40 px-4 py-4 text-sm text-subtle">No ledger lines yet.</p>
+        ) : (
+          <ul className="mt-3">
+            {lines.map((t) => (
+              <li key={t.id} className="flex items-baseline justify-between gap-3 border-t border-white/10 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{t.counterparty || t.kind}</p>
+                  <p className="truncate text-xs text-subtle">
+                    {t.kind}
+                    {t.note ? ` · ${t.note}` : ""} · {t.status}
+                  </p>
+                </div>
+                <p className="shrink-0 font-mono text-sm tabular-nums">{formatMoney(t.amount, t.ccy)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      <header className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
         <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
           <h1 className="text-4xl leading-[1.05] tracking-tight lg:text-5xl">
@@ -30,7 +68,7 @@ export function BooksDesk() {
         <Stat k="Suspense" v={d.suspense} line="Journal versus the balance" />
         <Stat k="Ghost" v={d.ghost} line="Still chargeable on a number" />
       </dl>
-      <section className="overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#10131c]">
+      <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
         <table className="w-full text-left text-sm">
           <thead className="text-xs text-subtle">
             <tr>
@@ -61,7 +99,7 @@ export function BooksDesk() {
 
 function Stat({ k, v, line }: { k: string; v: number; line: string }) {
   return (
-    <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-4">
+    <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
       <dt className="text-xs text-subtle">{k}</dt>
       <dd className="mt-1 font-mono text-2xl">{v.toLocaleString(undefined, { maximumFractionDigits: 2 })}</dd>
       <p className="mt-1 text-xs text-muted">{line}</p>

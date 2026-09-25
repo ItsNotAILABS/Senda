@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { toast } from "sonner";
 import { WalletPicker } from "@/components/wallet-picker";
 import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
@@ -8,7 +9,8 @@ import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, PRESTOCK_MINTS, readChain, type ChainWallet } from "@/lib/phantom";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
 import { unwrapUsdc, wrapUsdc, wrappedUsdc } from "@/lib/vault-wrap";
-import { getHouse, type HouseListing } from "@/lib/sol-house";
+import { getHouse, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { runPrestock, spendable } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +33,12 @@ export function WalletDesk({ buy }: { buy?: string }) {
   const [busy, setBusy] = useState(false);
   const [wrapRaw, setWrapRaw] = useState("25");
   const [wrapTick, setWrapTick] = useState(0);
+  const [sellMint, setSellMint] = useState("");
+  const [sellUsd, setSellUsd] = useState(10);
+  const [sellBusy, setSellBusy] = useState(false);
+  const [sellSig, setSellSig] = useState<string | null>(null);
+  const [sellOut, setSellOut] = useState<number | null>(null);
+  const [sellErr, setSellErr] = useState("");
 
   useEffect(() => setCap(spendCap()), []);
   useEffect(() => {
@@ -90,6 +98,22 @@ export function WalletDesk({ buy }: { buy?: string }) {
   }, 0);
   const cash = wallet.w.balances.USD || 0;
   const total = cash + usdcFree + solUsd + invested;
+  const heldPre = useMemo(() => {
+    if (!snap) return [];
+    const out: Array<{ symbol: string; mint: string; ui: number; decimals: number; price: number }> = [];
+    for (const [symbol, mint] of PRESTOCK_MINTS) {
+      const token = snap.tokens.find((t) => t.mint === mint);
+      if (!token || !(token.ui > 0)) continue;
+      out.push({
+        symbol,
+        mint,
+        ui: token.ui,
+        decimals: token.decimals,
+        price: marks.get(mint) ?? 0,
+      });
+    }
+    return out;
+  }, [snap, marks]);
 
   const payMint = pay === "SOL" ? SOL : pay === "USDC" ? USDC : pay;
   const recvMint = recv === "USDC" ? USDC : PRESTOCK_MINTS.find(([s]) => s === recv)?.[1] || "";
@@ -130,6 +154,12 @@ export function WalletDesk({ buy }: { buy?: string }) {
       window.clearTimeout(t);
     };
   }, [amount, pay, payMint, recv, recvMint]);
+
+  useEffect(() => {
+    if (heldPre.length === 0) return;
+    if (heldPre.some((h) => h.mint === sellMint)) return;
+    setSellMint(heldPre[0].mint);
+  }, [heldPre, sellMint]);
 
   async function onWrap() {
     if (!owner) return;
@@ -202,121 +232,313 @@ export function WalletDesk({ buy }: { buy?: string }) {
     }
   }
 
+  async function sellBack() {
+    const row = heldPre.find((h) => h.mint === sellMint) ?? heldPre[0];
+    if (!row) return;
+    if (!(row.price > 0)) {
+      setSellErr("No live price. Nothing was sent.");
+      setSellSig(null);
+      setSellOut(null);
+      return;
+    }
+    const worth = row.ui * row.price;
+    const slice = Math.min(sellUsd, worth);
+    if (!(slice > 0)) {
+      setSellErr("Enter a size.");
+      setSellSig(null);
+      setSellOut(null);
+      return;
+    }
+    setSellBusy(true);
+    setSellErr("");
+    setSellSig(null);
+    setSellOut(null);
+    try {
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = wallet.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const done = await runPrestock({
+        owner: who,
+        mint: row.mint,
+        usd: slice,
+        side: "sell",
+        price: row.price,
+      });
+      setSellSig(done.signature);
+      setSellOut(done.outUi);
+      toast.success(`Sold ${row.symbol}. ${done.signature.slice(0, 8)}…`);
+      readChain(who)
+        .then((s) => setSnap(s))
+        .catch(() => undefined);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "The swap did not send.";
+      setSellErr(msg);
+      toast.error(msg);
+    } finally {
+      setSellBusy(false);
+    }
+  }
+
   const payLabel = pay === "SOL" ? "SOL" : pay === "USDC" ? "USDC" : house.find((h) => h.mint === pay)?.symbol || "Token";
+  const recvLabel = recv === "USDC" ? "USDC" : recv;
+  const sellRow = heldPre.find((h) => h.mint === sellMint) ?? heldPre[0] ?? null;
+  const sellWorth = sellRow && sellRow.price > 0 ? sellRow.ui * sellRow.price : 0;
+  const sellSlice = sellWorth > 0 ? Math.min(sellUsd, sellWorth) : 0;
 
   return (
     <div className="space-y-4 px-3 py-3 lg:px-4">
-      <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,420px)]">
-        <div className="py-1">
-          <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">Convert</p>
-          <h1 className="mt-3 text-4xl tracking-tight">
-            Swap <span className="text-accent">on Jupiter</span>
-          </h1>
-          <p className="mt-4 font-mono text-5xl tabular-nums tracking-tight">
-            ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-          </p>
-          <p className="mt-2 font-mono text-xs text-subtle">
-            {owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Phantom not connected"}
-          </p>
-          {err ? <p className="mt-3 text-sm text-down">{err}</p> : null}
-          <div className="mt-6 flex flex-wrap gap-2">
-            <Link to="/pre" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
-              Buy
-            </Link>
-            <Link to="/payments" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
-              Send
-            </Link>
-            <Link to="/agents" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
-              Agents
-            </Link>
+      <TabLead
+        kicker="Convert"
+        title="Swap what’s in the wallet"
+        accent="into the name."
+        line="Jupiter names the out-amount. Phantom signs. You hold the name."
+        live={["Jupiter quote", "Phantom sign", "Sell a slice back"]}
+        coming={["Limit orders", "A fiat ramp that isn’t a card"]}
+      />
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-8">
+        <p className="font-mono text-xs text-subtle">
+          {owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Phantom not connected"}
+          {total > 0 ? ` · $${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : ""}
+        </p>
+        {err ? <p className="mt-2 text-sm text-down">{err}</p> : null}
+
+        <div className="mt-6 grid items-start gap-8 lg:grid-cols-2">
+          <div>
+            <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">You pay</p>
+            <input
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+              inputMode="decimal"
+              aria-label="Amount to pay"
+              className="mt-2 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none"
+            />
+            <p className="mt-1 font-mono text-sm text-muted">
+              {payLabel}
+              {payUsd > 0 ? ` · $${payUsd.toFixed(2)}` : ""}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(["SOL", "USDC"] as const).map((id) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setPay(id)}
+                  className={cn(
+                    "min-h-9 rounded-full px-3 text-xs font-semibold",
+                    pay === id ? "bg-accent text-accent-fg" : "border border-white/10",
+                  )}
+                >
+                  {id}
+                </button>
+              ))}
+              {PRESTOCK_MINTS.filter(([, mint]) => (snap?.tokens.find((t) => t.mint === mint)?.ui ?? 0) > 0).map(([symbol, mint]) => (
+                <button
+                  key={mint}
+                  type="button"
+                  onClick={() => setPay(mint)}
+                  className={cn(
+                    "min-h-9 rounded-full px-3 text-xs font-semibold",
+                    pay === mint ? "bg-accent text-accent-fg" : "border border-white/10",
+                  )}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">You receive</p>
+            <p className="mt-2 font-mono text-5xl tabular-nums tracking-tight">
+              {quote ? quote.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"}
+            </p>
+            <p className="mt-1 font-mono text-sm text-muted">{recvLabel}</p>
+            {qErr && amount > 0 && payMint !== recvMint ? <p className="mt-2 text-sm text-down">{qErr}</p> : null}
+            {payMint === recvMint ? <p className="mt-2 text-sm text-muted">Pick a different name.</p> : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setRecv("USDC")}
+                className={cn(
+                  "min-h-9 rounded-full px-3 text-xs font-semibold",
+                  recv === "USDC" ? "bg-accent text-accent-fg" : "border border-white/10",
+                )}
+              >
+                USDC
+              </button>
+              {PRESTOCK_MINTS.map(([symbol]) => (
+                <button
+                  key={symbol}
+                  type="button"
+                  onClick={() => setRecv(symbol)}
+                  className={cn(
+                    "min-h-9 rounded-full px-3 text-xs font-semibold",
+                    recv === symbol ? "bg-accent text-accent-fg" : "border border-white/10",
+                  )}
+                >
+                  {symbol}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-        <aside className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-          <h2 className="text-2xl tracking-tight">
-            Convert <span className="text-accent">{payLabel}</span>
-          </h2>
-          <p className="mt-4 text-[11px] text-subtle">You pay</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {(["SOL", "USDC"] as const).map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setPay(id)}
-                className={cn(
-                  "min-h-9 rounded-full px-3 text-xs font-semibold",
-                  pay === id ? "bg-accent text-accent-fg" : "border border-white/10",
-                )}
-              >
-                {id}
-              </button>
-            ))}
-            {PRESTOCK_MINTS.filter(([, mint]) => (snap?.tokens.find((t) => t.mint === mint)?.ui ?? 0) > 0).map(([symbol, mint]) => (
-              <button
-                key={mint}
-                type="button"
-                onClick={() => setPay(mint)}
-                className={cn(
-                  "min-h-9 rounded-full px-3 text-xs font-semibold",
-                  pay === mint ? "bg-accent text-accent-fg" : "border border-white/10",
-                )}
-              >
-                {symbol}
-              </button>
-            ))}
-          </div>
-          <input
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            inputMode="decimal"
-            className="mt-3 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
-            aria-label="Amount to pay"
-          />
-          <p className="mt-4 text-[11px] text-subtle">You receive</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setRecv("USDC")}
-              className={cn(
-                "min-h-9 rounded-full px-3 text-xs font-semibold",
-                recv === "USDC" ? "bg-accent text-accent-fg" : "border border-white/10",
-              )}
-            >
-              USDC
-            </button>
-            {PRESTOCK_MINTS.map(([symbol]) => (
-              <button
-                key={symbol}
-                type="button"
-                onClick={() => setRecv(symbol)}
-                className={cn(
-                  "min-h-9 rounded-full px-3 text-xs font-semibold",
-                  recv === symbol ? "bg-accent text-accent-fg" : "border border-white/10",
-                )}
-              >
-                {symbol}
-              </button>
-            ))}
-          </div>
-          <dl className="mt-4 divide-y divide-white/[0.06]">
-            <Row k="You pay" v={amount > 0 ? `${amount} ${payLabel}` : "—"} />
-            <Row k="You receive" v={quote ? quote.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : qErr || "—"} />
-            <Row k="Minimum received" v={quote ? quote.minUi.toLocaleString("en-US", { maximumFractionDigits: 4 }) : "—"} />
-            <Row k="Route" v={quote?.route || "—"} />
-            <Row k="Impact" v={quote ? `${quote.impact.toFixed(2)}%` : "—"} />
-          </dl>
-          <button
-            type="button"
-            disabled={busy || !quote}
-            onClick={() => void go()}
-            className="mt-5 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-          >
-            {busy ? "Waiting for the wallet…" : `Convert ${payLabel}`}
-          </button>
-          <p className="mt-3 font-mono text-xs tabular-nums text-muted">≈ ${payUsd.toFixed(2)}</p>
-        </aside>
+
+        <div className="mt-8 border-t border-white/10 pt-5">
+          <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Route fee</p>
+          <p className="mt-2 font-mono text-sm tabular-nums">
+            {quote ? `${quote.route} · impact ${quote.impact.toFixed(2)}%` : "—"}
+          </p>
+          <p className="mt-1 text-sm text-muted">
+            {quote
+              ? `Min ${quote.minUi.toLocaleString("en-US", { maximumFractionDigits: 4 })} ${recvLabel}. Senda adds none.`
+              : "Nothing until Jupiter quotes. No rate is filled in ahead of that."}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          disabled={busy || sellBusy || !quote}
+          onClick={() => void go()}
+          className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {busy ? "Waiting for the wallet…" : "Convert"}
+        </button>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link to="/pre" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+            Buy
+          </Link>
+          <Link to="/payments" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+            Send
+          </Link>
+          <Link to="/agents" className="inline-flex min-h-11 items-center rounded-full border border-white/10 px-4 text-sm">
+            Agents
+          </Link>
+        </div>
       </section>
 
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">Sell back</p>
+            <h2 className="mt-2 text-2xl tracking-tight">
+              A slice back to <span className="text-accent">USDC</span>
+            </h2>
+          </div>
+          {sellRow && sellRow.price > 0 ? (
+            <p className="font-mono text-sm tabular-nums text-muted">Raise ${spendable(sellRow.ui, sellRow.price).toFixed(2)}</p>
+          ) : null}
+        </div>
+        <p className="mt-2 text-sm text-muted">Sell part of a PreStock this wallet holds. The SOL and USDC convert stays above.</p>
+        {!owner ? (
+          <p className="mt-4 text-sm text-muted">Connect Phantom. A PreStock in that wallet can be sold back to USDC.</p>
+        ) : !snap && !err ? (
+          <p className="mt-4 text-sm text-muted">Reading the wallet…</p>
+        ) : heldPre.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">This wallet holds no PreStock.</p>
+        ) : sellRow ? (
+          <>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {heldPre.map((h) => (
+                <button
+                  key={h.mint}
+                  type="button"
+                  onClick={() => {
+                    setSellMint(h.mint);
+                    setSellSig(null);
+                    setSellOut(null);
+                    setSellErr("");
+                  }}
+                  className={cn(
+                    "min-h-11 rounded-full px-3 text-xs font-semibold",
+                    sellRow.mint === h.mint ? "bg-accent text-accent-fg" : "border border-white/10",
+                  )}
+                >
+                  {h.symbol}
+                  <span className="ml-2 font-mono tabular-nums">{h.ui.toLocaleString("en-US", { maximumFractionDigits: 4 })}</span>
+                </button>
+              ))}
+            </div>
+            {sellRow.price > 0 ? (
+              <p className="mt-3 font-mono text-sm tabular-nums">
+                {formatUsd(sellRow.price)} <span className="text-subtle">live · {sellRow.ui.toLocaleString("en-US", { maximumFractionDigits: 4 })} held</span>
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-down">No live print for {sellRow.symbol}. Nothing will be sent.</p>
+            )}
+            <p className="mt-4 text-[11px] text-subtle">USD slice</p>
+            <input
+              value={sellUsd}
+              onChange={(e) => {
+                setSellUsd(Math.max(0, Number(e.target.value) || 0));
+                setSellSig(null);
+                setSellOut(null);
+                setSellErr("");
+              }}
+              inputMode="decimal"
+              aria-label="Dollars of the PreStock to sell back"
+              className="mt-2 min-h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
+            />
+            <div className="mt-2 flex gap-2">
+              {[10, 25, 100].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => {
+                    setSellUsd(n);
+                    setSellSig(null);
+                    setSellOut(null);
+                    setSellErr("");
+                  }}
+                  className={cn(
+                    "min-h-9 rounded-full px-3 font-mono text-xs tabular-nums",
+                    sellUsd === n ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                  )}
+                >
+                  ${n}
+                </button>
+              ))}
+              {sellWorth > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellUsd(spendable(sellRow.ui, sellRow.price) || sellWorth);
+                    setSellSig(null);
+                    setSellOut(null);
+                    setSellErr("");
+                  }}
+                  className="min-h-9 rounded-full border border-white/10 px-3 font-mono text-xs text-muted"
+                >
+                  Max
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={sellBusy || busy || !(sellSlice > 0)}
+              onClick={() => void sellBack()}
+              className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+            >
+              {sellBusy ? "Waiting for the wallet…" : `Sell $${sellSlice.toFixed(2)} of ${sellRow.symbol}`}
+            </button>
+            {sellSig ? (
+              <div className="mt-4">
+                {sellOut != null ? (
+                  <p className="font-mono text-sm tabular-nums">Jupiter out {sellOut.toLocaleString("en-US", { maximumFractionDigits: 4 })} USDC</p>
+                ) : null}
+                <a href={`https://solscan.io/tx/${sellSig}`} target="_blank" rel="noreferrer" className="mt-1 block font-mono text-xs break-all text-accent">
+                  {sellSig}
+                </a>
+              </div>
+            ) : null}
+            {sellErr ? <p className="mt-3 text-sm text-down">{sellErr}</p> : null}
+          </>
+        ) : null}
+      </section>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">Sources</h2>
           <p className="font-mono text-xs tabular-nums text-subtle">
@@ -338,7 +560,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <h2 className="text-sm font-semibold">Vault</h2>
           <p className="mt-1 text-sm text-muted">USDC stays in {link?.label || "the wallet"}. Wrap is the claim. Push sends it back.</p>
           <p className="mt-3 font-mono text-2xl tabular-nums">${wrapped.toFixed(2)}</p>
@@ -347,7 +569,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
             value={wrapRaw}
             onChange={(e) => setWrapRaw(e.target.value)}
             inputMode="decimal"
-            className="mt-3 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono tabular-nums outline-none"
+            className="mt-3 min-h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 font-mono tabular-nums outline-none"
             aria-label="Amount to wrap or push"
           />
           <div className="mt-3 flex gap-2">
@@ -369,7 +591,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
             </button>
           </div>
         </div>
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <h2 className="text-sm font-semibold">Send cap</h2>
           <p className="mt-3 font-mono text-2xl tabular-nums">${cap}</p>
           <p className="mt-1 text-sm text-muted">A bigger send is refused. The key stays in Phantom.</p>
@@ -420,14 +642,5 @@ function Source({ name, value, hint, tint, total }: { name: string; value: numbe
         <div className={cn("h-full rounded-full", tint)} style={{ width: `${share}%` }} />
       </div>
     </li>
-  );
-}
-
-function Row({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-2">
-      <dt className="text-sm text-muted">{k}</dt>
-      <dd className="text-right font-mono text-xs tabular-nums">{v}</dd>
-    </div>
   );
 }

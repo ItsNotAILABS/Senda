@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { connectPhantom, mintDecimals, splHolding } from "@/lib/phantom";
+import { connectPhantom, mintDecimals, readChain, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { listChainCovers, openChainCover } from "@/lib/cover-chain";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -47,11 +48,26 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   const [sig, setSig] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<"buy" | "cover" | "spend" | "stand">("buy");
+  const [trioUsd, setTrioUsd] = useState(10);
+  const [trioPicks, setTrioPicks] = useState<string[]>([]);
+  const [trioSlot, setTrioSlot] = useState(0);
+  const [trioBusy, setTrioBusy] = useState(false);
+  const [trioNow, setTrioNow] = useState("");
+  const [trioOut, setTrioOut] = useState<Array<{ symbol: string; signature?: string; error?: string }>>([]);
   const [store, setStore] = useState("");
   const [reveal, setReveal] = useState<{ pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const wallet = useWallet();
   const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; value: number }>>([]);
+  const three = useMemo(() => {
+    const chosen = trioPicks
+      .map((s) => rows.find((r) => r.symbol === s))
+      .filter((r): r is HouseListing => Boolean(r));
+    const have = new Set(chosen.map((r) => r.symbol));
+    return [...chosen, ...rows.filter((r) => !have.has(r.symbol))].slice(0, 3);
+  }, [rows, trioPicks]);
+  const slot = three.length === 0 ? 0 : Math.min(trioSlot, three.length - 1);
 
   useEffect(() => {
     if (!name) return;
@@ -90,6 +106,35 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     };
   }, [name?.mint, owner, sig]);
 
+  useEffect(() => {
+    if (!owner) {
+      setHolds([]);
+      return;
+    }
+    let live = true;
+    readChain(owner)
+      .then((snap) => {
+        if (!live) return;
+        const byMint = new Map<string, HouseListing>();
+        for (const n of names) {
+          if (n.venue !== "prestocks" || byMint.has(n.mint)) continue;
+          byMint.set(n.mint, n);
+        }
+        const next: Array<{ symbol: string; mint: string; value: number }> = [];
+        for (const token of snap.tokens) {
+          const house = byMint.get(token.mint);
+          if (!house || !(token.ui > 0)) continue;
+          next.push({ symbol: house.symbol, mint: house.mint, value: token.ui * house.last });
+        }
+        next.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
+        setHolds(next);
+      })
+      .catch(() => live && setHolds([]));
+    return () => {
+      live = false;
+    };
+  }, [owner, names, sig, trioOut]);
+
   async function swap(side: "buy" | "sell") {
     if (!name) return;
     setBusy(true);
@@ -115,8 +160,84 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     }
   }
 
+  function putInSlot(symbol: string) {
+    if (three.length < 1) return;
+    const next = three.map((n) => n.symbol);
+    const existing = next.indexOf(symbol);
+    if (existing >= 0) {
+      setTrioSlot(existing);
+      return;
+    }
+    if (next.length < 3) return;
+    next[slot] = symbol;
+    setTrioPicks(next);
+    setTrioOut([]);
+  }
+
+  async function buyThree() {
+    const ticket = three.slice(0, 3);
+    const size = trioUsd;
+    if (ticket.length < 3) {
+      toast.error("The book needs three live names.");
+      return;
+    }
+    if (!(size > 0)) {
+      toast.error("Enter a size.");
+      return;
+    }
+    setTrioBusy(true);
+    setTrioOut([]);
+    setTrioNow(ticket[0].symbol);
+    const results: Array<{ symbol: string; signature?: string; error?: string }> = [];
+    try {
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = wallet.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      for (const n of ticket) {
+        setTrioNow(n.symbol);
+        try {
+          const done = await runPrestock({
+            owner: who,
+            mint: n.mint,
+            usd: size,
+            side: "buy",
+            price: n.last,
+          });
+          results.push({ symbol: n.symbol, signature: done.signature });
+        } catch (e) {
+          results.push({
+            symbol: n.symbol,
+            error: e instanceof Error ? e.message : "The swap did not send.",
+          });
+        }
+        setTrioOut(results.slice());
+      }
+      const signed = results.filter((r) => r.signature).length;
+      if (signed === ticket.length) toast.success(`Bought all ${signed}.`);
+      else if (signed === 0) toast.error("None of the three signed.");
+      else toast.success(`${signed} of ${ticket.length} signed.`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "The wallet did not connect.";
+      setTrioOut(ticket.map((n) => ({ symbol: n.symbol, error: msg })));
+      toast.error(msg);
+    } finally {
+      setTrioBusy(false);
+      setTrioNow("");
+    }
+  }
+
   return (
     <div className="space-y-4 px-3 py-3 lg:px-4">
+      <TabLead
+        kicker="PreStocks"
+        title="The pre-IPO book"
+        accent="open all night."
+        line="These are tokenized names you buy with the wallet you already have."
+        live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
+        coming={["A broker account", "Margin"]}
+      />
       <section className="grid items-stretch gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,400px)]">
         <div className="flex flex-col justify-center py-1">
           <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">PreStock</p>
@@ -177,6 +298,27 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             <p className="text-sm text-muted">The live print shows up when a name is priced.</p>
           )}
         </aside>
+      </section>
+
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-5 py-4">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-sm font-semibold">You hold</p>
+          <Link to="/vault" className="text-sm font-semibold text-accent">
+            Portfolio
+          </Link>
+        </div>
+        {holds.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">{owner ? "None of these names in this wallet." : "Connect a wallet to see what you hold."}</p>
+        ) : (
+          <ul className="mt-3 flex gap-2 overflow-x-auto">
+            {holds.map((h) => (
+              <li key={h.mint} className="shrink-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2">
+                <p className="font-mono text-xs text-subtle">{h.symbol}</p>
+                <p className="font-mono text-sm tabular-nums">{h.value > 0 ? formatUsd(h.value) : "$0.00"}</p>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
@@ -254,7 +396,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 {owner ? (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || trioBusy}
                     onClick={() => void swap("buy")}
                     className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
                   >
@@ -275,7 +417,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 {held && held.ui > 0 ? (
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || trioBusy}
                     onClick={() => void swap("sell")}
                     className="mt-2 min-h-11 w-full rounded-full border border-white/10 text-sm font-semibold"
                   >
@@ -303,6 +445,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 <p className="mt-3 text-xs text-subtle">Premium is USDC from Phantom. Not a licensed policy. The token you hold stays put.</p>
                 <button
                   type="button"
+                  disabled={busy || trioBusy}
                   onClick={() => {
                     if (!name) return;
                     setBusy(true);
@@ -427,6 +570,105 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
           </section>
         ) : null}
       </div>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">Buy three</p>
+            <h2 className="mt-2 text-2xl tracking-tight">
+              One size, <span className="text-accent">three names</span>
+            </h2>
+          </div>
+          <p className="font-mono text-sm tabular-nums text-muted">
+            {three.length} × ${trioUsd}
+            {three.length === 3 ? <span className="text-subtle"> · ${three.length * trioUsd}</span> : null}
+          </p>
+        </div>
+        <p className="mt-2 text-sm text-muted">Each name is its own Jupiter swap. Phantom signs them in turn. The single-name buy stays above.</p>
+        {three.length === 0 ? (
+          <p className="mt-4 text-sm text-muted">No priced names on the book.</p>
+        ) : (
+          <>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {three.map((n, i) => (
+                <button
+                  key={n.symbol}
+                  type="button"
+                  onClick={() => setTrioSlot(i)}
+                  className={cn(
+                    "rounded-2xl border border-white/10 bg-black/25 p-3 text-left",
+                    i === slot ? "ring-1 ring-accent" : "",
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    {LOGO[n.symbol] ? (
+                      <img src={LOGO[n.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
+                    ) : (
+                      <span className="grid size-8 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{n.symbol.slice(0, 2)}</span>
+                    )}
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">{n.symbol}</span>
+                      <span className="block truncate text-[11px] text-subtle">{n.name}</span>
+                    </span>
+                  </div>
+                  <p className="mt-3 font-mono text-lg tabular-nums">{formatUsd(n.last)}</p>
+                  <p className={cn("font-mono text-[11px] tabular-nums", (n.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                    {formatPremium(n.premium)}
+                  </p>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {rows.map((r) => {
+                const on = three.some((t) => t.symbol === r.symbol);
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => putInSlot(r.symbol)}
+                    className={cn(
+                      "min-h-9 rounded-full px-3 font-mono text-xs",
+                      on ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                    )}
+                  >
+                    {r.symbol}
+                  </button>
+                );
+              })}
+            </div>
+            <Size usd={trioUsd} setUsd={setTrioUsd} label="Dollars for each name" />
+            <button
+              type="button"
+              disabled={trioBusy || busy || three.length < 3}
+              onClick={() => void buyThree()}
+              className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+            >
+              {trioBusy ? `Signing ${trioNow}…` : three.length < 3 ? "Need three live names" : `Buy $${trioUsd} of each`}
+            </button>
+            {trioOut.length > 0 ? (
+              <ul className="mt-4 divide-y divide-white/10">
+                {trioOut.map((row) => (
+                  <li key={row.symbol} className="flex items-start justify-between gap-3 py-2">
+                    <span className="text-sm font-semibold">{row.symbol}</span>
+                    {row.signature ? (
+                      <a
+                        href={`https://solscan.io/tx/${row.signature}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 text-right font-mono text-xs break-all text-accent"
+                      >
+                        {row.signature}
+                      </a>
+                    ) : (
+                      <span className="text-right text-xs text-down">{row.error}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </section>
       <FilmBand poster="/images/markets-desk.jpg" label="A mint. Not a brokerage." />
     </div>
   );
@@ -441,7 +683,7 @@ function Stat({ k, v }: { k: string; v: string }) {
   );
 }
 
-function Size({ usd, setUsd }: { usd: number; setUsd: (n: number) => void }) {
+function Size({ usd, setUsd, label = "Size in dollars" }: { usd: number; setUsd: (n: number) => void; label?: string }) {
   return (
     <div className="mt-4">
       <p className="text-[11px] text-subtle">Size</p>
@@ -449,7 +691,7 @@ function Size({ usd, setUsd }: { usd: number; setUsd: (n: number) => void }) {
         value={usd}
         onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
         inputMode="decimal"
-        aria-label="Size in dollars"
+        aria-label={label}
         className="mt-2 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
       />
       <div className="mt-2 flex gap-2">

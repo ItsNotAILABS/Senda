@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Shield, TrendingDown } from "lucide-react";
 import { FilmBand } from "@/components/film-band";
+import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { COVERS, formatCover } from "@/lib/cover";
 import {
@@ -42,9 +43,11 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
   const [locked, setLocked] = useState(0);
   const [rows, setRows] = useState<ChainCover[]>([]);
   const [busy, setBusy] = useState(false);
+  const [policy, setPolicy] = useState<ChainCover | null>(null);
   const name = book.find((n) => n.symbol === symbol) ?? book[0];
   const life = COVERS.find((c) => c.id === lifeId) ?? COVERS[0];
   const premium = mode === "drop" ? Math.max(1, Math.round(usd * 0.04)) : life.premium;
+  const shown = policy ? (rows.find((r) => r.id === policy.id) ?? policy) : null;
 
   function refresh() {
     setRows(listChainCovers());
@@ -68,17 +71,22 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     };
   }, [owner]);
 
+  async function payer(): Promise<string> {
+    const who = owner || (await connectPhantom());
+    if (!owner) {
+      const linked = wallet.linkChain(who, "Phantom", "phantom");
+      if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+    }
+    return who;
+  }
+
   async function open() {
     setBusy(true);
     try {
-      const who = owner || (await connectPhantom());
-      if (!owner) {
-        const linked = wallet.linkChain(who, "Phantom", "phantom");
-        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
-      }
+      const who = await payer();
       if (mode === "drop") {
         if (!name) throw new Error("No PreStock to cover.");
-        await openChainCover({
+        const row = await openChainCover({
           owner: who,
           kind: "drop",
           title: `${name.symbol} drop`,
@@ -89,6 +97,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           premium,
           days: 1,
         });
+        setPolicy(row);
         toast.success(`Premium left Phantom. If ${name.symbol} falls 10%, settle buys $${usd}.`);
       } else {
         await openChainCover({
@@ -101,6 +110,39 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         });
         toast.success(`${life.title} premium is on-chain. The payout is only what that account holds.`);
       }
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The cover did not send.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function coverTen() {
+    const live = name ?? book[0];
+    if (!live) {
+      toast.error("No PreStock to cover.");
+      return;
+    }
+    setSymbol(live.symbol);
+    setMode("drop");
+    setBusy(true);
+    try {
+      const who = await payer();
+      const premiumNow = Math.max(1, Math.round(usd * 0.04));
+      const row = await openChainCover({
+        owner: who,
+        kind: "drop",
+        title: `${live.symbol} drop`,
+        symbol: live.symbol,
+        mint: live.mint,
+        strike: live.last,
+        cover: usd,
+        premium: premiumNow,
+        days: 1,
+      });
+      setPolicy(row);
+      toast.success(`${row.symbol || live.symbol} is ${row.status}. Premium $${row.premium}. Strike ${formatUsd(row.strike)}.`);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The cover did not send.");
@@ -131,6 +173,17 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      <TabLead
+        kicker="Cover"
+        title="If the print drops"
+        accent="the cover pays."
+        line="Name the size. Sign once. A ten percent drop is the cover you can buy on this desk."
+        live={[
+          "Buy a 10% drop cover on a live PreStock.",
+          "The premium leaves as USDC on the on-chain path this page already calls.",
+        ]}
+        coming={["A licensed insurer.", "A pooled premium."]}
+      />
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
@@ -161,6 +214,49 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
             <p className="mt-1 break-all font-mono text-[11px] text-subtle">{coverPubkey()}</p>
           </figure>
         </div>
+      </section>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
+            <h2 className="mt-2 text-3xl tracking-tight">{name ? name.symbol : "No PreStock"}</h2>
+            <p className="mt-2 max-w-lg text-sm text-muted">
+              One signature on {name ? name.symbol : "the first name"}. The premium leaves Phantom. Strike, premium, and status come back from that cover. Nothing is paid out here.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={busy || !name}
+            onClick={() => void coverTen()}
+            className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            {busy ? "Waiting for Phantom…" : "Cover 10%"}
+          </button>
+        </div>
+        {shown ? (
+          <dl className="mt-5 grid gap-2 sm:grid-cols-3">
+            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
+              <dt className="text-[11px] text-subtle">Premium</dt>
+              <dd className="font-mono text-2xl tabular-nums">${shown.premium}</dd>
+            </div>
+            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
+              <dt className="text-[11px] text-subtle">Strike</dt>
+              <dd className="font-mono text-2xl tabular-nums">{formatUsd(shown.strike)}</dd>
+            </div>
+            <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
+              <dt className="text-[11px] text-subtle">Status</dt>
+              <dd className="font-mono text-2xl">{shown.status}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Premium, strike, and status show after Phantom signs.</p>
+        )}
+        {shown && shown.strike > 0 ? (
+          <p className="mt-3 text-xs text-muted">
+            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
+          </p>
+        ) : null}
       </section>
       <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
 

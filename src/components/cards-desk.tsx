@@ -2,11 +2,12 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
-import { formatMoney, type Card, type CardKind } from "@/lib/wallet";
+import { TabLead } from "@/components/tab-lead";
+import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-const PANEL = "rounded-[22px] border border-white/[0.08] bg-[#10131c]";
+const PANEL = "rounded-[22px] border border-white/10 bg-[#10131c]";
 
 const KINDS: { id: CardKind; label: string; line: string }[] = [
   { id: "virtual", label: "Everyday", line: "Use it again." },
@@ -16,6 +17,34 @@ const KINDS: { id: CardKind; label: string; line: string }[] = [
 
 const CAPS = [20, 40, 80, 150];
 
+/** Real auths only. Blank merchant stays blank — nothing is named for you. */
+function groupAuths(auths: CardAuth[]) {
+  const order: string[] = [];
+  const map = new Map<string, CardAuth[]>();
+  for (const a of auths) {
+    const merchant = a.merchant.trim() || "—";
+    const hit = map.get(merchant);
+    if (hit) hit.push(a);
+    else {
+      map.set(merchant, [a]);
+      order.push(merchant);
+    }
+  }
+  return order.map((merchant) => ({ merchant, rows: map.get(merchant) ?? [] }));
+}
+
+/** Real merchants. A tap only fills this checkout — it does not mint or charge. */
+const STORES: { id: string; label: string; merchant: string; cap: number; mcc: string }[] = [
+  { id: "coffee", label: "Coffee", merchant: "Starbucks", cap: 8, mcc: "5812" },
+  { id: "transit", label: "Transit", merchant: "Uber", cap: 24, mcc: "4121" },
+  { id: "grocery", label: "Grocery", merchant: "Whole Foods", cap: 80, mcc: "5411" },
+  { id: "online", label: "Online", merchant: "Amazon", cap: 45, mcc: "5999" },
+  { id: "fuel", label: "Fuel", merchant: "Shell", cap: 60, mcc: "5541" },
+  { id: "phone", label: "Phone", merchant: "Verizon", cap: 85, mcc: "0000" },
+  { id: "software", label: "Software", merchant: "Adobe", cap: 55, mcc: "5815" },
+  { id: "travel", label: "Travel", merchant: "United Airlines", cap: 240, mcc: "4511" },
+];
+
 export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   const { w, freeze, cardSpend, issue, terminate, replace, setLimit, sealIssued, issueCheckout } = useWallet();
   const [openId, setOpenId] = useState<string | null>(null);
@@ -24,8 +53,9 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   const [limitRaw, setLimitRaw] = useState("1500");
   const [payId, setPayId] = useState<string | null>(null);
 
-  const live = w.cards.filter((c) => c.status !== "terminated");
+  const openCards = w.cards.filter((c) => c.status !== "terminated");
   const cash = (w.balances.USD || 0) + (w.balances.USDC || 0);
+  const expenses = groupAuths(w.cardAuths ?? []);
 
   function issueNow() {
     const r = issue(kind, nameOn || w.tag.replace("@", "").toUpperCase() || "SENDA", Number(limitRaw) || 1500);
@@ -35,21 +65,24 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
 
   return (
     <main className="senda-rise space-y-3 px-3 py-3 lg:px-4">
-      <header className={cn(PANEL, "px-6 py-6 lg:px-8")}>
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[11px] tracking-[0.18em] text-accent uppercase">Shop</p>
-            <h1 className="mt-2 text-5xl tracking-tight lg:text-6xl">The card</h1>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Cash</p>
-            <p className="font-mono text-4xl lg:text-5xl">${cash.toFixed(0)}</p>
-          </div>
+      <TabLead
+        kicker="Shop"
+        title="A number for the store"
+        accent="not the token."
+        line="The store sees a number. The charge takes the cash on this account."
+        live={["Make a card", "One-time number", "Charge Senda cash", "Freeze"]}
+        coming={["A licensed card network", "Apple Pay", "The charge actually reaching a merchant"]}
+      />
+
+      <section className={cn(PANEL, "flex flex-wrap items-end justify-between gap-4 px-5 py-4")}>
+        <div>
+          <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Cash</p>
+          <p className="font-mono text-4xl tabular-nums">${cash.toFixed(0)}</p>
+          <p className="mt-1 text-sm text-muted">
+            {cash > 0 ? "A store charge takes this cash." : "Nothing to charge until cash is on the account."}
+          </p>
         </div>
-        <p className="mt-3 max-w-md text-sm text-muted">
-          {cash > 0 ? "A store charges this cash." : "Nothing to charge until cash is on the account."}
-        </p>
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <a href="#make-card" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">
             Make a card
           </a>
@@ -59,10 +92,10 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
             </Link>
           ) : null}
         </div>
-      </header>
+      </section>
 
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
-        <div className="relative min-h-[420px] overflow-hidden rounded-[22px] border border-white/[0.08]">
+        <div className="relative min-h-[420px] overflow-hidden rounded-[22px] border border-white/10">
           <video
             src="/video/card.mp4"
             poster="/images/metal-card.jpg"
@@ -75,7 +108,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
           <p className="absolute bottom-5 left-5 text-xs tracking-[0.18em] text-white/85 uppercase">The number. Not the wallet.</p>
         </div>
-        <div className="relative min-h-72 overflow-hidden rounded-[22px] border border-white/[0.08] lg:min-h-[420px]">
+        <div className="relative min-h-72 overflow-hidden rounded-[22px] border border-white/10 lg:min-h-[420px]">
           <img src="/images/metal-card.jpg" alt="Metal card" className="h-full min-h-72 w-full object-cover lg:min-h-[420px]" />
         </div>
       </section>
@@ -132,9 +165,9 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         }}
       />
 
-      {live.length ? (
+      {openCards.length ? (
         <section className="grid gap-3 lg:grid-cols-2">
-          {live.map((c) => (
+          {openCards.map((c) => (
             <CardFace
               key={c.id}
               card={c}
@@ -174,24 +207,29 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         </section>
       ) : null}
 
-      {(w.cardAuths ?? []).length > 0 ? (
-        <section className={cn(PANEL, "p-5")}>
-          <h2 className="text-sm font-semibold">Charges</h2>
+      <section className={cn(PANEL, "p-5")}>
+        <h2 className="text-sm font-semibold">Expenses</h2>
+        {expenses.length === 0 ? (
+          <p className="mt-3 text-sm text-muted">No spend yet.</p>
+        ) : (
           <ul className="mt-2 divide-y divide-white/10">
-            {w.cardAuths.slice(0, 12).map((a) => (
-              <li key={a.id} className="flex items-baseline justify-between gap-3 py-3">
-                <div>
-                  <p className="text-sm">{a.merchant}</p>
-                  <p className="font-mono text-[11px] text-subtle">
-                    {a.mti ?? "0110"} · STAN {a.stan ?? "—"} · RC {a.rc ?? a.status} · {a.mcc}
-                  </p>
-                </div>
-                <p className={cn("font-mono text-sm", a.status === "declined" ? "text-down" : "text-fg")}>{formatMoney(a.amount)}</p>
+            {expenses.map((g) => (
+              <li key={g.merchant} className="py-3">
+                <p className="text-sm font-semibold">{g.merchant}</p>
+                <ul className="mt-2 space-y-2">
+                  {g.rows.map((a) => (
+                    <li key={a.id} className="flex items-baseline justify-between gap-3">
+                      <span className="font-mono text-sm tabular-nums">{formatMoney(a.amount)}</span>
+                      <span className={cn("text-sm", a.status === "declined" ? "text-down" : "text-muted")}>{a.status}</span>
+                      <span className="font-mono text-sm tabular-nums">···· {a.last4 || "—"}</span>
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
+        )}
+      </section>
     </main>
   );
 }
@@ -213,12 +251,49 @@ function CheckoutPay({
   const [merchant, setMerchant] = useState("");
   const [name, setName] = useState("SENDA");
   const [mcc, setMcc] = useState("5999");
+  const [picked, setPicked] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ id: string; pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const [spent, setSpent] = useState(false);
   const store = merchant.trim() || MCC.find((m) => m.id === mcc)?.label || "Store";
 
+  function pickStore(id: string) {
+    const s = STORES.find((x) => x.id === id);
+    if (!s) return;
+    setPicked(s.id);
+    setMerchant(s.merchant);
+    setCap(String(s.cap));
+    setMcc(s.mcc);
+  }
+
   return (
-    <section className="grid gap-3 lg:grid-cols-2">
+    <section className="space-y-3">
+      <div className={cn(PANEL, "p-4 sm:p-5")}>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold">Stores</h2>
+          <p className="text-xs text-muted">Fills the checkout. Nothing moves until you charge.</p>
+        </div>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {STORES.map((s) => {
+            const on = picked === s.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => pickStore(s.id)}
+                className={cn(
+                  "min-w-[7.75rem] shrink-0 rounded-[22px] border border-white/10 px-3 py-3 text-left",
+                  on ? "border-transparent bg-accent text-accent-fg" : "bg-[#10131c]",
+                )}
+              >
+                <span className="block text-sm font-semibold">{s.label}</span>
+                <span className={cn("mt-1 block truncate text-xs", on ? "text-accent-fg/80" : "text-muted")}>{s.merchant}</span>
+                <span className="mt-2 block font-mono text-sm">${s.cap}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
       <div className={cn(PANEL, "p-5 sm:p-6")}>
         <h2 className="text-3xl">This checkout</h2>
         <p className="mt-1 text-sm text-muted">One number. One charge.</p>
@@ -256,14 +331,18 @@ function CheckoutPay({
             value={cap}
             onChange={(e) => setCap(e.target.value)}
             inputMode="decimal"
-            className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
+            className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 font-mono text-lg outline-none"
           />
         </label>
         <label className="mt-3 block">
           <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Store</span>
           <input
             value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
+            onChange={(e) => {
+              const next = e.target.value;
+              setMerchant(next);
+              setPicked((id) => (STORES.find((s) => s.id === id)?.merchant === next ? id : null));
+            }}
             placeholder="Store name"
             className="mt-1 min-h-12 w-full rounded-2xl border border-white/[0.06] bg-black/30 px-4 text-sm outline-none"
           />
@@ -292,7 +371,7 @@ function CheckoutPay({
         </button>
       </div>
 
-      <div className="relative flex min-h-[380px] flex-col justify-between overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#141820] p-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]">
+      <div className="relative flex min-h-[380px] flex-col justify-between overflow-hidden rounded-[22px] border border-white/10 bg-[#141820] p-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.14)]">
         <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_28%,rgb(255_255_255/0.07)_46%,transparent_64%)]" />
         <div className="relative flex items-start justify-between">
           <ChipMark />
@@ -344,7 +423,7 @@ function CheckoutPay({
                   }}
                   className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
                 >
-                  Charge ${Number(cap) || 0}
+                  Charge <span className="font-mono">${Number(cap) || 0}</span>
                 </button>
               ) : null}
             </>
@@ -352,6 +431,7 @@ function CheckoutPay({
             <p className="text-xs tracking-[0.16em] text-white/50 uppercase">{store}</p>
           )}
         </div>
+      </div>
       </div>
     </section>
   );
