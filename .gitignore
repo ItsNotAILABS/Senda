@@ -10,4 +10,3 @@ pglite.data
 dist/
 routeTree.gen.ts
 .cursor/
-.grok/
