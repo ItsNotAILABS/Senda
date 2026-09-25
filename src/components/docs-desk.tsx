@@ -188,10 +188,13 @@ export function DocsDesk() {
         </nav>
       </aside>
       <div className="space-y-3">
-        <header className="rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-5">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
-          <h1 className="mt-2 max-w-3xl text-4xl tracking-tight lg:text-5xl">The desk for pre-IPO names that already trade.</h1>
-          <p className="mt-3 max-w-2xl text-sm text-muted">Your wallet signs. Jupiter routes. The print is the price. This page is the map of what that means, and of what it does not mean.</p>
+        <header className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+          <img src="/banner.jpg" alt="Senda" className="h-40 w-full object-cover sm:h-52" />
+          <div className="px-5 py-5">
+            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
+            <h1 className="mt-2 max-w-3xl text-4xl tracking-tight lg:text-5xl">The desk for pre-IPO names that already trade.</h1>
+            <p className="mt-3 max-w-2xl text-sm text-muted">Your wallet signs. Jupiter routes. The print is the price. This page is the map of what that means, and of what it does not mean.</p>
+          </div>
         </header>
         {SECTIONS.map((s) => (
           <section key={s.id} id={s.id} className="scroll-mt-24 rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-5">

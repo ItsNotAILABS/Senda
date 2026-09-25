@@ -19,6 +19,14 @@ export const Route = createRootRoute({
           "Senda. Pre-IPO companies, as Solana tokens, while the stock market is closed.",
       },
       { name: "theme-color", content: "#05050a" },
+      { property: "og:title", content: "Senda" },
+      {
+        property: "og:description",
+        content: "Pre-IPO companies, as Solana tokens, while the stock market is closed.",
+      },
+      { property: "og:image", content: "/cover.jpg" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "/cover.jpg" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
