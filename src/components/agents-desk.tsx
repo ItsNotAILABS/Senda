@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { AgentComputer } from "@/components/agent-computer";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
-import { createEnvelope, dropEnvelope, listEnvelopes, writeLog, type Envelope } from "@/lib/agent-envelope";
+import { JOBS, think, type Job } from "@/lib/agent-shift";
+import { createEnvelope, dropEnvelope, listEnvelopes, patchEnvelope, writeLog, type Envelope } from "@/lib/agent-envelope";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
 import { spendCap } from "@/lib/spend-cap";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
@@ -29,6 +30,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [made, setMade] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftSay, setDraftSay] = useState("");
+  const [draftJob, setDraftJob] = useState<Job>("scout");
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
@@ -44,6 +46,22 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   useEffect(() => {
     const level = bookLevel(book.map((n) => n.last));
     if (level > 0) setSeries(pushLevel(level));
+  }, [book]);
+
+  useEffect(() => {
+    if (!book.length) return;
+    const id = window.setInterval(() => {
+      let changed = false;
+      for (const e of listEnvelopes()) {
+        const out = think(e, book);
+        if (!out) continue;
+        changed = true;
+        writeLog(e.id, out.log);
+        patchEnvelope(e.id, { lastTick: new Date().toISOString(), queue: out.queue ?? e.queue });
+      }
+      if (changed) setEnvs(listEnvelopes());
+    }, 20_000);
+    return () => window.clearInterval(id);
   }, [book]);
 
   const focus = id === "rich" ? rich : id === "daily" ? picked : cheap;
@@ -163,24 +181,29 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setBusy(true);
     try {
       const who = await owner();
+      const queued = env.queue ? book.find((n) => n.symbol === env.queue?.symbol) : null;
       const pool = env.symbols.length ? book.filter((n) => env.symbols.includes(n.symbol)) : book;
-      const pick = [...pool].sort((a, b) => (env.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
+      const pick =
+        queued ??
+        [...pool].sort((a, b) => (env.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
       if (!pick) throw new Error("No name inside this envelope.");
+      const side = env.queue?.side ?? env.side;
       const g = review({
         symbol: pick.symbol,
-        side: env.side,
-        usd: Math.min(env.maxUsd, spendCap()),
+        side,
+        usd: Math.min(env.queue?.usd ?? env.maxUsd, spendCap()),
         premium: pick.premium,
         change24h: pick.change24h,
         series,
         cap: Math.min(env.maxUsd, spendCap()),
       });
       if (g.blocked) throw new Error(g.blocked);
-      const done = await runPrestock({ owner: who, mint: pick.mint, side: env.side, usd: g.usd, price: pick.last });
-      const line = `${env.side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
-      const next = writeLog(env.id, line);
-      if (next) setEnvs(listEnvelopes());
-      note(pick.symbol, env.side, g.usd, pick);
+      const done = await runPrestock({ owner: who, mint: pick.mint, side, usd: g.usd, price: pick.last });
+      const line = `${side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
+      writeLog(env.id, line);
+      patchEnvelope(env.id, { queue: null });
+      setEnvs(listEnvelopes());
+      note(pick.symbol, side, g.usd, pick);
       toast.success(`${env.name} sent ${pick.symbol}. ${done.signature.slice(0, 8)}…`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "It did not send.";
@@ -198,7 +221,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       mandate: draftSay,
       symbols: [],
       maxUsd: usd,
-      side: "buy",
+      side: draftJob === "rich" ? "sell" : "buy",
+      job: draftJob,
     });
     setEnvs(listEnvelopes());
     setMade(row.id);
@@ -229,9 +253,22 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018]">
         <header className="px-5 py-4">
           <h1 className="text-3xl">Agents</h1>
-          <p className="mt-2 text-sm text-muted">Make one. The envelope is the bound. You still sign the send.</p>
+          <p className="mt-2 text-sm text-muted">A shift watches the book. It queues. You still sign.</p>
         </header>
-        <div className="px-5 pb-4">
+        <div className="grid grid-cols-2 gap-1 px-3 pb-3">
+          {JOBS.map((j) => (
+            <button
+              key={j.id}
+              type="button"
+              onClick={() => setDraftJob(j.id)}
+              className={cn("rounded-xl px-2 py-2 text-left", draftJob === j.id ? "bg-accent text-accent-fg" : "bg-black/30")}
+            >
+              <span className="block text-xs font-semibold">{j.title}</span>
+              <span className="block text-[10px] opacity-80">{j.line}</span>
+            </button>
+          ))}
+        </div>
+        <div className="px-3 pb-4">
           <input
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
@@ -244,8 +281,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             placeholder="What it watches"
             className="mt-2 min-h-10 w-full rounded-lg bg-elevated px-3 text-sm outline-none"
           />
-          <button type="button" onClick={makeAgent} className="mt-2 min-h-10 rounded-lg bg-accent px-3 text-sm font-semibold text-accent-fg">
-            Make agent
+          <button type="button" onClick={makeAgent} className="mt-2 min-h-10 w-full rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg">
+            Start this shift
           </button>
         </div>
         <ul>
@@ -257,7 +294,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 className={cn("w-full px-5 py-3 text-left", made === e.id ? "bg-elevated" : "hover:bg-surface")}
               >
                 <span className="block text-sm font-semibold">{e.name}</span>
-                <span className="mt-0.5 block text-xs text-muted">{e.mandate || "No mandate"} · ${e.maxUsd} · {e.side}</span>
+                <span className="mt-0.5 block text-xs text-muted">{e.job} · {e.armed === false ? "paused" : "on shift"} · ${e.maxUsd}</span>
               </button>
             </li>
           ))}
@@ -308,9 +345,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 <dt className="text-[11px] text-subtle">Max send</dt>
                 <dd className="font-mono">${env.maxUsd}</dd>
               </div>
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <dt className="text-[11px] text-subtle">Side</dt>
-                <dd className="font-mono">{env.side}</dd>
+              <div className="rounded-xl bg-black/30 px-3 py-2">
+                <dt className="text-[11px] text-subtle">Job</dt>
+                <dd className="font-mono">{env.job}</dd>
               </div>
               <div className="rounded-xl bg-elevated px-3 py-2">
                 <dt className="text-[11px] text-subtle">Names</dt>
@@ -328,12 +365,33 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             </div>
             <button
               type="button"
-              disabled={busy || book.length === 0}
-              onClick={() => void runMade()}
-              className="mt-6 min-h-12 rounded-lg bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+              onClick={() => {
+                patchEnvelope(env.id, { armed: env.armed === false });
+                setEnvs(listEnvelopes());
+              }}
+              className="mt-4 min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold"
             >
-              {busy ? "Waiting for the wallet…" : `Run ${env.name}`}
+              {env.armed === false ? "Put it back on shift" : "Pause the shift"}
             </button>
+            {env.queue ? (
+              <div className="mt-4 rounded-2xl bg-black/40 p-4">
+                <p className="text-xs text-subtle">Waiting on you</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {env.queue.side} {env.queue.symbol} · ${env.queue.usd}
+                </p>
+                <p className="text-xs text-muted">{env.queue.why}</p>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void runMade()}
+                  className="mt-3 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                >
+                  {busy ? "Waiting for the wallet…" : "Sign it"}
+                </button>
+              </div>
+            ) : (
+              <p className="mt-4 text-xs text-subtle">On shift. It will write here when the book moves. Nothing is signed until you do.</p>
+            )}
           </>
         ) : (
           <>

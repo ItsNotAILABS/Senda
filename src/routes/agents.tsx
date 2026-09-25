@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AgentsDesk } from "@/components/agents-desk";
 import { AppShell } from "@/components/app-shell";
-import { getHouse } from "@/lib/sol-house";
+import { getHouse, type HouseListing } from "@/lib/sol-house";
 
 export const Route = createFileRoute("/agents")({
   loader: () => getHouse(),
@@ -10,7 +11,14 @@ export const Route = createFileRoute("/agents")({
 });
 
 function AgentsPage() {
-  const house = Route.useLoaderData();
+  const seed = Route.useLoaderData();
+  const [house, setHouse] = useState<HouseListing[]>(seed);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      getHouse().then(setHouse).catch(() => undefined);
+    }, 20_000);
+    return () => window.clearInterval(id);
+  }, []);
   return (
     <AppShell>
       <AgentsDesk names={house} />

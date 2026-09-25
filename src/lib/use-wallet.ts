@@ -14,6 +14,8 @@ import {
   upsertContact,
   buyCover,
   payCover,
+  playStake,
+  playWin,
   claimNearby,
   convert,
   createSenda,
@@ -176,6 +178,13 @@ export function useWallet() {
       cover: (plan: { id: string; title: string; premium: number; cover: number; term: string }) =>
         commit(buyCover(w, plan)),
       payCover: (amount: number, title: string) => commit(payCover(w, amount, title)),
+      playStake: (amount: number, note: string) => commit(playStake(w, amount, note)),
+      playWin: (amount: number, note: string) => {
+        const next = playWin(w, amount, note);
+        setW(next);
+        saveWallet(next);
+        return { ok: true as const };
+      },
       investOut: (amount: number, name: string) => commit(investDebit(w, amount, name)),
       investFromVault: (vaultId: string, amount: number, name: string) =>
         commit(investFromVault(w, vaultId, amount, name)),

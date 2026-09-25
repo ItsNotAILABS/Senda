@@ -989,6 +989,37 @@ export function payCover(w: Wallet, amount: number, title: string): Wallet | { e
   });
 }
 
+/** Stake leaves Senda cash. A win pays the stake back twice. A loss keeps it. */
+export function playStake(w: Wallet, amount: number, note: string): Wallet | { error: string } {
+  const amt = roundCcy(amount, "USD");
+  if (!(amt > 0)) return { error: "Set a stake." };
+  if (w.balances.USD < amt) return { error: "Not enough cash for that stake." };
+  const next = { ...w, balances: { ...w.balances, USD: roundCcy(w.balances.USD - amt, "USD") } };
+  return pushTx(next, {
+    kind: "move",
+    amount: amt,
+    ccy: "USD",
+    counterparty: note,
+    note: "Play stake",
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
+export function playWin(w: Wallet, amount: number, note: string): Wallet {
+  const amt = roundCcy(amount, "USD");
+  const next = { ...w, balances: { ...w.balances, USD: roundCcy(w.balances.USD + amt, "USD") } };
+  return pushTx(next, {
+    kind: "move",
+    amount: amt,
+    ccy: "USD",
+    counterparty: note,
+    note: "Play paid",
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 export function openCurrency(w: Wallet, ccy: Ccy): Wallet | { error: string } {
   if (w.opened.includes(ccy)) return { error: `${ccy} is already open.` };
   return { ...w, opened: [...w.opened, ccy] };
