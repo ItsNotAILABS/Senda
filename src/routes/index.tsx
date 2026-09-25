@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { HomeDesk } from "@/components/home-desk";
-import { UseDesk } from "@/components/use-desk";
 import { getHouse } from "@/lib/sol-house";
 
 export const Route = createFileRoute("/")({
@@ -15,7 +14,6 @@ function Home() {
   return (
     <AppShell>
       <HomeDesk names={names} />
-      <UseDesk names={names} />
     </AppShell>
   );
 }

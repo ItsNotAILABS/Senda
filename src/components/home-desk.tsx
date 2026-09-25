@@ -104,75 +104,41 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Start here</p>
-        <h1 className="mt-3 max-w-3xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-          Buy a pre-IPO company. <span className="text-accent">Then use it.</span>
-        </h1>
-        <p className="mt-4 max-w-2xl text-sm text-muted">
-          {owner
-            ? `Phantom has ${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC${held > 0 ? `, plus $${held.toFixed(0)} of PreStocks` : ""}. Pick a name, sign the buy, and the same company is what you spend from, cover, play, or hand to an agent.`
-            : "Connect Phantom. The SOL and USDC already in it are the money. You do not fund a second account first."}
-        </p>
-        {!owner ? (
-          <div className="mt-5 max-w-sm"><WalletPicker /></div>
-        ) : null}
-      </section>
-
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
-          <p className="text-sm font-semibold">1 · Pick the company</p>
-          <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
-            {pre.slice(0, 8).map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => choose(n)}
-                className={cn("rounded-2xl px-3 py-3 text-left", chosen?.symbol === n.symbol ? "bg-accent text-accent-fg" : "bg-black/40")}
-              >
-                <span className="block text-sm font-semibold">{n.symbol}</span>
-                <span className="block font-mono text-[11px] opacity-80">{formatUsd(n.last)} · {formatPremium(n.premium)}</span>
-              </button>
-            ))}
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
+          <h1 className="mt-3 max-w-xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            Your money. <span className="text-accent">Held here. Spent from here.</span>
+          </h1>
+          <p className="mt-4 max-w-md text-sm text-muted">
+            {owner
+              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Senda cash is the account you send, spend, and exchange. A PreStock you hold is still yours. It is not the account.`
+              : "Connect Phantom. The money already in it shows up here. Senda cash is what you send to people, put on a card, and hold in another currency."}
+          </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Send</Link>
+            <Link to="/cards" search={{ spend: 0 }} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Card</Link>
+            <Link to="/wallet" className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">Exchange</Link>
           </div>
-          {chosen ? (
-            <div className="mt-4">
-              <p className="text-sm font-semibold">2 · Buy {chosen.symbol}</p>
-              <p className="mt-1 text-xs text-muted">{chosen.name}. Token {formatUsd(chosen.last)}, mark {formatUsd(chosen.mark)}. Jupiter builds it. You sign. The token lands in Phantom.</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {[10, 25, 100].map((n) => (
-                  <button key={n} type="button" onClick={() => setBuyUsd(n)} className={cn("min-h-10 rounded-full px-4 font-mono text-sm", buyUsd === n ? "bg-white text-black" : "bg-black/40")}>${n}</button>
-                ))}
-                <button type="button" disabled={buying} onClick={() => void buyChosen()} className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-60">
-                  {buying ? "Waiting for Phantom…" : `Sign the buy · $${buyUsd}`}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-muted">PreStocks did not answer, so there is nothing to buy.</p>
-          )}
+          {!owner ? <div className="mt-5 max-w-sm"><WalletPicker /></div> : null}
         </div>
-        <div className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
-          <p className="text-sm font-semibold">3 · Use {chosen?.symbol || "it"}</p>
-          <p className="mt-1 text-xs text-muted">These are the reasons to hold it here instead of at a brokerage.</p>
-          <div className="mt-3 space-y-2">
-            <Link to="/cards" search={{ spend: 40 }} className="block rounded-2xl bg-[#eab308]/15 px-3 py-3">
-              <span className="block text-sm font-semibold">Spend without selling</span>
-              <span className="block text-[11px] text-muted">Mint one number for a store. The token stays in the wallet.</span>
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              ["/payments", "Send", "To a person, or nearby", "bg-[#14f195]/15"],
+              ["/cards", "Card", "A number for a store", "bg-[#eab308]/15"],
+              ["/wallet", "Exchange", "Dollars, euros, pesos, USDC", "bg-[#3b82f6]/15"],
+              ["/vault", "Vault", "Wrap the wallet you have", "bg-[#9945ff]/20"],
+              ["/cover", "Cover", "A drop, or a life event", "bg-[#ff5d73]/15"],
+              ["/pre", "Holdings", "A company you can spend from", "bg-white/10"],
+            ] as const
+          ).map(([to, label, hint, tint]) => (
+            <Link key={label} to={to === "/cards" ? "/cards" : to} search={to === "/cards" ? { spend: 0 } : undefined} className="rounded-2xl border border-white/10 bg-[#101018] px-3 py-3">
+              <span className={cn("mb-2 grid size-8 place-items-center rounded-lg text-[10px] font-semibold", tint)}>{label.slice(0, 1)}</span>
+              <span className="block text-sm font-semibold">{label}</span>
+              <span className="block text-[11px] text-muted">{hint}</span>
             </Link>
-            <Link to="/cover" className="block rounded-2xl bg-[#ff5d73]/15 px-3 py-3">
-              <span className="block text-sm font-semibold">Cover a 10% drop</span>
-              <span className="block text-[11px] text-muted">The premium leaves Phantom. If the print falls, you sign the buy.</span>
-            </Link>
-            <Link to="/social" className="block rounded-2xl bg-[#3b82f6]/15 px-3 py-3">
-              <span className="block text-sm font-semibold">Play the print</span>
-              <span className="block text-[11px] text-muted">Two names. The one that moves is the one that moved. The stake is cash.</span>
-            </Link>
-            <Link to="/agents" className="block rounded-2xl bg-[#a855f7]/20 px-3 py-3">
-              <span className="block text-sm font-semibold">Let an agent watch it</span>
-              <span className="block text-[11px] text-muted">It queues a trade. You sign it. It cannot move money alone.</span>
-            </Link>
-          </div>
+          ))}
         </div>
       </section>
 

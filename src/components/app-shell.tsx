@@ -27,19 +27,19 @@ import { cn } from "@/lib/utils";
 
 const PRIMARY = [
   { to: "/", label: "Home", icon: LayoutGrid },
-  { to: "/pre", label: "PreStocks", icon: Sparkles },
-  { to: "/invest", label: "Trade", icon: Waypoints },
+  { to: "/payments", label: "Send", icon: Wallet },
+  { to: "/cards", label: "Cards", icon: CreditCard },
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },
   { to: "/vault", label: "Vault", icon: Lock },
+  { to: "/pre", label: "PreStocks", icon: Sparkles },
   { to: "/social", label: "Play", icon: Gamepad2 },
   { to: "/agents", label: "Agents", icon: Bot },
-  { to: "/work", label: "Work", icon: SquarePen },
-  { to: "/payments", label: "Send", icon: Wallet },
 ] as const;
 
 const MORE = [
-  { to: "/cards", label: "Cards", icon: CreditCard },
   { to: "/cover", label: "Cover", icon: Shield },
+  { to: "/work", label: "Work", icon: SquarePen },
+  { to: "/invest", label: "Trade", icon: Waypoints },
   { to: "/solana", label: "Solana", icon: Hexagon },
   { to: "/books", label: "Books", icon: BookOpen },
   { to: "/more", label: "Account", icon: UserRound },
@@ -151,13 +151,7 @@ function UseBar() {
     window.addEventListener("senda-using", pull);
     return () => window.removeEventListener("senda-using", pull);
   }, []);
-  if (!row) {
-    return (
-      <div className="border-b border-white/10 bg-[#0c0c14] px-4 py-2 text-sm text-muted">
-        Pick a company on Home. Buy it with the wallet you already have. Then spend from it, cover a drop, play it, or let an agent watch it.
-      </div>
-    );
-  }
+  if (!row) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0c0c14] px-4 py-2">
       <span className="text-sm font-semibold">{row.symbol}</span>
