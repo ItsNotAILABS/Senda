@@ -1,171 +1,286 @@
-const SECTIONS: { id: string; title: string; blocks: { h: string; p: string[] }[] }[] = [
+import { useState } from "react";
+import { cn } from "@/lib/utils";
+
+type Page = { id: string; title: string; body: { h: string; p: string[] }[] };
+
+const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
   {
-    id: "product",
-    title: "Product",
-    blocks: [
+    id: "start",
+    label: "Start",
+    lede: "What this desk is, and what it refuses to pretend.",
+    pages: [
       {
-        h: "What Senda is",
-        p: [
-          "Senda is a desk for tokenized pre-IPO names that already trade on Solana. The wallet you connect is the account. A buy is a Jupiter route you sign. A holding is a token balance in that wallet, marked at the live print.",
-          "It is not a broker, not a bank, and not a card network. Nothing on this desk can move until a wallet you control signs, except the cash ledger that lives in this browser.",
+        id: "what",
+        title: "What Senda is",
+        body: [
+          {
+            h: "The desk",
+            p: [
+              "Senda is the operating layer on tokenized pre-IPO names that already trade on Solana. You connect a wallet you already have. You buy a mint. You hold it there. You can pay someone in USDC, cover a drop, play the print, or hand a bounded job to an agent.",
+              "A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. This is the desk in between.",
+            ],
+          },
+          {
+            h: "What it is not",
+            p: [
+              "Not a broker. Not a bank. Not a card network. Not a custodian. The private key never enters Senda. If a wallet is not installed in this browser, it is not offered.",
+            ],
+          },
         ],
       },
       {
-        h: "Who it is for",
-        p: [
-          "Someone who already holds SOL or USDC in Phantom, Solflare, or Backpack, and wants to buy, hold, cover, spend against, or play a pre-IPO print without opening a brokerage account that closes at four.",
+        id: "map",
+        title: "The pages",
+        body: [
+          {
+            h: "Where to go",
+            p: [
+              "Home is the money and the book. PreStocks is the names. Convert is the route. Play is the print. Shop is a number and a USDC payment. Agents is the workspace. Send moves cash in this browser. Portfolio is what the wallet holds. Make is work other people can pay for in USDC. Cover is a drop. Docs is this set.",
+            ],
+          },
         ],
       },
     ],
   },
   {
-    id: "money",
-    title: "Money",
-    blocks: [
+    id: "wallets",
+    label: "Wallets",
+    lede: "The signer is the account.",
+    pages: [
       {
-        h: "Two balances",
-        p: [
-          "Wallet balances are on Solana. SOL and USDC are read from the connected account. PreStock tokens are read the same way, by mint. Senda does not custody them.",
-          "Senda cash is a ledger in this browser. Send, shop charges, play, and some covers move that ledger. Clearing the site clears it. It is not a deposit at a bank.",
+        id: "connect",
+        title: "Connect",
+        body: [
+          {
+            h: "Injected only",
+            p: [
+              "Phantom, Solflare, Backpack, and the other Solana wallets in the picker are offered only when their provider is actually in this window. Connect returns a public key. Senda does not receive the secret, and it does not create a key for you.",
+            ],
+          },
+          {
+            h: "What a signature is",
+            p: [
+              "A buy, a sell, a convert, a cover premium, and a USDC payment are transactions. The desk builds them, simulates them, and asks the wallet to sign. If simulation fails, the wallet is not asked.",
+            ],
+          },
         ],
       },
       {
-        h: "A buy",
-        p: [
-          "You pick a name and a dollar size. The desk asks Jupiter for a route from USDC into that mint. You see what you pay, what you receive, and the route. Phantom (or the last Solana wallet you connected) signs. The token lands in the wallet you signed with.",
-        ],
-      },
-      {
-        h: "Wallets",
-        p: [
-          "The picker only offers a wallet whose provider is actually injected in this browser. Phantom, Solflare, Backpack, and the other listed Solana injectors can connect. Signing of a PreStock swap follows the last Solana wallet you connected. A wallet that is not installed is not offered as if it were.",
-        ],
-      },
-    ],
-  },
-  {
-    id: "book",
-    title: "PreStocks",
-    blocks: [
-      {
-        h: "The book",
-        p: [
-          "Each row is a tokenized name: last print, premium versus its mark, and the mint. Prices come from the issuer’s public market data. Senda does not set them and does not take the other side.",
-          "Buy one name, or buy three in one ticket. Each leg is its own signed swap. Cover, a one-time shop number, and a stand on the print sit on the same name.",
-        ],
-      },
-      {
-        h: "Portfolio",
-        p: [
-          "Portfolio is the names this wallet holds. Tokens from the chain, times the last print. If the wallet is not connected, or it holds none, the book is empty. There are no paper shares.",
-          "Under the book, the cash sleeve wraps USDC you already hold and can send that wrap back to the same wallet. The tokens do not move into a Senda account.",
+        id: "cash",
+        title: "Two balances",
+        body: [
+          {
+            h: "On the chain",
+            p: ["SOL, USDC, and PreStock tokens are read from the connected account. Portfolio marks tokens at the last print. Empty means the wallet holds none."],
+          },
+          {
+            h: "In this browser",
+            p: ["Senda cash is a ledger on this machine. Send, a shop charge, real play, and some premiums move it. Clearing the site clears it. It is not a bank balance and it does not follow you to another computer."],
+          },
         ],
       },
     ],
   },
   {
-    id: "use",
-    title: "Using a name",
-    blocks: [
+    id: "prestocks",
+    label: "PreStocks",
+    lede: "A name is a mint with a print.",
+    pages: [
       {
-        h: "Convert",
-        p: [
-          "Convert is the swap, shown as what you pay and what you receive. SOL can route to USDC and on into a name. A slice you hold can be sold back the same way. You sign the route. There is no limit order.",
+        id: "book",
+        title: "The book",
+        body: [
+          {
+            h: "The row",
+            p: [
+              "Each name has a last price, a premium versus its mark, and a mint. The print comes from the public pre-IPO market. Senda does not set it and does not take the other side.",
+              "A buy is a dollar size. Jupiter quotes USDC into that mint. You see what leaves and what comes back. You sign. The token arrives in the wallet that signed.",
+            ],
+          },
         ],
       },
       {
-        h: "Play",
-        p: [
-          "Ten games take their result from the live print: wheel, slots, up or down, furthest from the mark, closest to the mark, a ride you cash out of, higher or lower, a two-name parlay, dice from the cents, and three safe tiles.",
-          "Practice is a separate balance on this browser. Load $500 to learn the felt. Practice never touches the wallet and never touches Senda cash. Real stakes leave Senda cash and wins come back to it. The two do not mix.",
+        id: "hold",
+        title: "Holding one",
+        body: [
+          {
+            h: "Portfolio",
+            p: ["Portfolio is only the PreStocks this wallet holds, token account times last print. There is no paper share. Selling a slice is the same route in reverse."],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "pay",
+    label: "Pay",
+    lede: "USDC to an address. The wallet signs.",
+    pages: [
+      {
+        id: "usdc",
+        title: "A payment",
+        body: [
+          {
+            h: "The transaction",
+            p: [
+              "Shop can pay a Solana address in USDC. The mint is EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v, six decimals. Source and destination are the USDC accounts of the two wallets. If the receiver has no USDC account, the same transaction creates it and you pay the rent.",
+              "A memo carries a reference so the payment can be found on chain. The signature opens on Solscan. There is no BIN and no issuer.",
+            ],
+          },
+          {
+            h: "The cap",
+            p: ["A payment cannot exceed the spend cap on this browser. The default is $100. The ceiling is $5,000. Raise it on the wallet before you send a larger amount."],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "cards",
+    label: "Cards",
+    lede: "A number is not a network. A transfer is.",
+    pages: [
+      {
+        id: "number",
+        title: "The number",
+        body: [
+          {
+            h: "What it does",
+            p: [
+              "Make a number, see it once, keep the last four and the cap. A charge debits Senda cash in this browser. Visa never sees it, so a terminal will decline it. The mark on the card is Senda, not a scheme.",
+            ],
+          },
         ],
       },
       {
-        h: "Shop",
-        p: [
-          "Shop mints a number for a store: a virtual card, or a one-time number with a cap. The full number is shown once and is not stored. A charge debits Senda cash and shows up under expenses.",
-          "These numbers are minted here. They are not a bank BIN. A merchant can decline them. Apple Pay and a licensed network are not built.",
+        id: "rails",
+        title: "Rails a store will clear",
+        body: [
+          {
+            h: "Already live, not ours",
+            p: [
+              "Phantom Cash spends Bridge’s CASH on Solana. The issuer is Lead Bank. Jupiter spends USDC on a Visa issued through Rain or DCS. KAST spends USDC, USDT, or PYUSD deposited on Solana, custodial, Visa. Solflare’s card paused on 28 Jul 2026 when Kulipa wound down.",
+              "The pipes under those cards are Rain and Bridge. Both require a program and KYC. This repo does not have a BIN. Until it does, the payment a Solana merchant can clear is the USDC transfer.",
+            ],
+          },
         ],
       },
+    ],
+  },
+  {
+    id: "play",
+    label: "Play",
+    lede: "The result is the print, not a hidden draw.",
+    pages: [
       {
-        h: "Cover",
-        p: [
-          "Cover is a 10% drop on a name. You pay a premium. If the print falls through the strike, the cover pays the size back into cash. The token stays in the wallet. It is not an insurance policy and not a regulated contract.",
+        id: "felt",
+        title: "The ten",
+        body: [
+          {
+            h: "Games",
+            p: ["Wheel, slots, up or down, furthest from the mark, closest to the mark, a ride, higher or lower, a two-name parlay, dice from the cents, and three safe tiles. The pay table is on the felt."],
+          },
+          {
+            h: "Practice and real",
+            p: ["Practice is a separate balance. Loading it does not touch the wallet or Senda cash. Real stakes move Senda cash in one write. If real cash is empty, the round refuses."],
+          },
         ],
       },
+    ],
+  },
+  {
+    id: "cover",
+    label: "Cover",
+    lede: "A drop, not a policy.",
+    pages: [
       {
-        h: "Send",
-        p: [
-          "Send moves Senda cash to a person you name, or requests it, or passes it to a browser nearby. Presets fill the amount. Pay again fills the last person you actually paid. It does not wire a bank.",
+        id: "drop",
+        title: "Ten percent",
+        body: [
+          {
+            h: "The terms",
+            p: [
+              "You lock a print and pay a premium. If that name falls ten percent from the print, the cover pays the size back into cash. The token stays in the wallet. It is not a licensed insurance policy.",
+              "On chain, the premium is a USDC transfer into a cover account whose key stays in this browser, with the terms in a memo. You sign it.",
+            ],
+          },
         ],
       },
     ],
   },
   {
     id: "agents",
-    title: "Agents",
-    blocks: [
+    label: "Agents",
+    lede: "A workspace. The purpose is yours. The signature is yours.",
+    pages: [
       {
-        h: "The bound",
-        p: [
-          "An agent is an envelope: a name, a mandate, the symbols it may watch, a max size, a side, and a job. Jobs are scout, discount, rich, daily, cover, and clerk. You can make one, arm one of the four ready desks, or paste one in as JSON.",
-          "On a shift it reads the book and writes a line, or queues one order. A buy or sell is passed through the spend cap and a drawdown gate before it is queued. If this tape matches a send you already made, the size is cut. The agent does not sign. You do.",
-        ],
-      },
-      {
-        h: "The computer",
-        p: [
-          "The computer on the agent page only runs commands the desk already knows: the book, a quote, memory of past sends, the vault wrap, and a note. It cannot invent a tool and it cannot broadcast.",
+        id: "workspace",
+        title: "Make one",
+        body: [
+          {
+            h: "What you write",
+            p: [
+              "An agent is a name and a purpose. The purpose can be anything you need it to do with the tools on the page: read the book, queue a trade, remember the tape. A buyer, a clerk, a watch on one name, or a sentence you write yourself.",
+            ],
+          },
+          {
+            h: "What it cannot do",
+            p: ["It cannot sign. Run writes a log and, if you allowed a trade, queues one. Sign asks the wallet. The shift does not continue after you close the tab. It does not hold its own key."],
+          },
         ],
       },
     ],
   },
   {
-    id: "desk",
-    title: "The rest of the desk",
-    blocks: [
+    id: "make",
+    label: "Make",
+    lede: "Work a person will pay for.",
+    pages: [
       {
-        h: "Work",
-        p: ["A sheet next to the book. The clerk job can write a line onto it. You can edit it. It stays in this browser."],
-      },
-      {
-        h: "Trade",
-        p: ["A ticket: size, side, and a signature. There is no central limit book."],
-      },
-      {
-        h: "Solana",
-        p: ["The mints behind the names, copied from the book the desk already loaded. This is how a name is an address, not a ticker in a database."],
-      },
-      {
-        h: "Books",
-        p: ["The ledger of this browser: sends, play, charges, and the other lines the cash ledger actually wrote. No sample rows."],
-      },
-      {
-        h: "Account",
-        p: ["The wallets you linked, the cash in this browser, and the privacy note. Signing in is optional and is not the wallet."],
+        id: "board",
+        title: "The board",
+        body: [
+          {
+            h: "What you can post",
+            p: [
+              "A job, software, a service, hardware, robotics, or what a teacher’s class needs. You set a price in USDC and the Solana address that should receive it. Pay signs a transfer. The whole amount goes to that address. Senda does not take a cut.",
+            ],
+          },
+          {
+            h: "Where the listing lives",
+            p: ["The listing is stored in this browser. The payment is on mainnet. Another computer does not see the listing until it is posted there."],
+          },
+        ],
       },
     ],
   },
   {
     id: "limits",
-    title: "Limits",
-    blocks: [
+    label: "Limits",
+    lede: "Live, and not built.",
+    pages: [
       {
-        h: "Live",
-        p: [
-          "Live prints. A Jupiter quote. A signature in your wallet. Portfolio from chain balances. Practice and real play. A number you can charge against Senda cash. An agent that queues and waits. A cover you open on a name. A sheet, a ticket, the mints, and the ledger.",
+        id: "live",
+        title: "Live",
+        body: [
+          {
+            h: "What runs",
+            p: [
+              "Prints. A Jupiter quote and a signature. Portfolio from token accounts. A USDC payment. Practice and real play. A shop number against browser cash. A cover premium you sign. An agent that runs and waits. A board you can pay.",
+            ],
+          },
         ],
       },
       {
-        h: "Not built",
-        p: [
-          "A brokerage account. Margin. A bank wire. A card network that a merchant must accept. An agent that signs while this tab is closed. A second computer that inherits this browser’s cash. Limit orders. A shared play table between two wallets.",
-        ],
-      },
-      {
-        h: "Submission note",
-        p: [
-          "The long note for the bounty is the PDF linked on this page. It is the same product, written out for a reader who is not in the app. The app is the demo.",
+        id: "not",
+        title: "Not built",
+        body: [
+          {
+            h: "Do not read these as done",
+            p: [
+              "A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id.",
+            ],
+          },
         ],
       },
     ],
@@ -173,50 +288,68 @@ const SECTIONS: { id: string; title: string; blocks: { h: string; p: string[] }[
 ];
 
 export function DocsDesk() {
+  const [bookId, setBookId] = useState(BOOKS[0].id);
+  const book = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
+  const [pageId, setPageId] = useState(book.pages[0].id);
+  const page = book.pages.find((p) => p.id === pageId) ?? book.pages[0];
+
+  function openBook(id: string) {
+    const next = BOOKS.find((b) => b.id === id) ?? BOOKS[0];
+    setBookId(next.id);
+    setPageId(next.pages[0].id);
+  }
+
   return (
-    <div className="grid gap-4 px-3 py-3 lg:grid-cols-[220px_1fr] lg:px-4">
-      <aside className="lg:sticky lg:top-20 lg:self-start">
-        <a href="/senda-submission.pdf" className="flex min-h-11 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
-          Submission PDF
-        </a>
-        <a href="/senda-submission.md" className="mt-2 flex min-h-11 items-center justify-center rounded-full border border-white/15 px-4 text-sm">
-          Submission note
-        </a>
-        <nav className="mt-3 rounded-[22px] border border-white/10 bg-[#10131c] p-2">
-          {SECTIONS.map((s) => (
-            <a key={s.id} href={`#${s.id}`} className="block rounded-xl px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-fg">
-              {s.title}
-            </a>
-          ))}
-        </nav>
-      </aside>
-      <div className="space-y-3">
-        <header className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
-          <img src="/banner.jpg" alt="Senda" className="h-40 w-full object-cover sm:h-52" />
-          <div className="px-5 py-5">
-            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
-            <h1 className="mt-2 max-w-3xl text-4xl tracking-tight lg:text-5xl">The desk for pre-IPO names that already trade.</h1>
-            <p className="mt-3 max-w-2xl text-sm text-muted">Your wallet signs. Jupiter routes. The print is the price. This page is the map of what that means, and of what it does not mean.</p>
-          </div>
-        </header>
-        {SECTIONS.map((s) => (
-          <section key={s.id} id={s.id} className="scroll-mt-24 rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-5">
-            <h2 className="text-xl">{s.title}</h2>
-            <div className="mt-4 space-y-4">
-              {s.blocks.map((b) => (
-                <div key={b.h}>
-                  <h3 className="text-sm font-semibold text-accent">{b.h}</h3>
-                  {b.p.map((para) => (
-                    <p key={para.slice(0, 24)} className="mt-2 text-sm leading-relaxed text-muted">
-                      {para}
-                    </p>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </section>
+    <main className="flex min-h-[calc(100dvh-88px)] flex-col">
+      <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-4">
+        {BOOKS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => openBook(b.id)}
+            className={cn(
+              "shrink-0 border-b-2 px-3 py-3 text-sm",
+              b.id === book.id ? "border-accent text-white" : "border-transparent text-white/45 hover:text-white",
+            )}
+          >
+            {b.label}
+          </button>
         ))}
       </div>
-    </div>
+      <div className="grid flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="border-white/10 px-3 py-4 lg:border-r">
+          <p className="px-2 text-[11px] tracking-[0.16em] text-white/35 uppercase">{book.label}</p>
+          <nav className="mt-2">
+            {book.pages.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPageId(p.id)}
+                className={cn("block w-full rounded-xl px-3 py-2 text-left text-sm", p.id === page.id ? "bg-white/8 text-white" : "text-white/50 hover:text-white")}
+              >
+                {p.title}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <article className="px-6 py-8 lg:px-12 lg:py-10">
+          <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{book.label}</p>
+          <h1 className="mt-2 max-w-3xl font-display text-4xl tracking-tight lg:text-5xl">{page.title}</h1>
+          <p className="mt-3 max-w-2xl text-[15px] text-white/50">{book.lede}</p>
+          <div className="mt-8 max-w-3xl space-y-8">
+            {page.body.map((block) => (
+              <section key={block.h}>
+                <h2 className="text-lg font-medium">{block.h}</h2>
+                {block.p.map((para) => (
+                  <p key={para.slice(0, 32)} className="mt-2 text-[15px] leading-relaxed text-white/70">
+                    {para}
+                  </p>
+                ))}
+              </section>
+            ))}
+          </div>
+        </article>
+      </div>
+    </main>
   );
 }
