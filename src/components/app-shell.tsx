@@ -21,7 +21,6 @@ import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { readChain } from "@/lib/phantom";
-import { readUsing, type Using } from "@/lib/using";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -68,10 +67,15 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="font-display text-lg tracking-tight">Senda</span>
         </Link>
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2">
-          {PRIMARY.map((t) => (
+          <p className="px-3 pt-1 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">Money</p>
+          {PRIMARY.slice(0, 5).map((t) => (
             <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
           ))}
-          <p className="mt-4 px-3 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">More</p>
+          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">With it</p>
+          {PRIMARY.slice(5).map((t) => (
+            <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} />
+          ))}
+          <p className="mt-3 px-3 pb-1 font-mono text-[10px] tracking-[0.16em] text-subtle uppercase">More</p>
           {MORE.map((t) => (
             <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet />
           ))}
@@ -99,68 +103,73 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </aside>
       <div className="senda-stage min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-bg/90 px-4 py-3 backdrop-blur">
-          <form
-            className="min-w-0 flex-1"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void navigate({ to: "/pre", search: { q } });
-            }}
-          >
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search a company"
-              className="min-h-10 w-full rounded-full border border-border bg-surface px-4 text-sm outline-none"
-            />
-          </form>
-          <div className="relative">
-            {link ? (
-              <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface px-3 text-sm">
-                {link.label} · {link.address.slice(0, 4)}…
-              </Link>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConnectOpen((v) => !v)}
-                className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
-              >
-                Connect Phantom
-              </button>
-            )}
-            {connectOpen && !link ? (
-              <div className="absolute right-0 z-30 mt-2 w-80 rounded-2xl border border-border bg-surface p-3 shadow-border">
-                <WalletPicker />
-              </div>
-            ) : null}
+        <header className="sticky top-0 z-20 border-b border-border bg-bg/95 px-4 py-3 backdrop-blur">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to="/" className="min-w-36">
+              <p className="text-[11px] text-subtle">{w.tag}</p>
+              <p className="font-mono text-lg leading-none tracking-tight">
+                ${(w.balances.USD || 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
+                <span className="ml-1 text-xs text-subtle">cash</span>
+              </p>
+            </Link>
+            <div className="flex flex-wrap gap-1">
+              <Link to="/payments" className="inline-flex min-h-9 items-center rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg">Send</Link>
+              <Link to="/payments" search={{ act: "add" }} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Add</Link>
+              <Link to="/cards" search={{ spend: 0 }} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Card</Link>
+              <Link to="/wallet" className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Exchange</Link>
+            </div>
+            <form
+              className="min-w-0 flex-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const key = q.trim().toLowerCase();
+                setQ("");
+                if (key === "send") void navigate({ to: "/payments" });
+                else if (key === "add") void navigate({ to: "/payments", search: { act: "add" } });
+                else if (key === "card" || key === "cards") void navigate({ to: "/cards", search: { spend: 0 } });
+                else if (key === "exchange" || key === "convert") void navigate({ to: "/wallet" });
+                else if (key === "vault") void navigate({ to: "/vault" });
+                else if (key === "cover") void navigate({ to: "/cover" });
+                else if (key === "play") void navigate({ to: "/social" });
+                else if (key === "agent" || key === "agents") void navigate({ to: "/agents" });
+                else if (key === "work") void navigate({ to: "/work" });
+                else if (key === "trade") void navigate({ to: "/invest" });
+                else if (key === "home") void navigate({ to: "/" });
+                else void navigate({ to: "/pre", search: { q: key } });
+              }}
+            >
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search money, a card, or a company"
+                className="min-h-10 w-full rounded-full border border-border bg-surface px-4 text-sm outline-none"
+              />
+            </form>
+            <div className="relative">
+              {link ? (
+                <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full border border-border bg-surface px-3 text-sm">
+                  {link.label} · {link.address.slice(0, 4)}…
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConnectOpen((v) => !v)}
+                  className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                >
+                  Connect Phantom
+                </button>
+              )}
+              {connectOpen && !link ? (
+                <div className="absolute right-0 z-30 mt-2 w-80 rounded-2xl border border-border bg-surface p-3 shadow-border">
+                  <WalletPicker />
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
-        <UseBar />
         {children}
         <Onboard />
       </div>
-    </div>
-  );
-}
-
-function UseBar() {
-  const [row, setRow] = useState<Using | null>(null);
-  useEffect(() => {
-    const pull = () => setRow(readUsing());
-    pull();
-    window.addEventListener("senda-using", pull);
-    return () => window.removeEventListener("senda-using", pull);
-  }, []);
-  if (!row) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#0c0c14] px-4 py-2">
-      <span className="text-sm font-semibold">{row.symbol}</span>
-      <span className="text-xs text-muted">is the company you're using</span>
-      <Link to="/pre" search={{ q: row.symbol }} className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-fg">Buy</Link>
-      <Link to="/cards" search={{ spend: 40 }} className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Spend</Link>
-      <Link to="/cover" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Cover</Link>
-      <Link to="/social" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Play</Link>
-      <Link to="/agents" className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold">Watch</Link>
     </div>
   );
 }
