@@ -203,17 +203,17 @@ export function PitFloor({
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Trade</p>
         <p className="mt-2 text-sm text-muted">PreStocks on Jupiter. Spot, options, perps, the index, and a borrow against what you hold.</p>
       </header>
-    <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[232px_minmax(0,1fr)]">
+    <main className="m-3 grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
       {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <nav className="border-b border-border lg:overflow-auto lg:border-r lg:border-b-0">
-        <div className="px-4 py-4">
+      <nav className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-2 lg:overflow-auto">
+        <div className="px-3 py-3">
           <p className="text-[11px] tracking-wide text-subtle uppercase">Cash</p>
-          <p className="mt-1 font-mono text-2xl tabular-nums" suppressHydrationWarning>
+          <p className="mt-1 font-mono text-3xl tabular-nums" suppressHydrationWarning>
             ${equity.toFixed(2)}
           </p>
-          <p className={cn("mt-1 font-mono text-xs tabular-nums", pnl < 0 ? "text-down" : "text-up")} suppressHydrationWarning>
+          <p className={cn("mt-1 font-mono text-xs tabular-nums", pnl < 0 ? "text-down" : "text-accent")} suppressHydrationWarning>
             {pnl >= 0 ? "+" : ""}
-            {pnl.toFixed(2)} today
+            {pnl.toFixed(2)} on the book
           </p>
         </div>
         {desks.map(([id, label, hint]) => (
@@ -223,8 +223,8 @@ export function PitFloor({
             aria-pressed={desk === id}
             onClick={() => setDesk(id)}
             className={cn(
-              "flex w-full flex-col items-start px-4 py-2.5 text-left",
-              desk === id ? "bg-accent text-accent-fg" : "hover:bg-elevated",
+              "mb-1 flex w-full flex-col items-start rounded-2xl px-3 py-2.5 text-left",
+              desk === id ? "bg-accent text-accent-fg" : "hover:bg-white/5",
             )}
           >
             <span className="text-sm font-semibold">{label}</span>
@@ -232,7 +232,7 @@ export function PitFloor({
           </button>
         ))}
       </nav>
-      <div className="min-h-0 overflow-auto">
+      <div className="min-h-0 overflow-auto rounded-[28px] border border-white/10 bg-[#101018]">
 
       {desk === "spot" ? <JupBoard names={pre} /> : null}
       {desk === "minty" ? <LaunchDesk /> : null}

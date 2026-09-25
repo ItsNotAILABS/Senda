@@ -9,6 +9,18 @@ import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
+const LOGO: Record<string, string> = {
+  SPACEX: "/logos/spacex.png",
+  OPENAI: "/logos/openai.png",
+  ANTHROPIC: "/logos/anthropic.png",
+  ANDURIL: "/logos/anduril.png",
+  NEURALINK: "/logos/neuralink.png",
+  FIGUREAI: "/logos/figureai.png",
+  KALSHI: "/logos/kalshi.png",
+  POLYMARKET: "/logos/polymarket.png",
+  XAI: "/logos/xai.png",
+};
+
 export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; routes: PreRoute[]; query?: string }) {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -91,17 +103,18 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   }
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px]">
-      <section className="border-b border-border xl:border-r xl:border-b-0">
-        <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
+    <div className="grid grid-cols-1 gap-3 px-3 py-3 xl:grid-cols-[minmax(0,1fr)_380px] lg:px-4">
+      <section>
+        <header className="rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">PreStocks</p>
           <h1 className="mt-2 text-4xl">The book</h1>
           <p className="mt-2 max-w-xl text-sm text-muted">
             {owner
-              ? "The print, the mark, and a Jupiter ticket. You are not the broker. You sign the swap."
-              : "Connect the wallet that already holds the money. Then buy the mint. Nothing else to deposit."}
+              ? "Pick a name. Jupiter quotes it. You sign. Senda does not take the other side."
+              : "Connect the wallet that already holds the money. Then buy the mint."}
           </p>
         </header>
+        <div className="mt-3 overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
         <table className="w-full text-left text-sm">
           <thead className="text-xs text-subtle">
             <tr>
@@ -121,11 +134,20 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                   setSymbol(r.symbol);
                   setSig(null);
                 }}
-                className={cn("cursor-pointer border-t border-border", r.symbol === name?.symbol ? "bg-elevated" : "hover:bg-surface")}
+                className={cn("cursor-pointer border-t border-white/10", r.symbol === name?.symbol ? "bg-white/5" : "hover:bg-white/5")}
               >
-                <td className="px-5 py-3 lg:px-8">
-                  <span className="font-medium">{r.symbol}</span>
-                  <span className="mt-0.5 block font-mono text-[11px] text-subtle">{r.mint.slice(0, 4)}…{r.mint.slice(-4)}</span>
+                <td className="px-4 py-3">
+                  <span className="flex items-center gap-3">
+                    {LOGO[r.symbol] ? (
+                      <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
+                    ) : (
+                      <span className="grid size-8 place-items-center rounded-full bg-elevated text-[10px]">{r.symbol.slice(0, 2)}</span>
+                    )}
+                    <span>
+                      <span className="block font-semibold">{r.symbol}</span>
+                      <span className="block text-[11px] text-subtle">{r.name}</span>
+                    </span>
+                  </span>
                 </td>
                 <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.last)}</td>
                 <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.mark)}</td>
@@ -142,13 +164,14 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             ))}
           </tbody>
         </table>
+        </div>
       </section>
 
-      <aside className="px-5 py-6 lg:px-6">
+      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
         {name ? (
           <>
             <p className="font-mono text-[11px] text-subtle">{name.mint}</p>
-            <h2 className="font-display text-4xl">{name.symbol}</h2>
+            <h2 className="mt-3 text-4xl">{name.symbol}</h2>
             <p className="mt-2 text-sm text-muted">{name.description}</p>
             <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
               <div className="rounded-xl bg-elevated px-3 py-2">
@@ -179,7 +202,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                   key={n}
                   type="button"
                   onClick={() => setUsd(n)}
-                  className={cn("min-h-9 rounded-lg px-3 font-mono text-xs tabular-nums", usd === n ? "bg-fg text-bg" : "bg-elevated text-muted")}
+                  className={cn("min-h-9 rounded-full px-3 font-mono text-xs tabular-nums", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
                 >
                   ${n}
                 </button>
@@ -191,7 +214,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 type="button"
                 disabled={busy}
                 onClick={() => void swap("buy")}
-                className="mt-4 min-h-12 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
+                className="mt-4 min-h-12 w-full rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
               >
                 {busy ? "Waiting for the wallet…" : `Buy with $${usd} USDC`}
               </button>
@@ -208,7 +231,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 type="button"
                 disabled={busy}
                 onClick={() => void swap("sell")}
-                className="mt-2 min-h-11 w-full rounded-lg bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-60"
+                className="mt-2 min-h-11 w-full rounded-full bg-white/10 px-4 text-sm font-semibold disabled:opacity-60"
               >
                 Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
               </button>

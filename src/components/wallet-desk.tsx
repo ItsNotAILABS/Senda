@@ -204,22 +204,22 @@ export function WalletDesk({ buy }: { buy?: string }) {
   const payLabel = pay === "SOL" ? "SOL" : pay === "USDC" ? "USDC" : house.find((h) => h.mint === pay)?.symbol || "Token";
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <section className="border-b border-border px-3 py-3 lg:px-4 xl:border-r xl:border-b-0">
+    <div className="grid grid-cols-1 gap-3 px-3 py-3 xl:grid-cols-[minmax(0,1fr)_420px] lg:px-4">
+      <section>
         <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
-          <p className="text-sm text-muted">Your money</p>
-          <h1 className="mt-1 font-display text-6xl tabular-nums tracking-tight">
-          ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
-        </h1>
-        <p className="mt-2 max-w-lg text-sm text-muted">
-          Phantom is already money. You do not deposit it into another account before you can buy, swap, or sell.
-        </p>
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Convert</p>
+          <h1 className="mt-2 font-mono text-5xl tabular-nums tracking-tight">
+            ${total.toLocaleString("en-US", { maximumFractionDigits: 2 })}
+          </h1>
+          <p className="mt-2 max-w-lg text-sm text-muted">
+            Phantom is already money. Convert it here. You do not deposit it into another account first.
+          </p>
         </header>
-        <ul className="mt-4 max-w-md divide-y divide-border">
-          <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." />
-          <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} is in the vault` : owner || "Not connected"} />
-          <Source name="SOL" value={solUsd} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} />
-          <Source name="PreStocks" value={invested} hint="Held in this wallet, at the live token price" />
+        <ul className="mt-3 space-y-2">
+          <Source name="Senda cash" value={cash} hint="In-app balance. It does not become USDC in Phantom." tint="bg-white/20" />
+          <Source name="Phantom USDC" value={usdcFree} hint={wrapped > 0 ? `${owner.slice(0, 4)}… · $${wrapped.toFixed(2)} wrapped` : owner || "Not connected"} tint="bg-[#2775ca]" />
+          <Source name="SOL" value={solUsd} hint={solPx ? `${sol.toFixed(4)} SOL · $${solPx.toFixed(2)}` : "Pricing SOL…"} tint="bg-[#9945ff]" />
+          <Source name="PreStocks" value={invested} hint="Held in this wallet, at the live token price" tint="bg-accent" />
         </ul>
         {err ? <p className="mt-3 text-sm text-down">{err}</p> : null}
         <div className="mt-6 flex flex-wrap gap-2 text-sm">
@@ -227,7 +227,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
           <Link to="/payments" className="rounded-lg bg-elevated px-3 py-2">Send</Link>
           <Link to="/agents" className="rounded-lg bg-elevated px-3 py-2">Agents</Link>
         </div>
-        <div className="mt-8 max-w-xl">
+        <div className="mt-3 max-w-xl rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <h2 className="text-sm font-semibold">Vault</h2>
           <p className="mt-1 text-sm text-muted">
             The vault wraps {link?.label || "the wallet"}. The USDC stays in that wallet. Senda cash is the claim. Push sends the claim back, so the same USDC is spendable there again.
@@ -241,15 +241,15 @@ export function WalletDesk({ buy }: { buy?: string }) {
             aria-label="Amount to wrap or push"
           />
           <div className="mt-2 flex gap-2">
-            <button type="button" disabled={!owner} onClick={() => void onWrap()} className="min-h-11 rounded-lg bg-fg px-4 text-sm font-semibold text-bg disabled:opacity-50">
+            <button type="button" disabled={!owner} onClick={() => void onWrap()} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50">
               Wrap
             </button>
-            <button type="button" disabled={!owner} onClick={() => void onPush()} className="min-h-11 rounded-lg bg-elevated px-4 text-sm font-semibold disabled:opacity-50">
+            <button type="button" disabled={!owner} onClick={() => void onPush()} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold disabled:opacity-50">
               Push back
             </button>
           </div>
         </div>
-        <div className="mt-8 max-w-xl">
+        <div className="mt-3 max-w-xl rounded-[28px] border border-white/10 bg-[#101018] p-5">
           <h2 className="text-sm font-semibold">Send cap</h2>
           <p className="mt-1 text-sm text-muted">A bigger send is refused. The key never leaves Phantom. Every send is simulated first.</p>
           <div className="mt-3 flex gap-1">
@@ -258,7 +258,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
                 key={n}
                 type="button"
                 onClick={() => setCap(setSpendCap(n))}
-                className={cn("min-h-9 rounded-lg px-3 font-mono text-xs", cap === n ? "bg-fg text-bg" : "bg-elevated text-muted")}
+                className={cn("min-h-9 rounded-full px-3 font-mono text-xs", cap === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
               >
                 ${n}
               </button>
@@ -275,18 +275,18 @@ export function WalletDesk({ buy }: { buy?: string }) {
           )}
         </div>
       </section>
-      <aside className="px-5 py-6 lg:px-6">
-        <h2 className="font-display text-3xl">Convert</h2>
+      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
+        <h2 className="text-3xl">Convert</h2>
         <p className="mt-1 text-sm text-muted">SOL, USDC, or a PreStock you hold. One signature.</p>
         <p className="mt-4 text-xs text-subtle">You pay</p>
         <div className="mt-1 flex flex-wrap gap-1">
           {(["SOL", "USDC"] as const).map((id) => (
-            <button key={id} type="button" onClick={() => setPay(id)} className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", pay === id ? "bg-fg text-bg" : "bg-elevated")}>
+            <button key={id} type="button" onClick={() => setPay(id)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", pay === id ? "bg-accent text-accent-fg" : "bg-black/40")}>
               {id}
             </button>
           ))}
           {PRESTOCK_MINTS.filter(([, mint]) => (snap?.tokens.find((t) => t.mint === mint)?.ui ?? 0) > 0).map(([symbol, mint]) => (
-            <button key={mint} type="button" onClick={() => setPay(mint)} className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", pay === mint ? "bg-fg text-bg" : "bg-elevated")}>
+            <button key={mint} type="button" onClick={() => setPay(mint)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", pay === mint ? "bg-accent text-accent-fg" : "bg-black/40")}>
               {symbol}
             </button>
           ))}
@@ -295,16 +295,16 @@ export function WalletDesk({ buy }: { buy?: string }) {
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           inputMode="decimal"
-          className="mt-3 min-h-12 w-full rounded-lg bg-elevated px-3 font-mono text-lg outline-none"
+          className="mt-3 min-h-12 w-full rounded-2xl bg-black/40 px-3 font-mono text-lg outline-none"
           aria-label="Amount to pay"
         />
         <p className="mt-4 text-xs text-subtle">You receive</p>
         <div className="mt-1 flex flex-wrap gap-1">
-          <button type="button" onClick={() => setRecv("USDC")} className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", recv === "USDC" ? "bg-fg text-bg" : "bg-elevated")}>
+          <button type="button" onClick={() => setRecv("USDC")} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", recv === "USDC" ? "bg-accent text-accent-fg" : "bg-black/40")}>
             USDC
           </button>
           {PRESTOCK_MINTS.map(([symbol]) => (
-            <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={cn("min-h-9 rounded-lg px-3 text-xs font-semibold", recv === symbol ? "bg-fg text-bg" : "bg-elevated")}>
+            <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", recv === symbol ? "bg-accent text-accent-fg" : "bg-black/40")}>
               {symbol}
             </button>
           ))}
@@ -320,7 +320,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
           type="button"
           disabled={busy || !quote}
           onClick={() => void go()}
-          className="mt-5 min-h-12 w-full rounded-lg bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+          className="mt-5 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
         >
           {busy ? "Waiting for the wallet…" : `Convert ${payLabel}`}
         </button>
@@ -332,10 +332,11 @@ export function WalletDesk({ buy }: { buy?: string }) {
   );
 }
 
-function Source({ name, value, hint }: { name: string; value: number; hint: string }) {
+function Source({ name, value, hint, tint }: { name: string; value: number; hint: string; tint: string }) {
   return (
-    <li className="flex items-baseline justify-between gap-4 py-3">
-      <span>
+    <li className="flex items-center gap-3 rounded-2xl border border-white/10 bg-[#101018] px-3 py-3">
+      <span className={cn("size-8 rounded-full", tint)} />
+      <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{name}</span>
         <span className="block text-xs text-subtle">{hint}</span>
       </span>
