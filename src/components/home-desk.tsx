@@ -104,16 +104,16 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
-      <section className="senda-rise grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="flex flex-col justify-center rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="rounded-[28px] border border-white/10 bg-[#0c0c14] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Senda</p>
-          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+          <h1 className="mt-3 max-w-xl text-4xl leading-[1.05] tracking-tight lg:text-5xl">
             Your money. <span className="text-accent">Held here. Spent from here.</span>
           </h1>
           <p className="mt-4 max-w-md text-sm text-muted">
             {owner
-              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Senda cash is what you send, put on a card, and hold in another currency. A company you hold stays in the wallet.`
-              : "Connect Phantom. The money already in it shows up here. Senda cash is what you send, put on a card, and hold in another currency."}
+              ? `${sol.toFixed(2)} SOL and ${usdc.toFixed(2)} USDC are already in Phantom. Senda cash is the account you send, spend, and exchange. A PreStock you hold is still yours. It is not the account.`
+              : "Connect Phantom. The money already in it shows up here. Senda cash is what you send to people, put on a card, and hold in another currency."}
           </p>
           <div className="mt-6 flex flex-wrap gap-2">
             <Link to="/payments" className="inline-flex min-h-12 items-center rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg">Send</Link>
@@ -122,22 +122,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
           </div>
           {!owner ? <div className="mt-5 max-w-sm"><WalletPicker /></div> : null}
         </div>
-        <div className="relative min-h-80 overflow-hidden rounded-[28px] border border-white/10">
-          <video
-            src="/video/desk.mp4"
-            poster="/images/orbit.jpg"
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="senda-film h-full min-h-80 w-full object-cover"
-          />
-          <p className="absolute right-4 bottom-4 max-w-48 text-right text-xs tracking-[0.18em] text-white/80 uppercase">
-            Same money. More uses.
-          </p>
-        </div>
-      </section>
-      <section className="senda-rise grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2">
           {(
             [
               ["/payments", "Send", "To a person, or nearby", "bg-[#14f195]/15"],
@@ -154,40 +139,46 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               <span className="block text-[11px] text-muted">{hint}</span>
             </Link>
           ))}
+        </div>
       </section>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
-          <div className="flex items-center justify-between px-4 pt-4">
-            <p className="text-sm font-semibold">Card</p>
-            <Link to="/cards" search={{ spend: 0 }} className="text-xs text-accent">
-              Open
-            </Link>
-          </div>
-          <div className="relative mt-3 h-56 overflow-hidden">
-            <video src="/video/card.mp4" poster="/images/metal-card.jpg" autoPlay muted loop playsInline className="h-full w-full object-cover" />
-          </div>
-          <div className="flex gap-3 overflow-x-auto p-4">
-            {wallet.w.cards.filter((c) => c.status !== "terminated").length === 0 ? (
-              <Link to="/cards" search={{ spend: 0 }} className="text-sm">
-                <span className="block font-semibold">No card yet</span>
-                <span className="block text-xs text-muted">Make one. A store charges this cash, not the token.</span>
-              </Link>
-            ) : (
-              wallet.w.cards
-                .filter((c) => c.status !== "terminated")
-                .slice(0, 3)
-                .map((c) => (
-                  <Link key={c.id} to="/cards" search={{ spend: 0 }} className="min-w-40">
-                    <p className="text-[11px] text-subtle">{c.label}</p>
-                    <p className="mt-1 font-mono text-sm">•••• {c.last4}</p>
-                  </Link>
-                ))
-            )}
-          </div>
+      <section className="grid gap-3 xl:grid-cols-2">
+        <div className="relative min-h-64 overflow-hidden rounded-[28px] border border-white/10">
+          <video src="/video/desk.mp4" poster="/images/orbit.jpg" autoPlay muted loop playsInline className="h-full min-h-64 w-full object-cover" />
         </div>
-        <div className="relative min-h-72 overflow-hidden rounded-[28px] border border-white/10">
-          <video src="/video/desk.mp4" poster="/images/orbit.jpg" autoPlay muted loop playsInline className="h-full min-h-72 w-full object-cover" />
+        <div className="relative min-h-64 overflow-hidden rounded-[28px] border border-white/10">
+          <video src="/video/card.mp4" poster="/images/metal-card.jpg" autoPlay muted loop playsInline className="h-full min-h-64 w-full object-cover" />
+          <Link to="/cards" search={{ spend: 0 }} className="absolute right-4 bottom-4 text-xs tracking-[0.16em] text-white uppercase">Card</Link>
+        </div>
+      </section>
+      <section className="rounded-[28px] border border-white/10 bg-[#101018] p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Cards</p>
+          <Link to="/cards" search={{ spend: 0 }} className="text-xs text-accent">
+            Open
+          </Link>
+        </div>
+        <div className="mt-3 flex gap-3 overflow-x-auto">
+          {wallet.w.cards.filter((c) => c.status !== "terminated").length === 0 ? (
+            <Link to="/cards" search={{ spend: 0 }} className="flex min-w-56 items-center gap-3 rounded-2xl bg-gradient-to-br from-[#14141c] to-[#0c2418] px-4 py-4">
+              <img src="/images/metal-card.jpg" alt="" className="h-12 w-20 rounded-lg object-cover" />
+              <span>
+                <span className="block text-sm font-semibold">No card yet</span>
+                <span className="block text-xs text-muted">One number. The store never sees the token.</span>
+              </span>
+            </Link>
+          ) : (
+            wallet.w.cards
+              .filter((c) => c.status !== "terminated")
+              .slice(0, 3)
+              .map((c) => (
+                <Link key={c.id} to="/cards" search={{ spend: 0 }} className="min-w-52 rounded-2xl bg-gradient-to-br from-[#14141c] to-[#0c2418] px-4 py-4">
+                  <p className="text-[11px] text-subtle">{c.label}</p>
+                  <p className="mt-4 font-mono text-sm">•••• {c.last4}</p>
+                  <p className="mt-1 text-xs text-muted">{c.nameOn}</p>
+                </Link>
+              ))
+          )}
         </div>
       </section>
 
