@@ -13,6 +13,7 @@ import {
   addPayUsdc,
   upsertContact,
   buyCover,
+  claimCover,
   payCover,
   playStake,
   playWin,
@@ -177,6 +178,7 @@ export function useWallet() {
       },
       cover: (plan: { id: string; title: string; premium: number; cover: number; term: string }) =>
         commit(buyCover(w, plan)),
+      claim: (policyId: string) => commit(claimCover(w, policyId)),
       payCover: (amount: number, title: string) => commit(payCover(w, amount, title)),
       playStake: (amount: number, note: string) => commit(playStake(w, amount, note)),
       playWin: (amount: number, note: string) => {

@@ -1020,6 +1020,28 @@ export function playWin(w: Wallet, amount: number, note: string): Wallet {
   });
 }
 
+/** One claim pays the cover and ends it. Not a licensed carrier. */
+export function claimCover(w: Wallet, policyId: string): Wallet | { error: string } {
+  const p = w.policies.find((x) => x.id === policyId);
+  if (!p) return { error: "That cover is not on the account." };
+  if (Date.parse(p.until) < Date.now()) return { error: "That cover has ended." };
+  const amt = roundCcy(p.cover, "USD");
+  const next = {
+    ...w,
+    balances: { ...w.balances, USD: roundCcy(w.balances.USD + amt, "USD") },
+    policies: w.policies.filter((x) => x.id !== policyId),
+  };
+  return pushTx(next, {
+    kind: "cover",
+    amount: amt,
+    ccy: "USD",
+    counterparty: p.title,
+    note: "Cover paid",
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 export function openCurrency(w: Wallet, ccy: Ccy): Wallet | { error: string } {
   if (w.opened.includes(ccy)) return { error: `${ccy} is already open.` };
   return { ...w, opened: [...w.opened, ccy] };

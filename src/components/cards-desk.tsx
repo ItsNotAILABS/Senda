@@ -92,8 +92,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           <CheckoutPay
             initialSpend={initialSpend}
             onMint={(cap, merchant, name) => issueCheckout(cap, merchant, name)}
-            onAuth={(id, amount, merchant) => {
-              const r = cardSpend(amount, merchant || "Checkout", id, "5999");
+            onAuth={(id, amount, merchant, mcc) => {
+              const r = cardSpend(amount, merchant || "Checkout", id, mcc);
               if (!r.ok) toast.error(r.error);
               else toast.success("Approved once. That number is dead.");
               return r.ok;
@@ -152,8 +152,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
             ))}
           </div>
           {(w.cardAuths ?? []).length > 0 ? (
-            <section className="mt-8">
-              <h2 className="text-sm font-medium text-muted">Authorizations</h2>
+            <section className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] p-5">
+              <h2 className="text-sm font-semibold">Charges</h2>
               <ul className="mt-2 divide-y divide-border">
                 {w.cardAuths.slice(0, 12).map((a) => (
                   <li key={a.id} className="flex items-baseline justify-between py-3">
@@ -188,11 +188,12 @@ function CheckoutPay({
     merchant: string,
     name: string,
   ) => { ok: true; reveal: { id: string; pan: string; cvv: string; expiry: string; last4: string } } | { ok: false; error: string };
-  onAuth: (id: string, amount: number, merchant: string) => boolean;
+  onAuth: (id: string, amount: number, merchant: string, mcc: string) => boolean;
 }) {
   const [cap, setCap] = useState(initialSpend > 0 ? String(initialSpend) : "40");
   const [merchant, setMerchant] = useState("");
   const [name, setName] = useState("SENDA");
+  const [mcc, setMcc] = useState("5999");
   const [reveal, setReveal] = useState<{ id: string; pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const [spent, setSpent] = useState(false);
 
@@ -202,9 +203,15 @@ function CheckoutPay({
         <p className="text-xs tracking-wide text-subtle uppercase">Ghost</p>
         <h2 className="mt-1 font-display text-3xl">One number. One charge.</h2>
         <p className="mt-2 text-sm text-muted">
-          Paste it at any checkout that takes a card. The store sees this number, not your bank card, Cash App, Chime, or Venmo.
-          It is not saved. A second charge is declined.
+          Pick what the store is. Mint a number capped at the amount. Paste it at checkout. A second charge is declined. The number is not saved.
         </p>
+        <div className="mt-3 flex flex-wrap gap-1">
+          {MCC.map((m) => (
+            <button key={m.id} type="button" onClick={() => setMcc(m.id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", mcc === m.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>
+              {m.label}
+            </button>
+          ))}
+        </div>
         <label className="mt-4 block text-xs text-subtle">Cap</label>
         <input
           value={cap}
@@ -264,7 +271,7 @@ function CheckoutPay({
               <button
                 type="button"
                 onClick={() => {
-                  const ok = onAuth(reveal.id, Number(cap) || 0, merchant.trim());
+                  const ok = onAuth(reveal.id, Number(cap) || 0, merchant.trim() || MCC.find((m) => m.id === mcc)?.label || "Store", mcc);
                   if (ok) setSpent(true);
                 }}
                 className="mt-2 min-h-11 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg"
