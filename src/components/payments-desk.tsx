@@ -28,9 +28,17 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
       <div className="min-h-0">
       <header className="rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Send</p>
-        <h1 className="mt-2 text-4xl">Same cash</h1>
-        <p className="mt-2 text-sm text-muted">Send it, hold another currency, or add. The PreStock stays a separate thing you buy.</p>
+        <h1 className="mt-2 text-4xl">Cash, in the currencies you hold</h1>
+        <p className="mt-2 max-w-xl text-sm text-muted">Send it, ask for it, change it, or add it. A PreStock is not this cash. You buy that on the book.</p>
       </header>
+      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        {(w.w.opened.length ? w.w.opened : (["USD"] as Ccy[])).map((c) => (
+          <button key={c} type="button" onClick={() => setAct("exchange")} className="rounded-[24px] border border-white/10 bg-[#101018] px-4 py-4 text-left">
+            <p className="text-xs text-subtle">{c}</p>
+            <p className="mt-1 font-mono text-xl tabular-nums">{formatMoney(w.w.balances[c] || 0, c)}</p>
+          </button>
+        ))}
+      </div>
       <div className="mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-4 py-3 text-sm">
         <p className="font-medium">{w.w.tag}</p>
         <p className="mt-1 font-mono text-xs text-muted">

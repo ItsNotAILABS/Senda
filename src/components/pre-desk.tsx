@@ -37,6 +37,9 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   const [decimals, setDecimals] = useState(9);
   const [sig, setSig] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [mode, setMode] = useState<"buy" | "cover" | "spend" | "stand">("buy");
+  const [store, setStore] = useState("");
+  const [reveal, setReveal] = useState<{ pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const wallet = useWallet();
   const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
@@ -116,192 +119,235 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   }
 
   return (
-    <div className="grid grid-cols-1 gap-3 px-3 py-3 xl:grid-cols-[minmax(0,1fr)_380px] lg:px-4">
-      <section>
-        <header className="rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">PreStocks</p>
-          <h1 className="mt-2 text-4xl">The book</h1>
-          <p className="mt-2 max-w-xl text-sm text-muted">
-            {owner
-              ? "Pick a name. Jupiter quotes it. You sign. Senda does not take the other side."
-              : "Connect the wallet that already holds the money. Then buy the mint."}
-          </p>
-        </header>
-        <div className="mt-3 overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
-        <table className="w-full text-left text-sm">
-          <thead className="text-xs text-subtle">
-            <tr>
-              <th className="px-5 py-2 font-medium lg:px-8">Company</th>
-              <th className="px-2 py-2 text-right font-medium">Token</th>
-              <th className="px-2 py-2 text-right font-medium">Mark</th>
-              <th className="px-2 py-2 text-right font-medium">Vs mark</th>
-              <th className="px-2 py-2 text-right font-medium">24h</th>
-              <th className="px-5 py-2 text-right font-medium lg:px-8">Route</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.id}
-                onClick={() => {
-                  setSymbol(r.symbol);
-                  setSig(null);
-                }}
-                className={cn("cursor-pointer border-t border-white/10", r.symbol === name?.symbol ? "bg-white/5" : "hover:bg-white/5")}
-              >
-                <td className="px-4 py-3">
-                  <span className="flex items-center gap-3">
-                    {LOGO[r.symbol] ? (
-                      <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
-                    ) : (
-                      <span className="grid size-8 place-items-center rounded-full bg-elevated text-[10px]">{r.symbol.slice(0, 2)}</span>
-                    )}
-                    <span>
-                      <span className="block font-semibold">{r.symbol}</span>
-                      <span className="block text-[11px] text-subtle">{r.name}</span>
-                    </span>
-                  </span>
-                </td>
-                <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.last)}</td>
-                <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(r.mark)}</td>
-                <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
-                  {formatPremium(r.premium)}
-                </td>
-                <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (r.change24h ?? 0) < 0 ? "text-down" : "text-up")}>
-                  {r.change24h == null ? "—" : `${r.change24h > 0 ? "+" : ""}${(r.change24h * 100).toFixed(1)}%`}
-                </td>
-                <td className="px-5 py-3 text-right font-mono text-[11px] text-muted lg:px-8">
-                  {routes.find((x) => x.mint === r.mint)?.route || "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </section>
-
-      <aside className="h-fit rounded-[28px] border border-white/10 bg-[#101018] p-5">
-        {name ? (
-          <>
-            <p className="font-mono text-[11px] text-subtle">{name.mint}</p>
-            <h2 className="mt-3 text-4xl">{name.symbol}</h2>
-            <p className="mt-2 text-sm text-muted">{name.description}</p>
-            <div className="mt-4 grid grid-cols-3 gap-2 text-xs">
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <p className="text-subtle">24h</p>
-                <p className="font-mono">{name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`}</p>
-              </div>
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <p className="text-subtle">Holders</p>
-                <p className="font-mono">{name.holders.toLocaleString()}</p>
-              </div>
-              <div className="rounded-xl bg-elevated px-3 py-2">
-                <p className="text-subtle">Liquidity</p>
-                <p className="font-mono">{formatUsd(name.liquidity)}</p>
+    <div className="space-y-3 px-3 py-3 lg:px-4">
+      {name ? (
+        <section className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="flex items-center gap-4">
+              {LOGO[name.symbol] ? (
+                <img src={LOGO[name.symbol]} alt="" className="size-16 rounded-2xl bg-white object-contain p-2" />
+              ) : null}
+              <div>
+                <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">PreStock</p>
+                <h1 className="text-4xl">{name.symbol}</h1>
+                <p className="text-sm text-muted">{name.name}</p>
               </div>
             </div>
-            <label className="mt-4 block text-xs text-subtle">
-              Size
-              <input
-                value={usd}
-                onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
-                inputMode="decimal"
-                className="mt-1 min-h-11 w-full rounded-lg bg-elevated px-3 font-mono text-sm text-fg outline-none"
-              />
-            </label>
-            <div className="mt-2 flex gap-1">
-              {[10, 25, 100].map((n) => (
+            <div className="text-right">
+              <p className="font-mono text-5xl tabular-nums">{formatUsd(name.last)}</p>
+              <p className={cn("mt-1 font-mono text-sm", (name.premium ?? 0) < 0 ? "text-up" : "text-down")}>
+                {formatPremium(name.premium)} vs mark {formatUsd(name.mark)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4">
+            <Stat k="24h" v={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} />
+            <Stat k="Holders" v={name.holders.toLocaleString()} />
+            <Stat k="Liquidity" v={formatUsd(name.liquidity)} />
+            <Stat k="You hold" v={held && held.ui > 0 ? held.ui.toFixed(4) : "none"} />
+          </div>
+          <p className="mt-4 max-w-2xl text-sm text-muted">{name.description}</p>
+        </section>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <div className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101018]">
+          {rows.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => {
+                setSymbol(r.symbol);
+                setSig(null);
+                setReveal(null);
+              }}
+              className={cn("flex w-full items-center gap-3 border-t border-white/10 px-3 py-3 text-left first:border-0", r.symbol === name?.symbol ? "bg-white/5" : "hover:bg-white/5")}
+            >
+              {LOGO[r.symbol] ? <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" /> : <span className="grid size-8 place-items-center rounded-full bg-black/40 text-[10px]">{r.symbol.slice(0, 2)}</span>}
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{r.symbol}</span>
+                <span className="block truncate text-[11px] text-subtle">{r.name}</span>
+              </span>
+              <span className="text-right">
+                <span className="block font-mono text-xs">{formatUsd(r.last)}</span>
+                <span className={cn("block font-mono text-[11px]", (r.change24h ?? 0) < 0 ? "text-down" : "text-accent")}>
+                  {r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {name ? (
+          <section className="rounded-[28px] border border-white/10 bg-[#101018] p-5">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["buy", "Buy"],
+                  ["cover", "Cover"],
+                  ["spend", "Spend"],
+                  ["stand", "Stand"],
+                ] as const
+              ).map(([id, label]) => (
                 <button
-                  key={n}
+                  key={id}
                   type="button"
-                  onClick={() => setUsd(n)}
-                  className={cn("min-h-9 rounded-full px-3 font-mono text-xs tabular-nums", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
+                  onClick={() => setMode(id)}
+                  className={cn("min-h-10 rounded-full px-4 text-sm font-semibold", mode === id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
                 >
-                  ${n}
+                  {label}
                 </button>
               ))}
             </div>
-            <QuoteLine quote={quote} usd={usd} decimals={decimals} />
-            {owner ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void swap("buy")}
-                className="mt-4 min-h-12 w-full rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-60"
-              >
-                {busy ? "Waiting for the wallet…" : `Buy with $${usd} USDC`}
-              </button>
-            ) : (
-              <div className="mt-4">
-                <WalletPicker />
+
+            {mode === "buy" ? (
+              <div className="mt-5 max-w-lg">
+                <p className="text-sm text-muted">Jupiter quotes {name.symbol}. You sign. Senda does not take the other side.</p>
+                <Size usd={usd} setUsd={setUsd} />
+                <QuoteLine quote={quote} usd={usd} decimals={decimals} />
+                {owner ? (
+                  <button type="button" disabled={busy} onClick={() => void swap("buy")} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60">
+                    {busy ? "Waiting for the wallet…" : `Buy $${usd} of ${name.symbol}`}
+                  </button>
+                ) : (
+                  <div className="mt-4"><WalletPicker /></div>
+                )}
+                <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">Pay with SOL instead</Link>
+                {held && held.ui > 0 ? (
+                  <button type="button" disabled={busy} onClick={() => void swap("sell")} className="mt-2 min-h-11 w-full rounded-full bg-white/10 text-sm font-semibold">
+                    Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
+                  </button>
+                ) : owner ? <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p> : null}
+                <p className="mt-3 font-mono text-[11px] text-subtle break-all">{routes.find((x) => x.mint === name.mint)?.route || name.mint}</p>
               </div>
-            )}
-            <Link to="/wallet" search={{ buy: name.symbol }} className="mt-2 block text-center text-xs font-semibold text-muted">
-              Pay with SOL instead
-            </Link>
-            <div className="mt-5 border-t border-white/10 pt-4">
-              <p className="text-xs text-subtle">Use {name.symbol}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  const premium = Math.max(1, Math.round(usd * 0.04));
-                  const r = wallet.cover({
-                    id: `drop-${name.symbol}`,
-                    title: `${name.symbol} drop cover`,
-                    premium,
-                    cover: usd,
-                    term: "pays if the token falls 10% from this print",
-                  });
-                  if (!r.ok) {
-                    toast.error(r.error || "Not enough cash for the premium.");
-                    return;
-                  }
-                  lockDrop({ symbol: name.symbol, strike: name.last, cover: usd, paid: false });
-                  toast.success(`Covered. $${premium} now. Pays $${usd} if ${name.symbol} falls 10%.`);
-                }}
-                className="mt-2 min-h-11 w-full rounded-full bg-white/10 px-4 text-sm font-semibold"
-              >
-                Cover a 10% drop · ${Math.max(1, Math.round(usd * 0.04))}
-              </button>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <Link to="/social" className="rounded-2xl bg-black/40 px-3 py-3">
-                  <span className="block font-semibold">Play it</span>
-                  <span className="text-xs text-muted">Which name moves</span>
-                </Link>
-                <Link to="/cards" search={{ spend: 0 }} className="rounded-2xl bg-black/40 px-3 py-3">
-                  <span className="block font-semibold">Spend it</span>
-                  <span className="text-xs text-muted">A number, not the token</span>
-                </Link>
-              </div>
-              <p className="mt-2 text-[11px] text-subtle">
-                Cover pays Senda cash. It is not a licensed policy. The token stays in the wallet.
-              </p>
-            </div>
-            {held && held.ui > 0 ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void swap("sell")}
-                className="mt-2 min-h-11 w-full rounded-full bg-white/10 px-4 text-sm font-semibold disabled:opacity-60"
-              >
-                Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
-              </button>
-            ) : owner ? (
-              <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
             ) : null}
+
+            {mode === "cover" ? (
+              <div className="mt-5 max-w-lg">
+                <h2 className="text-2xl">Cover a 10% drop</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Premium is 4% of the size, taken from Senda cash now. If {name.symbol} falls from {formatUsd(name.last)} to {formatUsd(name.last * 0.9)}, the cover pays ${usd} back into cash. The token stays in the wallet. Not a licensed policy.
+                </p>
+                <Size usd={usd} setUsd={setUsd} />
+                <dl className="mt-4 space-y-1 text-sm">
+                  <Row k="Print you lock" v={formatUsd(name.last)} />
+                  <Row k="Pays if last is at or under" v={formatUsd(name.last * 0.9)} />
+                  <Row k="Premium now" v={`$${Math.max(1, Math.round(usd * 0.04))}`} />
+                  <Row k="Pays" v={`$${usd}`} />
+                </dl>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const premium = Math.max(1, Math.round(usd * 0.04));
+                    const r = wallet.cover({
+                      id: `drop-${name.symbol}`,
+                      title: `${name.symbol} drop cover`,
+                      premium,
+                      cover: usd,
+                      term: "pays if the token falls 10% from this print",
+                    });
+                    if (!r.ok) {
+                      toast.error(r.error || "Not enough cash for the premium.");
+                      return;
+                    }
+                    lockDrop({ symbol: name.symbol, strike: name.last, cover: usd, paid: false });
+                    toast.success(`Covered. $${premium} now. Pays $${usd} if ${name.symbol} falls 10%.`);
+                  }}
+                  className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+                >
+                  Buy the cover
+                </button>
+                <ul className="mt-4 space-y-2">
+                  {listDrops().filter((d) => d.symbol === name.symbol).map((d) => (
+                    <li key={d.strike} className="rounded-2xl bg-black/40 px-3 py-2 text-sm">
+                      Locked {formatUsd(d.strike)} · pays ${d.cover} · {d.paid ? "paid" : "open"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {mode === "spend" ? (
+              <div className="mt-5 max-w-lg">
+                <h2 className="text-2xl">A number, not the token</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Mint a one-time card capped at this size. The store sees the number. {name.symbol} stays in the wallet. The full number is shown once.
+                </p>
+                <Size usd={usd} setUsd={setUsd} />
+                <input value={store} onChange={(e) => setStore(e.target.value)} placeholder="Store, optional" className="mt-3 min-h-11 w-full rounded-2xl bg-black/40 px-3 text-sm outline-none" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const r = wallet.issueCheckout(usd, store, "SENDA");
+                    if (!r.ok) toast.error(r.error || "Could not mint a number.");
+                    else setReveal(r.reveal);
+                  }}
+                  className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg"
+                >
+                  Mint a ${usd} number
+                </button>
+                {reveal ? (
+                  <div className="mt-4 rounded-2xl bg-gradient-to-br from-[#16161f] to-[#0c2418] p-5 font-mono">
+                    <p className="tracking-[0.16em]">{reveal.pan}</p>
+                    <p className="mt-2 text-sm">{reveal.expiry} · {reveal.cvv}</p>
+                    <p className="mt-2 text-xs text-subtle">Shown once. A second charge is declined.</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {mode === "stand" ? (
+              <div className="mt-5">
+                <h2 className="text-2xl">Where {name.symbol} stands</h2>
+                <p className="mt-2 max-w-lg text-sm text-muted">Against the other names on this book, right now. Not a link.</p>
+                <ol className="mt-4 space-y-2">
+                  {[...rows].sort((a, b) => (b.change24h ?? -9) - (a.change24h ?? -9)).map((r, i) => (
+                    <li key={r.id} className={cn("flex items-center justify-between rounded-2xl px-3 py-2 text-sm", r.symbol === name.symbol ? "bg-accent/15" : "bg-black/30")}>
+                      <span>{i + 1}. {r.symbol}</span>
+                      <span className="font-mono text-xs">{r.change24h == null ? "—" : `${(r.change24h * 100).toFixed(1)}%`} · {formatPremium(r.premium)}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+
             {sig ? (
-              <a
-                href={`https://solscan.io/tx/${sig}`}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-4 block font-mono text-xs text-accent break-all"
-              >
-                {sig}
-              </a>
+              <a href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer" className="mt-4 block font-mono text-xs text-accent break-all">{sig}</a>
             ) : null}
-          </>
+          </section>
         ) : null}
-      </aside>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-2xl bg-black/40 px-3 py-2">
+      <p className="text-[11px] text-subtle">{k}</p>
+      <p className="font-mono text-sm">{v}</p>
+    </div>
+  );
+}
+
+function Size({ usd, setUsd }: { usd: number; setUsd: (n: number) => void }) {
+  return (
+    <div className="mt-4">
+      <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="min-h-12 w-full rounded-2xl bg-black/40 px-3 font-mono text-lg outline-none" />
+      <div className="mt-2 flex gap-1">
+        {[10, 25, 100, 250].map((n) => (
+          <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", usd === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}>${n}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Row({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-muted">{k}</dt>
+      <dd className="font-mono text-xs">{v}</dd>
     </div>
   );
 }

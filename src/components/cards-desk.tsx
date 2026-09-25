@@ -35,10 +35,13 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
     <main className="px-3 py-3 lg:px-4">
       <header className="rounded-[28px] border border-white/10 bg-[#101018] p-6">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cards</p>
-        <h1 className="mt-2 max-w-xl text-4xl">A number for the store. Not the token.</h1>
-        <p className="mt-3 max-w-xl text-sm text-muted">
-          Virtual, one-time, or fleet. The full number is shown once. What stays is the last four. Not a bank card.
+        <h1 className="mt-2 max-w-xl text-4xl">Numbers you can spend. The token stays put.</h1>
+        <p className="mt-3 max-w-2xl text-sm text-muted">
+          A card for the month, a number for one store, or a fleet card. The full number shows once. What stays is the last four. This is not a bank card.
         </p>
+        <button type="button" onClick={() => setStep(step === "issue" ? "list" : "issue")} className="mt-4 min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+          {step === "issue" ? "Back to the cards" : "Issue a card"}
+        </button>
       </header>
 
       {step === "issue" ? (
@@ -232,7 +235,7 @@ function CheckoutPay({
               setSpent(false);
             }
           }}
-          className="mt-4 min-h-11 rounded-lg bg-fg px-4 text-sm font-semibold text-bg"
+          className="mt-4 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
         >
           New number
         </button>
