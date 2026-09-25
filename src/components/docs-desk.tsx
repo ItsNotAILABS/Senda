@@ -179,6 +179,9 @@ export function DocsDesk() {
         <a href="/senda-submission.pdf" className="flex min-h-11 items-center justify-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
           Submission PDF
         </a>
+        <a href="/senda-submission.md" className="mt-2 flex min-h-11 items-center justify-center rounded-full border border-white/15 px-4 text-sm">
+          Submission note
+        </a>
         <nav className="mt-3 rounded-[22px] border border-white/10 bg-[#10131c] p-2">
           {SECTIONS.map((s) => (
             <a key={s.id} href={`#${s.id}`} className="block rounded-xl px-3 py-2 text-sm text-muted hover:bg-white/5 hover:text-fg">
