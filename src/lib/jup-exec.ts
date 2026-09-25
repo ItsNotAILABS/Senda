@@ -4,7 +4,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
+const QUOTE = "https://api.jup.ag/swap/v1/quote";
+const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
 
 export type JupQuote = {
   inAmount: string;
@@ -30,27 +31,38 @@ export async function fetchQuote(mint: string, usd: number, side: "buy" | "sell"
   const amount = Math.max(1, Math.round(usd * 1e6));
   const inputMint = side === "buy" ? USDC : mint;
   const outputMint = side === "buy" ? mint : USDC;
-  const url = `${QUOTE}?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
-  try {
-    const r = await fetch(url, { headers: { accept: "application/json" } });
-    if (!r.ok) return { error: `Jupiter ${r.status}` };
-    const j = (await r.json()) as Record<string, unknown>;
-    if (!j.outAmount) return { error: "No route." };
-    return {
-      inAmount: String(j.inAmount ?? amount),
-      outAmount: String(j.outAmount),
-      otherAmountThreshold: String(j.otherAmountThreshold ?? j.outAmount),
-      priceImpactPct: String(j.priceImpactPct ?? "0"),
-      slippageBps: Number(j.slippageBps ?? 100),
-      route: routeLabels(j),
-      swapUsdValue: j.swapUsdValue != null ? String(j.swapUsdValue) : null,
-      inMint: String(j.inputMint ?? inputMint),
-      outMint: String(j.outputMint ?? outputMint),
-      side,
-    };
-  } catch {
-    return { error: "Jupiter unreachable." };
+  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
+  let last = "Jupiter unreachable.";
+  for (const base of [QUOTE, QUOTE_LITE]) {
+    try {
+      const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+      const text = await r.text();
+      if (!r.ok) {
+        last = r.status === 429 ? "Jupiter is busy. Wait a moment." : `Jupiter ${r.status}`;
+        continue;
+      }
+      const j = JSON.parse(text) as Record<string, unknown>;
+      if (!j.outAmount) {
+        last = "No route.";
+        continue;
+      }
+      return {
+        inAmount: String(j.inAmount ?? amount),
+        outAmount: String(j.outAmount),
+        otherAmountThreshold: String(j.otherAmountThreshold ?? j.outAmount),
+        priceImpactPct: String(j.priceImpactPct ?? "0"),
+        slippageBps: Number(j.slippageBps ?? 100),
+        route: routeLabels(j),
+        swapUsdValue: j.swapUsdValue != null ? String(j.swapUsdValue) : null,
+        inMint: String(j.inputMint ?? inputMint),
+        outMint: String(j.outputMint ?? outputMint),
+        side,
+      };
+    } catch {
+      last = "Jupiter unreachable.";
+    }
   }
+  return { error: last };
 }
 
 export const quoteJup = createServerFn({ method: "POST" })

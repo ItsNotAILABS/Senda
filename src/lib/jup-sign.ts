@@ -4,8 +4,10 @@ import { USDC } from "@/lib/jup-exec";
 import { sendVersioned } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
 
-const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
-const SWAP = "https://lite-api.jup.ag/swap/v1/swap";
+const QUOTE = "https://api.jup.ag/swap/v1/quote";
+const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
+const SWAP = "https://api.jup.ag/swap/v1/swap";
+const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
 
 export const SOL = "So11111111111111111111111111111111111111112";
 
@@ -41,21 +43,35 @@ export async function quoteRoute(input: {
   outDecimals: number;
 }): Promise<RouteQuote> {
   if (!(input.amountRaw > 0)) throw new Error("Enter an amount.");
-  const url = `${QUOTE}?inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
-  const res = await fetch(url, { headers: { accept: "application/json" } });
-  const quote = (await res.json()) as RawQuote;
-  if (!res.ok || !quote.outAmount) throw new Error(quote.error || `Jupiter quote ${res.status}`);
-  const impact = Number(quote.priceImpactPct ?? 0);
-  const outUi = Number(quote.outAmount) / 10 ** input.outDecimals;
-  const minRaw = Number(quote.otherAmountThreshold || quote.outAmount);
-  return {
-    inAmount: quote.inAmount || String(Math.floor(input.amountRaw)),
-    outAmount: quote.outAmount,
-    outUi,
-    minUi: minRaw / 10 ** input.outDecimals,
-    impact,
-    route: (quote.routePlan ?? []).map((p) => p.swapInfo?.label).filter(Boolean).join(" → ") || "Jupiter",
-  };
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
+  let last = "Jupiter did not quote.";
+  for (const base of [QUOTE, QUOTE_LITE]) {
+    const res = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+    const text = await res.text();
+    let quote: RawQuote = {};
+    try {
+      quote = JSON.parse(text) as RawQuote;
+    } catch {
+      last = res.status === 429 ? "Jupiter is busy. Wait a moment." : "Jupiter did not quote.";
+      continue;
+    }
+    if (!res.ok || !quote.outAmount) {
+      last = res.status === 429 ? "Jupiter is busy. Wait a moment." : quote.error || `Jupiter quote ${res.status}`;
+      continue;
+    }
+    const impact = Number(quote.priceImpactPct ?? 0);
+    const outUi = Number(quote.outAmount) / 10 ** input.outDecimals;
+    const minRaw = Number(quote.otherAmountThreshold || quote.outAmount);
+    return {
+      inAmount: quote.inAmount || String(Math.floor(input.amountRaw)),
+      outAmount: quote.outAmount,
+      outUi,
+      minUi: minRaw / 10 ** input.outDecimals,
+      impact,
+      route: (quote.routePlan ?? []).map((p) => p.swapInfo?.label).filter(Boolean).join(" → ") || "Jupiter",
+    };
+  }
+  throw new Error(last);
 }
 
 export async function signRoute(input: {
@@ -71,26 +87,52 @@ export async function signRoute(input: {
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
   const quoted = await quoteRoute(input);
   if (quoted.impact > 5) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
-  const url = `${QUOTE}?inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
-  const quoteRes = await fetch(url, { headers: { accept: "application/json" } });
-  const quote = (await quoteRes.json()) as RawQuote;
-  if (!quote.outAmount) throw new Error(quote.error || "Jupiter did not quote.");
-  const swapRes = await fetch(SWAP, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      quoteResponse: quote,
-      userPublicKey: input.owner,
-      dynamicComputeUnitLimit: true,
-      dynamicSlippage: true,
-    }),
-  });
-  const swap = (await swapRes.json()) as { swapTransaction?: string; error?: string };
-  if (!swap.swapTransaction) throw new Error(swap.error || "Jupiter did not build a transaction.");
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
+  let quote: RawQuote | null = null;
+  for (const base of [QUOTE, QUOTE_LITE]) {
+    const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+    const text = await quoteRes.text();
+    try {
+      const parsed = JSON.parse(text) as RawQuote;
+      if (quoteRes.ok && parsed.outAmount) {
+        quote = parsed;
+        break;
+      }
+    } catch {
+      /* try the other host */
+    }
+  }
+  if (!quote?.outAmount) throw new Error("Jupiter did not quote.");
+  let swapTx = "";
+  let swapErr = "Jupiter did not build a transaction.";
+  for (const base of [SWAP, SWAP_LITE]) {
+    const swapRes = await fetch(base, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        quoteResponse: quote,
+        userPublicKey: input.owner,
+        dynamicComputeUnitLimit: true,
+        dynamicSlippage: true,
+      }),
+    });
+    const text = await swapRes.text();
+    try {
+      const swap = JSON.parse(text) as { swapTransaction?: string; error?: string };
+      if (swap.swapTransaction) {
+        swapTx = swap.swapTransaction;
+        break;
+      }
+      if (swap.error) swapErr = swap.error;
+    } catch {
+      if (swapRes.status === 429) swapErr = "Jupiter is busy. Wait a moment.";
+    }
+  }
+  if (!swapTx) throw new Error(swapErr);
   const { Buffer } = await import("buffer");
   if (!globalThis.Buffer) globalThis.Buffer = Buffer;
   const { VersionedTransaction } = await import("@solana/web3.js");
-  const tx = VersionedTransaction.deserialize(b64ToBytes(swap.swapTransaction));
+  const tx = VersionedTransaction.deserialize(b64ToBytes(swapTx));
   const signature = await sendVersioned(tx);
   return { signature, outUi: quoted.outUi };
 }

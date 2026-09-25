@@ -1,7 +1,6 @@
 /** Every PreStock is the same object: a mint, a live route, a signed swap. */
 
 import { createServerFn } from "@tanstack/react-start";
-import { fetchQuote } from "@/lib/jup-exec";
 import { signStockSwap } from "@/lib/jup-sign";
 import { mintDecimals, splHolding } from "@/lib/phantom";
 
@@ -57,15 +56,9 @@ export const getPreRoutes = createServerFn({ method: "GET" }).handler(async (): 
   const res = await fetch(PRE, { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`PreStocks ${res.status}`);
   const rows = (await res.json()) as Array<{ symbol?: string; contract_address?: string }>;
-  const quoted = await Promise.all(
-    rows.map(async (r) => {
-      const mint = String(r.contract_address ?? "");
-      const symbol = String(r.symbol ?? "");
-      if (mint.length < 32) return { symbol, mint, route: "", outRaw: "", ok: false };
-      const q = await fetchQuote(mint, 10, "buy");
-      if ("error" in q) return { symbol, mint, route: q.error, outRaw: "", ok: false };
-      return { symbol, mint, route: q.route.join(" → ") || "Jupiter", outRaw: q.outAmount, ok: true };
-    }),
-  );
-  return quoted;
+  return rows.map((r) => {
+    const mint = String(r.contract_address ?? "");
+    const symbol = String(r.symbol ?? "");
+    return { symbol, mint, route: mint.length >= 32 ? "Jupiter" : "", outRaw: "", ok: mint.length >= 32 };
+  });
 });
