@@ -1,25 +1,19 @@
-import { finishGrant, listBlobs, openNonce, putBlob } from "@/lib/sealed-store";
+import { finishGrant, readVault, openNonce, writeVault } from "@/lib/sealed-store";
 
-/**
- * The wallet is the account. What the desk remembers is ciphertext.
- * The key lives in memory for this visit. It is the signature of one fixed line.
- * Postgres stores that ciphertext and nothing else. Flags the desk needs before
- * a wallet exists stay in the clear, and they are not uploaded.
- */
-
-const MARK = "sen1.";
-const EVENT = "senda-seal";
 const PLAIN = new Set(["senda.seen.v1", "senda.howto.v1"]);
-
+const own = (key: string) => !PLAIN.has(key) && /^(senda|the-pit)\./.test(key);
+const records = new Map<string, string>();
 let aes: CryptoKey | null = null;
-let who = "";
-let grant = "";
-const open = new Map<string, string>();
-const pending = new Map<string, string>();
-const dirty = new Map<string, string>();
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-let installed = false;
-
+let who = "",
+  token = "",
+  generation = 0,
+  revision = 0;
+let dirty = false,
+  syncing = false,
+  conflict = false,
+  edits = 0;
+let timer: ReturnType<typeof setTimeout> | null = null;
+let queue = Promise.resolve();
 const native =
   typeof Storage === "undefined"
     ? null
@@ -28,213 +22,316 @@ const native =
         set: Storage.prototype.setItem,
         remove: Storage.prototype.removeItem,
       };
-
-function own(key: string): boolean {
-  if (PLAIN.has(key)) return false;
-  return key.startsWith("senda.") || key.startsWith("the-pit.");
-}
-
-function rawGet(key: string): string | null {
-  if (!native) return null;
-  return native.get.call(localStorage, key);
-}
-
-function rawSet(key: string, value: string) {
-  if (!native) return;
-  native.set.call(localStorage, key, value);
-}
-
-function rawRemove(key: string) {
-  if (!native) return;
-  native.remove.call(localStorage, key);
-}
-
-export function sealOpen(): boolean {
-  return aes != null;
-}
-
+const rawGet = (key: string) => native!.get.call(localStorage, key);
+const rawSet = (key: string, value: string) => native!.set.call(localStorage, key, value);
+const keyFor = (owner: string) => `sealed-vault.v2.${owner}`;
+const b64 = (v: Uint8Array) => btoa(Array.from(v, (b) => String.fromCharCode(b)).join(""));
+const unb64 = (v: string) => Uint8Array.from(atob(v), (c) => c.charCodeAt(0));
 function tell() {
-  window.dispatchEvent(new Event(EVENT));
+  window.dispatchEvent(new Event("senda-seal"));
 }
-
-async function aesFrom(sig: Uint8Array): Promise<CryptoKey> {
-  const raw = await crypto.subtle.digest("SHA-256", sig);
-  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+function problem(error: unknown) {
+  window.dispatchEvent(
+    new CustomEvent("senda-sync-error", {
+      detail:
+        error instanceof Error
+          ? error.message
+          : "Encrypted sync is unavailable. Your local copy is preserved.",
+    }),
+  );
 }
-
-async function pack(value: string): Promise<string> {
-  if (!aes) throw new Error("The desk is sealed.");
-  const iv = new Uint8Array(12);
-  crypto.getRandomValues(iv);
-  const box = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, new TextEncoder().encode(value));
-  return `${MARK}${b64(iv)}.${b64(new Uint8Array(box))}`;
+export function sealOpen() {
+  return aes !== null;
 }
-
-async function unpack(stored: string): Promise<string | null> {
-  if (!aes || !stored.startsWith(MARK)) return null;
-  const cut = stored.indexOf(".", MARK.length);
-  if (cut < 0) return null;
-  try {
-    const iv = unb64(stored.slice(MARK.length, cut));
-    const box = unb64(stored.slice(cut + 1));
-    const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aes, box);
-    return new TextDecoder().decode(clear);
-  } catch {
-    return null;
-  }
-}
-
-async function writeCipher(key: string, value: string) {
-  const box = await pack(value);
-  rawSet(key, box);
-  schedule(key, box);
-}
-
-function schedule(key: string, box: string) {
-  if (!who || !grant) return;
-  dirty.set(key, box);
-  if (flushTimer != null) return;
-  flushTimer = setTimeout(() => {
-    flushTimer = null;
-    const batch = [...dirty];
-    dirty.clear();
-    void Promise.all(batch.map(([slot, packed]) => putBlob({ data: { wallet: who, nonce: grant, slot, box: packed } }))).catch(() => {
-      /* the browser copy is already sealed */
-    });
-  }, 400);
-}
-
-async function authorize(owner: string) {
-  const opened = await openNonce({ data: { wallet: owner } });
-  const provider = walletProvider();
-  if (!provider?.signMessage) return;
-  const out = await provider.signMessage(new TextEncoder().encode(`senda-grant:v1:${owner}:${opened.nonce}`), "utf8");
-  const sig = out instanceof Uint8Array ? out : out.signature;
-  if (!(sig instanceof Uint8Array)) return;
-  const done = await finishGrant({ data: { wallet: owner, nonce: opened.nonce, sig: b64(sig) } });
-  if (done.ok) grant = opened.nonce;
-}
-
-async function pull() {
-  if (!who || !grant) return;
-  const listed = await listBlobs({ data: { wallet: who, nonce: grant } });
-  for (const row of listed.rows) {
-    if (!own(row.slot) || open.has(row.slot)) continue;
-    const clear = await unpack(row.box);
-    if (clear == null) continue;
-    open.set(row.slot, clear);
-    rawSet(row.slot, row.box);
-  }
-}
-
-async function pushOpen() {
-  if (!who || !grant) return;
-  for (const key of open.keys()) {
-    const box = rawGet(key);
-    if (!box || !box.startsWith(MARK)) continue;
-    await putBlob({ data: { wallet: who, nonce: grant, slot: key, box } });
-  }
-}
-
-function install() {
-  if (installed || typeof window === "undefined" || !native) return;
-  installed = true;
-  const store = Storage.prototype;
-  store.getItem = function (key: string) {
-    if (!own(key)) return rawGet(key);
-    if (open.has(key)) return open.get(key) ?? null;
-    if (!aes) return pending.get(key) ?? null;
-    return null;
-  };
-  store.setItem = function (key: string, value: string) {
-    if (!own(key)) {
-      rawSet(key, value);
-      return;
-    }
-    if (!aes) {
-      pending.set(key, value);
-      return;
-    }
-    open.set(key, value);
-    void writeCipher(key, value);
-  };
-  store.removeItem = function (key: string) {
-    if (!own(key)) {
-      rawRemove(key);
-      return;
-    }
-    open.delete(key);
-    pending.delete(key);
-    rawRemove(key);
-  };
-}
-
-async function signVault(owner: string): Promise<Uint8Array> {
-  const provider = walletProvider();
-  if (!provider?.signMessage) throw new Error("This wallet has to sign before the desk opens.");
-  const out = await provider.signMessage(new TextEncoder().encode(`senda-vault:v1:${owner}`), "utf8");
-  const sig = out instanceof Uint8Array ? out : out.signature;
-  if (!(sig instanceof Uint8Array) || sig.length < 64) throw new Error("The wallet did not sign.");
-  return sig;
-}
-
-function walletProvider(): {
-  signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array>;
-} | null {
-  const w = window as unknown as {
-    phantom?: { solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> } };
-    solana?: { signMessage?: (m: Uint8Array, d?: string) => Promise<{ signature: Uint8Array } | Uint8Array> };
-  };
-  return w.phantom?.solana ?? w.solana ?? null;
-}
-
-export async function unlockSeal(owner: string): Promise<void> {
-  install();
-  who = owner;
-  grant = "";
-  aes = await aesFrom(await signVault(owner));
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i);
-    if (key && own(key)) keys.push(key);
-  }
-  for (const key of keys) {
-    const stored = rawGet(key);
-    if (!stored) continue;
-    if (stored.startsWith(MARK)) {
-      const clear = await unpack(stored);
-      if (clear != null) open.set(key, clear);
-    } else {
-      open.set(key, stored);
-      await writeCipher(key, stored);
-    }
-  }
-  for (const [key, value] of pending) {
-    open.set(key, value);
-    await writeCipher(key, value);
-  }
-  pending.clear();
-  try {
-    await authorize(owner);
-    await pull();
-    await pushOpen();
-  } catch {
-    /* local seal still holds. the database is the copy, not the door. */
-  }
+export function lockSeal() {
+  generation++;
+  aes = null;
+  who = "";
+  token = "";
+  records.clear();
+  revision = 0;
+  dirty = false;
+  conflict = false;
+  if (timer) clearTimeout(timer);
+  timer = null;
   tell();
 }
-
-function b64(bytes: Uint8Array): string {
-  let s = "";
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s);
+function provider() {
+  const w = window as unknown as { phantom?: { solana?: Wallet }; solana?: Wallet };
+  return w.phantom?.solana ?? w.solana;
 }
-
-function unb64(value: string): Uint8Array {
-  const raw = atob(value);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
-  return out;
+type Wallet = {
+  publicKey?: { toString(): string };
+  signMessage?: (
+    msg: Uint8Array,
+    display?: string,
+  ) => Promise<Uint8Array | { signature: Uint8Array }>;
+  on?: (event: string, fn: () => void) => void;
+};
+export async function signWalletMessage(owner: string, message: string) {
+  const p = provider();
+  if (p?.publicKey?.toString() !== owner || !p.signMessage)
+    throw new Error("Connect the matching wallet first.");
+  const out = await p.signMessage(new TextEncoder().encode(message), "utf8");
+  if (p.publicKey?.toString() !== owner) throw new Error("Wallet changed during approval.");
+  const sig = out instanceof Uint8Array ? out : out.signature;
+  if (sig.length !== 64) throw new Error("Invalid wallet signature.");
+  return sig;
 }
-
-install();
+async function encrypt(key: CryptoKey, owner: string, entries: [string, string][]) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(JSON.stringify(entries));
+  const box = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(`senda-vault:v2:${owner}`) },
+    key,
+    data,
+  );
+  return `sen2.${b64(iv)}.${b64(new Uint8Array(box))}`;
+}
+async function decrypt(key: CryptoKey, owner: string, box: string): Promise<[string, string][]> {
+  const [mark, iv, data] = box.split(".");
+  if (mark !== "sen2") throw new Error("Unknown vault format.");
+  const clear = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: unb64(iv),
+      additionalData: new TextEncoder().encode(`senda-vault:v2:${owner}`),
+    },
+    key,
+    unb64(data),
+  );
+  const entries: unknown = JSON.parse(new TextDecoder().decode(clear));
+  if (
+    !Array.isArray(entries) ||
+    !entries.every(
+      (e) =>
+        Array.isArray(e) &&
+        e.length === 2 &&
+        typeof e[0] === "string" &&
+        own(e[0]) &&
+        typeof e[1] === "string",
+    )
+  )
+    throw new Error("Invalid vault contents.");
+  return entries as [string, string][];
+}
+async function legacy(key: CryptoKey, box: string) {
+  const [mark, iv, data] = box.split(".");
+  if (mark !== "sen1") return null;
+  try {
+    return new TextDecoder().decode(
+      await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(iv) }, key, unb64(data)),
+    );
+  } catch {
+    return null;
+  }
+}
+function persist() {
+  const g = generation,
+    key = aes,
+    owner = who,
+    entries = [...records.entries()];
+  if (!key || !owner) return Promise.resolve();
+  queue = queue
+    .catch(() => {})
+    .then(async () => {
+      const box = await encrypt(key, owner, entries);
+      if (g !== generation) return;
+      rawSet(keyFor(owner), JSON.stringify({ box, revision, dirty: true }));
+    });
+  return queue;
+}
+function schedule() {
+  edits++;
+  dirty = true;
+  void persist()
+    .then(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void sync().catch(problem);
+      }, 500);
+    })
+    .catch(problem);
+}
+async function sync() {
+  if (!aes || !token || !dirty || syncing || conflict) return;
+  syncing = true;
+  const g = generation,
+    owner = who,
+    auth = token,
+    editing = edits;
+  try {
+    await queue;
+    const local = JSON.parse(rawGet(keyFor(owner)) || "null") as { box: string } | null;
+    if (!local || g !== generation) return;
+    const result = await writeVault({
+      data: { wallet: owner, token: auth, box: local.box, revision },
+    });
+    if (g !== generation) return;
+    revision = result.revision;
+    await queue;
+    const latest = JSON.parse(rawGet(keyFor(owner)) || "null") as { box: string } | null;
+    dirty = latest?.box !== local.box || edits !== editing;
+    if (latest) rawSet(keyFor(owner), JSON.stringify({ ...latest, revision, dirty }));
+  } catch (e) {
+    // Never automatically retry an uncertain write or overwrite a newer device.
+    conflict = true;
+    problem(e);
+  } finally {
+    syncing = false;
+    if (dirty && !conflict && g === generation) void sync().catch(problem);
+  }
+}
+let watched: Wallet | undefined;
+export async function unlockSeal(owner: string) {
+  if (who === owner && aes) return;
+  if (who && who !== owner) {
+    lockSeal();
+    window.location.reload();
+    throw new Error("Reopening the desk for the new wallet.");
+  }
+  lockSeal();
+  const g = generation;
+  const sig = await signWalletMessage(owner, `senda-vault:v1:${owner}`);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    await crypto.subtle.digest("SHA-256", new Uint8Array(sig)),
+    "AES-GCM",
+    false,
+    ["encrypt", "decrypt"],
+  );
+  if (g !== generation) return;
+  const loaded = new Map<string, string>();
+  const local = JSON.parse(rawGet(keyFor(owner)) || "null") as {
+    box: string;
+    revision: number;
+    dirty: boolean;
+  } | null;
+  let rev = 0,
+    changed = false,
+    auth = "",
+    blocked = false;
+  if (local) {
+    for (const [k, v] of await decrypt(key, owner, local.box)) loaded.set(k, v);
+    rev = local.revision;
+    changed = local.dirty;
+  } else {
+    // One-time migration: encrypted legacy entries must decrypt for this owner.
+    // Plaintext can be claimed by only the first wallet on this browser.
+    const claimed = rawGet("sealed-legacy-owner");
+    if (!claimed) rawSet("sealed-legacy-owner", owner);
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !own(k)) continue;
+      const value = rawGet(k);
+      if (value === null) continue;
+      const clear = value.startsWith("sen1.")
+        ? await legacy(key, value)
+        : !claimed || claimed === owner
+          ? value
+          : null;
+      if (clear !== null) {
+        loaded.set(k, clear);
+        changed = true;
+      }
+    }
+  }
+  try {
+    const challenge = await openNonce({ data: { wallet: owner } });
+    const signed = await signWalletMessage(owner, challenge.message);
+    auth = (
+      await finishGrant({ data: { wallet: owner, nonce: challenge.nonce, sig: b64(signed) } })
+    ).token;
+    const remote = await readVault({ data: { wallet: owner, token: auth } });
+    if (remote.vault) {
+      if (changed && remote.vault.revision !== rev) {
+        blocked = true;
+        problem(
+          new Error(
+            "Sync conflict: local changes preserved. Reconcile this device before syncing.",
+          ),
+        );
+      } else if (!changed) {
+        loaded.clear();
+        for (const [k, v] of await decrypt(key, owner, remote.vault.box)) loaded.set(k, v);
+        rev = remote.vault.revision;
+      }
+    } else if (rev > 0) {
+      blocked = true;
+      problem(new Error("Remote vault missing. Local copy preserved."));
+    } else
+      for (const row of remote.legacy) {
+        if (own(row.slot) && !loaded.has(row.slot)) {
+          const clear = await legacy(key, row.box);
+          if (clear !== null) {
+            loaded.set(row.slot, clear);
+            changed = true;
+          }
+        }
+      }
+  } catch (e) {
+    problem(e);
+    auth = "";
+  }
+  if (g !== generation) return;
+  aes = key;
+  who = owner;
+  token = auth;
+  revision = rev;
+  dirty = changed;
+  conflict = blocked;
+  for (const [k, v] of loaded) records.set(k, v);
+  const box = await encrypt(key, owner, [...records]);
+  if (g !== generation) return;
+  rawSet(keyFor(owner), JSON.stringify({ box, revision, dirty }));
+  // Remove migrated plaintext only after its encrypted copy is safely stored.
+  for (const k of loaded.keys()) {
+    const old = rawGet(k);
+    if (
+      old !== null &&
+      (old.startsWith("sen1.")
+        ? (await legacy(key, old)) !== null
+        : rawGet("sealed-legacy-owner") === owner)
+    )
+      native!.remove.call(localStorage, k);
+  }
+  const p = provider();
+  if (p && p !== watched) {
+    watched = p;
+    for (const event of ["accountChanged", "disconnect"])
+      p.on?.(event, () => {
+        lockSeal();
+        window.location.reload();
+      });
+  }
+  tell();
+  void sync().catch(problem);
+}
+if (native && typeof window !== "undefined") {
+  Storage.prototype.getItem = function (key: string) {
+    if (this !== localStorage || !own(key)) return native.get.call(this, key);
+    return aes ? (records.get(key) ?? null) : null;
+  };
+  Storage.prototype.setItem = function (key: string, value: string) {
+    if (this !== localStorage || !own(key)) {
+      native.set.call(this, key, value);
+      return;
+    }
+    if (!aes) return;
+    records.set(key, String(value));
+    schedule();
+  };
+  Storage.prototype.removeItem = function (key: string) {
+    if (this !== localStorage || !own(key)) {
+      native.remove.call(this, key);
+      return;
+    }
+    if (!aes) return;
+    records.delete(key);
+    schedule();
+  };
+  window.addEventListener("online", () => {
+    void sync().catch(problem);
+  });
+}

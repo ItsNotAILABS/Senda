@@ -72,9 +72,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const sync = () => setSealed(!sealOpen());
+    const syncError = (e: Event) => toast.error((e as CustomEvent<string>).detail);
+    window.addEventListener("senda-sync-error", syncError);
     sync();
     window.addEventListener("senda-seal", sync);
-    return () => window.removeEventListener("senda-seal", sync);
+    return () => { window.removeEventListener("senda-seal", sync); window.removeEventListener("senda-sync-error", syncError); };
   }, []);
 
   useEffect(() => {

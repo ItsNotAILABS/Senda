@@ -104,7 +104,7 @@ export function rememberCard(card: string): Space {
 }
 
 async function x25519(): Promise<{ publicRaw: Uint8Array; secret: JsonWebKey }> {
-  const pair = await crypto.subtle.generateKey({ name: "X25519" } as AlgorithmIdentifier, true, ["deriveBits"]);
+  const pair = await crypto.subtle.generateKey({ name: "X25519" } as AlgorithmIdentifier, true, ["deriveBits"]) as CryptoKeyPair;
   const publicRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
   const secret = await crypto.subtle.exportKey("jwk", pair.privateKey);
   return { publicRaw, secret };
@@ -123,7 +123,7 @@ async function signWithWallet(text: string): Promise<Uint8Array> {
 
 export async function verifyArm(owner: string, members: [string, string], nonce: string, arm: Arm): Promise<boolean> {
   const text = signText(members, nonce, arm.x25519);
-  const key = await crypto.subtle.importKey("raw", new PublicKey(owner).toBytes(), { name: "Ed25519" } as AlgorithmIdentifier, false, ["verify"]);
+  const key = await crypto.subtle.importKey("raw", new Uint8Array(new PublicKey(owner).toBytes()), { name: "Ed25519" } as AlgorithmIdentifier, false, ["verify"]);
   return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, b64(arm.sig), new TextEncoder().encode(text));
 }
 
@@ -214,7 +214,7 @@ function hex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function unhex(value: string): Uint8Array {
+function unhex(value: string): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(value.length / 2);
   for (let i = 0; i < out.length; i += 1) out[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
   return out;
@@ -226,7 +226,7 @@ function b64e(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-function b64(value: string): Uint8Array {
+function b64(value: string): Uint8Array<ArrayBuffer> {
   const raw = atob(value);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
