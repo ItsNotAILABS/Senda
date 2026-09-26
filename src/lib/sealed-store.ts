@@ -1,94 +1,59 @@
-/**
- * Postgres holds the sealed desk. It checks the wallet signature.
- * It never receives the key, and it rejects anything that is not ciphertext.
- */
-
 import { createServerFn } from "@tanstack/react-start";
-import { PublicKey } from "@solana/web3.js";
 import { z } from "zod";
-
-const SLOT = /^(senda|the-pit)\.[a-z0-9._-]{1,80}$/;
-const SKIP = new Set(["senda.seen.v1", "senda.howto.v1"]);
-const BOX = /^sen1\.[A-Za-z0-9+/]+=*\.[A-Za-z0-9+/]+=*$/;
+import {
+  issueChallenge,
+  consumeProof,
+  createSession,
+  requireSession,
+  saveVault,
+  validBox,
+} from "./wallet-security";
 
 const wallet = z.string().min(32).max(48);
-const nonce = z.string().regex(/^[a-f0-9]{32}$/);
-const slot = z.string().regex(SLOT).refine((s) => !SKIP.has(s));
-const box = z.string().min(20).max(400_000).regex(BOX);
-const sig = z.string().min(80).max(120);
-
+const proof = z.object({ wallet, nonce: z.string().uuid(), sig: z.string().max(120) });
+const session = z.object({ wallet, token: z.string().length(72) });
 async function sql() {
-  const { getSql } = await import("@/lib/db");
-  return getSql();
+  return (await import("@/lib/db")).getSql();
 }
-
-function bytesOf(value: string): Uint8Array {
-  return new PublicKey(value).toBytes();
-}
-
-async function verify(owner: string, message: string, signature: string): Promise<boolean> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    bytesOf(owner),
-    { name: "Ed25519" } as AlgorithmIdentifier,
-    false,
-    ["verify"],
-  );
-  const raw = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
-  return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, raw, new TextEncoder().encode(message));
-}
-
-async function granted(owner: string, proof: string): Promise<boolean> {
-  const db = await sql();
-  const rows = await db<{ ok: number }>`
-    select 1 as ok from sealed_grant
-    where wallet = ${owner} and nonce = ${proof} and expires_at > now()
-  `;
-  return rows.length > 0;
-}
-
 export const openNonce = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.object({ wallet }).parse(input))
-  .handler(async ({ data }) => {
-    bytesOf(data.wallet);
-    const fresh = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
-    return { nonce: fresh };
-  });
-
+  .handler(async ({ data }) => issueChallenge(await sql(), data.wallet, "sync"));
 export const finishGrant = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ wallet, nonce, sig }).parse(input))
+  .validator((input: unknown) => proof.parse(input))
   .handler(async ({ data }) => {
-    const ok = await verify(data.wallet, `senda-grant:v1:${data.wallet}:${data.nonce}`, data.sig);
-    if (!ok) return { ok: false as const };
     const db = await sql();
-    await db`
-      insert into sealed_grant (wallet, nonce, expires_at)
-      values (${data.wallet}, ${data.nonce}, now() + interval '12 hours')
-      on conflict (wallet) do update set nonce = excluded.nonce, expires_at = excluded.expires_at
-    `;
-    return { ok: true as const };
+    if (!(await consumeProof(db, data.wallet, "sync", data.nonce, data.sig)))
+      throw new Error("Wallet proof expired or already used.");
+    return { token: await createSession(db, data.wallet) };
   });
-
-export const putBlob = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ wallet, nonce, slot, box }).parse(input))
+export const readVault = createServerFn({ method: "POST" })
+  .validator((input: unknown) => session.parse(input))
   .handler(async ({ data }) => {
-    if (!(await granted(data.wallet, data.nonce))) return { ok: false as const };
     const db = await sql();
-    await db`
-      insert into sealed_blob (wallet, slot, box)
-      values (${data.wallet}, ${data.slot}, ${data.box})
-      on conflict (wallet, slot) do update set box = excluded.box
-    `;
-    return { ok: true as const };
+    await requireSession(db, data.wallet, data.token);
+    const rows = await db<{
+      box: string;
+      revision: number;
+    }>`select box,revision from sealed_vault where wallet=${data.wallet}`;
+    const legacy = rows.length
+      ? []
+      : await db<{
+          slot: string;
+          box: string;
+        }>`select slot,box from sealed_blob where wallet=${data.wallet}`;
+    return { vault: rows[0] ?? null, legacy };
   });
-
-export const listBlobs = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.object({ wallet, nonce }).parse(input))
+export const writeVault = createServerFn({ method: "POST" })
+  .validator((input: unknown) =>
+    session
+      .extend({
+        box: z.string().refine(validBox),
+        revision: z.number().int().min(0).max(2147483646),
+      })
+      .parse(input),
+  )
   .handler(async ({ data }) => {
-    if (!(await granted(data.wallet, data.nonce))) return { rows: [] as { slot: string; box: string }[] };
     const db = await sql();
-    const rows = await db<{ slot: string; box: string }>`
-      select slot, box from sealed_blob where wallet = ${data.wallet}
-    `;
-    return { rows };
+    await requireSession(db, data.wallet, data.token);
+    return { revision: await saveVault(db, data.wallet, data.box, data.revision) };
   });

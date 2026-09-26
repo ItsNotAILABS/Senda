@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Landmark } from "lucide-react";
 import { toast } from "sonner";
-import { openReceiveAccount, type IssuedAccount } from "@/lib/receive-account";
+import { openReceiveAccount, receiveChallenge, type IssuedAccount } from "@/lib/receive-account";
+import { signWalletMessage } from "@/lib/seal";
 import { cn } from "@/lib/utils";
 
 type Ccy = "usd" | "eur" | "mxn" | "usdc";
@@ -20,7 +21,14 @@ function Row({ label, value, onCopy }: { label: string; value: string; onCopy: (
     <div className="flex items-start justify-between gap-3 py-3">
       <div className="min-w-0">
         <p className="text-[13px] text-subtle">{label}</p>
-        <p className={cn("mt-0.5 text-[15px] leading-snug break-all", empty ? "text-subtle" : "text-[#9ec1ff]")}>{value || "—"}</p>
+        <p
+          className={cn(
+            "mt-0.5 text-[15px] leading-snug break-all",
+            empty ? "text-subtle" : "text-[#9ec1ff]",
+          )}
+        >
+          {value || "—"}
+        </p>
       </div>
       <button
         type="button"
@@ -41,7 +49,11 @@ export function AccountDetails({ owner }: { owner: string }) {
   const [busy, setBusy] = useState(false);
   const [book, setBook] = useState<Partial<Record<"usd" | "eur" | "mxn", IssuedAccount>>>({});
 
-  const issued = ccy === "usdc" ? null : book[ccy] ?? null;
+  useEffect(() => {
+    setBook({});
+  }, [owner]);
+
+  const issued = ccy === "usdc" ? null : (book[ccy] ?? null);
 
   async function copy(text: string) {
     if (!text || text === "—") return;
@@ -61,7 +73,12 @@ export function AccountDetails({ owner }: { owner: string }) {
     }
     setBusy(true);
     try {
-      const res = await openReceiveAccount({ data: { wallet: owner, currency: ccy } });
+      const challenge = await receiveChallenge({ data: { wallet: owner, currency: ccy } });
+      const signature = await signWalletMessage(owner, challenge.message);
+      const sig = btoa(Array.from(signature, (b) => String.fromCharCode(b)).join(""));
+      const res = await openReceiveAccount({
+        data: { wallet: owner, currency: ccy, nonce: challenge.nonce, sig },
+      });
       if (!res.ok) toast.error(res.error);
       else {
         setBook((prev) => ({ ...prev, [ccy]: res }));
@@ -81,7 +98,7 @@ export function AccountDetails({ owner }: { owner: string }) {
     try {
       if (navigator.share) await navigator.share({ title: "Account details", text });
       else await navigator.clipboard.writeText(text);
-      toast.success(navigator.share ? "Shared." : "Copied the details.");
+      toast.success("Details ready.");
     } catch {
       /* cancelled */
     }
@@ -126,7 +143,11 @@ export function AccountDetails({ owner }: { owner: string }) {
 
       <div className="rounded-[22px] border border-white/10 bg-[#141414] px-4 py-2">
         <p className="pt-3 text-[13px] text-subtle">
-          {ccy === "usdc" ? "On Solana. This one already works." : lane === "local" ? "For domestic transfers only" : "For international transfers"}
+          {ccy === "usdc"
+            ? "On Solana. This one already works."
+            : lane === "local"
+              ? "For domestic transfers only"
+              : "For international transfers"}
         </p>
         <div className="divide-y divide-white/8">
           {rows.map((r) => (
@@ -155,7 +176,9 @@ export function AccountDetails({ owner }: { owner: string }) {
       <div className="flex gap-3 rounded-[22px] border border-white/10 bg-[#141414] px-4 py-4">
         <Landmark className="mt-0.5 size-5 shrink-0 text-subtle" />
         <p className="text-[13px] leading-snug text-muted">
-          When the number is open, the dollars sit at Lead Bank, Member FDIC, the same partner bank Revolut uses in the US. Insurance is the bank’s, up to $250,000. Senda does not hold the deposit. Bridge turns it into USDC and sends it to the wallet. A Visa, if you add one, is issued by Rain against that USDC. A one-time card is a scoped Rain card: one merchant, one amount, then the number dies. This screen does not paint either number.
+          Account details come directly from the provider after verified onboarding and your wallet
+          approval. Available currencies and payment rails depend on your approved account. Use the
+          bank and beneficiary details shown above for transfers.
         </p>
       </div>
     </section>
@@ -183,8 +206,11 @@ function rowsFor(ccy: Ccy, lane: Lane, owner: string, issued: IssuedAccount | nu
     return [
       { label: "Beneficiary", value: issued.beneficiary || "—" },
       { label: ccy === "usd" ? "Account" : "IBAN / account", value: issued.iban || issued.account },
-      { label: "SWIFT / BIC", value: issued.bic || issued.wire || "—" },
-      { label: "Bank name and address", value: [issued.bank, issued.address].filter(Boolean).join("\n") || "—" },
+      { label: "SWIFT / BIC", value: issued.bic || "—" },
+      {
+        label: "Bank name and address",
+        value: [issued.bank, issued.address].filter(Boolean).join("\n") || "—",
+      },
     ];
   }
   return [
@@ -192,6 +218,9 @@ function rowsFor(ccy: Ccy, lane: Lane, owner: string, issued: IssuedAccount | nu
     { label: "Account", value: issued.account },
     { label: "ACH routing number", value: issued.routing || "—" },
     { label: "Wire routing number", value: issued.wire || "—" },
-    { label: "Bank name and address", value: [issued.bank, issued.address].filter(Boolean).join(", ") || "—" },
+    {
+      label: "Bank name and address",
+      value: [issued.bank, issued.address].filter(Boolean).join(", ") || "—",
+    },
   ];
 }

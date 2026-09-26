@@ -135,3 +135,13 @@ The submission note is [public/senda-submission.md](public/senda-submission.md).
 </p>
 
 <p align="center"><sub>ItsNotAILABS · <a href="https://github.com/ItsNotAILABS/Senda">github.com/ItsNotAILABS/Senda</a></sub></p>
+
+## Engineering memo · September 25, 2026
+
+Senda’s wallet foundation now includes single-use signed authorization, scoped account approvals, and encrypted continuity between devices. Each wallet’s record names and contents travel together inside an AES-GCM vault, with the encryption key held in browser memory. Revision checks protect newer saves, and wallet changes reset the active desk.
+
+The account integration now uses a verified customer binding for each wallet, with currency-specific approval, revocation checks, idempotent requests and bounded provider timeouts. Bank details are taken from the provider’s response.
+
+Regression coverage exercises signature replay, expiry, wallet isolation, customer revocation, concurrent saves, encrypted migration and deletion. These improvements strengthen the same principle throughout Senda: the wallet authorizes, the application checks, and state changes remain explicit.
+
+[Engineering and rollout details](docs/wallet-security.md)

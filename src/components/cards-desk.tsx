@@ -70,9 +70,9 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         kicker="Shop"
         title="A number for the store"
         accent="not the token."
-        line="The dollar number is a Lead Bank account. Deposits become USDC in the wallet. The Visa is Rain’s, not a number made here."
+        line="Receive account details through verified onboarding, or pay a Solana address in USDC."
         live={["Account details", "USDC address", "One charge"]}
-        coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
+        coming={["Provider account after approval", "A Rain Visa"]}
       />
 
       <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
