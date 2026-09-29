@@ -145,7 +145,7 @@ export function logWorker(id: string, text: string, kind: "info" | "action" | "s
 
 export function isWorkerDue(row: Worker, now = new Date()): boolean {
   if (row.status !== "active" || row.trigger === "manual") return false;
+  if (row.trigger === "on_open") return true;
   if (!row.lastRunAt) return true;
-  if (row.trigger === "on_open") return false;
   return row.lastRunAt.slice(0, 10) !== now.toISOString().slice(0, 10);
 }
