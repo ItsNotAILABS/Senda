@@ -63,6 +63,9 @@ Minting, redemption, and most of the issuer interfaces block a U.S. address or a
 | **Play** | Ten games. The result is the live print. Practice cash never touches the wallet. | Play |
 | **Pay** | USDC to a Solana address. Their token account receives it. | Shop |
 | **Number** | Shown once. Caps cash in this browser. A card terminal will decline it. It is not a BIN. | Shop |
+| **Wallets** | Connect the wallet you already have. Solana signs the buy. Ethereum is a different signature. | Wallets |
+| **Work** | Post a job. Pay is USDC to their address, or a Solana Pay link they open. | Work |
+| **Trade** | Size, side, a Jupiter quote, then you sign. | Trade |
 | **Agent** | You write what it is for. It can read the book and queue a trade. You still sign. | Agents |
 | **Make** | Post a job, software, a service, hardware, or what a class needs. The price is USDC. The whole amount goes to their address. | Make |
 
@@ -125,6 +128,16 @@ npm run dev
 The desk is on port 8080. `npm run typecheck` has to pass. No env var is required to read the book or to ask a wallet to sign. A Jupiter API key is optional. The public RPC rate-limits. Point a private RPC at the same calls in [src/lib/phantom.ts](src/lib/phantom.ts) when you need a higher limit.
 
 Open the book. Load practice cash and play a print. Connect a wallet and quote the same name. On Shop, paste an address and sign a dollar of USDC.
+
+## For another agent
+
+The manual is [AGENTS.md](AGENTS.md). The map of the code is [docs/MODULES.md](docs/MODULES.md).
+
+`node mcp/server.mjs` speaks MCP over stdio. It can list the live prints, quote a Jupiter route, read a public Solana address, build a USDC pay link, and price a cover. It cannot sign, and it cannot see a key. Claude Code and any client that reads `.mcp.json` start that process as the `senda` server.
+
+```bash
+node --test mcp/tools.test.mjs
+```
 
 [AGENTS.md](AGENTS.md) is the manual for anyone changing the code. The same file is `CLAUDE.md`, `GEMINI.md`, and `llms.txt`. Do not invent a balance, a card, or a position the wallet does not have. Do not add a program id that was not deployed.
 
