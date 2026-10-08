@@ -26,10 +26,11 @@ function AgentsPage() {
   );
 }
 
-function AgentsError({ error }: { error: Error }) {
+function AgentsError({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : "Agents did not load.";
   return (
     <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
+      <p className="px-6 py-10 text-sm text-down">{message}</p>
     </AppShell>
   );
 }

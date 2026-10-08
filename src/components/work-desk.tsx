@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
+import { WorkJobs } from "@/components/work-jobs";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 
@@ -66,10 +68,12 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
         kicker="Work"
         title="Your sheet"
         accent="next to the book."
-        line="The print is live. The note sits beside it. The page is still yours to write."
-        live={["The live sheet, a note on every name, saved in this browser.", "The page you already edit, still on this desk."]}
-        coming={["Sharing the sheet with someone else."]}
+        line="Post a job and pay it in USDC. The sheet stays next to the live print."
+        live={["Pay a job in USDC. You sign.", "The live sheet, a note on every name."]}
+        coming={["A shared sheet on someone else's computer."]}
       />
+      <MoneyBar />
+      <WorkJobs symbol={name?.symbol ?? ""} />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         {name ? (
           <>

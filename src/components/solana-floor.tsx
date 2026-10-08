@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { PRESTOCK_MINTS } from "@/lib/phantom";
@@ -32,6 +33,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         live={["Copy a live PreStock mint.", idx.n > 0 ? `PRE8 at ${idx.level.toFixed(1)}, from the marks on this book.` : "PRE8 when this book has marks."]}
         coming={["Your own program."]}
       />
+      <MoneyBar />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>

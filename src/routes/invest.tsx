@@ -1,18 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { PitFloor } from "@/components/pit-floor";
-import { getPit } from "@/lib/pit";
 import { usePit } from "@/lib/use-pit";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 
 export const Route = createFileRoute("/invest")({
-  loader: () => getPit(),
   component: Invest,
 });
 
 function Invest() {
-  const seed = Route.useLoaderData();
-  const pit = usePit(seed);
+  const pit = usePit(null);
   const wallet = useWallet();
   const cash = Math.floor((wallet.w.balances.USD || 0) + (wallet.w.balances.USDC || 0));
 

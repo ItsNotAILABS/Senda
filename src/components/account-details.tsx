@@ -79,9 +79,10 @@ export function AccountDetails({ owner }: { owner: string }) {
   async function share() {
     const text = rows.map((r) => `${r.label}: ${r.value}`).join("\n");
     try {
-      if (navigator.share) await navigator.share({ title: "Account details", text });
+      const canShare = typeof navigator.share === "function";
+      if (canShare) await navigator.share({ title: "Account details", text });
       else await navigator.clipboard.writeText(text);
-      toast.success(navigator.share ? "Shared." : "Copied the details.");
+      toast.success(canShare ? "Shared." : "Copied the details.");
     } catch {
       /* cancelled */
     }

@@ -18,10 +18,11 @@ function Home() {
   );
 }
 
-function HomeError({ error }: { error: Error }) {
+function HomeError({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : "The book did not load.";
   return (
     <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
+      <p className="px-6 py-10 text-sm text-down">{message}</p>
     </AppShell>
   );
 }

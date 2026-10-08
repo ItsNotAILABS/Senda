@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FilmBand } from "@/components/film-band";
 import { TabLead } from "@/components/tab-lead";
+import { MoneyBar } from "@/components/money-bar";
 import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
@@ -20,6 +21,7 @@ import { applyHouseDrop, loadHouseBook, markHouse, saveHouseBook, type HouseBook
 import { openChainCover } from "@/lib/cover-chain";
 import { connectPhantom } from "@/lib/phantom";
 import type { Side } from "@/lib/lmsr";
+import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { chainFor, formatStrike, type OptContract, type OptTenor } from "@/lib/option-chain";
 import { settleOptions } from "@/lib/option-book";
 import { getHouse, HOUSE_FALLBACK, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -74,6 +76,7 @@ export function PitFloor({
   const [tenor, setTenor] = useState<OptTenor>("1d");
   const [underId, setUnderId] = useState<string | null>(null);
   const [ticketSide, setTicketSide] = useState<"buy" | "sell">("buy");
+  const [liveQuote, setLiveQuote] = useState<JupQuote | { error: string } | null>(null);
 
   useEffect(() => {
     setBook(loadHouseBook());
@@ -119,6 +122,25 @@ export function PitFloor({
   const pnl = mtm - cost;
   const equity = chips + mtm;
   const busy = Boolean(busyKey);
+
+  useEffect(() => {
+    if (!under?.mint || !(armed > 0)) {
+      setLiveQuote(null);
+      return;
+    }
+    let live = true;
+    setLiveQuote(null);
+    quoteJup({ data: { mint: under.mint, usd: armed, side: ticketSide } })
+      .then((r) => {
+        if (live) setLiveQuote(r);
+      })
+      .catch(() => {
+        if (live) setLiveQuote({ error: "Quote failed." });
+      });
+    return () => {
+      live = false;
+    };
+  }, [under?.mint, armed, ticketSide]);
 
   async function ensureStack(spend: number): Promise<boolean> {
     if (frozen) {
@@ -208,6 +230,9 @@ export function PitFloor({
           live={["Set the size in dollars.", "Pick buy or sell.", "Sign it through the ticket on this page."]}
           coming={["A central limit book."]}
         />
+        <div className="mt-3">
+          <MoneyBar />
+        </div>
       </div>
       <section className="mx-3 mt-3 rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -268,6 +293,7 @@ export function PitFloor({
             Sell
           </button>
         </div>
+        <TicketQuote quote={liveQuote} side={ticketSide} armed={armed} />
         {under ? (
           <FillButton
             mint={under.mint}
@@ -393,5 +419,37 @@ export function PitFloor({
       </div>
     </main>
     </div>
+  );
+}
+
+function TicketQuote({
+  quote,
+  side,
+  armed,
+}: {
+  quote: JupQuote | { error: string } | null;
+  side: "buy" | "sell";
+  armed: number;
+}) {
+  if (!(armed > 0)) return <p className="mt-3 text-xs text-muted">Type a size. Jupiter quotes it before you sign.</p>;
+  if (!quote) return <p className="mt-3 text-xs text-muted">Asking Jupiter…</p>;
+  if ("error" in quote) return <p className="mt-3 text-xs text-down">{quote.error}</p>;
+  const got = outUi(quote);
+  const paid = inUi(quote);
+  return (
+    <dl className="mt-3 grid grid-cols-3 gap-2">
+      <div className="rounded-2xl bg-black/40 px-3 py-2">
+        <dt className="text-[11px] text-subtle">You pay</dt>
+        <dd className="font-mono text-sm tabular-nums">{side === "buy" ? `$${paid.toFixed(2)}` : paid.toFixed(4)}</dd>
+      </div>
+      <div className="rounded-2xl bg-black/40 px-3 py-2">
+        <dt className="text-[11px] text-subtle">You get</dt>
+        <dd className="font-mono text-sm tabular-nums">{side === "buy" ? `${got.toFixed(4)}` : `$${got.toFixed(2)}`}</dd>
+      </div>
+      <div className="rounded-2xl bg-black/40 px-3 py-2">
+        <dt className="text-[11px] text-subtle">Impact</dt>
+        <dd className="font-mono text-sm tabular-nums">{impactPct(quote).toFixed(2)}%</dd>
+      </div>
+    </dl>
   );
 }

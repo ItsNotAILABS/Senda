@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { KINDS, listListings, saveListing, type Listing, type MakeKind } from "@/lib/make-board";
+import { MoneyBar } from "@/components/money-bar";
 import { payUsdc } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -40,6 +41,9 @@ export function MakeDesk() {
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/55">
             A job. Software. A service. Hardware. A robot. Or what a teacher’s class is missing. The price is USDC. The wallet signs. The whole amount goes to the address on the listing.
           </p>
+          <div className="mt-5 max-w-xl">
+            <MoneyBar />
+          </div>
         </div>
         <form
           className="rounded-[28px] bg-[#14141c] p-5"

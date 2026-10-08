@@ -5,6 +5,7 @@ import { connectPhantom, mintDecimals, readChain, splHolding } from "@/lib/phant
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { listChainCovers, openChainCover } from "@/lib/cover-chain";
@@ -247,6 +248,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
         coming={["A broker account", "Margin"]}
       />
+      <MoneyBar />
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
         <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">

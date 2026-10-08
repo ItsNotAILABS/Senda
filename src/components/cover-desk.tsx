@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Shield, TrendingDown } from "lucide-react";
+import { ClearStrip } from "@/components/clear-strip";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
+import { rememberClear } from "@/lib/clearing";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { COVERS, formatCover } from "@/lib/cover";
@@ -98,15 +101,31 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           days: 1,
         });
         setPolicy(row);
+        rememberClear({
+          desk: "cover",
+          title: `${name.symbol} cover`,
+          legs: [{ side: "out", asset: "USDC", amount: premium, where: "cover account" }],
+          feeUsd: 0,
+          sig: row.sig,
+          status: "signed",
+        });
         toast.success(`Premium left Phantom. If ${name.symbol} falls 10%, settle buys $${usd}.`);
       } else {
-        await openChainCover({
+        const row = await openChainCover({
           owner: who,
           kind: "life",
           title: life.title,
           cover: life.cover,
           premium: life.premium,
           days: 30,
+        });
+        rememberClear({
+          desk: "cover",
+          title: `${life.title} cover`,
+          legs: [{ side: "out", asset: "USDC", amount: life.premium, where: "cover account" }],
+          feeUsd: 0,
+          sig: row.sig,
+          status: "signed",
         });
         toast.success(`${life.title} premium is on-chain. The payout is only what that account holds.`);
       }
@@ -142,6 +161,14 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         days: 1,
       });
       setPolicy(row);
+      rememberClear({
+        desk: "cover",
+        title: `${live.symbol} 10% cover`,
+        legs: [{ side: "out", asset: "USDC", amount: premiumNow, where: "cover account" }],
+        feeUsd: 0,
+        sig: row.sig,
+        status: "signed",
+      });
       toast.success(`${row.symbol || live.symbol} is ${row.status}. Premium $${row.premium}. Strike ${formatUsd(row.strike)}.`);
       refresh();
     } catch (e) {
@@ -157,10 +184,26 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     try {
       if (cancel) {
         const sig = await cancelChainCover(row, owner);
+        rememberClear({
+          desk: "cover",
+          title: `${row.symbol || row.title} returned`,
+          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
+          feeUsd: 0,
+          sig,
+          status: "signed",
+        });
         toast.success(`USDC sent back. ${sig.slice(0, 8)}`);
       } else {
         const price = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
         const out = await settleChainCover(row, owner, price);
+        rememberClear({
+          desk: "cover",
+          title: `${row.symbol || row.title} settled`,
+          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
+          feeUsd: 0,
+          sig: out.sig,
+          status: "signed",
+        });
         toast.success(out.bought ? "Premium returned. The buy is signed." : "Premium returned.");
       }
       refresh();
@@ -184,6 +227,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         ]}
         coming={["A licensed insurer.", "A pooled premium."]}
       />
+      <MoneyBar />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -246,11 +290,32 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         </dl>
         {shown && shown.strike > 0 ? (
           <p className="mt-3 text-xs text-muted">
-            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
+            Pays if the print is at or under {formatUsd(shown.strike * 0.9)}. Settle is a second signature.
+          </p>
+        ) : name ? (
+          <p className="mt-3 text-xs text-muted">
+            Pays if {name.symbol} prints at or under {formatUsd(name.last * 0.9)}. You are {((1 - 0.9) * 100).toFixed(0)}% above that line at the current print. Premium is 4% of the size, in USDC, when you sign.
           </p>
         ) : (
           <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Status stays blank until Phantom signs.</p>
         )}
+        {name && mode === "drop" ? (
+          <div className="mt-4">
+            <div className="flex justify-between text-[11px] text-subtle">
+              <span>Pays at {formatUsd(name.last * 0.9)}</span>
+              <span>Now {formatUsd(name.last)}</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-[90%] bg-accent" />
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              The line is 10% under this print. Premium is ${Math.max(1, Math.round(usd * 0.04))} USDC when you sign.
+              {owner && usdc + 0.001 < Math.max(1, Math.round(usd * 0.04))
+                ? ` Wallet has ${usdc.toFixed(2)}. Convert SOL first if that is short.`
+                : ""}
+            </p>
+          </div>
+        ) : null}
       </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
@@ -377,6 +442,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           </ul>
         </div>
       </section>
+      <ClearStrip desk="cover" />
     </div>
   );
 }

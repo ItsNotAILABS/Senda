@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { BIC, sendaIban } from "@/lib/iso20022";
 import { PROGRAM_ID } from "@/lib/senda-program";
@@ -37,6 +38,7 @@ export function MoreDesk() {
         live={["Wallets you linked.", "The privacy note.", "Cash on this browser."]}
         coming={["A login that follows you to another computer."]}
       />
+      <MoneyBar />
       <section className="grid gap-3 lg:grid-cols-3">
         <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Wallets</p>

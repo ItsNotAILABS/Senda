@@ -15,6 +15,17 @@ const MEMO = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const SYSTEM = new PublicKey("11111111111111111111111111111111");
 export const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
+/** A Solana Pay request. The recipient's wallet asks to sign. Senda never sees the key. */
+export function usdcPayLink(to: string, usd: number, memo: string): string {
+  const amount = (Math.round(usd * 100) / 100).toFixed(2);
+  const q = new URLSearchParams({
+    amount,
+    "spl-token": USDC_MINT.toBase58(),
+    memo: memo.slice(0, 80),
+  });
+  return `solana:${to.trim()}?${q.toString()}`;
+}
+
 function rpc(method: string, params: unknown[]): Promise<unknown> {
   const urls = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
   return (async () => {

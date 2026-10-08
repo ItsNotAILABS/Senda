@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { readChain, type ChainWallet } from "@/lib/phantom";
@@ -167,6 +168,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
         live={["Chain balance", "Value at the live last", "Wrap USDC and send it back"]}
         coming={["A broker account", "Margin"]}
       />
+      <MoneyBar />
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-8">
         <p className="font-mono text-5xl tabular-nums tracking-tight lg:text-6xl">{waiting ? "—" : bookUsd(total)}</p>

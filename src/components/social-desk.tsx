@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { PlayDesk } from "@/components/play-desk";
+import { MoneyBar } from "@/components/money-bar";
 import { loadHouseBook } from "@/lib/house-paper";
 import { formatMoney } from "@/lib/wallet";
 import { loadPlay } from "@/lib/play";
@@ -49,6 +50,9 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
           Games, copy a name, tape of the book. Same cash. PreStocks only.
         </p>
       </header>
+      <div className="mx-3 mb-3">
+        <MoneyBar />
+      </div>
       <div className="flex gap-1 overflow-x-auto px-4 pb-3">
         {(
           [

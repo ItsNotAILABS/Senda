@@ -8,6 +8,7 @@ import {
   FileText,
   Gamepad2,
   Hexagon,
+  KeyRound,
   LayoutGrid,
   Lock,
   PanelLeft,
@@ -34,6 +35,7 @@ const PRIMARY = [
   { to: "/", label: "Home", icon: LayoutGrid },
   { to: "/pre", label: "PreStocks", icon: Sparkles },
   { to: "/wallet", label: "Convert", icon: ArrowLeftRight },
+  { to: "/wallets", label: "Wallets", icon: KeyRound },
   { to: "/social", label: "Play", icon: Gamepad2 },
   { to: "/cards", label: "Shop", icon: CreditCard },
   { to: "/make", label: "Make", icon: Store },
@@ -186,6 +188,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 if (key === "send") void navigate({ to: "/payments" });
                 else if (key === "add") void navigate({ to: "/payments", search: { act: "add" } });
                 else if (key === "card" || key === "cards" || key === "shop") void navigate({ to: "/cards", search: { spend: 0 } });
+                else if (key === "wallet" || key === "wallets") void navigate({ to: "/wallets" });
                 else if (key === "exchange" || key === "convert") void navigate({ to: "/wallet" });
                 else if (key === "vault" || key === "portfolio") void navigate({ to: "/vault" });
                 else if (key === "cover") void navigate({ to: "/cover" });
@@ -250,7 +253,7 @@ function NavLink({
   quiet,
   compact,
 }: {
-  to: "/" | "/pre" | "/invest" | "/wallet" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
+  to: "/" | "/pre" | "/invest" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

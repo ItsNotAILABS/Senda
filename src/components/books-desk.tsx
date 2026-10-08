@@ -1,4 +1,5 @@
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { digestBooks } from "@/lib/books";
 import { formatMoney } from "@/lib/wallet";
@@ -20,6 +21,7 @@ export function BooksDesk() {
         live={["The lines already stored on this account."]}
         coming={["An export a CPA would take."]}
       />
+      <MoneyBar />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>

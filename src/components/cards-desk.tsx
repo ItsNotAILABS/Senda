@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
 import { AccountDetails } from "@/components/account-details";
+import { MoneyBar } from "@/components/money-bar";
 import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
@@ -74,6 +75,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
         live={["Account details", "USDC address", "One charge"]}
         coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
+      <MoneyBar />
 
       <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
 
