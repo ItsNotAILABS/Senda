@@ -7,6 +7,7 @@
   <img src="https://img.shields.io/badge/wallet-you%20sign-c6f135?style=flat-square&labelColor=111111" alt="You sign">
   <img src="https://img.shields.io/badge/route-Jupiter-111111?style=flat-square" alt="Jupiter">
   <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC">
+  <img src="https://img.shields.io/badge/live-senda.pocketnova.app-14F195?style=flat-square&labelColor=111111" alt="Live">
   <img src="https://img.shields.io/github/last-commit/ItsNotAILABS/Senda?style=flat-square&color=111111" alt="Last commit">
 </p>
 
@@ -15,7 +16,8 @@
 <p align="center">
   Senda is the desk for tokenized pre-IPO names on Solana.<br>
   The wallet you already have is the account. Jupiter quotes the route. You sign.<br>
-  A payment is USDC to their address. The print does not close at four.
+  A payment is USDC to their address. The print does not close at four.<br>
+  <a href="https://senda.pocketnova.app"><strong>senda.pocketnova.app</strong></a>
 </p>
 
 <p align="center">
@@ -65,7 +67,8 @@ Minting, redemption, and most of the issuer interfaces block a U.S. address or a
 | **Number** | Shown once. Caps cash in this browser. A card terminal will decline it. It is not a BIN. | Shop |
 | **Wallets** | Connect the wallet you already have. Solana signs the buy. Ethereum is a different signature. | Wallets |
 | **Work** | Post a job. Pay is USDC to their address, or a Solana Pay link they open. | Work |
-| **Trade** | Size, side, a Jupiter quote, then you sign. | Trade |
+| **Trade** | The live PreStock names, pool candles for the one you pick, a Jupiter quote, then you sign. | Trade |
+| **Listed** | xStocks that already trade, and the cash Kamino will lend against a share. The share stays. | Listed |
 | **Agent** | You write what it is for. It can read the book and queue a trade. You still sign. | Agents |
 | **Make** | Post a job, software, a service, hardware, or what a class needs. The price is USDC. The whole amount goes to their address. | Make |
 
@@ -142,6 +145,12 @@ node --test mcp/tools.test.mjs
 [AGENTS.md](AGENTS.md) is the manual for anyone changing the code. The same file is `CLAUDE.md`, `GEMINI.md`, and `llms.txt`. Do not invent a balance, a card, or a position the wallet does not have. Do not add a program id that was not deployed.
 
 The submission note is [public/senda-submission.md](public/senda-submission.md).
+
+## Handoff
+
+This is the stopping point. The live desk is [senda.pocketnova.app](https://senda.pocketnova.app). The source is this repository. The next person starts at [HANDOFF.md](HANDOFF.md), then [AGENTS.md](AGENTS.md).
+
+Do not rebuild the rail. Do not replace a working desk with a paragraph. Do not draw candles when the pool feed is empty. The wallet still signs.
 
 <p align="center">
   <img src="public/og.jpg" width="720" alt="Senda">

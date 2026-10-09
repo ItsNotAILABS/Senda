@@ -10,6 +10,7 @@ import {
   Hexagon,
   KeyRound,
   LayoutGrid,
+  LineChart,
   Lock,
   PanelLeft,
   Shield,
@@ -48,6 +49,7 @@ const MORE = [
   { to: "/cover", label: "Cover", icon: Shield },
   { to: "/work", label: "Work", icon: SquarePen },
   { to: "/invest", label: "Trade", icon: Hexagon },
+  { to: "/equities", label: "Listed", icon: LineChart },
   { to: "/solana", label: "Solana", icon: Hexagon },
   { to: "/books", label: "Books", icon: BookOpen },
   { to: "/docs", label: "Docs", icon: FileText },
@@ -253,7 +255,7 @@ function NavLink({
   quiet,
   compact,
 }: {
-  to: "/" | "/pre" | "/invest" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
+  to: "/" | "/pre" | "/invest" | "/equities" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

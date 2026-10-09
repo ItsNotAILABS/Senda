@@ -8,7 +8,7 @@ The wallet signs. Senda does not hold the key, the token, or a balance the chain
 
 | Path | Role |
 | --- | --- |
-| `src/components/app-shell.tsx` | The rail. Home, PreStocks, Convert, Wallets, Play, Shop, Make, AI Agent, Send, Portfolio, then Cover, Work, Trade, Solana, Books, Docs, Account. |
+| `src/components/app-shell.tsx` | The rail. Home, PreStocks, Convert, Wallets, Play, Shop, Make, AI Agent, Send, Portfolio, then Cover, Work, Trade, Listed, Solana, Books, Docs, Account. |
 | `src/components/money-bar.tsx` | SOL, USDC, and other token counts for the connected Solana address. Read only. |
 | `src/routes/` | One file per page. `/wallets` is `src/routes/wallets.tsx`. |
 
@@ -72,7 +72,12 @@ There is no Senda program on mainnet. Buys and payments there are Jupiter and SP
 
 | Path | Role |
 | --- | --- |
-| `src/components/pit-floor.tsx` | The ticket. Size, side, a Jupiter quote, then sign. |
+| `src/components/pit-floor.tsx` | Trade. Spot opens on the live names. The other desks stay on the same row. |
+| `src/components/trade-terminal.tsx` | Markets, the pool chart, the ticket. |
+| `src/lib/print.ts` | Pool candles for the mint. Cached. Empty when the feed is busy. |
+| `src/lib/trade-assist.ts` | A draft from the print. Optional Grok if `XAI_API_KEY` is set. It does not sign. |
+| `src/components/equities-desk.tsx` | Listed xStocks and the Kamino borrow line. |
+| `src/lib/equities.ts` | xStocks assets and Kamino reserve metrics. |
 | `src/lib/option-chain.ts` | Calls and puts on a print. A put premium uses the cover path. |
 | `src/components/perp-desk.tsx` | Levered long or short against the book. |
 | `src/components/lend-desk.tsx` | Cash against a holding. The token stays. |

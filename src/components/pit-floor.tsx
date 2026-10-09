@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { FilmBand } from "@/components/film-band";
-import { TabLead } from "@/components/tab-lead";
-import { MoneyBar } from "@/components/money-bar";
+import { TradeTerminal } from "@/components/trade-terminal";
 import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
@@ -21,10 +19,9 @@ import { applyHouseDrop, loadHouseBook, markHouse, saveHouseBook, type HouseBook
 import { openChainCover } from "@/lib/cover-chain";
 import { connectPhantom } from "@/lib/phantom";
 import type { Side } from "@/lib/lmsr";
-import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { chainFor, formatStrike, type OptContract, type OptTenor } from "@/lib/option-chain";
 import { settleOptions } from "@/lib/option-book";
-import { getHouse, HOUSE_FALLBACK, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { getHouse, HOUSE_FALLBACK, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
 function Dollars({
@@ -76,7 +73,6 @@ export function PitFloor({
   const [tenor, setTenor] = useState<OptTenor>("1d");
   const [underId, setUnderId] = useState<string | null>(null);
   const [ticketSide, setTicketSide] = useState<"buy" | "sell">("buy");
-  const [liveQuote, setLiveQuote] = useState<JupQuote | { error: string } | null>(null);
 
   useEffect(() => {
     setBook(loadHouseBook());
@@ -122,25 +118,6 @@ export function PitFloor({
   const pnl = mtm - cost;
   const equity = chips + mtm;
   const busy = Boolean(busyKey);
-
-  useEffect(() => {
-    if (!under?.mint || !(armed > 0)) {
-      setLiveQuote(null);
-      return;
-    }
-    let live = true;
-    setLiveQuote(null);
-    quoteJup({ data: { mint: under.mint, usd: armed, side: ticketSide } })
-      .then((r) => {
-        if (live) setLiveQuote(r);
-      })
-      .catch(() => {
-        if (live) setLiveQuote({ error: "Quote failed." });
-      });
-    return () => {
-      live = false;
-    };
-  }, [under?.mint, armed, ticketSide]);
 
   async function ensureStack(spend: number): Promise<boolean> {
     if (frozen) {
@@ -221,235 +198,135 @@ export function PitFloor({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mx-3 mt-3">
-        <TabLead
-          kicker="Trade"
-          title="The ticket"
-          accent="you sign it."
-          line="Your size. Your side. The signature is the ticket already on this book."
-          live={["Set the size in dollars.", "Pick buy or sell.", "Sign it through the ticket on this page."]}
-          coming={["A central limit book."]}
-        />
-        <div className="mt-3">
-          <MoneyBar />
-        </div>
-      </div>
-      <section className="mx-3 mt-3 rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Ticket</p>
-            <h2 className="mt-1 text-4xl tracking-tight lg:text-5xl">{under ? under.symbol : "PreStock"}</h2>
-            <p className="mt-1 font-mono text-sm text-muted">
-              {under ? `${formatUsd(under.last)} last` : "Waiting on the book."}
-              {under?.mint ? ` · ${under.mint.slice(0, 4)}…${under.mint.slice(-4)}` : ""}
-            </p>
-          </div>
-          <p className="font-mono text-5xl tabular-nums">${armed ? armed.toFixed(2) : "0.00"}</p>
-        </div>
-        <div className="mt-5 flex gap-2 overflow-x-auto">
-          {pre.map((r) => (
+      <main className="m-3 min-h-0 flex-1">
+        {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="mr-2 font-mono text-sm tabular-nums" suppressHydrationWarning>
+            ${equity.toFixed(2)}
+            <span className={cn("ml-2 text-xs", pnl < 0 ? "text-down" : "text-accent")}>
+              {pnl >= 0 ? "+" : ""}
+              {pnl.toFixed(2)}
+            </span>
+          </p>
+          {desks.map(([id, label]) => (
             <button
-              key={r.id}
+              key={id}
               type="button"
-              onClick={() => setUnderId(r.id)}
+              aria-pressed={desk === id}
+              onClick={() => setDesk(id)}
               className={cn(
-                "min-h-12 shrink-0 rounded-full px-4 text-sm font-semibold",
-                under?.id === r.id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                "min-h-9 rounded-full px-3 text-sm",
+                desk === id ? "bg-accent font-semibold text-accent-fg" : "bg-white/5 text-muted hover:text-fg",
               )}
             >
-              {r.symbol}
+              {label}
             </button>
           ))}
         </div>
-        <label className="mt-5 block">
-          <span className="text-xs font-medium text-subtle">Size</span>
-          <input
-            inputMode="decimal"
-            value={armed ? String(armed) : ""}
-            onChange={(e) => setArmed(Number(e.target.value) || 0)}
-            placeholder="0"
-            className="mt-2 min-h-16 w-full rounded-[22px] border border-white/10 bg-black/40 px-5 font-mono text-3xl tabular-nums outline-none"
-          />
-        </label>
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setTicketSide("buy")}
-            className={cn(
-              "min-h-14 rounded-full px-5 text-base font-semibold",
-              ticketSide === "buy" ? "bg-accent text-accent-fg" : "border border-white/10",
-            )}
-          >
-            Buy
-          </button>
-          <button
-            type="button"
-            onClick={() => setTicketSide("sell")}
-            className={cn(
-              "min-h-14 rounded-full px-5 text-base font-semibold",
-              ticketSide === "sell" ? "bg-accent text-accent-fg" : "border border-white/10",
-            )}
-          >
-            Sell
-          </button>
-        </div>
-        <TicketQuote quote={liveQuote} side={ticketSide} armed={armed} />
-        {under ? (
-          <FillButton
-            mint={under.mint}
-            usd={armed}
-            side={ticketSide}
-            price={under.last}
-            label={`Sign ${ticketSide} ${under.symbol}`}
-            className="mt-4 flex min-h-16 w-full items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-fg"
-          />
-        ) : (
-          <p className="mt-4 text-sm text-muted">No PreStock on the book to sign.</p>
-        )}
-      </section>
-      <FilmBand poster="/images/markets-desk.jpg" label="The book is live." />
-    <main className="m-3 grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
-      {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <nav className="h-fit rounded-[22px] border border-white/10 bg-[#10131c] p-2 lg:overflow-auto">
-        <div className="px-3 py-3">
-          <p className="text-[11px] tracking-wide text-subtle uppercase">Cash</p>
-          <p className="mt-1 font-mono text-3xl tabular-nums" suppressHydrationWarning>
-            ${equity.toFixed(2)}
-          </p>
-          <p className={cn("mt-1 font-mono text-xs tabular-nums", pnl < 0 ? "text-down" : "text-accent")} suppressHydrationWarning>
-            {pnl >= 0 ? "+" : ""}
-            {pnl.toFixed(2)} on the book
-          </p>
-        </div>
-        {desks.map(([id, label, hint]) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={desk === id}
-            onClick={() => setDesk(id)}
-            className={cn(
-              "mb-1 flex w-full flex-col items-start rounded-2xl px-3 py-2.5 text-left",
-              desk === id ? "bg-accent text-accent-fg" : "hover:bg-white/5",
-            )}
-          >
-            <span className="text-sm font-semibold">{label}</span>
-            <span className={cn("text-[11px]", desk === id ? "text-accent-fg/70" : "text-subtle")}>{hint}</span>
-          </button>
-        ))}
-      </nav>
-      <div className="min-h-0 overflow-auto rounded-[22px] border border-white/10 bg-[#10131c]">
-
-      {desk === "spot" ? <JupBoard names={pre} /> : null}
-      {desk === "minty" ? <LaunchDesk /> : null}
-      {desk === "curve" ? <CurveDesk /> : null}
-      {desk === "perps" ? <PerpDesk house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
-      {desk === "basket" ? <BasketDesk house={pre} cash={chips} onDebit={onDebit} /> : null}
-      {desk === "lend" ? <LendDesk house={pre} onCredit={onCredit} onDebit={onDebit} /> : null}
-
-      {desk === "book" ? <MarketStream house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
-      {desk === "wrap" ? <RadarDesk house={pre} /> : null}
-      {desk === "eco" ? <EcosystemDesk house={pre} /> : null}
-
-      {desk === "options" ? (
-        <>
-          <div className="flex gap-1 overflow-x-auto px-3 py-3">
-            {house
-              .filter((r) => r.venue === "prestocks")
-              .map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setUnderId(r.id)}
-                  className={cn(
-                    "min-h-10 shrink-0 rounded-full px-3 text-sm font-medium",
-                    under?.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
-                  )}
-                >
-                  {r.symbol}
-                </button>
-              ))}
-          </div>
-          {under ? (
-            <div className="px-4 pb-2">
-              <p className="text-sm text-muted">
-                {under.symbol} last {formatUsd(under.last)} · mark {formatUsd(under.mark)}. Put is insurance on last.
-              </p>
-              <p className="mt-1 truncate font-mono text-[11px] text-subtle">{under.mint}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <FillButton
-                  mint={under.mint}
-                  usd={10}
-                  price={under.last}
-                  label={`Buy $10 ${under.symbol}`}
-                  className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
-                />
-                <Link
-                  to="/wallet"
-                  search={{ buy: under.symbol }}
-                  className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm font-semibold"
-                >
-                  Pay with SOL
-                </Link>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    const put = chainFor(under, tenor).find((c) => c.atm && c.kind === "put");
-                    if (put) void liftOpt(put);
-                  }}
-                  className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
-                >
-                  Insure last
-                </button>
-              </div>
+        <div className="min-h-0">
+          {desk === "spot" ? (
+            <>
+              <TradeTerminal
+                names={pre}
+                under={under}
+                onPick={setUnderId}
+                armed={armed}
+                side={ticketSide}
+                onArmed={setArmed}
+                onSide={setTicketSide}
+                positions={pre
+                  .filter((r) => (book[r.id]?.shares ?? 0) !== 0)
+                  .map((r) => ({
+                    id: r.id,
+                    symbol: r.symbol,
+                    shares: book[r.id]?.shares ?? 0,
+                    cost: book[r.id]?.cost ?? 0,
+                    last: r.last,
+                  }))}
+              />
+              <JupBoard names={pre} />
+            </>
+          ) : (
+            <div className="overflow-auto rounded-[22px] border border-white/10 bg-[#10131c]">
+              {desk === "minty" ? <LaunchDesk /> : null}
+              {desk === "curve" ? <CurveDesk /> : null}
+              {desk === "perps" ? <PerpDesk house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
+              {desk === "basket" ? <BasketDesk house={pre} cash={chips} onDebit={onDebit} /> : null}
+              {desk === "lend" ? <LendDesk house={pre} onCredit={onCredit} onDebit={onDebit} /> : null}
+              {desk === "book" ? <MarketStream house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
+              {desk === "wrap" ? <RadarDesk house={pre} /> : null}
+              {desk === "eco" ? <EcosystemDesk house={pre} /> : null}
+              {desk === "options" ? (
+                <>
+                  <div className="flex gap-1 overflow-x-auto px-3 py-3">
+                    {house
+                      .filter((r) => r.venue === "prestocks")
+                      .map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setUnderId(r.id)}
+                          className={cn(
+                            "min-h-10 shrink-0 rounded-full px-3 text-sm font-medium",
+                            under?.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
+                          )}
+                        >
+                          {r.symbol}
+                        </button>
+                      ))}
+                  </div>
+                  {under ? (
+                    <div className="px-4 pb-2">
+                      <p className="text-sm text-muted">
+                        {under.symbol} last {formatUsd(under.last)} · mark {formatUsd(under.mark)}. Put is insurance on last.
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-subtle">{under.mint}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <FillButton
+                          mint={under.mint}
+                          usd={10}
+                          price={under.last}
+                          label={`Buy $10 ${under.symbol}`}
+                          className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                        />
+                        <Link
+                          to="/wallet"
+                          search={{ buy: under.symbol }}
+                          className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm font-semibold"
+                        >
+                          Pay with SOL
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            const put = chainFor(under, tenor).find((c) => c.atm && c.kind === "put");
+                            if (put) void liftOpt(put);
+                          }}
+                          className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                        >
+                          Insure last
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="px-3 pb-3">
+                    <Dollars value={armed} onChange={setArmed} />
+                  </div>
+                  <OptionChain
+                    stock={under?.venue === "prestocks" ? under : house.find((h) => h.venue === "prestocks") ?? under}
+                    tenor={tenor}
+                    onTenor={setTenor}
+                    busy={busy}
+                    onBuy={(c) => void liftOpt(c)}
+                  />
+                </>
+              ) : null}
             </div>
-          ) : null}
-          <div className="px-3 pb-3">
-            <Dollars value={armed} onChange={setArmed} />
-          </div>
-          <OptionChain
-            stock={under?.venue === "prestocks" ? under : house.find((h) => h.venue === "prestocks") ?? under}
-            tenor={tenor}
-            onTenor={setTenor}
-            busy={busy}
-            onBuy={(c) => void liftOpt(c)}
-          />
-        </>
-      ) : null}
-      </div>
-    </main>
+          )}
+        </div>
+      </main>
     </div>
   );
 }
 
-function TicketQuote({
-  quote,
-  side,
-  armed,
-}: {
-  quote: JupQuote | { error: string } | null;
-  side: "buy" | "sell";
-  armed: number;
-}) {
-  if (!(armed > 0)) return <p className="mt-3 text-xs text-muted">Type a size. Jupiter quotes it before you sign.</p>;
-  if (!quote) return <p className="mt-3 text-xs text-muted">Asking Jupiter…</p>;
-  if ("error" in quote) return <p className="mt-3 text-xs text-down">{quote.error}</p>;
-  const got = outUi(quote);
-  const paid = inUi(quote);
-  return (
-    <dl className="mt-3 grid grid-cols-3 gap-2">
-      <div className="rounded-2xl bg-black/40 px-3 py-2">
-        <dt className="text-[11px] text-subtle">You pay</dt>
-        <dd className="font-mono text-sm tabular-nums">{side === "buy" ? `$${paid.toFixed(2)}` : paid.toFixed(4)}</dd>
-      </div>
-      <div className="rounded-2xl bg-black/40 px-3 py-2">
-        <dt className="text-[11px] text-subtle">You get</dt>
-        <dd className="font-mono text-sm tabular-nums">{side === "buy" ? `${got.toFixed(4)}` : `$${got.toFixed(2)}`}</dd>
-      </div>
-      <div className="rounded-2xl bg-black/40 px-3 py-2">
-        <dt className="text-[11px] text-subtle">Impact</dt>
-        <dd className="font-mono text-sm tabular-nums">{impactPct(quote).toFixed(2)}%</dd>
-      </div>
-    </dl>
-  );
-}

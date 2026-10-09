@@ -15,6 +15,7 @@ A PreStock is economic exposure. Not a legal share, not a vote, not a dividend. 
 ## What is real
 
 - Prints come from `https://prestocks.com/api/prestocks`, loaded in `src/lib/sol-house.ts`.
+- Trade candles are the pool, from GeckoTerminal, in `src/lib/print.ts`. If that feed is busy, the last price still stands. Do not draw a fake series.
 - A buy, sell, or convert is quoted on Jupiter, simulated, then signed. `src/lib/jup-sign.ts` and `src/lib/prestock.ts`. The wallet signs. Senda does not invent a fill.
 - Portfolio and the wallet strip call `readChain` in `src/lib/phantom.ts`. Empty means the wallet holds none.
 - Pay is an SPL transfer of USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) plus a memo. `src/lib/solana-pay.ts`. `usdcPayLink` builds a Solana Pay URL. It does not send the money.
@@ -48,7 +49,8 @@ Defined in `src/components/app-shell.tsx`.
 - `/vault` Portfolio.
 - `/cover` The 10% line.
 - `/work` The sheet and the job board.
-- `/invest` Trade. Quote, then sign.
+- `/invest` Trade. The live names, pool candles, a Jupiter quote, then sign.
+- `/equities` Listed shares. xStocks, and what Kamino will lend against them.
 - `/solana` The mints.
 - `/books` The ledger already stored on this account.
 - `/docs` The written desk.
