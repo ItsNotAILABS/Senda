@@ -51,7 +51,7 @@ Defined in `src/components/app-shell.tsx`.
 - `/work` The sheet and the job board.
 - `/invest` Trade. The live names, pool candles, a Jupiter quote, then sign.
 - `/equities` Listed shares. xStocks, and what Kamino will lend against them.
-- `/solana` The mints.
+- `/solana` The mints, plus Jupiter prices for more Solana markets and DefiLlama spot prices for other chains. Those rows are prices, not positions. A chain row is not a buy.
 - `/books` The ledger already stored on this account.
 - `/docs` The written desk.
 - `/more` Account.

@@ -4,12 +4,14 @@ import { FilmBand } from "@/components/film-band";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
+import { ChainTapeView } from "@/components/chain-tape";
+import type { ChainTape } from "@/lib/chain-tape";
 import { PRESTOCK_MINTS } from "@/lib/phantom";
 import { pre8 } from "@/lib/pre8";
 import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 
-export function SolanaFloor({ house }: { house: HouseListing[] }) {
+export function SolanaFloor({ house, tape }: { house: HouseListing[]; tape: ChainTape }) {
   const idx = pre8(house);
   const wallet = useWallet();
   const link = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
@@ -29,7 +31,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
         kicker="Solana"
         title="The mints"
         accent="on this book."
-        line="Real PreStock mints, row by row. Tap one and it is on your clipboard."
+        line="Real PreStock mints, then live prices for more Solana markets and other chains. A price is not a position."
         live={["Copy a live PreStock mint.", idx.n > 0 ? `PRE8 at ${idx.level.toFixed(1)}, from the marks on this book.` : "PRE8 when this book has marks."]}
         coming={["Your own program."]}
       />
@@ -63,6 +65,7 @@ export function SolanaFloor({ house }: { house: HouseListing[] }) {
           </ul>
         )}
       </section>
+      <ChainTapeView tape={tape} />
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Solana</p>
