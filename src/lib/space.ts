@@ -214,7 +214,7 @@ function hex(bytes: Uint8Array): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-function unhex(value: string): Uint8Array {
+function unhex(value: string): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(value.length / 2);
   for (let i = 0; i < out.length; i += 1) out[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
   return out;
@@ -226,7 +226,7 @@ function b64e(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-function b64(value: string): Uint8Array {
+function b64(value: string): Uint8Array<ArrayBuffer> {
   const raw = atob(value);
   const out = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
