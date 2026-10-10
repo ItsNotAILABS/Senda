@@ -1,19 +1,13 @@
 /** Send the LI.FI transaction with the injected EVM wallet. Senda never holds the key. */
 
-import { quoteIsSane, rawAmount, type EvmMarket, type LifiQuote } from "@/lib/trade-book.mjs";
+import { EVM_CHAINS, quoteIsSane, type EvmMarket, type LifiQuote } from "@/lib/trade-book.mjs";
 import { spendCap } from "@/lib/spend-cap";
 
 type Eth = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 };
 
-const CHAINS: Record<number, { name: string; rpc: string; symbol: string; explorer: string }> = {
-  1: { name: "Ethereum", rpc: "https://ethereum.publicnode.com", symbol: "ETH", explorer: "https://etherscan.io" },
-  10: { name: "Optimism", rpc: "https://mainnet.optimism.io", symbol: "ETH", explorer: "https://optimistic.etherscan.io" },
-  56: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org", symbol: "BNB", explorer: "https://bscscan.com" },
-  42161: { name: "Arbitrum", rpc: "https://arb1.arbitrum.io/rpc", symbol: "ETH", explorer: "https://arbiscan.io" },
-  43114: { name: "Avalanche", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorer: "https://snowtrace.io" },
-};
+const CHAINS = EVM_CHAINS;
 
 function ethereum(): Eth {
   const eth = (window as unknown as { ethereum?: Eth }).ethereum;
@@ -98,16 +92,17 @@ async function approve(token: string, owner: string, spender: string, amount: bi
   await mined(hash);
 }
 
-export async function signLifi(market: EvmMarket, quote: LifiQuote, usd: number): Promise<string> {
-  if (!(usd > 0)) throw new Error("Enter an amount.");
-  if (usd > spendCap()) throw new Error(`That is about $${usd.toFixed(0)}. Your send cap is $${spendCap()}. Raise it on Your money.`);
+export async function signLifi(market: EvmMarket, quote: LifiQuote, spend: { token: string; amount: bigint; usd: number }): Promise<string> {
+  if (!(spend.usd > 0) || spend.amount <= 0n) throw new Error("Enter an amount.");
+  if (spend.usd > spendCap()) throw new Error(`That is about $${spend.usd.toFixed(0)}. Your send cap is $${spendCap()}. Raise it on Your money.`);
   if (!quote.ready || !quote.to || !quote.data) throw new Error("Quote again from this wallet. LI.FI has not built the transaction.");
   if (quote.fromAmountUSD && quote.toAmountUSD && !quoteIsSane(quote.fromAmountUSD, quote.toAmountUSD)) {
     throw new Error("The quote is more than 5% under the dollars in. The wallet was not asked to sign.");
   }
   await onChain(market.chainId);
   const owner = await account();
-  if (quote.approvalAddress) await approve(market.usdc, owner, quote.approvalAddress, rawAmount(usd, market.usdcDecimals));
+  const token = quote.fromToken || spend.token;
+  if (quote.approvalAddress) await approve(token, owner, quote.approvalAddress, spend.amount);
   return send({
     from: owner,
     to: quote.to,

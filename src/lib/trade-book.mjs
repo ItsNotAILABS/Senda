@@ -46,10 +46,54 @@ export function quoteIsSane(fromUsd, toUsd) {
   return received >= spent * 0.95;
 }
 
+export const EVM_CHAINS = {
+  1: { name: "Ethereum", rpc: "https://ethereum.publicnode.com", symbol: "ETH", explorer: "https://etherscan.io" },
+  10: { name: "Optimism", rpc: "https://mainnet.optimism.io", symbol: "ETH", explorer: "https://optimistic.etherscan.io" },
+  56: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org", symbol: "BNB", explorer: "https://bscscan.com" },
+  42161: { name: "Arbitrum", rpc: "https://arb1.arbitrum.io/rpc", symbol: "ETH", explorer: "https://arbiscan.io" },
+  43114: { name: "Avalanche", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorer: "https://snowtrace.io" },
+};
+
+/** Token units to sell for about `usd`, never more than the wallet holds. */
+export function sellRaw(usd, price, decimals, heldRaw) {
+  if (!(usd > 0) || !(price > 0) || decimals < 0) return 0n;
+  const held = BigInt(heldRaw || "0");
+  if (held <= 0n) return 0n;
+  const want = BigInt(Math.max(1, Math.floor((usd / price) * 10 ** decimals)));
+  return want > held ? held : want;
+}
+
+export function balanceOfCall(owner) {
+  const addr = String(owner || "").toLowerCase().replace(/^0x/, "");
+  if (!/^[\da-f]{40}$/.test(addr)) return "";
+  return `0x70a08231${addr.padStart(64, "0")}`;
+}
+
+export function decodeBalance(hex) {
+  if (!hex || hex === "0x") return 0n;
+  try {
+    return BigInt(hex);
+  } catch {
+    return 0n;
+  }
+}
+
+export function txLink(chainId, hash) {
+  const chain = EVM_CHAINS[Number(chainId)];
+  if (!chain || !hash) return "";
+  return `${chain.explorer}/tx/${hash}`;
+}
+
+export function solTxLink(signature) {
+  if (!signature) return "";
+  return `https://solscan.io/tx/${signature}`;
+}
+
 export function readLifi(body) {
   const estimate = body?.estimate;
   if (!estimate?.toAmount) return null;
   const tx = body.transactionRequest;
+  const fromToken = body?.action?.fromToken;
   return {
     tool: String(estimate.tool || "LI.FI"),
     toAmount: String(estimate.toAmount),
@@ -57,6 +101,7 @@ export function readLifi(body) {
     fromAmountUSD: estimate.fromAmountUSD != null ? String(estimate.fromAmountUSD) : "",
     toAmountUSD: estimate.toAmountUSD != null ? String(estimate.toAmountUSD) : "",
     approvalAddress: String(estimate.approvalAddress || ""),
+    fromToken: String(fromToken?.address || ""),
     ready: Boolean(tx?.to && tx?.data),
     to: String(tx?.to || ""),
     data: String(tx?.data || ""),

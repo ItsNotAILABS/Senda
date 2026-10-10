@@ -22,6 +22,14 @@ export function pairAllowed(inputMint: string, outputMint: string, prestockMints
 export function rawAmount(usd: number, decimals: number): bigint;
 export function quoteIsSane(fromUsd: string | number, toUsd: string | number): boolean;
 
+export const EVM_CHAINS: Record<number, { name: string; rpc: string; symbol: string; explorer: string }>;
+
+export function sellRaw(usd: number, price: number, decimals: number, heldRaw: string): bigint;
+export function balanceOfCall(owner: string): string;
+export function decodeBalance(hex: string | null | undefined): bigint;
+export function txLink(chainId: number, hash: string): string;
+export function solTxLink(signature: string): string;
+
 export type LifiQuote = {
   tool: string;
   toAmount: string;
@@ -29,6 +37,7 @@ export type LifiQuote = {
   fromAmountUSD: string;
   toAmountUSD: string;
   approvalAddress: string;
+  fromToken: string;
   ready: boolean;
   to: string;
   data: string;
