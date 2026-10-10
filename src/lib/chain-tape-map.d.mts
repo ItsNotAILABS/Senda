@@ -1,4 +1,6 @@
 export const USDC_MAINNET: string;
+export const SOL_MINT: string;
+export const SOLANA_DECIMALS: Record<string, number>;
 export const SOLANA_MORE: ReadonlyArray<readonly [string, string, string]>;
 export const CHAINS: ReadonlyArray<readonly [string, string, string, string]>;
 

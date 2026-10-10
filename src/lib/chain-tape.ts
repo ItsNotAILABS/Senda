@@ -56,7 +56,7 @@ export async function fetchChainTape(): Promise<ChainTape> {
   return {
     ok: solana.length + chains.length > 0,
     rows: [...solana, ...chains],
-    note: "These are live prices. They are not positions, and a chain row is not a Solana buy.",
+    note: "Solana rows can be signed on Jupiter. Listed EVM rows can be signed on LI.FI. Every other row is a price.",
     jupiter,
     defillama,
   };

@@ -1,6 +1,20 @@
 /** Price rows only. A row is not a position and not a fill. */
 
 export const USDC_MAINNET = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+export const SOL_MINT = "So11111111111111111111111111111111111111112";
+
+/** Raw-unit decimals for the extra Solana markets. Jupiter amounts use these. */
+export const SOLANA_DECIMALS = {
+  [USDC_MAINNET]: 6,
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: 6,
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo": 6,
+  mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So: 9,
+  J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn: 9,
+  bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1: 9,
+  "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm": 9,
+  DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263: 5,
+  EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm: 6,
+};
 
 export const SOLANA_MORE = [
   ["USDC", "USD Coin", USDC_MAINNET],

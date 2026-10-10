@@ -19,7 +19,7 @@ Connect a wallet they already have. Buy a PreStock. Jupiter quotes it. They sign
 
 From the same account they can convert, cover a 10% drop, send USDC, post work, list something on Make, play the print with practice cash, or hand an agent a job that cannot sign.
 
-Trade opens on the live names. The chart is pool candles for the name they pick (`src/lib/print.ts`). Listed is the xStocks book and the Kamino line on a share (`/equities`). Solana also shows Jupiter prices for more Solana markets and DefiLlama spot prices for other chains. Those rows are prices. A chain row is not a buy.
+Trade opens on the live names. The chart is pool candles for the name they pick (`src/lib/print.ts`). Listed is the xStocks book and the Kamino line on a share (`/equities`). Solana markets on that page can be signed through Jupiter. Listed EVM markets can be signed through LI.FI. A chain with no signer stays a price.
 
 ## What is not true
 

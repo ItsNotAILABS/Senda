@@ -4,6 +4,7 @@ import { USDC } from "@/lib/jup-exec";
 import { PRESTOCK_MINTS } from "@/lib/phantom";
 import { sendVersioned } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
+import { pairAllowed } from "@/lib/trade-book.mjs";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
 const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
@@ -12,12 +13,11 @@ const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
 
 export const SOL = "So11111111111111111111111111111111111111112";
 
-const ALLOWED = new Set<string>([SOL, USDC, ...PRESTOCK_MINTS.map(([, mint]) => mint)]);
-
-/** A swap may only be SOL, USDC, or a PreStock mint. Anything else never reaches the wallet. */
+/** A swap may only be SOL, USDC, a PreStock, or a listed Solana market. */
 export function assertPrestockRoute(inputMint: string, outputMint: string) {
-  if (!ALLOWED.has(inputMint) || !ALLOWED.has(outputMint)) {
-    throw new Error("That pair is not SOL, USDC, or a PreStock. The wallet was not asked to sign.");
+  const prestocks = PRESTOCK_MINTS.map(([, mint]) => mint);
+  if (!pairAllowed(inputMint, outputMint, prestocks)) {
+    throw new Error("That pair is not on this desk. The wallet was not asked to sign.");
   }
 }
 
