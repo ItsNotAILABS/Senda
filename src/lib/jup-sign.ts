@@ -13,10 +13,19 @@ const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
 
 export const SOL = "So11111111111111111111111111111111111111112";
 
-/** A swap may only be SOL, USDC, a PreStock, or a listed Solana market. */
+/** A swap may only be SOL, USDC, a PreStock, a Tessera T-Token, or a listed Solana market. */
+const TESSERA_MINTS = [
+  "TKLSidmLVt3cqGaaodG8tyRzoANfQwoh67AccjmubeZ",
+  "oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ",
+  "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v",
+];
+
 export function assertPrestockRoute(inputMint: string, outputMint: string) {
-  const prestocks = PRESTOCK_MINTS.map(([, mint]) => mint);
-  if (!pairAllowed(inputMint, outputMint, prestocks)) {
+  const listed = PRESTOCK_MINTS.map(([, mint]) => mint);
+  const extra = [inputMint, outputMint].filter(
+    (mint) => /^Pre[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) || TESSERA_MINTS.includes(mint),
+  );
+  if (!pairAllowed(inputMint, outputMint, [...listed, ...extra])) {
     throw new Error("That pair is not on this desk. The wallet was not asked to sign.");
   }
 }

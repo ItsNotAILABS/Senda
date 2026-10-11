@@ -30,9 +30,12 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...names]
-      .filter((n) => n.venue === "prestocks" && n.last > 0)
-      .filter((n) => !q || n.symbol.toLowerCase().includes(q) || n.name.toLowerCase().includes(q))
-      .sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0));
+      .filter((n) => (n.venue === "prestocks" || n.venue === "tessera") && n.last > 0)
+      .filter((n) => !q || n.symbol.toLowerCase().includes(q) || n.name.toLowerCase().includes(q) || n.sector.toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (a.venue !== b.venue) return a.venue === "prestocks" ? -1 : 1;
+        return b.liquidity - a.liquidity;
+      });
   }, [names, query]);
   const [symbol, setSymbol] = useState(rows[0]?.symbol ?? "");
   useEffect(() => {
@@ -244,7 +247,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         kicker="PreStocks"
         title="The pre-IPO book"
         accent="open all night."
-        line="These are tokenized names you buy with the wallet you already have."
+        line="PreStocks and Tessera, including Oura, SpaceX, and xAI. You buy with the wallet you already have."
         live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
         coming={["A broker account", "Margin"]}
       />
@@ -357,7 +360,10 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{r.symbol}</span>
-                    <span className="block truncate text-[11px] text-subtle">{r.name}</span>
+                    <span className="block truncate text-[11px] text-subtle">
+                      {r.venue === "tessera" ? "Tessera" : "PreStock"} · {r.sector}
+                      {r.liquidity > 0 && r.liquidity < 1000 ? " · thin pool" : ""}
+                    </span>
                   </span>
                   <span className="w-24 text-right font-mono text-sm tabular-nums">{formatUsd(r.last)}</span>
                   <span className={cn("w-16 text-right font-mono text-xs tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>

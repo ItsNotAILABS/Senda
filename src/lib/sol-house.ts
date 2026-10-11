@@ -121,12 +121,6 @@ export function jupiterSwap(mint: string): string {
   return `https://jup.ag/swap/USDC-${mint}`;
 }
 
-/** xAI token discontinued after the SpaceX deal. Off the book. */
-function skippedName(symbol: string, name = "", url = ""): boolean {
-  const blob = `${symbol} ${name} ${url}`.toUpperCase();
-  return /\bXAI\b/.test(blob) && !blob.includes("SPACEX");
-}
-
 export function sectorFor(symbol: string, fallback = "Pre-IPO"): string {
   const s = symbol.toUpperCase().replace(/[^A-Z]/g, "");
   if (s.includes("KALSHI") || s.includes("POLY")) return "Prediction Markets";
@@ -141,6 +135,8 @@ export function sectorFor(symbol: string, fallback = "Pre-IPO"): string {
     return "Artificial Intelligence";
   }
   if (s.includes("KRAKEN")) return "Crypto";
+  if (s.includes("OURA")) return "Health";
+  if (s.includes("XAI")) return "Artificial Intelligence";
   if (s.includes("SARON") || s.includes("CHAOS")) return "Defense";
   return fallback;
 }
@@ -355,6 +351,36 @@ const SEEDS: Seed[] = [
     sector: "Robotics",
     description: "SPV-backed PreStock tracking Figure AI. Economic exposure only — not a share.",
   },
+  {
+    venue: "prestocks",
+    mint: "Pre9atBqkocK1QngFy7Q7zvyQictEFpXdLi6bZ2qnYy",
+    symbol: "OURA",
+    name: "Oura PreStocks",
+    mark: 71.25,
+    last: 69.9,
+    valuation: 14_631_069_727,
+    holders: 0,
+    liquidity: 44854,
+    change24h: -0.0133,
+    url: "https://www.prestocks.com/oura",
+    sector: "Health",
+    description: "SPV-backed PreStock tracking Oura. Economic exposure only — not a share.",
+  },
+  {
+    venue: "prestocks",
+    mint: "PreC1KtJ1sBPPqaeeqL6Qb15GTLCYVvyYEwxhdfTwfx",
+    symbol: "XAI",
+    name: "xAI PreStocks",
+    mark: 75.46,
+    last: 89.53,
+    valuation: 250_000_000_000,
+    holders: 0,
+    liquidity: 185,
+    change24h: 0.0187,
+    url: "https://www.prestocks.com/xai",
+    sector: "Artificial Intelligence",
+    description: "SPV-backed PreStock tracking xAI. The pool is thin. Economic exposure only — not a share.",
+  },
 ];
 
 const SEED_MINTS = new Set(SEEDS.map((s) => s.mint));
@@ -395,6 +421,8 @@ function rank(s: HouseListing): number {
   else if (blob.includes("NEURAL")) name = 6;
   else if (blob.includes("ANDURIL")) name = 7;
   else if (blob.includes("FIGURE")) name = 8;
+  else if (blob.includes("OURA")) name = 9;
+  else if (blob.includes("XAI")) name = 10;
   return venueBoost + name;
 }
 
@@ -417,7 +445,6 @@ function tesseraRows(raw: unknown, px: Record<string, JupRow>): HouseListing[] {
     if (!mint) continue;
     const symbol = String(r.symbol ?? r.code ?? "T");
     const name = String(r.name ?? symbol);
-    if (skippedName(symbol, name)) continue;
     const mark = n(r.markPrice);
     const last = n(px[mint]?.usdPrice) || mark;
     out.push({
@@ -454,7 +481,6 @@ function prestocksRows(raw: unknown, px: Record<string, JupRow>): HouseListing[]
     if (!mint) continue;
     const symbol = String(r.symbol ?? "");
     const name = String(r.name ?? symbol);
-    if (skippedName(symbol, name, String(r.external_url ?? ""))) continue;
     const mark = n(r.markPrice);
     const token = n(r.tokenPrice) || n(px[mint]?.usdPrice) || mark;
     const desc = String(r.description ?? "").split("\n\n")[0] ?? "";

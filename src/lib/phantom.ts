@@ -291,6 +291,8 @@ const NAMES: Record<string, string> = {
   PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF: "OPENAI",
   Pre8AREmFPtoJFT8mQSXQLh56cwJmM7CFDRuoGBZiUP: "POLYMARKET",
   PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh: "SPACEX",
+  Pre9atBqkocK1QngFy7Q7zvyQictEFpXdLi6bZ2qnYy: "OURA",
+  PreC1KtJ1sBPPqaeeqL6Qb15GTLCYVvyYEwxhdfTwfx: "XAI",
 };
 
 export const PRESTOCK_MINTS = [
@@ -302,6 +304,8 @@ export const PRESTOCK_MINTS = [
   ["OPENAI", "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF"],
   ["POLYMARKET", "Pre8AREmFPtoJFT8mQSXQLh56cwJmM7CFDRuoGBZiUP"],
   ["SPACEX", "PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh"],
+  ["OURA", "Pre9atBqkocK1QngFy7Q7zvyQictEFpXdLi6bZ2qnYy"],
+  ["XAI", "PreC1KtJ1sBPPqaeeqL6Qb15GTLCYVvyYEwxhdfTwfx"],
 ] as const;
 
 export type ChainToken = { mint: string; symbol: string; ui: number; decimals: number };
