@@ -136,8 +136,12 @@ export function sectorFor(symbol: string, fallback = "Pre-IPO"): string {
   }
   if (s.includes("KRAKEN")) return "Crypto";
   if (s.includes("OURA")) return "Health";
-  if (s.includes("XAI")) return "Artificial Intelligence";
+  if (s.includes("XAI") || s.includes("OPENAI") || s.includes("ANTHROP")) return "Artificial Intelligence";
   if (s.includes("SARON") || s.includes("CHAOS")) return "Defense";
+  if (s.includes("APPTRON") || s.includes("APTRNK")) return "Robotics";
+  if (s.includes("ADDEPAR")) return "Infrastructure";
+  if (s.includes("BLABLA")) return "Consumer";
+  if (s.includes("IMPOSSIBLE") || s.includes("IMFOOD")) return "Food";
   return fallback;
 }
 

@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { PreDesk } from "@/components/pre-desk";
+import { getClosedPrints } from "@/lib/closed-prints";
 import { getPreRoutes } from "@/lib/prestock";
 import { getHouse } from "@/lib/sol-house";
 
@@ -10,19 +11,19 @@ export const Route = createFileRoute("/pre")({
     return q ? { q } : {};
   },
   loader: async () => {
-    const [house, routes] = await Promise.all([getHouse(), getPreRoutes()]);
-    return { house, routes };
+    const [house, routes, closed] = await Promise.all([getHouse(), getPreRoutes(), getClosedPrints()]);
+    return { house, routes, closed };
   },
   component: PrePage,
   errorComponent: PreError,
 });
 
 function PrePage() {
-  const { house, routes } = Route.useLoaderData();
+  const { house, routes, closed } = Route.useLoaderData();
   const { q } = Route.useSearch();
   return (
     <AppShell>
-      <PreDesk names={house} routes={routes} query={q ?? ""} />
+      <PreDesk names={house} routes={routes} query={q ?? ""} closed={closed} />
     </AppShell>
   );
 }

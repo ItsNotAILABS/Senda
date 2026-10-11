@@ -9,7 +9,8 @@ import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { listChainCovers, openChainCover } from "@/lib/cover-chain";
-import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { type ClosedPrint } from "@/lib/closed-prints";
+import { formatPremium, formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { writeUsing, readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,17 @@ const LOGO: Record<string, string> = {
   XAI: "/logos/xai.png",
 };
 
-export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; routes: PreRoute[]; query?: string }) {
+export function PreDesk({
+  names,
+  routes,
+  query = "",
+  closed = [],
+}: {
+  names: HouseListing[];
+  routes: PreRoute[];
+  query?: string;
+  closed?: ClosedPrint[];
+}) {
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...names]
@@ -63,7 +74,19 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   const wallet = useWallet();
   const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; value: number }>>([]);
+  const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; value: number; note?: string }>>([]);
+  const [sector, setSector] = useState("All");
+  const sectors = useMemo(() => {
+    const found = new Set(rows.map((r) => r.sector).filter(Boolean));
+    return ["All", ...[...found].sort()];
+  }, [rows]);
+  const book = sector === "All" ? rows : rows.filter((r) => r.sector === sector);
+  const shelf = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return closed.filter(
+      (row) => !q || row.symbol.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.sector.toLowerCase().includes(q),
+    );
+  }, [closed, query]);
   const three = useMemo(() => {
     const chosen = trioPicks
       .map((s) => rows.find((r) => r.symbol === s))
@@ -124,11 +147,15 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
           if (n.venue !== "prestocks" || byMint.has(n.mint)) continue;
           byMint.set(n.mint, n);
         }
-        const next: Array<{ symbol: string; mint: string; value: number }> = [];
+        const next: Array<{ symbol: string; mint: string; value: number; note?: string }> = [];
         for (const token of snap.tokens) {
           const house = byMint.get(token.mint);
-          if (!house || !(token.ui > 0)) continue;
-          next.push({ symbol: house.symbol, mint: house.mint, value: token.ui * house.last });
+          if (house && token.ui > 0) {
+            next.push({ symbol: house.symbol, mint: house.mint, value: token.ui * house.last });
+            continue;
+          }
+          const old = closed.find((row) => row.mint === token.mint);
+          if (old && token.ui > 0) next.push({ symbol: old.symbol, mint: old.mint, value: 0, note: old.status });
         }
         next.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
         setHolds(next);
@@ -137,7 +164,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     return () => {
       live = false;
     };
-  }, [owner, names, sig, trioOut]);
+  }, [owner, names, closed, sig, trioOut]);
 
   async function swap(side: "buy" | "sell") {
     if (!name) return;
@@ -247,8 +274,8 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         kicker="PreStocks"
         title="The pre-IPO book"
         accent="open all night."
-        line="PreStocks and Tessera, including Oura, SpaceX, and xAI. You buy with the wallet you already have."
-        live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
+        line={`${rows.length} live PreStock and Tessera prints, plus ${closed.length} refunded or replaced prints from the old book. You buy the live ones with the wallet you already have.`}
+        live={["Live prices", "Buy one", "Buy three", "Cover", "Closed prints"]}
         coming={["A broker account", "Margin"]}
       />
       <MoneyBar />
@@ -334,7 +361,22 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <div className="flex items-baseline justify-between">
             <p className="text-sm font-semibold">Book</p>
-            <p className="font-mono text-xs tabular-nums text-subtle">{rows.length}</p>
+            <p className="font-mono text-xs tabular-nums text-subtle">{book.length}</p>
+          </div>
+          <div className="mt-3 flex gap-2 overflow-x-auto">
+            {sectors.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSector(id)}
+                className={cn(
+                  "min-h-9 shrink-0 rounded-full px-3 text-xs font-semibold",
+                  sector === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                )}
+              >
+                {id}
+              </button>
+            ))}
           </div>
           <div className="mt-3 flex items-center gap-3 px-2 text-[11px] tracking-[0.14em] text-subtle uppercase">
             <span className="size-8 shrink-0" />
@@ -343,7 +385,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             <span className="w-16 text-right">Premium</span>
           </div>
           <ul className="mt-1">
-            {rows.map((r) => (
+            {book.map((r) => (
               <li key={r.id}>
                 <button
                   type="button"
@@ -362,6 +404,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                     <span className="block truncate text-sm font-semibold">{r.symbol}</span>
                     <span className="block truncate text-[11px] text-subtle">
                       {r.venue === "tessera" ? "Tessera" : "PreStock"} · {r.sector}
+                      {r.valuation > 0 ? ` · ${formatValuation(r.valuation)}` : ""}
                       {r.liquidity > 0 && r.liquidity < 1000 ? " · thin pool" : ""}
                     </span>
                   </span>
@@ -373,9 +416,43 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
               </li>
             ))}
           </ul>
-          {rows.length === 0 ? <p className="py-6 text-sm text-muted">No priced names.</p> : null}
+          {book.length === 0 ? <p className="py-6 text-sm text-muted">No priced names in this sector.</p> : null}
         </section>
       </div>
+
+      {shelf.length > 0 ? (
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="font-mono text-[11px] tracking-[0.18em] text-subtle uppercase">Closed prints</p>
+              <h2 className="mt-2 text-2xl tracking-tight">
+                The names <span className="text-accent">we had</span>
+              </h2>
+            </div>
+            <p className="font-mono text-xs tabular-nums text-subtle">{shelf.length}</p>
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            PreStocks marked these refunded or replaced. Jupiter has no price, so this desk does not ask the wallet to buy them. The live print, when there is one, stays in the book above.
+          </p>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {shelf.map((row) => (
+              <li key={row.mint} className="rounded-2xl border border-white/[0.06] bg-black/25 px-3 py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="truncate text-sm font-semibold">{row.name}</p>
+                  <span className="shrink-0 font-mono text-[10px] tracking-[0.12em] text-subtle uppercase">{row.status}</span>
+                </div>
+                <p className="mt-1 truncate text-[11px] text-subtle">
+                  {row.symbol} · {row.sector}
+                </p>
+                <p className="mt-2 text-xs text-muted">{row.note}</p>
+                <a href={`https://solscan.io/token/${row.mint}`} target="_blank" rel="noreferrer" className="mt-2 block truncate font-mono text-[11px] text-accent">
+                  {row.mint}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-4">
         <div className="flex items-baseline justify-between gap-3">
@@ -391,7 +468,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             {holds.map((h) => (
               <li key={h.mint} className="shrink-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2">
                 <p className="font-mono text-xs text-subtle">{h.symbol}</p>
-                <p className="font-mono text-sm tabular-nums">{h.value > 0 ? formatUsd(h.value) : "$0.00"}</p>
+                <p className="font-mono text-sm tabular-nums">{h.note ? h.note : h.value > 0 ? formatUsd(h.value) : "$0.00"}</p>
               </li>
             ))}
           </ul>
