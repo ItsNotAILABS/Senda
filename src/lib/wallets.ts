@@ -1,6 +1,6 @@
 /** Injected wallets. We only connect what is actually in this browser. */
 
-import { insideWalletApp, isPhoneBrowser, openInWallet, type MobileWallet } from "@/lib/mobile-wallet";
+import { canSignHere, isPhoneBrowser, openInWallet, type MobileWallet } from "@/lib/mobile-wallet";
 
 type SolProvider = {
   isPhantom?: boolean;
@@ -142,20 +142,19 @@ async function waitChoice(id: WalletId, ms: number): Promise<WalletChoice | unde
 }
 
 export async function connectWallet(id: WalletId): Promise<{ address: string; label: string; chain: "solana" | "evm" }> {
-  const inApp = insideWalletApp();
   const canOpen = id === "phantom" || id === "solflare" || id === "backpack";
   let choice = detectWallets().find((w) => w.id === id);
-  if (!choice?.installed && (inApp || (isPhoneBrowser() && canOpen))) {
-    choice = await waitChoice(id, inApp ? 4000 : 600);
+  if (!choice?.installed && (canSignHere() || (isPhoneBrowser() && canOpen))) {
+    choice = await waitChoice(id, canSignHere() ? 8000 : 500);
   }
-  if (!choice?.installed && !inApp && isPhoneBrowser() && canOpen) {
+  if (!choice?.installed && !canSignHere() && isPhoneBrowser() && canOpen) {
     openInWallet(id as MobileWallet);
     return new Promise(() => {});
   }
   if (!choice?.installed) {
     throw new Error(
-      inApp
-        ? "This page is already inside the wallet. Tap Connect again."
+      canSignHere()
+        ? "This page is already inside the wallet. Tap Show my account again."
         : `${choice?.name ?? "That wallet"} is not in this browser. On a phone, Phantom, Solflare, or Backpack opens this page.`,
     );
   }

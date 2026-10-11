@@ -28,7 +28,7 @@ import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { readChain, connectPhantom, waitForInjected } from "@/lib/phantom";
-import { humanWalletError, insideWalletApp, isPhoneBrowser, openInWallet, takeBuyAgain } from "@/lib/mobile-wallet";
+import { humanWalletError, injectedSolana, insideWalletApp, isPhoneBrowser, openInWallet, takeBuyAgain } from "@/lib/mobile-wallet";
 import { linkChain as writeLink, loadWallet, saveWallet } from "@/lib/wallet";
 import { sealOpen } from "@/lib/seal";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -72,7 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [q, setQ] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
   const [phone, setPhone] = useState(false);
-  const [inApp, setInApp] = useState(false);
+  const [here, setHere] = useState(false);
   const [sealed, setSealed] = useState(true);
   const [rail, setRail] = useState(true);
   const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
@@ -80,9 +80,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     setPhone(isPhoneBrowser());
-    setInApp(insideWalletApp());
+    const sync = () => setHere(insideWalletApp() || (isPhoneBrowser() && injectedSolana()));
+    sync();
+    const id = window.setInterval(sync, 250);
+    const stop = window.setTimeout(() => window.clearInterval(id), 12000);
+    window.addEventListener("phantom#initialized", sync);
     const hint = insideWalletApp() ? takeBuyAgain() : null;
     if (hint) toast(hint);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+      window.removeEventListener("phantom#initialized", sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -90,22 +99,32 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (owner || saved) return;
     let live = true;
     void (async () => {
-      const here = insideWalletApp();
-      const injected = await waitForInjected(here ? 4000 : 800);
+      if (insideWalletApp()) {
+        try {
+          const addr = await connectPhantom();
+          if (!live || !addr) return;
+          const next = writeLink(loadWallet(), addr, "Phantom", "phantom");
+          if ("error" in next) return;
+          saveWallet(next);
+          window.dispatchEvent(new Event("senda-seal"));
+        } catch {
+          /* The Show my account button still connects. */
+        }
+        return;
+      }
+      const injected = await waitForInjected(800);
       if (!live || !injected?.connect) return;
       try {
-        const res = here ? await injected.connect() : await injected.connect({ onlyIfTrusted: true });
+        const res = await injected.connect({ onlyIfTrusted: true });
         const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
         if (!addr || !live) return;
         if (loadWallet().links.some((l) => l.address === addr)) return;
-        const label = /Solflare/i.test(navigator.userAgent) ? "Solflare" : /Backpack/i.test(navigator.userAgent) ? "Backpack" : "Phantom";
-        const kind = label === "Phantom" ? "phantom" : "solana";
-        const next = writeLink(loadWallet(), addr, label, kind);
+        const next = writeLink(loadWallet(), addr, "Phantom", "phantom");
         if ("error" in next) return;
         saveWallet(next);
         window.dispatchEvent(new Event("senda-seal"));
       } catch {
-        /* Not trusted yet, or the person closed the sheet. The button still connects. */
+        /* Not trusted yet. The button still connects. */
       }
     })();
     return () => {
@@ -266,11 +285,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (phone && !inApp) {
-                      openInWallet("phantom");
-                      return;
-                    }
-                    if (inApp) {
+                    const onPhone = isPhoneBrowser();
+                    const inWallet = insideWalletApp() || (onPhone && injectedSolana());
+                    if (inWallet) {
                       void connectPhantom()
                         .then((addr) => {
                           const linked = linkChain(addr, "Phantom", "phantom");
@@ -279,11 +296,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                         .catch((e) => toast.error(humanWalletError(e instanceof Error ? e.message : "The wallet did not connect.")));
                       return;
                     }
+                    if (onPhone) {
+                      openInWallet("phantom");
+                      return;
+                    }
                     setConnectOpen((v) => !v);
                   }}
                   className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
                 >
-                  {phone && !inApp ? "Open Phantom" : "Connect Phantom"}
+                  {phone && !here ? "Open Phantom" : phone ? "Show my account" : "Connect Phantom"}
                 </button>
               )}
               {connectOpen && !link ? (
@@ -295,6 +316,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <div key={pathname} className="senda-rise">
+          {phone && !link ? (
+            <div className="pointer-events-auto mx-4 mb-3 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+              <p className="text-sm font-semibold">{here ? "Phantom is open" : "Open Phantom on this phone"}</p>
+              <p className="mt-1 text-sm text-muted">
+                {here
+                  ? "Tap Show my account and approve it. Your address and USDC appear below. Senda does not hold them. This is only the clearing view of your wallet."
+                  : "The first tap only opens the app. Stay on this page, then tap Show my account. Nothing shows in Safari, because Safari cannot sign."}
+              </p>
+            </div>
+          ) : null}
           {children}
         </div>
         <Onboard />

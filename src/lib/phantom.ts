@@ -1,5 +1,5 @@
 import { activeSolProvider, rememberWallet, type WalletId } from "@/lib/wallets";
-import { humanWalletError, insideWalletApp, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
+import { humanWalletError, canSignHere, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
 import { unlockSeal } from "@/lib/seal";
 
 type Pub = { toString: () => string };
@@ -15,6 +15,9 @@ export type PhantomProvider = {
     opts?: { skipPreflight?: boolean },
   ) => Promise<{ signature: string | Uint8Array }>;
   signTransaction?: (tx: unknown) => Promise<{ serialize: () => Uint8Array }>;
+  signMessage?: (message: Uint8Array, display?: "utf8" | "hex") => Promise<Uint8Array | { signature: Uint8Array }>;
+  on?: (event: string, cb: (pk?: Pub | null) => void) => void;
+  off?: (event: string, cb: (pk?: Pub | null) => void) => void;
 };
 
 export function phantomProvider(): PhantomProvider | null {
@@ -66,36 +69,89 @@ function rememberInjected(p: PhantomProvider) {
   rememberWallet(id);
 }
 
+function addressOf(p: PhantomProvider, res?: { publicKey?: Pub }, eventKey?: Pub | null): string {
+  return eventKey?.toString() || res?.publicKey?.toString() || p.publicKey?.toString() || "";
+}
+
+/** Connect from a tap. Also listens, because Phantom on a phone sometimes never resolves the promise. */
+function approve(p: PhantomProvider): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = 0;
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      p.off?.("connect", onConnect);
+      p.off?.("accountChanged", onAccount);
+    };
+    const ok = (addr: string) => {
+      if (settled || !addr) return;
+      settled = true;
+      cleanup();
+      resolve(addr);
+    };
+    const fail = (e: unknown) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(e instanceof Error ? e : new Error("The wallet did not connect."));
+    };
+    const onConnect = (pk?: Pub | null) => ok(addressOf(p, undefined, pk));
+    const onAccount = (pk?: Pub | null) => {
+      if (pk) ok(pk.toString());
+    };
+    p.on?.("connect", onConnect);
+    p.on?.("accountChanged", onAccount);
+    const timerId = window.setTimeout(() => fail(new Error("Phantom did not return the account. Tap Show my account again.")), 20000);
+    timer = timerId;
+    const ready = p.publicKey?.toString();
+    if (ready) {
+      ok(ready);
+      return;
+    }
+    void p.connect().then((res) => ok(addressOf(p, res))).catch(fail);
+  });
+}
+
+let inflight: Promise<string> | null = null;
+
 export async function connectPhantom(): Promise<string> {
-  const wait = insideWalletApp() ? 4000 : isPhoneBrowser() ? 700 : 200;
-  const injected = await waitForInjected(wait);
+  if (inflight) return inflight;
+  inflight = runConnect().finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+async function runConnect(): Promise<string> {
+  const here = canSignHere();
+  const injected = await waitForInjected(here ? 8000 : isPhoneBrowser() ? 900 : 200);
   if (injected?.connect) {
-    const res = await injected.connect();
-    const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
-    if (!addr) throw new Error("The wallet returned no account.");
+    const addr = await approve(injected);
     rememberInjected(injected);
-    await unlockSeal(addr);
+    void unlockSeal(addr).catch(() => {
+      /* The account can show before the vault message is signed. */
+    });
     return addr;
   }
-  if (isPhoneBrowser() && openInWallet("phantom")) return new Promise(() => {});
+  if (!here && isPhoneBrowser() && openInWallet("phantom")) return new Promise(() => {});
   throw new Error(
     humanWalletError(
-      insideWalletApp()
-        ? "Phantom is open. Tap Connect again. This page signs here."
+      here
+        ? "Phantom is open. Tap Show my account again. This page signs here."
         : "No Solana wallet in this browser. On a phone, Phantom opens this page to approve.",
     ),
   );
 }
 
 async function providerOrLeave(): Promise<PhantomProvider | null> {
-  const wait = insideWalletApp() ? 2500 : 300;
-  const p = await waitForInjected(wait);
+  const here = canSignHere();
+  const p = await waitForInjected(here ? 8000 : 300);
   if (p?.signAndSendTransaction || p?.signTransaction) return p;
-  if (isPhoneBrowser() && openInWallet("phantom")) return null;
+  if (!here && isPhoneBrowser() && openInWallet("phantom")) return null;
   throw new Error(
     humanWalletError(
-      insideWalletApp()
-        ? "Phantom is open. Tap Connect, then buy again. This page signs here."
+      here
+        ? "Phantom is open. Tap Show my account, then sign again. This page signs here."
         : "Connect a Solana wallet. On a phone, Phantom opens this page to sign.",
     ),
   );
@@ -279,22 +335,32 @@ async function tokenAccounts(owner: string, programId: string): Promise<ChainTok
 }
 
 /** What this address holds on Solana right now. Keys never move. */
+function asLamports(result: unknown): number {
+  if (typeof result === "number" && Number.isFinite(result)) return result;
+  if (result && typeof result === "object" && "value" in result) {
+    const value = (result as { value?: unknown }).value;
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return 0;
+}
+
 export async function readChain(owner: string): Promise<ChainWallet> {
-  const [lamports, classic, extra, sigs] = await Promise.all([
-    rpc("getBalance", [owner]) as Promise<number>,
+  const [balance, classic, extra, sigs] = await Promise.all([
+    rpc("getBalance", [owner, { commitment: "confirmed" }]),
     tokenAccounts(owner, TOKEN_PROGRAM),
     tokenAccounts(owner, TOKEN_2022).catch(() => [] as ChainToken[]),
     rpc("getSignaturesForAddress", [owner, { limit: 8 }]) as Promise<
-      Array<{ signature?: string; err?: unknown; blockTime?: number | null }>
+      Array<{ signature?: string; err?: unknown; blockTime?: number | null }> | { value?: Array<{ signature?: string; err?: unknown; blockTime?: number | null }> }
     >,
   ]);
   const merged = new Map<string, ChainToken>();
   for (const t of [...classic, ...extra]) merged.set(t.mint, t);
   const tokens = [...merged.values()].sort((a, b) => Number(b.symbol === "USDC") - Number(a.symbol === "USDC") || b.ui - a.ui);
+  const rows = Array.isArray(sigs) ? sigs : sigs?.value ?? [];
   return {
-    sol: (lamports || 0) / 1e9,
+    sol: asLamports(balance) / 1e9,
     tokens,
-    txs: (Array.isArray(sigs) ? sigs : []).map((s) => ({
+    txs: rows.map((s) => ({
       signature: String(s.signature || ""),
       err: Boolean(s.err),
       time: s.blockTime ?? null,
