@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { TabLead } from "@/components/tab-lead";
 import { MoneyBar } from "@/components/money-bar";
+import { humanWalletError, insideWalletApp, isPhoneBrowser } from "@/lib/mobile-wallet";
 import { robinhoodBuyingPowerUrl } from "@/lib/robinhood";
 import { connectWallet, detectWallets, type WalletChoice, type WalletId } from "@/lib/wallets";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -21,7 +22,14 @@ export function WalletsDesk() {
   const [choices, setChoices] = useState<WalletChoice[]>(() => detectWallets());
   const [busy, setBusy] = useState<string | null>(null);
   const [usd, setUsd] = useState(50);
+  const [phone, setPhone] = useState(false);
+  const [inApp, setInApp] = useState(false);
   const sol = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
+
+  useEffect(() => {
+    setPhone(isPhoneBrowser());
+    setInApp(insideWalletApp());
+  }, []);
 
   async function go(c: WalletChoice) {
     setBusy(c.id);
@@ -29,14 +37,14 @@ export function WalletsDesk() {
       const got = await connectWallet(c.id);
       const kind = got.chain === "evm" ? "evm" : c.id === "phantom" ? "phantom" : "solana";
       const r = w.linkChain(got.address, got.label, kind);
-      if (!r.ok) toast.error(r.error);
+      if (!r.ok && r.error !== "Already linked.") toast.error(r.error);
       else {
         if (got.chain === "solana") w.openCurrency("SOL");
         toast.success(`${got.label} is on the desk.`);
         setChoices(detectWallets());
       }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not connect.");
+      toast.error(humanWalletError(e instanceof Error ? e.message : "Could not connect."));
     } finally {
       setBusy(null);
     }
@@ -95,6 +103,7 @@ export function WalletsDesk() {
       <section className="grid gap-2 md:grid-cols-2">
         {choices.map((c) => {
           const job = JOB.find((j) => j.id === c.id);
+          const opens = phone && !inApp && !c.installed && (c.id === "phantom" || c.id === "solflare" || c.id === "backpack");
           return (
             <button
               key={c.id}
@@ -103,12 +112,12 @@ export function WalletsDesk() {
               onClick={() => void go(c)}
               className={cn(
                 "rounded-[22px] border border-white/10 bg-[#10131c] p-4 text-left",
-                !c.installed && "opacity-60",
+                !c.installed && !opens && "opacity-60",
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-base font-semibold">{c.name}</p>
-                <p className="font-mono text-[11px] text-subtle">{c.installed ? "In this browser" : "Not installed"}</p>
+                <p className="font-mono text-[11px] text-subtle">{c.installed ? "In this browser" : opens ? "Open app" : inApp && !c.installed ? "Tap again" : "Not installed"}</p>
               </div>
               <p className="mt-1 text-xs text-accent">{c.chain === "solana" ? "Solana" : "Ethereum"}</p>
               <p className="mt-2 text-sm text-muted">{job?.does ?? "Connect it if this is the wallet you use."}</p>

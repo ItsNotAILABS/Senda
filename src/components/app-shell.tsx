@@ -27,7 +27,9 @@ import { Onboard } from "@/components/onboard";
 import { WalletPicker } from "@/components/wallet-picker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { readChain, connectPhantom } from "@/lib/phantom";
+import { readChain, connectPhantom, waitForInjected } from "@/lib/phantom";
+import { humanWalletError, insideWalletApp, isPhoneBrowser, openInWallet, takeBuyAgain } from "@/lib/mobile-wallet";
+import { linkChain as writeLink, loadWallet, saveWallet } from "@/lib/wallet";
 import { sealOpen } from "@/lib/seal";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -69,10 +71,47 @@ export function AppShell({ children }: { children: ReactNode }) {
   const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [q, setQ] = useState("");
   const [connectOpen, setConnectOpen] = useState(false);
+  const [phone, setPhone] = useState(false);
+  const [inApp, setInApp] = useState(false);
   const [sealed, setSealed] = useState(true);
   const [rail, setRail] = useState(true);
   const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
   const home = pathname === "/";
+
+  useEffect(() => {
+    setPhone(isPhoneBrowser());
+    setInApp(insideWalletApp());
+    const hint = insideWalletApp() ? takeBuyAgain() : null;
+    if (hint) toast(hint);
+  }, []);
+
+  useEffect(() => {
+    const saved = loadWallet().links.some((l) => l.kind === "phantom" || l.kind === "solana");
+    if (owner || saved) return;
+    let live = true;
+    void (async () => {
+      const here = insideWalletApp();
+      const injected = await waitForInjected(here ? 4000 : 800);
+      if (!live || !injected?.connect) return;
+      try {
+        const res = here ? await injected.connect() : await injected.connect({ onlyIfTrusted: true });
+        const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
+        if (!addr || !live) return;
+        if (loadWallet().links.some((l) => l.address === addr)) return;
+        const label = /Solflare/i.test(navigator.userAgent) ? "Solflare" : /Backpack/i.test(navigator.userAgent) ? "Backpack" : "Phantom";
+        const kind = label === "Phantom" ? "phantom" : "solana";
+        const next = writeLink(loadWallet(), addr, label, kind);
+        if ("error" in next) return;
+        saveWallet(next);
+        window.dispatchEvent(new Event("senda-seal"));
+      } catch {
+        /* Not trusted yet, or the person closed the sheet. The button still connects. */
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [owner]);
 
   useEffect(() => {
     const sync = () => setSealed(!sealOpen());
@@ -146,7 +185,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     const linked = linkChain(addr, "Phantom", "phantom");
                     if (!linked.ok) toast.error(linked.error || "The wallet did not stay.");
                   })
-                  .catch((e) => toast.error(e instanceof Error ? e.message : "The desk stayed sealed."));
+                  .catch((e) => toast.error(humanWalletError(e instanceof Error ? e.message : "The desk stayed sealed.")));
               }}
               title="Open with wallet"
               className={cn("mb-2 min-h-9 rounded-full bg-accent font-semibold text-accent-fg", rail ? "w-full px-3 text-[12px]" : "mx-auto grid size-9 place-items-center")}
@@ -226,10 +265,25 @@ export function AppShell({ children }: { children: ReactNode }) {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setConnectOpen((v) => !v)}
+                  onClick={() => {
+                    if (phone && !inApp) {
+                      openInWallet("phantom");
+                      return;
+                    }
+                    if (inApp) {
+                      void connectPhantom()
+                        .then((addr) => {
+                          const linked = linkChain(addr, "Phantom", "phantom");
+                          if (!linked.ok && linked.error !== "Already linked.") toast.error(linked.error || "The wallet did not stay.");
+                        })
+                        .catch((e) => toast.error(humanWalletError(e instanceof Error ? e.message : "The wallet did not connect.")));
+                      return;
+                    }
+                    setConnectOpen((v) => !v);
+                  }}
                   className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
                 >
-                  Connect Phantom
+                  {phone && !inApp ? "Open Phantom" : "Connect Phantom"}
                 </button>
               )}
               {connectOpen && !link ? (

@@ -1,10 +1,13 @@
-import { activeSolProvider } from "@/lib/wallets";
+import { activeSolProvider, rememberWallet, type WalletId } from "@/lib/wallets";
+import { humanWalletError, insideWalletApp, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
 import { unlockSeal } from "@/lib/seal";
 
 type Pub = { toString: () => string };
 
 export type PhantomProvider = {
   isPhantom?: boolean;
+  isSolflare?: boolean;
+  isBackpack?: boolean;
   publicKey?: Pub;
   connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey?: Pub }>;
   signAndSendTransaction?: (
@@ -22,20 +25,86 @@ export function phantomProvider(): PhantomProvider | null {
   return p;
 }
 
+function currentSolProvider(): PhantomProvider | null {
+  return (activeSolProvider() as PhantomProvider | null) ?? phantomProvider();
+}
+
+/** Phantom injects late inside its own browser. Poll, and listen for phantom#initialized. */
+export function waitForInjected(ms = 2500): Promise<PhantomProvider | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  const now = currentSolProvider();
+  if (now?.connect) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (p: PhantomProvider | null) => {
+      if (done) return;
+      done = true;
+      window.clearInterval(id);
+      window.clearTimeout(timer);
+      window.removeEventListener("phantom#initialized", onReady);
+      resolve(p);
+    };
+    const onReady = () => finish(currentSolProvider());
+    window.addEventListener("phantom#initialized", onReady);
+    const id = window.setInterval(() => {
+      const p = currentSolProvider();
+      if (p?.connect) finish(p);
+    }, 120);
+    const timer = window.setTimeout(() => finish(currentSolProvider()), ms);
+  });
+}
+
+function rememberInjected(p: PhantomProvider) {
+  const w = window as unknown as {
+    phantom?: { solana?: PhantomProvider };
+    solflare?: PhantomProvider;
+    backpack?: PhantomProvider;
+  };
+  let id: WalletId = "phantom";
+  if (p === w.solflare || p.isSolflare) id = "solflare";
+  else if (p === w.backpack || p.isBackpack) id = "backpack";
+  rememberWallet(id);
+}
+
 export async function connectPhantom(): Promise<string> {
-  const p = phantomProvider();
-  if (!p) throw new Error("No Phantom in this browser. Install it, then open Senda in that window.");
-  const res = await p.connect();
-  const addr = res?.publicKey?.toString() || p.publicKey?.toString();
-  if (!addr) throw new Error("Phantom returned no account.");
-  await unlockSeal(addr);
-  return addr;
+  const wait = insideWalletApp() ? 4000 : isPhoneBrowser() ? 700 : 200;
+  const injected = await waitForInjected(wait);
+  if (injected?.connect) {
+    const res = await injected.connect();
+    const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
+    if (!addr) throw new Error("The wallet returned no account.");
+    rememberInjected(injected);
+    await unlockSeal(addr);
+    return addr;
+  }
+  if (isPhoneBrowser() && openInWallet("phantom")) return new Promise(() => {});
+  throw new Error(
+    humanWalletError(
+      insideWalletApp()
+        ? "Phantom is open. Tap Connect again. This page signs here."
+        : "No Solana wallet in this browser. On a phone, Phantom opens this page to approve.",
+    ),
+  );
+}
+
+async function providerOrLeave(): Promise<PhantomProvider | null> {
+  const wait = insideWalletApp() ? 2500 : 300;
+  const p = await waitForInjected(wait);
+  if (p?.signAndSendTransaction || p?.signTransaction) return p;
+  if (isPhoneBrowser() && openInWallet("phantom")) return null;
+  throw new Error(
+    humanWalletError(
+      insideWalletApp()
+        ? "Phantom is open. Tap Connect, then buy again. This page signs here."
+        : "Connect a Solana wallet. On a phone, Phantom opens this page to sign.",
+    ),
+  );
 }
 
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
+  const p = await providerOrLeave();
+  if (!p) return new Promise(() => {});
   await simulateFirst(tx);
-  const p = (activeSolProvider() as PhantomProvider | null) ?? phantomProvider();
-  if (!p) throw new Error("Phantom is not connected.");
   if (p.signAndSendTransaction) {
     const out = await p.signAndSendTransaction(tx);
     const sig = out.signature;
