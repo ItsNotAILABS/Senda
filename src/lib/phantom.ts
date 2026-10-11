@@ -367,3 +367,50 @@ export async function readChain(owner: string): Promise<ChainWallet> {
     })),
   };
 }
+
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+export type UsdcMove = { signature: string; at: number | null; delta: number; err: boolean };
+
+type TokenBal = { owner?: string; mint?: string; uiTokenAmount?: { uiAmount?: number | null } };
+
+function usdcUi(rows: TokenBal[] | undefined, owner: string): number {
+  let n = 0;
+  for (const row of rows ?? []) {
+    if (row.mint === USDC_MINT && row.owner === owner) n += row.uiTokenAmount?.uiAmount || 0;
+  }
+  return n;
+}
+
+/** USDC that entered or left this address. Amounts come from the chain, not from this browser. */
+export async function readUsdcMoves(owner: string): Promise<UsdcMove[]> {
+  const sigs = (await rpc("getSignaturesForAddress", [owner, { limit: 6 }])) as
+    | Array<{ signature?: string }>
+    | { value?: Array<{ signature?: string }> };
+  const list = (Array.isArray(sigs) ? sigs : sigs?.value ?? []).map((s) => s.signature).filter((s): s is string => Boolean(s));
+  const txs = await Promise.all(
+    list.map(async (signature) => {
+      try {
+        const tx = (await rpc("getTransaction", [
+          signature,
+          { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" },
+        ])) as {
+          blockTime?: number | null;
+          meta?: { err?: unknown; preTokenBalances?: TokenBal[]; postTokenBalances?: TokenBal[] };
+        } | null;
+        if (!tx?.meta) return { signature, at: null, delta: 0, err: true };
+        const before = usdcUi(tx.meta.preTokenBalances, owner);
+        const after = usdcUi(tx.meta.postTokenBalances, owner);
+        return {
+          signature,
+          at: tx.blockTime ?? null,
+          delta: Math.round((after - before) * 1e6) / 1e6,
+          err: Boolean(tx.meta.err),
+        };
+      } catch {
+        return { signature, at: null, delta: 0, err: false };
+      }
+    }),
+  );
+  return txs;
+}

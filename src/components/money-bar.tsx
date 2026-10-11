@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { humanWalletError, injectedSolana, insideWalletApp, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
-import { connectPhantom, readChain, type ChainTx } from "@/lib/phantom";
+import { connectPhantom, readChain, readUsdcMoves, type UsdcMove } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 
 /** What the connected Solana wallet holds right now. Senda does not keep a balance. */
@@ -12,7 +12,7 @@ export function MoneyBar() {
   const [sol, setSol] = useState<number | null>(null);
   const [usdc, setUsdc] = useState<number | null>(null);
   const [other, setOther] = useState(0);
-  const [txs, setTxs] = useState<ChainTx[]>([]);
+  const [txs, setTxs] = useState<UsdcMove[]>([]);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -31,10 +31,16 @@ export function MoneyBar() {
           setSol(s.sol);
           setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0);
           setOther(s.tokens.filter((t) => t.symbol !== "USDC").length);
-          setTxs(s.txs.filter((t) => t.signature));
         })
         .catch(() => {
           if (live) setSol(null);
+        });
+      readUsdcMoves(owner)
+        .then((rows) => {
+          if (live) setTxs(rows.filter((t) => t.signature));
+        })
+        .catch(() => {
+          if (live) setTxs([]);
         });
     };
     pull();
@@ -108,9 +114,11 @@ export function MoneyBar() {
           {txs.slice(0, 5).map((t) => (
             <li key={t.signature} className="flex items-baseline justify-between gap-3 border-t border-white/10 py-2 first:border-t-0">
               <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${t.signature}`} target="_blank" rel="noreferrer">
-                {t.err ? "Failed" : "Cleared"} · {t.signature.slice(0, 8)}…
+                {t.err ? "Failed" : t.delta > 0 ? "In" : t.delta < 0 ? "Out" : "Signed"} · {t.signature.slice(0, 8)}…
               </a>
-              <span className="shrink-0 text-[11px] text-subtle">{t.time ? new Date(t.time * 1000).toLocaleString() : ""}</span>
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-subtle">
+                {t.delta ? `${t.delta > 0 ? "+" : ""}${t.delta.toFixed(2)} USDC` : t.at ? new Date(t.at * 1000).toLocaleString() : ""}
+              </span>
             </li>
           ))}
         </ul>

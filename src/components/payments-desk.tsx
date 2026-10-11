@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
+import { AccountDetails } from "@/components/account-details";
 import { ClearStrip } from "@/components/clear-strip";
 import { MexicoSend } from "@/components/mexico-send";
 import { MoneyBar } from "@/components/money-bar";
@@ -8,11 +9,11 @@ import { SpaceDesk } from "@/components/space-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
 import { rememberClear } from "@/lib/clearing";
+import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
 import { humanWalletError } from "@/lib/mobile-wallet";
 import { connectPhantom } from "@/lib/phantom";
 import { payUsdc } from "@/lib/solana-pay";
-import { CCYS, CCY_META, formatMoney, revolutFee, type Ccy } from "@/lib/wallet";
-import { rate } from "@/lib/wallet-fx";
+import { CCYS, CCY_META, formatMoney, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -31,15 +32,14 @@ const field =
   "min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none placeholder:text-subtle";
 
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const SOL_MINT = "So11111111111111111111111111111111111111112";
-const PHANTOM_USDC = `https://phantom.app/ul/v1/swap?sell=solana%3A101%2Faddress%3A${SOL_MINT}&buy=solana%3A101%2Faddress%3A${USDC_MINT}`;
+const SWAP_USDC = `https://phantom.com/ul/v1/swap?sell=${encodeURIComponent(`solana:101/address:${SOL}`)}&buy=${encodeURIComponent(`solana:101/address:${USDC_MINT}`)}`;
+const OPEN_USDC = `https://phantom.com/ul/v1/fungible?token=${encodeURIComponent(`solana:101/address:${USDC_MINT}`)}`;
 
-export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string; initialFrom?: string }) {
+export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?: string }) {
   const start: PayAct = ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
   const [act, setAct] = useState<PayAct>(start);
   const [pocket, setPocket] = useState<Ccy | null>(null);
   const w = useWallet();
-  const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
   const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
   const total = CCYS.reduce((s, c) => s + (w.w.balances[c] || 0) * (w.usdPer[c] || (c === "USD" || c === "USDC" ? 1 : 0)), 0);
@@ -52,12 +52,12 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
       <TabLead
-        kicker="Send"
-        title="Send USDC."
-        accent="They get the token."
-        line="A peso amount is a quote. The signature is USDC on Solana, to an address. Not a bank and not a cash pickup."
-        live={["USDC to a Solana address", "Peso quote", "On-chain USDC", "Solana Pay request"]}
-        coming={["Cash pickup", "SPEI", "A bank balance"]}
+        kicker="Account"
+        title="USDC in your wallet."
+        accent="That is the balance."
+        line="Send it, request it, swap SOL for it, or load it. Each one hits the chain. The address on this page is the account."
+        live={["Send", "Request", "SOL ↔ USDC", "Load", "Bank details when the provider answers"]}
+        coming={[]}
       />
       <MoneyBar />
 
@@ -76,8 +76,8 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
         {act === "chain" ? <ChainPay w={w} /> : null}
         {act === "nearby" ? <NearbyDesk /> : null}
         {act === "request" ? <RequestForm owner={owner} /> : null}
-        {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
-        {act === "add" ? <AddForm onMexico={() => setAct("send")} /> : null}
+        {act === "exchange" ? <ExchangeForm key={pocket ?? "sol"} owner={owner} /> : null}
+        {act === "add" ? <AddForm owner={owner} onExchange={() => setAct("exchange")} /> : null}
         <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-4 border-t border-white/10 pt-3")}>
           {ACTS.map((a) => {
             const Icon = a.icon;
@@ -103,7 +103,7 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
           <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
-            <h2 className="text-sm font-semibold">Pockets</h2>
+            <h2 className="text-sm font-semibold">Practice pockets</h2>
             <p className="font-mono text-[11px] text-subtle">This browser. Not a bank. {formatMoney(total, "USD")}</p>
           </div>
           <ul>
@@ -255,104 +255,191 @@ function RequestForm({ owner }: { owner: string }) {
     ? `solana:${owner}?amount=${usd}&spl-token=${USDC_MINT}&label=Senda&message=${encodeURIComponent(memo.trim() || "Senda")}`
     : "";
 
+  async function share() {
+    if (!link) return;
+    try {
+      if (typeof navigator.share === "function") await navigator.share({ title: "Pay USDC", text: link, url: link });
+      else {
+        await navigator.clipboard.writeText(link);
+        toast.success("Request link copied.");
+      }
+    } catch {
+      /* cancelled */
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">This copies a Solana Pay link to the wallet you connected. It does not credit a tag, and nobody has paid until they sign.</p>
-      {owner ? null : <p className="text-sm text-muted">Connect a wallet first. The link has to point at that address.</p>}
+      <p className="text-sm text-muted">They pay the address on this account. The USDC shows up here when their signature confirms.</p>
+      {owner ? <p className="break-all font-mono text-xs">{owner}</p> : <p className="text-sm text-muted">Show my account first. The request has to name that address.</p>}
       <label className="block text-xs text-subtle">
-        USDC they would send
+        USDC
         <input value={usd} onChange={(e) => setUsd(Math.max(0.01, Number(e.target.value) || 0))} inputMode="decimal" className={`${field} mt-1 font-mono`} />
       </label>
       <label className="block text-xs text-subtle">
         Note
         <input value={memo} onChange={(e) => setMemo(e.target.value)} className={field} placeholder="What this is for" aria-label="Note" />
       </label>
-      <button
-        type="button"
-        disabled={!link}
-        onClick={() => {
-          void navigator.clipboard.writeText(link);
-          toast.success("Request link copied. They still have to sign.");
-        }}
-        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
-      >
-        Copy request link
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={!link} onClick={() => void share()} className="min-h-12 rounded-full bg-accent px-5 text-base font-semibold text-accent-fg disabled:opacity-40">
+          Share request
+        </button>
+        <button
+          type="button"
+          disabled={!link}
+          onClick={() => {
+            void navigator.clipboard.writeText(link);
+            toast.success("Request link copied.");
+          }}
+          className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-semibold disabled:opacity-40"
+        >
+          Copy link
+        </button>
+      </div>
       {link ? <p className="break-all font-mono text-[11px] text-subtle">{link}</p> : null}
     </div>
   );
 }
 
-function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromInit: Ccy }) {
-  const opened: Ccy[] = w.w.opened?.length ? w.w.opened : ["USD"];
-  const [from, setFrom] = useState<Ccy>(opened.includes(fromInit) ? fromInit : "USD");
-  const [to, setTo] = useState<Ccy>("EUR");
-  const [raw, setRaw] = useState("");
-  const amount = Number(raw) || 0;
-  const r = rate(from, to, w.usdPer);
-  const got = amount * r;
-  const amountUsd = amount * (w.usdPer[from] || 0);
-  const rev = revolutFee("fx", amountUsd, w.weekend);
+function ExchangeForm({ owner }: { owner: string }) {
+  const [side, setSide] = useState<"sol-usdc" | "usdc-sol">("sol-usdc");
+  const [raw, setRaw] = useState("0.1");
+  const [quote, setQuote] = useState<RouteQuote | null>(null);
+  const [quoteErr, setQuoteErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sig, setSig] = useState("");
+  const sellingSol = side === "sol-usdc";
 
-  function go() {
-    toast.error("This pocket screen does not move USDC or pesos. Send is the signed transfer.");
+  useEffect(() => {
+    const amount = Number(raw);
+    if (!(amount > 0)) {
+      setQuote(null);
+      setQuoteErr("");
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      void quoteRoute({
+        inputMint: sellingSol ? SOL : USDC_MINT,
+        outputMint: sellingSol ? USDC_MINT : SOL,
+        amountRaw: Math.round(amount * (sellingSol ? 1e9 : 1e6)),
+        outDecimals: sellingSol ? 6 : 9,
+      })
+        .then((next) => {
+          if (!live) return;
+          setQuote(next);
+          setQuoteErr("");
+        })
+        .catch((e) => {
+          if (!live) return;
+          setQuote(null);
+          setQuoteErr(e instanceof Error ? e.message : "No quote.");
+        });
+    }, 350);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [raw, sellingSol]);
+
+  async function go() {
+    const amount = Number(raw);
+    if (!(amount > 0) || !quote) return;
+    setBusy(true);
+    setSig("");
+    try {
+      const who = owner || (await connectPhantom());
+      const done = await signRoute({
+        owner: who,
+        inputMint: sellingSol ? SOL : USDC_MINT,
+        outputMint: sellingSol ? USDC_MINT : SOL,
+        amountRaw: Math.round(amount * (sellingSol ? 1e9 : 1e6)),
+        outDecimals: sellingSol ? 6 : 9,
+        usd: sellingSol ? quote.outUi : amount,
+      });
+      setSig(done.signature);
+      rememberClear({
+        desk: "send",
+        title: sellingSol ? "SOL to USDC" : "USDC to SOL",
+        legs: [
+          { side: "out", asset: sellingSol ? "SOL" : "USDC", amount, where: "Jupiter" },
+          { side: "in", asset: sellingSol ? "USDC" : "SOL", amount: done.outUi, where: who },
+        ],
+        feeUsd: 0,
+        sig: done.signature,
+        status: "signed",
+      });
+      toast.success("Signed. The swap is on the chain.");
+    } catch (e) {
+      toast.error(humanWalletError(e instanceof Error ? e.message : "The swap did not sign."));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  const choices = Array.from(new Set([...opened, from, to]));
+  const impact = quote ? Math.abs(quote.impact) <= 1 ? quote.impact * 100 : quote.impact : 0;
+  const outLabel = quote ? (sellingSol ? `${quote.outUi.toFixed(2)} USDC` : `${quote.outUi.toFixed(4)} SOL`) : "—";
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">Not a conversion. These pockets are this browser. They are not a bank balance and they do not become pesos.</p>
+      <p className="text-sm text-muted">Jupiter quotes. You sign. USDC or SOL moves in the wallet on this page.</p>
       <div className="grid grid-cols-2 gap-2">
-        <select value={from} onChange={(e) => setFrom(e.target.value as Ccy)} aria-label="From" className={cn(field, "font-mono")}>
-          {choices.map((c) => (
-            <option key={c} value={c}>
-              From {c}
-            </option>
-          ))}
-        </select>
-        <select value={to} onChange={(e) => setTo(e.target.value as Ccy)} aria-label="Hold" className={cn(field, "font-mono")}>
-          {CCYS.map((c) => (
-            <option key={c} value={c}>
-              Hold {c}
-            </option>
-          ))}
-        </select>
+        {([
+          ["sol-usdc", "SOL → USDC"],
+          ["usdc-sol", "USDC → SOL"],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSide(id)}
+            className={cn("min-h-11 rounded-full text-sm font-semibold", side === id ? "bg-accent text-accent-fg" : "border border-white/10")}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       <input
         inputMode="decimal"
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
-        placeholder="0"
         aria-label="Amount"
-        className="min-h-14 w-full bg-transparent font-mono text-4xl tabular-nums outline-none placeholder:text-white/20"
+        className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums outline-none"
       />
       <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
-        <p className="font-mono font-medium tabular-nums">Quote only {amount > 0 ? formatMoney(got, to) : "—"}</p>
-        <p className="mt-1 text-muted">1 {from} ≈ {r.toFixed(4)} {to}. Nothing is exchanged.</p>
-        {rev > 0 ? <p className="mt-1 text-muted">A retail FX desk can charge extra on the weekend. This screen does not.</p> : null}
+        <p className="font-mono tabular-nums">You receive about {outLabel}</p>
+        <p className="mt-1 text-muted">
+          {quote ? `${quote.route} · impact ${impact.toFixed(3)}% · minimum ${sellingSol ? quote.minUi.toFixed(2) + " USDC" : quote.minUi.toFixed(4) + " SOL"}` : quoteErr || "Quoting…"}
+        </p>
       </div>
-      <button
-        type="button"
-        onClick={go}
-        className="min-h-12 rounded-full border border-white/15 text-base font-semibold"
-      >
-        This does not exchange
+      <button type="button" disabled={busy || !quote} onClick={() => void go()} className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40">
+        {busy ? "Waiting on the wallet…" : "Sign swap"}
       </button>
+      {sig ? (
+        <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
+          {sig}
+        </a>
+      ) : null}
     </div>
   );
 }
 
-function AddForm({ onMexico }: { onMexico: () => void }) {
+function AddForm({ owner, onExchange }: { owner: string; onExchange: () => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">A card, Apple Pay, or a bank deposit would invent a balance in this browser. This screen does not take one.</p>
-      <a href={PHANTOM_USDC} target="_blank" rel="noreferrer" className="inline-flex min-h-12 items-center justify-center rounded-full bg-accent px-5 text-base font-semibold text-accent-fg">
-        Swap SOL for USDC in Phantom
-      </a>
-      <button type="button" onClick={onMexico} className="min-h-12 rounded-full border border-white/15 text-sm font-semibold">
-        Send USDC instead
-      </button>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted">Load the wallet on this desk. USDC that lands there shows under In the wallet.</p>
+      {owner ? <p className="break-all font-mono text-xs">{owner}</p> : <p className="text-sm text-muted">Show my account so loads have an address.</p>}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={onExchange} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
+          Swap SOL to USDC here
+        </button>
+        <a href={SWAP_USDC} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
+          Open Phantom swap
+        </a>
+        <a href={OPEN_USDC} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
+          Open USDC in Phantom
+        </a>
+      </div>
+      <AccountDetails owner={owner} />
     </div>
   );
 }
