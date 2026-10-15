@@ -20,12 +20,12 @@ const TESSERA_MINTS = [
   "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v",
 ];
 
-export function assertPrestockRoute(inputMint: string, outputMint: string) {
+export function assertPrestockRoute(inputMint: string, outputMint: string, extraMints: string[] = []) {
   const listed = PRESTOCK_MINTS.map(([, mint]) => mint);
   const extra = [inputMint, outputMint].filter(
     (mint) => /^Pre[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) || TESSERA_MINTS.includes(mint),
   );
-  if (!pairAllowed(inputMint, outputMint, [...listed, ...extra])) {
+  if (!pairAllowed(inputMint, outputMint, [...listed, ...extra, ...extraMints])) {
     throw new Error("That pair is not on this desk. The wallet was not asked to sign.");
   }
 }
@@ -93,6 +93,11 @@ export async function quoteRoute(input: {
   throw new Error(last);
 }
 
+function impactPct(impact: number): number {
+  if (!Number.isFinite(impact)) return 0;
+  return Math.abs(impact) <= 1 ? impact * 100 : impact;
+}
+
 export async function signRoute(input: {
   owner: string;
   inputMint: string;
@@ -100,13 +105,15 @@ export async function signRoute(input: {
   amountRaw: number;
   outDecimals: number;
   usd: number;
+  extraMints?: string[];
 }): Promise<{ signature: string; outUi: number }> {
   if (!(input.usd > 0)) throw new Error("Enter an amount.");
-  assertPrestockRoute(input.inputMint, input.outputMint);
+  assertPrestockRoute(input.inputMint, input.outputMint, input.extraMints ?? []);
   const cap = spendCap();
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
   const quoted = await quoteRoute(input);
-  if (quoted.impact > 5) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
+  const impact = impactPct(quoted.impact);
+  if (impact > 5) throw new Error(`Price impact is ${impact.toFixed(1)}%. The wallet was not asked to sign.`);
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
   let quote: RawQuote | null = null;
   for (const base of [QUOTE, QUOTE_LITE]) {
@@ -164,6 +171,7 @@ export async function signStockSwap(input: {
   side: "buy" | "sell";
   tokenAmount?: bigint;
   decimals?: number;
+  extraMints?: string[];
 }): Promise<{ signature: string; outUi: number }> {
   const amount =
     input.side === "buy" ? Math.max(1, Math.round(input.usd * 1e6)) : Number(input.tokenAmount ?? 0n);
@@ -175,5 +183,6 @@ export async function signStockSwap(input: {
     amountRaw: amount,
     outDecimals: input.decimals ?? (input.side === "buy" ? 9 : 6),
     usd: input.usd,
+    extraMints: input.extraMints,
   });
 }

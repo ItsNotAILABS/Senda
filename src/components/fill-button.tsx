@@ -10,6 +10,7 @@ export function FillButton({
   side = "buy",
   price,
   label,
+  listed = false,
   className,
 }: {
   mint: string;
@@ -17,6 +18,7 @@ export function FillButton({
   side?: "buy" | "sell";
   price?: number;
   label: string;
+  listed?: boolean;
   className?: string;
 }) {
   const wallet = useWallet();
@@ -35,7 +37,7 @@ export function FillButton({
         const linked = wallet.linkChain(owner, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
-      const done = await runPrestock({ owner, mint, side, usd, price });
+      const done = await runPrestock({ owner, mint, side, usd, price, listed });
       toast.success(`Sent ${done.signature.slice(0, 8)}…`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The swap did not send.");

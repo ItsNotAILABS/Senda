@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
 import { AccountDetails } from "@/components/account-details";
+import { ClearingCard } from "@/components/clearing-card";
 import { ClearStrip } from "@/components/clear-strip";
+import { CrossSend } from "@/components/cross-send";
 import { MexicoSend } from "@/components/mexico-send";
 import { MoneyBar } from "@/components/money-bar";
 import { SpaceDesk } from "@/components/space-desk";
@@ -12,7 +14,7 @@ import { rememberClear } from "@/lib/clearing";
 import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
 import { humanWalletError } from "@/lib/mobile-wallet";
 import { connectPhantom } from "@/lib/phantom";
-import { payUsdc } from "@/lib/solana-pay";
+import { assetPayLink, payAsset, SEND_ASSETS, type SendAssetId } from "@/lib/solana-pay";
 import { CCYS, CCY_META, formatMoney, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -56,7 +58,7 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
         title="USDC in your wallet."
         accent="That is the balance."
         line="Send it, request it, swap SOL for it, or load it. Each one hits the chain. The address on this page is the account."
-        live={["Send", "Request", "SOL ↔ USDC", "Load", "Bank details when the provider answers"]}
+        live={["Send", "Request", "SOL, USDC, USDT, PYUSD", "USDC onto Base, Ethereum, Arbitrum, or Polygon", "A clearing address on this device"]}
         coming={[]}
       />
       <MoneyBar />
@@ -166,20 +168,12 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
 function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
   const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [to, setTo] = useState("");
+  const [asset, setAsset] = useState<SendAssetId>("USDC");
   const [usd, setUsd] = useState(1);
   const [memo, setMemo] = useState("");
   const [busy, setBusy] = useState(false);
   const [sig, setSig] = useState("");
-  const link = useMemo(() => {
-    const dest = to.trim();
-    if (!dest) return "";
-    const params = new URLSearchParams({
-      amount: String(usd),
-      "spl-token": USDC_MINT,
-    });
-    if (memo.trim()) params.set("memo", memo.trim());
-    return `solana:${dest}?${params.toString()}`;
-  }, [to, usd, memo]);
+  const link = useMemo(() => (to.trim() ? assetPayLink(asset, to.trim(), usd, memo) : ""), [asset, to, usd, memo]);
 
   async function send() {
     setBusy(true);
@@ -189,12 +183,12 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
         const linked = w.linkChain(who, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "The wallet did not stay.");
       }
-      const out = await payUsdc({ owner: who, to, usd, memo: memo || "Senda USDC" });
+      const out = await payAsset({ owner: who, to, asset, amount: usd, memo: memo || `Senda ${asset}` });
       setSig(out.signature);
       rememberClear({
         desk: "send",
-        title: `USDC to ${to.slice(0, 4)}…`,
-        legs: [{ side: "out", asset: "USDC", amount: usd, where: to }],
+        title: `${asset} to ${to.slice(0, 4)}…`,
+        legs: [{ side: "out", asset, amount: usd, where: to }],
         feeUsd: 0,
         sig: out.signature,
         status: "signed",
@@ -209,13 +203,25 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
 
   return (
     <div>
-      <p className="text-sm text-muted">USDC leaves the wallet you connect and lands in theirs. You sign. Senda does not hold it.</p>
+      <p className="text-sm text-muted">The asset leaves the wallet you connect and lands in theirs. You sign. Senda does not hold it. SOL is priced in dollars only for the spend cap.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {SEND_ASSETS.map((row) => (
+          <button
+            key={row.id}
+            type="button"
+            onClick={() => setAsset(row.id)}
+            className={cn("min-h-10 rounded-full px-3 text-sm font-semibold", asset === row.id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted")}
+          >
+            {row.label}
+          </button>
+        ))}
+      </div>
       <label className="mt-3 block text-xs text-subtle">
         Their Solana address
         <input value={to} onChange={(e) => setTo(e.target.value)} className={`${field} mt-1 font-mono`} placeholder="Address" />
       </label>
       <label className="mt-3 block text-xs text-subtle">
-        USDC
+        {asset}
         <input value={usd} onChange={(e) => setUsd(Math.max(0.01, Number(e.target.value) || 0))} inputMode="decimal" className={`${field} mt-1 font-mono`} />
       </label>
       <label className="mt-3 block text-xs text-subtle">
@@ -224,7 +230,7 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
       </label>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" disabled={busy} onClick={() => void send()} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50">
-          {busy ? "Waiting for the wallet…" : `Send ${usd} USDC`}
+          {busy ? "Waiting for the wallet…" : `Send ${usd} ${asset}`}
         </button>
         <button
           type="button"
@@ -244,6 +250,7 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
           {sig}
         </a>
       ) : null}
+      <CrossSend owner={owner} />
     </div>
   );
 }
@@ -440,6 +447,9 @@ function AddForm({ owner, onExchange }: { owner: string; onExchange: () => void 
         </a>
       </div>
       <AccountDetails owner={owner} />
+      <div className="mt-4">
+        <ClearingCard />
+      </div>
     </div>
   );
 }

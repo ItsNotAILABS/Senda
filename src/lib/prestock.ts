@@ -21,6 +21,8 @@ export async function runPrestock(input: {
   usd: number;
   /** Token price in USD. Used to size a partial sell. */
   price?: number;
+  /** Listed share from the equities book. Still has to be that mint. */
+  listed?: boolean;
 }): Promise<{ signature: string; outUi: number }> {
   const holding = input.side === "sell" ? await splHolding(input.owner, input.mint) : null;
   const decimals = holding?.decimals || (await mintDecimals(input.mint));
@@ -43,6 +45,7 @@ export async function runPrestock(input: {
     side: input.side,
     decimals,
     tokenAmount,
+    extraMints: input.listed ? [input.mint] : undefined,
   });
 }
 

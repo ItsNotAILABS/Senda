@@ -136,6 +136,7 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
                 <FillButton
                   mint={stock.mint}
                   usd={usd}
+                  listed
                   label={`Buy $${usd} in your wallet`}
                   className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-accent"
                 />
