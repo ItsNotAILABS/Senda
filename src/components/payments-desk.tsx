@@ -216,6 +216,7 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
           </button>
         ))}
       </div>
+      {asset === "PYUSD" ? <p className="mt-2 text-xs text-subtle">PYUSD can be frozen by its issuer. This transfer uses Token-2022.</p> : null}
       <label className="mt-3 block text-xs text-subtle">
         Their Solana address
         <input value={to} onChange={(e) => setTo(e.target.value)} className={`${field} mt-1 font-mono`} placeholder="Address" />
