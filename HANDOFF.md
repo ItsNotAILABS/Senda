@@ -7,6 +7,7 @@ Stop here. The desk is usable. The next change should be a real gap, not a rewri
 | | |
 | --- | --- |
 | Live | [https://senda.pocketnova.app](https://senda.pocketnova.app) |
+| Worker | `senda` on Cloudflare, `npm run deploy` from this repo. A git push does not deploy it. |
 | Source | [https://github.com/ItsNotAILABS/Senda](https://github.com/ItsNotAILABS/Senda) |
 | Manual | [AGENTS.md](AGENTS.md) |
 | Map | [docs/MODULES.md](docs/MODULES.md) |

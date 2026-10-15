@@ -23,7 +23,7 @@ A PreStock is economic exposure. Not a legal share, not a vote, not a dividend. 
 - Work posts a job in this browser and pays it by a USDC transfer to the worker address. `src/lib/work-jobs.ts`.
 - Senda cash, practice play, the sheet, the agent log, listings, and the desk-number last four live in this browser. A fresh browser is at zero. Never seed a balance, a card, or a position.
 - The desk number is issued by `issueCheckout`. The full number is shown once and is not a BIN. A terminal will decline it.
-- A one-time Mastercard is `spinOneTimeCard`. It posts to Commercial Connect. With no consumer key, signing key, entity id, and real card id, the button stops. It does not mint a PAN. The number and CVV are shown once and are not stored.
+- A one-time Mastercard is `spinOneTimeCard`. It posts to Commercial Connect. With no consumer key, signing key, entity id, and real card id, the button stops. It does not mint a PAN. The number and CVV are shown once and are not stored. Stocklana's issuer proxy follows the same rule and is not hosted on this worker. PARALLAX `USMXCardRailReceiptRegistry` anchors a receipt hash and rejects custody. No deployed address is in that repo, so this desk does not read a chain head.
 - A Solana listing stays off the desk until a $100 Jupiter quote fills inside 100 bps. Basket weights use that executable quote. One theme and one amount quote every leg, then the wallet signs each filled leg. A leg that cannot fill is dropped.
 - A gift is one link. The sender funds a vault in the browser. The window is 1 hour, 1 day, or 7 days, enforced by the page. After it, the page will not claim and the sender can reclaim. The recipient connects a Solana wallet and does not pay the fee. The secret stays in the link hash and the tab. Do not send it to the server.
 - An agent inside the app can read the book and queue a trade. It cannot sign. `src/components/agents-desk.tsx`.
@@ -56,6 +56,7 @@ Defined in `src/components/app-shell.tsx`.
 - `/equities` xStocks that filled a $100 Jupiter quote, counted against the live unhalted Solana catalog. OpenAI and SpaceX appear only as PreStock SPVs when that same quote fills. Kamino lend terms show when the mint is in that market.
 - `/solana` The mints, Jupiter prices, and DefiLlama prices. A Solana row is shown after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is listed that way. A listed EVM market is signed through LI.FI on that chain. Monad mainnet stays a price until LI.FI quotes it.
 - `/books` The ledger already stored on this account.
+- `/clearing` Mastercard readiness, the PARALLAX receipt rule, and the Stocklana issuer boundary. No custody and no invented card.
 - `/docs` The written desk.
 - `/more` Account.
 
@@ -85,6 +86,7 @@ React 19, TypeScript, Vite, TanStack Start and Router. Tailwind v4 tokens are in
 npm install
 npm run dev
 npm run typecheck
+npm run deploy
 node --test mcp/tools.test.mjs
 node mcp/server.mjs
 ```

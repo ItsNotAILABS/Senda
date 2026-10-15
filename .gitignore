@@ -8,6 +8,8 @@ artifacts/
 pglite.data
 .pglite/
 dist/
+.output/
+.wrangler/
 routeTree.gen.ts
 .cursor/
 chain/senda-chain/target/

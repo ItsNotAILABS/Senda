@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 async function loadVcn() {
-  return import("@/lib/mastercard-vcn.mjs");
+  return import("@/lib/mastercard-oauth.mjs");
 }
 
 async function config() {

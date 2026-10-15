@@ -54,6 +54,7 @@ const MORE = [
   { to: "/equities", label: "Listed", icon: LineChart },
   { to: "/solana", label: "Solana", icon: Hexagon },
   { to: "/books", label: "Books", icon: BookOpen },
+  { to: "/clearing", label: "Clearing", icon: BookOpen },
   { to: "/docs", label: "Docs", icon: FileText },
   { to: "/more", label: "Account", icon: UserRound },
 ] as const;
@@ -342,7 +343,7 @@ function NavLink({
   quiet,
   compact,
 }: {
-  to: "/" | "/pre" | "/invest" | "/equities" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/docs" | "/more";
+  to: "/" | "/pre" | "/invest" | "/equities" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/solana" | "/books" | "/clearing" | "/docs" | "/more";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

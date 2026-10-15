@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { generateKeyPairSync, createVerify } from "node:crypto";
 import test from "node:test";
-import { baseStringUri, connectConfig, oauthHeader, oneTimeBody, paymentOnAccount, readVirtualCard, rfc3986 } from "../src/lib/mastercard-vcn.mjs";
+import { baseStringUri, connectConfig, oauthHeader, oneTimeBody, paymentOnAccount, readVirtualCard, rfc3986 } from "../src/lib/mastercard-oauth.mjs";
 
 test("a one-time card allows a single authorization for the cap", () => {
   const body = oneTimeBody({

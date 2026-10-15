@@ -13,6 +13,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "deploy": "vite build && npx wrangler deploy --cwd .output",
     "typecheck": "tsc --noEmit",
     "test": "node --test 'scripts/**/*.test.mjs' mcp/tools.test.mjs",
     "mcp": "node mcp/server.mjs",
@@ -91,6 +92,7 @@
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "wrangler": "^4.151.0"
   }
 }
