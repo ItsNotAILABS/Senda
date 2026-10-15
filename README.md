@@ -136,7 +136,7 @@ Open the book. Load practice cash and play a print. Connect a wallet and quote t
 
 The manual is [AGENTS.md](AGENTS.md). The map of the code is [docs/MODULES.md](docs/MODULES.md).
 
-`node mcp/server.mjs` speaks MCP over stdio. It can list the live prints, quote a Jupiter route, read a public Solana address, build a USDC pay link, and price a cover. It cannot sign, and it cannot see a key. Claude Code and any client that reads `.mcp.json` start that process as the `senda` server.
+`node mcp/server.mjs` speaks MCP over stdio. `GET /api/agent` and `POST /api/agent` are the same tools over HTTP. An agent can list the live prints, see which markets can be signed, quote Jupiter or LI.FI, read a public address, build a USDC pay link, price a cover, and read the clearing posture. It cannot sign, and it cannot see a key. Claude Code and any client that reads `.mcp.json` start that process as the `senda` server.
 
 ```bash
 node --test mcp/tools.test.mjs

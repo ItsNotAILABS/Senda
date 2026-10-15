@@ -32,7 +32,7 @@ async function handle(msg) {
       protocolVersion: "2024-11-05",
       capabilities: { tools: { listChanged: false } },
       serverInfo,
-      instructions: "Senda quotes and reads. The person's wallet signs. Do not invent a balance or a fill.",
+      instructions: "Senda quotes and reads. The person's wallet signs. Do not invent a balance, a card, or a fill. POST /api/agent is the same tool list and also cannot sign.",
     });
     return;
   }

@@ -2,7 +2,7 @@
 
 You are working in the Senda repository. This file is the manual. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.windsurfrules`, `.clinerules`, and `llms.txt`. Trust the code when it disagrees with a memory from another project.
 
-The module map is [docs/MODULES.md](docs/MODULES.md). The agent interface is [mcp/server.mjs](mcp/server.mjs).
+The module map is [docs/MODULES.md](docs/MODULES.md). The agent interface is [mcp/server.mjs](mcp/server.mjs) and `GET` / `POST /api/agent`.
 
 ## What Senda is
 
@@ -27,7 +27,7 @@ A PreStock is economic exposure. Not a legal share, not a vote, not a dividend. 
 - A Solana listing stays off the desk until a $100 Jupiter quote fills inside 100 bps. Basket weights use that executable quote. One theme and one amount quote every leg, then the wallet signs each filled leg. A leg that cannot fill is dropped.
 - A gift is one link. The sender funds a vault in the browser. The window is 1 hour, 1 day, or 7 days, enforced by the page. After it, the page will not claim and the sender can reclaim. The recipient connects a Solana wallet and does not pay the fee. The secret stays in the link hash and the tab. Do not send it to the server.
 - An agent inside the app can read the book and queue a trade. It cannot sign. `src/components/agents-desk.tsx`.
-- An agent outside the app uses `node mcp/server.mjs`. Same rule. It can quote and read. It cannot sign.
+- An agent outside the app uses `node mcp/server.mjs` or `POST /api/agent`. Same rule. It can quote and read. It cannot sign. The HTTP body is `{ "name", "arguments" }`. The response has no transaction to broadcast.
 
 ## Chains
 
@@ -60,19 +60,27 @@ Defined in `src/components/app-shell.tsx`.
 - `/docs` The written desk.
 - `/more` Account.
 
-## MCP
+## API and MCP
 
-Tools, all read or build, none of them sign:
+The same tools. None of them sign. `GET /api/agent` lists them. `POST /api/agent` with `{ "name", "arguments" }` runs one. `node mcp/server.mjs` is the stdio server.
 
 | Tool | Does |
 | --- | --- |
 | `desk_map` | The pages. |
 | `rules` | What not to fake. |
 | `list_prints` | Live PreStock prints. |
-| `quote_swap` | A Jupiter quote for a mint and a dollar size. |
-| `read_wallet` | SOL and tokens for a public address. |
+| `markets` | Jupiter markets, LI.FI markets, and prices that stay prices. |
+| `quote_swap` | A Jupiter quote. Off the book when the $100, 100 bps, or 5% gate fails. |
+| `quote_evm` | A LI.FI quote for a listed EVM market. No transaction bytes. |
+| `read_wallet` | SOL and tokens for a public Solana address, including Token-2022. |
+| `read_evm` | A token balance on a listed EVM chain. |
 | `usdc_pay_link` | A `solana:` payment URL. |
 | `cover_terms` | Premium and the 10% line. |
+| `gift_window` | 1 hour, 1 day, or 7 days. It refuses a secret. |
+| `baskets` | One theme. The wallet signs each filled leg. |
+| `spend_limits` | Browser cap. Default 100. Maximum 5000. |
+| `clearing` | Commercial Connect stays closed. PARALLAX has no deployed address. |
+| `chain_tape` | Live prices. A row is not a fill. |
 
 `.mcp.json` points a client at `node mcp/server.mjs`. The frame is Content-Length. `node --test mcp/tools.test.mjs` covers the pure tools.
 
@@ -98,5 +106,5 @@ The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_m
 - A buy still asks the wallet to sign a Jupiter route.
 - No balance, card, or position appears that the person did not create.
 - The event site is still gone.
-- The MCP still cannot sign.
+- The API and the MCP still cannot sign.
 - `npm run typecheck` passes.
