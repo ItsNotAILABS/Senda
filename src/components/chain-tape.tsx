@@ -23,7 +23,7 @@ export function ChainTapeView({ tape }: { tape: ChainTape }) {
         <div>
           <h2 className="text-3xl tracking-tight">Trade</h2>
           <p className="mt-1 max-w-xl text-sm text-muted">
-            Solana markets sign through Jupiter. Ethereum, Arbitrum, Optimism, BNB Chain, and Avalanche sign through LI.FI. A chain with no signer stays a price.
+            A Solana market is listed after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is in that list when the quote fills. Ethereum, Arbitrum, Optimism, BNB Chain, and Avalanche sign through LI.FI. Monad mainnet stays a price until LI.FI quotes it.
           </p>
         </div>
         <p className="font-mono text-sm text-subtle">

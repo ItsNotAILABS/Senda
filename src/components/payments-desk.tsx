@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Bluetooth, Gift, Link2, Plus, RefreshCw } from "lucide-react";
 import { AccountDetails } from "@/components/account-details";
 import { ClearingCard } from "@/components/clearing-card";
 import { ClearStrip } from "@/components/clear-strip";
@@ -8,6 +8,7 @@ import { CrossSend } from "@/components/cross-send";
 import { MexicoSend } from "@/components/mexico-send";
 import { MoneyBar } from "@/components/money-bar";
 import { SpaceDesk } from "@/components/space-desk";
+import { GiftDesk } from "@/components/gift-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
 import { rememberClear } from "@/lib/clearing";
@@ -19,11 +20,12 @@ import { CCYS, CCY_META, formatMoney, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "chain";
+export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "chain" | "gift";
 
 const ACTS: { id: PayAct; label: string; icon: typeof ArrowUpRight }[] = [
   { id: "send", label: "Send", icon: ArrowUpRight },
   { id: "chain", label: "On chain", icon: Link2 },
+  { id: "gift", label: "Gift", icon: Gift },
   { id: "request", label: "Request", icon: ArrowDownLeft },
   { id: "nearby", label: "Nearby", icon: Bluetooth },
   { id: "exchange", label: "Exchange", icon: RefreshCw },
@@ -57,8 +59,8 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
         kicker="Account"
         title="USDC in your wallet."
         accent="That is the balance."
-        line="Send it, request it, swap SOL for it, or load it. Each one hits the chain. The address on this page is the account."
-        live={["Send", "Request", "SOL, USDC, USDT, PYUSD", "USDC onto Base, Ethereum, Arbitrum, or Polygon", "A clearing address on this device"]}
+        line="Send it, request it, swap SOL for it, gift it, or load it. Each one hits the chain. The address on this page is the account."
+        live={["Send", "Request", "Gift", "SOL, USDC, USDT, PYUSD", "USDC onto Base, Ethereum, Arbitrum, or Polygon", "A clearing address on this device"]}
         coming={[]}
       />
       <MoneyBar />
@@ -76,6 +78,7 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
           />
         ) : null}
         {act === "chain" ? <ChainPay w={w} /> : null}
+        {act === "gift" ? <GiftDesk /> : null}
         {act === "nearby" ? <NearbyDesk /> : null}
         {act === "request" ? <RequestForm owner={owner} /> : null}
         {act === "exchange" ? <ExchangeForm key={pocket ?? "sol"} owner={owner} /> : null}

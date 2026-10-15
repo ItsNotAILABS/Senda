@@ -1,4 +1,4 @@
-/** Equal-weight and PRE8-style PreStocks packs. Paper. */
+/** PreStocks themes. One amount, quoted on Jupiter. */
 
 export const PACKS = [
   { id: "pre8", name: "PRE8", symbols: ["OPENAI", "ANTHROPIC", "SPACEX", "ANDURIL", "KALSHI", "NEURALINK", "FIGUREAI", "POLYMARKET"] },

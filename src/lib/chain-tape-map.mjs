@@ -14,6 +14,7 @@ export const SOLANA_DECIMALS = {
   "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm": 9,
   DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263: 5,
   EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm: 6,
+  CrAr4RRJMBVwRsZtT62pEhfA9H5utymC2mVx8e7FreP2: 8,
 };
 
 export const SOLANA_MORE = [
@@ -26,6 +27,7 @@ export const SOLANA_MORE = [
   ["INF", "Sanctum INF", "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm"],
   ["BONK", "Bonk", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"],
   ["WIF", "dogwifhat", "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"],
+  ["WMON", "Wrapped MON", "CrAr4RRJMBVwRsZtT62pEhfA9H5utymC2mVx8e7FreP2"],
 ];
 
 export const CHAINS = [
@@ -49,6 +51,7 @@ export const CHAINS = [
   ["ATOM", "Cosmos", "Cosmos", "cosmos"],
   ["DOGE", "Dogecoin", "Dogecoin", "dogecoin"],
   ["LTC", "Litecoin", "Litecoin", "litecoin"],
+  ["MON", "Monad", "Monad", "monad"],
 ];
 
 function num(value) {

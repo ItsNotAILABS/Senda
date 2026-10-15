@@ -188,7 +188,7 @@ export function PitFloor({
     ["book", "Protect", "Peg last to the SPV mark"],
     ["options", "Options", "Call or put on the print"],
     ["perps", "Perps", "Levered long or short"],
-    ["basket", "Index", "PRE8 basket"],
+    ["basket", "Index", "One theme, one amount"],
     ["lend", "Borrow", "Cash against a holding"],
     ["minty", "Launch", "Pump, LetsBonk, Clanker"],
     ["curve", "Curve", "Bonding curve"],
@@ -251,7 +251,7 @@ export function PitFloor({
               {desk === "minty" ? <LaunchDesk /> : null}
               {desk === "curve" ? <CurveDesk /> : null}
               {desk === "perps" ? <PerpDesk house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
-              {desk === "basket" ? <BasketDesk house={pre} cash={chips} onDebit={onDebit} /> : null}
+              {desk === "basket" ? <BasketDesk house={pre} /> : null}
               {desk === "lend" ? <LendDesk house={pre} onCredit={onCredit} onDebit={onDebit} /> : null}
               {desk === "book" ? <MarketStream house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
               {desk === "wrap" ? <RadarDesk house={pre} /> : null}

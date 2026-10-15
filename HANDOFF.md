@@ -19,14 +19,14 @@ Connect a wallet they already have. Buy a PreStock. Jupiter quotes it. They sign
 
 From the same account they can convert, cover a 10% drop, send USDC, post work, list something on Make, play the print with practice cash, or hand an agent a job that cannot sign.
 
-Trade opens on the live names. The chart is pool candles for the name they pick (`src/lib/print.ts`). Listed is the xStocks book and the Kamino line on a share (`/equities`). Solana markets on that page can be signed through Jupiter. Listed EVM markets can be signed through LI.FI. A chain with no signer stays a price.
+Trade opens on the live names. The chart is pool candles for the name they pick (`src/lib/print.ts`). Listed is the xStocks book that filled a $100 Jupiter quote, plus a PreStock SPV when that quote fills (`/equities`). The count is measured against the live unhalted catalog. Solana markets on that page can be signed through Jupiter. Listed EVM markets can be signed through LI.FI. A chain with no signer stays a price. A gift is one claimable link. A basket is one theme and one amount. Wrapped MON on Solana is listed when a $100 Jupiter quote fills. Monad mainnet stays a price until LI.FI quotes it.
 
 ## What is not true
 
 - There is no Senda program on mainnet. Do not add one.
 - The devnet cover program is `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`. It does not hold the PreStock.
 - A PreStock is a price, not a share, a vote, or a dividend.
-- The desk number is not a card a terminal will clear.
+- The desk number is not a card a terminal will clear. A one-time Mastercard is Commercial Connect, and only when that project is connected.
 - Browser cash, practice play, the sheet, and the agent log are not a chain balance. A fresh browser is at zero.
 - An agent can ask. It cannot sign.
 

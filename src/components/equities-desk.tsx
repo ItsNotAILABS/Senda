@@ -24,6 +24,11 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
     if (!q) return book.stocks;
     return book.stocks.filter((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
   }, [book.stocks, query]);
+  const xCount = book.stocks.filter((s) => s.kind === "xstock").length;
+  const census =
+    book.universe != null
+      ? `Of ${book.universe.toLocaleString("en-US")} unhalted xStocks with a Solana mint, ${xCount} filled a $${book.probeUsd} Jupiter quote inside 100 bps.`
+      : `${xCount} xStocks filled a $${book.probeUsd} Jupiter quote inside 100 bps. The catalog count did not load.`;
 
   return (
     <div className="flex flex-col">
@@ -62,6 +67,9 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="border-b border-border xl:border-r xl:border-b-0">
+          <p className="px-5 pt-4 text-sm text-muted lg:px-8">
+            {census} OpenAI and SpaceX, when they are listed, are PreStock SPVs. They are not shares of those companies. This is v1.
+          </p>
           <div className="flex items-center justify-between gap-3 px-5 py-3 lg:px-8">
             <h2 className="text-sm font-medium">Market</h2>
             <input
@@ -95,8 +103,8 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
                       <span className="mt-0.5 block text-xs text-muted">{s.name}</span>
                     </td>
                     <td className="px-2 py-3">
-                      <span className={cn("text-xs", s.halted ? "text-down" : s.open ? "text-up" : "text-muted")}>
-                        {s.halted ? "Halted" : s.open ? "Open" : "Closed"}
+                      <span className={cn("text-xs", s.kind === "spv" ? "text-muted" : s.halted ? "text-down" : s.open ? "text-up" : "text-muted")}>
+                        {s.kind === "spv" ? "SPV" : s.halted ? "Halted" : s.open ? "Open" : "Closed"}
                       </span>
                       <span className="mt-0.5 block font-mono text-[11px] text-subtle">{s.hours}</span>
                     </td>
@@ -116,7 +124,13 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
               <p className="text-xs text-subtle">{stock.name}</p>
               <h2 className="font-display text-4xl">{stock.symbol}</h2>
               <p className="mt-2 text-sm text-muted">
-                {stock.open && !stock.halted ? "Session is open." : stock.halted ? "Halted." : "Session is closed. Loan terms are still live."}
+                {stock.kind === "spv"
+                  ? "PreStock SPV exposure. Not a share, a vote, or a dividend."
+                  : stock.open && !stock.halted
+                    ? "Session is open."
+                    : stock.halted
+                      ? "Halted."
+                      : "Session is closed. Loan terms are still live."}
               </p>
               <div className="mt-4 flex gap-1">
                 {[100, 500, 2000].map((n) => (
@@ -132,7 +146,7 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
               </div>
               <div className="mt-4 rounded-xl border border-border p-4">
                 <p className="text-xs text-subtle">Buy</p>
-                <Quote mint={stock.mint} usd={usd} />
+                <Quote mint={stock.mint} usd={usd} decimals={stock.decimals} />
                 <FillButton
                   mint={stock.mint}
                   usd={usd}
@@ -161,7 +175,7 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
   );
 }
 
-function Quote({ mint, usd }: { mint: string; usd: number }) {
+function Quote({ mint, usd, decimals }: { mint: string; usd: number; decimals: number }) {
   const [q, setQ] = useState<JupQuote | { error: string } | null>(null);
   useEffect(() => {
     let live = true;
@@ -177,7 +191,7 @@ function Quote({ mint, usd }: { mint: string; usd: number }) {
   if ("error" in q) return <p className="mt-2 text-sm text-down">{q.error}</p>;
   return (
     <p className="mt-2 font-mono text-sm">
-      ${usd} buys {outUi(q, 8).toFixed(4)} · {q.route[0] || "Jupiter"}
+      ${usd} buys {outUi(q, decimals).toFixed(4)} · {q.route[0] || "Jupiter"}
     </p>
   );
 }
@@ -205,7 +219,7 @@ function Collateral({
       live = false;
     };
   }, [stock.mint, usd]);
-  const tokens = q && !("error" in q) ? outUi(q, 8) : 0;
+  const tokens = q && !("error" in q) ? outUi(q, stock.decimals) : 0;
   const maxBorrow = usd * reserve.maxLtv * pct;
   return (
     <>
@@ -251,7 +265,7 @@ function GhostSpend({
     <div className="rounded-xl bg-fg p-4 text-bg">
       <p className="text-xs uppercase opacity-60">Pay</p>
       <p className="mt-1 text-sm">
-        One number for ${cap}, locked to {stock}. The store sees this. It does not see the share or your bank. We do not keep the number.
+        One number for ${cap}, locked to {stock}. A store terminal will not clear it. It does not see the share or your bank. We do not keep the number.
       </p>
       {!reveal ? (
         <button

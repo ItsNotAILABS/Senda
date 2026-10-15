@@ -5,6 +5,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { fillableMints } from "@/lib/jup-exec";
 
 export type HouseVenue = "tessera" | "prestocks";
 
@@ -539,11 +540,12 @@ export async function fetchHouse(): Promise<HouseListing[]> {
     const live = [...tesseraRows(tess, px), ...prestocksRows(pre, px)];
     const have = new Set(live.map((r) => r.mint));
     const rows = sortHouse([...live, ...fillSeeds(have, px)]);
-    const filled = rows.length ? rows : HOUSE_FALLBACK;
-    cache = { at: Date.now(), rows: filled };
-    return filled;
+    const fillable = await fillableMints(rows.map((row) => row.mint));
+    const listed = rows.filter((row) => fillable.has(row.mint));
+    cache = { at: Date.now(), rows: listed };
+    return listed;
   } catch {
-    return HOUSE_FALLBACK;
+    return [];
   }
 }
 

@@ -23,6 +23,9 @@ A PreStock is economic exposure. Not a legal share, not a vote, not a dividend. 
 - Work posts a job in this browser and pays it by a USDC transfer to the worker address. `src/lib/work-jobs.ts`.
 - Senda cash, practice play, the sheet, the agent log, listings, and the desk-number last four live in this browser. A fresh browser is at zero. Never seed a balance, a card, or a position.
 - The desk number is issued by `issueCheckout`. The full number is shown once and is not a BIN. A terminal will decline it.
+- A one-time Mastercard is `spinOneTimeCard`. It posts to Commercial Connect. With no consumer key, signing key, entity id, and real card id, the button stops. It does not mint a PAN. The number and CVV are shown once and are not stored.
+- A Solana listing stays off the desk until a $100 Jupiter quote fills inside 100 bps. Basket weights use that executable quote. One theme and one amount quote every leg, then the wallet signs each filled leg. A leg that cannot fill is dropped.
+- A gift is one link. The sender funds a vault in the browser. The window is 1 hour, 1 day, or 7 days, enforced by the page. After it, the page will not claim and the sender can reclaim. The recipient connects a Solana wallet and does not pay the fee. The secret stays in the link hash and the tab. Do not send it to the server.
 - An agent inside the app can read the book and queue a trade. It cannot sign. `src/components/agents-desk.tsx`.
 - An agent outside the app uses `node mcp/server.mjs`. Same rule. It can quote and read. It cannot sign.
 
@@ -42,16 +45,16 @@ Defined in `src/components/app-shell.tsx`.
 - `/wallet` Convert.
 - `/wallets` Which wallet does which job. Robinhood buying power into USDC on the Solana address.
 - `/social` Play. Practice cash is separate.
-- `/cards` Shop. A desk number, and Pay USDC.
+- `/cards` Shop. A desk number, Pay USDC, and a one-time Mastercard when Commercial Connect is connected.
 - `/make` Listings other people pay for in USDC.
 - `/agents` The agent workspace. A cap. A queue. The person signs.
-- `/payments` Send.
+- `/payments` Send. One gift link: fund a vault, a time window, reclaim if it is still there.
 - `/vault` Portfolio.
 - `/cover` The 10% line.
 - `/work` The sheet and the job board.
 - `/invest` Trade. The live names, pool candles, a Jupiter quote, then sign.
-- `/equities` Listed shares. xStocks, and what Kamino will lend against them.
-- `/solana` The mints, Jupiter prices, and DefiLlama prices. A listed Solana market is signed through Jupiter. A listed EVM market is signed through LI.FI on that chain. A chain with no signer stays a price.
+- `/equities` xStocks that filled a $100 Jupiter quote, counted against the live unhalted Solana catalog. OpenAI and SpaceX appear only as PreStock SPVs when that same quote fills. Kamino lend terms show when the mint is in that market.
+- `/solana` The mints, Jupiter prices, and DefiLlama prices. A Solana row is shown after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is listed that way. A listed EVM market is signed through LI.FI on that chain. Monad mainnet stays a price until LI.FI quotes it.
 - `/books` The ledger already stored on this account.
 - `/docs` The written desk.
 - `/more` Account.

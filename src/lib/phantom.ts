@@ -247,11 +247,16 @@ async function rpc(method: string, params: unknown[]): Promise<unknown> {
 }
 
 export async function mintDecimals(mint: string): Promise<number> {
+  const exact = await mintDecimalsExact(mint);
+  return exact ?? 9;
+}
+
+export async function mintDecimalsExact(mint: string): Promise<number | null> {
   const result = (await rpc("getAccountInfo", [mint, { encoding: "jsonParsed" }])) as {
     value?: { data?: { parsed?: { info?: { decimals?: number } } } };
   };
   const d = result?.value?.data?.parsed?.info?.decimals;
-  return typeof d === "number" ? d : 9;
+  return typeof d === "number" ? d : null;
 }
 
 export async function splHolding(owner: string, mint: string): Promise<{ ui: number; raw: string; decimals: number }> {
