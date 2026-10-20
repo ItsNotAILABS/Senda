@@ -20,7 +20,7 @@ const CONTRACT = {
   sign: "The user signs in Phantom. This API does not return a key and cannot sign.",
   balances: "POST { action: 'balances', address }",
   quote: "POST { action: 'quote', address, mint, usd, side: 'buy' | 'sell' }",
-  open: "POST { action: 'open', page } — Phantom browse URL. First open creates the wallet.",
+  open: "POST { action: 'open', page } \u2014 Phantom browse URL. First open creates the wallet.",
   holds: ["SOL", "USDC", "CASH", "USDT", "any other SPL on that address"],
 };
 
@@ -76,7 +76,13 @@ export const Route = createFileRoute("/api/agent")({
       GET: async () => {
         const desk = await handleAgentHttp("GET");
         const tools = JSON.parse(desk.body) as Record<string, unknown>;
-        return Response.json({ ...CONTRACT, ...tools });
+        return Response.json({
+          ...CONTRACT,
+          ...tools,
+          site: "https://senda.pocketnova.app",
+          catalog:
+            "POST { name, arguments } on /api/agent. This host and https://senda.pocketnova.app/api/agent run the same tools. Neither signs.",
+        });
       },
       POST: async ({ request }) => {
         const raw = await request.text();
