@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { handleAgentHttp } from "@/lib/agent-http.mjs";
+import { handleAgentHttp, quoteSwap } from "@/lib/agent-http.mjs";
 
 /**
  * Agents call this. They never receive a key.
@@ -19,7 +19,7 @@ const CONTRACT = {
   engine: "senda.wallet",
   sign: "The user signs in Phantom. This API does not return a key and cannot sign.",
   balances: "POST { action: 'balances', address }",
-  quote: "POST { action: 'quote', address, mint, usd, side: 'buy' | 'sell' }",
+  quote: "POST { action: 'quote', address, mint, usd, side: 'buy' | 'sell' }. Same book, sell sizing, $100 probe, and sanity rule as quote_swap. ok is true only when that quote is offered.",
   open: "POST { action: 'open', page } \u2014 Phantom browse URL. First open creates the wallet.",
   holds: ["SOL", "USDC", "CASH", "USDT", "any other SPL on that address"],
 };
@@ -126,41 +126,27 @@ export const Route = createFileRoute("/api/agent")({
           }
         }
         if (body.action === "quote") {
-          const mint = String(body.mint ?? "");
-          const usd = Number(body.usd);
-          const side = body.side === "sell" ? "sell" : "buy";
-          if (!ADDR.test(mint) || !(usd > 0) || usd > 5000) {
-            return Response.json({ error: "Need a mint and a size from $0.01 to $5000." }, { status: 400 });
+          try {
+            const data = await quoteSwap({
+              mint: String(body.mint ?? ""),
+              usd: Number(body.usd),
+              side: body.side === "sell" ? "sell" : "buy",
+            });
+            return Response.json(
+              {
+                ok: data.offered,
+                address,
+                usd: Number(body.usd),
+                ...data,
+                sign: CONTRACT.sign,
+                route: data.sign,
+                browse: browse("https://senda.pocketnova.app/pre"),
+              },
+              { status: data.offered ? 200 : 422 },
+            );
+          } catch (e) {
+            return Response.json({ ok: false, error: e instanceof Error ? e.message : "Could not quote." }, { status: 400 });
           }
-          const amount = Math.max(1, Math.round(usd * 1e6));
-          const inputMint = side === "buy" ? USDC : mint;
-          const outputMint = side === "buy" ? mint : USDC;
-          const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100`;
-          let last = "Jupiter did not quote.";
-          for (const base of ["https://lite-api.jup.ag/swap/v1/quote", "https://api.jup.ag/swap/v1/quote"]) {
-            try {
-              const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
-              const parsed = (await r.json()) as { outAmount?: string; priceImpactPct?: string; error?: string };
-              if (r.ok && parsed.outAmount) {
-                return Response.json({
-                  ok: true,
-                  address,
-                  side,
-                  usd,
-                  inMint: inputMint,
-                  outMint: outputMint,
-                  outAmount: parsed.outAmount,
-                  priceImpactPct: parsed.priceImpactPct ?? "0",
-                  sign: CONTRACT.sign,
-                  browse: browse("https://senda.pocketnova.app/pre"),
-                });
-              }
-              last = parsed.error || last;
-            } catch {
-              last = "Jupiter did not quote.";
-            }
-          }
-          return Response.json({ error: last }, { status: 502 });
         }
         return Response.json({ error: "Use balances, quote, or open.", ...CONTRACT }, { status: 400 });
       },
