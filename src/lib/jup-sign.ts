@@ -4,7 +4,8 @@ import { USDC } from "@/lib/jup-exec";
 import { CASH, USDT } from "@/lib/wallet-engine";
 import { currentIntent, noteAct, recordFill } from "@/lib/book";
 import { stageMove } from "@/lib/moves";
-import { PRESTOCK_MINTS, sendVersioned, splHolding } from "@/lib/phantom";
+import { PRESTOCK_MINTS, chainRpc, sendVersioned, splHolding } from "@/lib/phantom";
+import { waitForChainConfirmation } from "@/lib/confirmation-gate.mjs";
 import { spendCap } from "@/lib/spend-cap";
 import { pairAllowed } from "@/lib/trade-book.mjs";
 import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
@@ -212,6 +213,27 @@ export async function signRoute(input: {
   const sideName = input.symbol ? `${side} ${input.symbol}` : "Jupiter swap";
   stageMove({ usd: input.usd, kind: "swap", title: sideName });
   const signature = await sendVersioned(tx);
+  // An RPC submission or wallet signature is not a fill. Confirm before
+  // creating a portfolio trade record, and do not silently invite duplicate sends.
+  try {
+    await waitForChainConfirmation(signature, async (sig) => {
+      const response = (await chainRpc("getSignatureStatuses", [
+        [sig], { searchTransactionHistory: true },
+      ])) as { value?: Array<{ err?: unknown; confirmationStatus?: string | null } | null> } | null;
+      return response?.value?.[0] ?? null;
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not confirm the submitted transaction.";
+    const failed = message.includes("failed on-chain");
+    noteAct({
+      kind: "swap",
+      title: failed ? "Swap failed on-chain" : "Swap awaiting confirmation",
+      detail: failed ? "No fill recorded; this transaction failed." : "No fill recorded yet. Check the signature on-chain before retrying.",
+      signature,
+      usd: input.usd,
+    });
+    throw error;
+  }
   const outName = PRESTOCK_MINTS.find(([, mint]) => mint === input.outputMint)?.[0];
   const inName = PRESTOCK_MINTS.find(([, mint]) => mint === input.inputMint)?.[0];
   const label = (mint: string, named?: string) =>
