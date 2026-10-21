@@ -10,3 +10,10 @@ export declare function verifySwapQuote(quote: unknown, intent: {
   minOutAmount: string;
   impactPercent: number;
 };
+
+export declare function verifyStableSpend(input: {
+  inputMint: string;
+  amountRaw: number;
+  capUsd: number;
+  stableMints: readonly string[];
+}): void;
