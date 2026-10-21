@@ -1,88 +1,38 @@
 # Senda — read this before you edit anything
 
-You are working in the Senda repository. This file is the manual. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.windsurfrules`, `.clinerules`, and `llms.txt`. Trust the code when it disagrees with a memory from another project.
-
-The module map is [docs/MODULES.md](docs/MODULES.md). The agent interface is [mcp/server.mjs](mcp/server.mjs) and `GET` / `POST /api/agent`.
+You are working in the Senda repository. This file is the manual. The same text is copied to `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.cursor/rules/senda.mdc`, `.windsurfrules`, `.clinerules`, and `llms.txt`. Trust the code when it disagrees with a memory from another project.
 
 ## What Senda is
 
-Senda is the desk for tokenized pre-IPO names that already trade on Solana. The wallet the person connects is the account. A buy is a Jupiter route they sign. A holding is the token balance in that wallet, marked at the live print. A payment is a USDC transfer they sign.
+Senda is a desk for tokenized pre-IPO names that already trade on Solana. The wallet the person connects is the account. A buy is a Jupiter route they sign. A holding is the token balance in that wallet, marked at the live print. A payment is a USDC transfer they sign. There is no Senda program and no program id.
 
 It is not a broker, not a bank, and not a card network. It is not an event site. Do not add a venue, a rooftop, tickets, an RSVP, speakers, or a guest list. That project was removed.
-
-A PreStock is economic exposure. Not a legal share, not a vote, not a dividend. Do not write copy that says the person owns the company.
 
 ## What is real
 
 - Prints come from `https://prestocks.com/api/prestocks`, loaded in `src/lib/sol-house.ts`.
-- Trade candles are the pool, from GeckoTerminal, in `src/lib/print.ts`. If that feed is busy, the last price still stands. Do not draw a fake series.
 - A buy, sell, or convert is quoted on Jupiter, simulated, then signed. `src/lib/jup-sign.ts` and `src/lib/prestock.ts`. The wallet signs. Senda does not invent a fill.
-- Portfolio and the wallet strip call `readChain` in `src/lib/phantom.ts`. Empty means the wallet holds none.
-- Pay is an SPL transfer of USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) plus a memo. `src/lib/solana-pay.ts`. `usdcPayLink` builds a Solana Pay URL. It does not send the money.
-- Cover premium is 4% of the size. It pays if the print is 10% under the price that was locked. The person signs the USDC. `src/lib/cover-chain.ts`. It is not a licensed policy. The token stays in the wallet.
-- Work posts a job in this browser and pays it by a USDC transfer to the worker address. `src/lib/work-jobs.ts`.
+- Portfolio reads token accounts. Empty means the wallet holds none.
+- Pay is an SPL transfer of USDC (`EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`) plus a memo. `src/lib/solana-pay.ts`.
+- Cover premium is a USDC transfer the user signs. `src/lib/cover-chain.ts`. It is not a licensed policy.
 - Senda cash, practice play, the sheet, the agent log, listings, and the desk-number last four live in this browser. A fresh browser is at zero. Never seed a balance, a card, or a position.
 - The desk number is issued by `issueCheckout`. The full number is shown once and is not a BIN. A terminal will decline it.
-- A one-time Mastercard is `spinOneTimeCard`. It posts to Commercial Connect. With no consumer key, signing key, entity id, and real card id, the button stops. It does not mint a PAN. The number and CVV are shown once and are not stored. Stocklana's issuer proxy follows the same rule and is not hosted on this worker. PARALLAX `USMXCardRailReceiptRegistry` anchors a receipt hash and rejects custody. No deployed address is in that repo, so this desk does not read a chain head.
-- A Solana listing stays off the desk until a $100 Jupiter quote fills inside 100 bps. Basket weights use that executable quote. One theme and one amount quote every leg, then the wallet signs each filled leg. A leg that cannot fill is dropped.
-- A gift is one link. The sender funds a vault in the browser. The window is 1 hour, 1 day, or 7 days, enforced by the page. After it, the page will not claim and the sender can reclaim. The recipient connects a Solana wallet and does not pay the fee. The secret stays in the link hash and the tab. Do not send it to the server.
-- An agent inside the app can read the book and queue a trade. It cannot sign. `src/components/agents-desk.tsx`.
-- An agent outside the app uses `node mcp/server.mjs` or `POST /api/agent`. Same rule. It can quote and read. It cannot sign. The HTTP body is `{ "name", "arguments" }`. The response has no transaction to broadcast.
-
-## Chains
-
-- Mainnet buys, sells, and USDC payments. Jupiter and SPL. There is no Senda program on mainnet. Do not invent one.
-- Devnet cover program `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`, recorded in `chain/devnet.json`. It does not hold the PreStock.
-- Rust payment builder: `chain/senda-chain`. Python twin: `chain/python`. The tests lock the same bytes.
-- Solana wallets sign PreStocks, cover, work, and USDC. Ethereum wallets are a different signature. Do not route a PreStock buy through MetaMask.
+- An agent can read the book and queue a trade. It cannot sign. `src/components/agent-workspace.tsx`.
 
 ## The pages
 
 Defined in `src/components/app-shell.tsx`.
 
-- `/` Home. The line, the book, a buy, the wallet strip.
+- `/` Home. The line, the planet, the book, a buy, the card.
 - `/pre` PreStocks.
 - `/wallet` Convert.
-- `/wallets` Which wallet does which job. Robinhood buying power into USDC on the Solana address.
-- `/social` Play. Practice cash is separate.
-- `/cards` Shop. A desk number, Pay USDC, and a one-time Mastercard when Commercial Connect is connected.
-- `/make` Listings other people pay for in USDC.
-- `/agents` The agent workspace. A cap. A queue. The person signs.
-- `/payments` Send. One gift link: fund a vault, a time window, reclaim if it is still there.
+- `/social` Play. Ten games on the live print. Practice cash is separate.
+- `/cards` Shop. A desk number, and Pay USDC.
+- `/agents` The agent workspace.
+- `/payments` Send.
 - `/vault` Portfolio.
-- `/cover` The 10% line.
-- `/work` The sheet and the job board.
-- `/invest` Trade. The live names, pool candles, a Jupiter quote, then sign.
-- `/equities` xStocks that filled a $100 Jupiter quote, counted against the live unhalted Solana catalog. OpenAI and SpaceX appear only as PreStock SPVs when that same quote fills. Kamino lend terms show when the mint is in that market.
-- `/solana` The mints, Jupiter prices, and DefiLlama prices. A Solana row is shown after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is listed that way. A listed EVM market is signed through LI.FI on that chain. Monad mainnet stays a price until LI.FI quotes it.
-- `/books` The ledger already stored on this account.
-- `/clearing` Mastercard readiness, the PARALLAX receipt rule, and the Stocklana issuer boundary. No custody and no invented card.
-- `/docs` The written desk.
-- `/more` Account.
-
-## API and MCP
-
-The same tools. None of them sign. `GET /api/agent` lists them. `POST /api/agent` with `{ "name", "arguments" }` runs one. `node mcp/server.mjs` is the stdio server.
-
-| Tool | Does |
-| --- | --- |
-| `desk_map` | The pages. |
-| `rules` | What not to fake. |
-| `list_prints` | Live PreStock prints. |
-| `markets` | Jupiter markets, LI.FI markets, and prices that stay prices. |
-| `quote_swap` | A Jupiter quote. Off the book when the $100, 100 bps, or 5% gate fails. |
-| `quote_evm` | A LI.FI quote for a listed EVM market. No transaction bytes. |
-| `read_wallet` | SOL and tokens for a public Solana address, including Token-2022. |
-| `read_evm` | A token balance on a listed EVM chain. |
-| `usdc_pay_link` | A `solana:` payment URL. |
-| `cover_terms` | Premium and the 10% line. |
-| `gift_window` | 1 hour, 1 day, or 7 days. It refuses a secret. |
-| `baskets` | One theme. The wallet signs each filled leg. |
-| `spend_limits` | Browser cap. Default 100. Maximum 5000. |
-| `clearing` | Commercial Connect stays closed. PARALLAX has no deployed address. |
-| `chain_tape` | Live prices. A row is not a fill. |
-
-`.mcp.json` points a client at `node mcp/server.mjs`. The frame is Content-Length. `node --test mcp/tools.test.mjs` covers the pure tools.
+- `/make` Work other people pay for in USDC.
+- `/cover` `/work` `/invest` `/solana` `/books` `/docs` `/more`
 
 ## Stack
 
@@ -94,9 +44,6 @@ React 19, TypeScript, Vite, TanStack Start and Router. Tailwind v4 tokens are in
 npm install
 npm run dev
 npm run typecheck
-npm run deploy
-node --test mcp/tools.test.mjs
-node mcp/server.mjs
 ```
 
 The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_modules`, or chat attachments. Do not store a PAN, a CVV, or a seed.
@@ -106,5 +53,4 @@ The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_m
 - A buy still asks the wallet to sign a Jupiter route.
 - No balance, card, or position appears that the person did not create.
 - The event site is still gone.
-- The API and the MCP still cannot sign.
 - `npm run typecheck` passes.

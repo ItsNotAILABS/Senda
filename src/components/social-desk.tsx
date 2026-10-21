@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { PlayDesk } from "@/components/play-desk";
-import { MoneyBar } from "@/components/money-bar";
 import { loadHouseBook } from "@/lib/house-paper";
 import { formatMoney } from "@/lib/wallet";
 import { loadPlay } from "@/lib/play";
 import { loadFeed, pushPost } from "@/lib/social";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { connectPhantom } from "@/lib/phantom";
+import { acceptQuote, acceptSize } from "@/lib/engine";
+import { USDC } from "@/lib/jup-exec";
+import { quoteRoute } from "@/lib/jup-sign";
 import { runPrestock } from "@/lib/prestock";
+import { spendCap } from "@/lib/spend-cap";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +31,16 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
         const linked = w.linkChain(owner, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
+      const quoted = await quoteRoute({
+        inputMint: USDC,
+        outputMint: mint,
+        amountRaw: 25_000_000,
+        outDecimals: 9,
+      });
+      const size = acceptSize(25, spendCap());
+      if (!size.ok) throw new Error(size.reason);
+      const gate = acceptQuote(quoted);
+      if (!gate.ok) throw new Error(gate.reason);
       const done = await runPrestock({ owner, mint, side: "buy", usd: 25 });
       setFeed(pushPost(feed, { tag: w.w.tag, kind: "copy", text: `Bought ${symbol} · $${25} · ${done.signature.slice(0, 8)}`, symbol }));
       toast.success(`${symbol} bought.`);
@@ -50,9 +63,6 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
           Games, copy a name, tape of the book. Same cash. PreStocks only.
         </p>
       </header>
-      <div className="mx-3 mb-3">
-        <MoneyBar />
-      </div>
       <div className="flex gap-1 overflow-x-auto px-4 pb-3">
         {(
           [

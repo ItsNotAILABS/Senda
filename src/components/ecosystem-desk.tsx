@@ -1,10 +1,14 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { TradePad } from "@/components/fill-button";
 import { LEGAL } from "@/lib/ecosystem";
 import { pre8 } from "@/lib/pre8";
 import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 
 export function EcosystemDesk({ house }: { house: HouseListing[] }) {
   const idx = pre8(house);
+  const [mint, setMint] = useState("");
+  const picked = idx.legs.find((leg) => leg.mint === mint) ?? idx.legs[0];
   return (
     <div className="px-4 pb-10 pt-4">
       <h2 className="font-display text-3xl tracking-tight">PreStocks rails</h2>
@@ -25,16 +29,17 @@ export function EcosystemDesk({ house }: { house: HouseListing[] }) {
           .sort((a, b) => b.valuation - a.valuation)
           .map((r) => (
             <li key={r.id} className="flex items-baseline justify-between py-3">
-              <div>
+              <button type="button" onClick={() => setMint(r.mint)} className="min-w-0 text-left">
                 <p className="text-sm font-semibold">{r.symbol}</p>
                 <p className="font-mono text-[11px] text-subtle">
                   last {formatUsd(r.last)} · mark {formatUsd(r.mark)}
                 </p>
-              </div>
+              </button>
               <p className="font-mono text-xs text-muted">{formatValuation(r.valuation)}</p>
             </li>
           ))}
       </ul>
+      {picked ? <TradePad mint={picked.mint} price={picked.last} symbol={picked.symbol} /> : null}
       <h3 className="mt-8 text-xs font-medium tracking-wide text-subtle uppercase">Do it here</h3>
       <ul className="mt-2 overflow-hidden rounded-2xl bg-elevated">
         {(

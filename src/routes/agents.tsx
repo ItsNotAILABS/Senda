@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AgentWorkspace } from "@/components/agent-workspace";
+import { AgentsDesk } from "@/components/agents-desk";
 import { AppShell } from "@/components/app-shell";
 import { getHouse, type HouseListing } from "@/lib/sol-house";
 
@@ -21,7 +21,7 @@ function AgentsPage() {
   }, []);
   return (
     <AppShell>
-      <AgentWorkspace names={house} />
+      <AgentsDesk names={house} />
     </AppShell>
   );
 }

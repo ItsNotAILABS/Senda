@@ -18,11 +18,10 @@ function EquitiesPage() {
   );
 }
 
-function EquitiesError({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "The book did not load.";
+function EquitiesError({ error }: { error: Error }) {
   return (
     <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{message}</p>
+      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
     </AppShell>
   );
 }

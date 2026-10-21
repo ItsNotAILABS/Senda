@@ -1,5 +1,6 @@
 /** Friends games on the same Senda cash. Paper settle from last vs mark. */
 
+import { challengePay, resolvesYes } from "@/lib/engine";
 import type { HouseListing } from "@/lib/sol-house";
 
 export type PlayKind = "direction" | "closer";
@@ -49,7 +50,8 @@ function savePlay(rows: Challenge[]): void {
 
 export function settleDirection(stock: HouseListing, pick: "up" | "down"): "win" | "lose" {
   const chg = stock.change24h ?? 0;
-  const up = chg >= 0;
+  const open = chg > -1 ? stock.last / (1 + chg) : stock.last;
+  const up = resolvesYes({ style: "line", mark: stock.last, openPrice: open, strike: open, hi: 0 });
   const won = (pick === "up" && up) || (pick === "down" && !up);
   return won ? "win" : "lose";
 }

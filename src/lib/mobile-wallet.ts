@@ -1,8 +1,8 @@
-/** Phone browsers have no extension. Open this page inside the wallet app. Never use a connect/login link. */
+import { deskUrl } from "@/lib/wallet-engine";
 
-export type MobileWallet = "phantom" | "solflare" | "backpack";
+export type MobileWallet = "phantom" | "solflare" | "backpack" | "coinbase";
 
-const HOST: Record<MobileWallet, string> = {
+const HOST: Record<Exclude<MobileWallet, "coinbase">, string> = {
   // phantom.app/ul/browse is the in-app browser. phantom.com/ul/v1/connect is a KMS login.
   phantom: "https://phantom.app/ul/browse",
   solflare: "https://solflare.com/ul/v1/browse",
@@ -17,6 +17,7 @@ type SolWin = Window & {
   solana?: { connect?: unknown };
   solflare?: { connect?: unknown };
   backpack?: { connect?: unknown };
+  coinbaseSolana?: { connect?: unknown };
 };
 
 function captureLanding() {
@@ -24,7 +25,7 @@ function captureLanding() {
   const q = new URLSearchParams(window.location.search).get("sendaIn");
   const h = new URLSearchParams(window.location.hash.replace(/^#/, "")).get("in");
   const flag = q || h;
-  if (flag === "phantom" || flag === "solflare" || flag === "backpack") {
+  if (flag === "phantom" || flag === "solflare" || flag === "backpack" || flag === "coinbase") {
     try {
       sessionStorage.setItem(MARK, flag);
     } catch {
@@ -44,7 +45,7 @@ export function isPhoneBrowser(): boolean {
 export function injectedSolana(): boolean {
   if (typeof window === "undefined") return false;
   const w = window as SolWin;
-  return Boolean(w.phantom?.solana?.connect || w.solflare?.connect || w.backpack?.connect || w.solana?.connect);
+  return Boolean(w.phantom?.solana?.connect || w.solflare?.connect || w.backpack?.connect || w.coinbaseSolana?.connect || w.solana?.connect);
 }
 
 /** True when this page was opened from a phone into the wallet's own browser. */
@@ -53,7 +54,7 @@ export function landedInWallet(): boolean {
   if (typeof sessionStorage === "undefined") return false;
   try {
     const flag = sessionStorage.getItem(MARK);
-    return flag === "phantom" || flag === "solflare" || flag === "backpack";
+    return flag === "phantom" || flag === "solflare" || flag === "backpack" || flag === "coinbase";
   } catch {
     return false;
   }
@@ -62,7 +63,7 @@ export function landedInWallet(): boolean {
 /** User-agent only. Phantom's in-app browser often looks like Safari, so also check landedInWallet. */
 export function insideWalletApp(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /Phantom|Solflare|Backpack/i.test(navigator.userAgent) || landedInWallet();
+  return /Phantom|Solflare|Backpack|CoinbaseWallet|CBWallet/i.test(navigator.userAgent) || landedInWallet();
 }
 
 /** This page can ask for a signature. Do not deeplink away from it. */
@@ -71,10 +72,11 @@ export function canSignHere(): boolean {
 }
 
 export function walletBrowseUrl(wallet: MobileWallet, page: string, origin: string): string {
+  if (wallet === "coinbase") return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(page)}`;
   return `${HOST[wallet]}/${encodeURIComponent(page)}?ref=${encodeURIComponent(origin)}`;
 }
 
-/** Opens the wallet's browser on this exact page. Returns false if we are already inside one. */
+/** Opens the wallet's browser on the public desk. Never the preview, which asks for X. */
 export function openInWallet(wallet: MobileWallet): boolean {
   if (typeof window === "undefined") return false;
   if (canSignHere()) return false;
@@ -83,10 +85,19 @@ export function openInWallet(wallet: MobileWallet): boolean {
   } catch {
     /* private mode */
   }
-  const url = new URL(window.location.href);
+  const url = new URL(deskUrl());
   url.searchParams.set("sendaIn", wallet);
   url.hash = `in=${wallet}`;
-  window.location.assign(walletBrowseUrl(wallet, url.toString(), window.location.origin));
+  const next = walletBrowseUrl(wallet, url.toString(), url.origin);
+  try {
+    if (window.top && window.top !== window) {
+      window.open(next, "_top");
+      return true;
+    }
+  } catch {
+    /* cross-origin frame */
+  }
+  window.location.assign(next);
   return true;
 }
 

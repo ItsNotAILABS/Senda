@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { TabLead } from "@/components/tab-lead";
-import { EventBoard } from "@/components/event-board";
-import { TableDesk } from "@/components/table-desk";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -114,9 +112,9 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         kicker="Play"
         title="Ten games on the live book."
         accent="Practice first."
-        line="The felt is practice or browser cash. Under it, a USDC table pays a winner from a key on this device, and the event book shows live Polymarket prices."
-        live={["Wheel, slots, up/down, furthest, closest, ride, higher, parlay, dice, and mines.", "Practice bankroll on this browser.", "USDC table", "Live event prices"]}
-        coming={["A prize that leaves this browser from the felt."]}
+        line="Every result comes from a PreStock print, not a hidden roll. Practice cash lets you learn the felt. Real cash is the balance you already hold. The two never mix."
+        live={["Wheel, slots, up/down, furthest, closest, ride, higher, parlay, dice, and mines.", "Practice bankroll on this browser.", "Real stakes leave Senda cash and wins come back."]}
+        coming={["A shared table with another wallet.", "A prize that leaves this browser."]}
       />
 
       <Felt className="mt-3">
@@ -191,8 +189,6 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
 
         <Board game={game} book={book} stake={stake} cash={pot} pay={meta.pay} banner={banner} take={take} clear={() => setBanner(null)} />
       </Felt>
-      <EventBoard />
-      <TableDesk names={book} />
     </div>
   );
 }

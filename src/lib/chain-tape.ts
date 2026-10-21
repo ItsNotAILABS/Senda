@@ -2,8 +2,6 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { CHAINS, SOLANA_MORE, mapChains, mapSolana, type TapeRow } from "@/lib/chain-tape-map.mjs";
-import { keepListed } from "@/lib/jup-fill.mjs";
-import { fillableMints } from "@/lib/jup-exec";
 
 const JUP = "https://lite-api.jup.ag/price/v3?ids=";
 const LLAMA = "https://coins.llama.fi";
@@ -40,10 +38,8 @@ export async function fetchChainTape(): Promise<ChainTape> {
   let chains: TapeRow[] = [];
   try {
     const quotes = (await getJson(`${JUP}${mints}`)) as Record<string, { usdPrice?: number; priceChange24h?: number }>;
-    const priced = mapSolana(quotes);
-    const fillable = await fillableMints(priced.map((row) => row.mint || ""));
-    solana = keepListed(priced, fillable);
-    jupiter = solana.some((row) => row.symbol !== "USDC");
+    solana = mapSolana(quotes);
+    jupiter = solana.length > 0;
   } catch {
     solana = [];
   }
@@ -60,7 +56,7 @@ export async function fetchChainTape(): Promise<ChainTape> {
   return {
     ok: solana.length + chains.length > 0,
     rows: [...solana, ...chains],
-    note: "A Solana row is listed only after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is one of those rows when that quote fills. A listed EVM row signs on LI.FI. Monad mainnet stays a price until LI.FI quotes it.",
+    note: "Solana rows can be signed on Jupiter. Listed EVM rows can be signed on LI.FI. Every other row is a price.",
     jupiter,
     defillama,
   };

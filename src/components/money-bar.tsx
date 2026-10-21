@@ -11,7 +11,7 @@ export function MoneyBar() {
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [sol, setSol] = useState<number | null>(null);
   const [usdc, setUsdc] = useState<number | null>(null);
-  const [other, setOther] = useState(0);
+  const [tokens, setTokens] = useState<{ symbol: string; ui: number }[]>([]);
   const [txs, setTxs] = useState<UsdcMove[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -19,7 +19,7 @@ export function MoneyBar() {
     if (!owner) {
       setSol(null);
       setUsdc(null);
-      setOther(0);
+      setTokens([]);
       setTxs([]);
       return;
     }
@@ -30,7 +30,7 @@ export function MoneyBar() {
           if (!live) return;
           setSol(s.sol);
           setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0);
-          setOther(s.tokens.filter((t) => t.symbol !== "USDC").length);
+          setTokens(s.tokens.filter((t) => t.ui > 0 && t.symbol !== "USDC").map((t) => ({ symbol: t.symbol, ui: t.ui })));
         })
         .catch(() => {
           if (live) setSol(null);
@@ -45,9 +45,11 @@ export function MoneyBar() {
     };
     pull();
     const id = window.setInterval(pull, 20000);
+    window.addEventListener("senda-chain", pull);
     return () => {
       live = false;
       window.clearInterval(id);
+      window.removeEventListener("senda-chain", pull);
     };
   }, [owner]);
 
@@ -80,7 +82,10 @@ export function MoneyBar() {
         </div>
         <Stat k="SOL" v={sol == null ? "—" : sol.toFixed(3)} />
         <Stat k="USDC" v={usdc == null ? "—" : usdc.toFixed(2)} />
-        <Stat k="Other" v={owner ? String(other) : "—"} />
+        {tokens.slice(0, 6).map((t) => (
+          <Stat key={t.symbol} k={t.symbol} v={t.ui >= 1 ? t.ui.toFixed(2) : t.ui.toFixed(4)} />
+        ))}
+        {tokens.length > 6 ? <Stat k="More" v={String(tokens.length - 6)} /> : null}
         {owner ? (
           <button
             type="button"

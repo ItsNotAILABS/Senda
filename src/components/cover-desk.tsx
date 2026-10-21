@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Shield, TrendingDown } from "lucide-react";
-import { ClearStrip } from "@/components/clear-strip";
 import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
-import { rememberClear } from "@/lib/clearing";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
 import { COVERS, formatCover } from "@/lib/cover";
@@ -50,7 +47,18 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
   const name = book.find((n) => n.symbol === symbol) ?? book[0];
   const life = COVERS.find((c) => c.id === lifeId) ?? COVERS[0];
   const premium = mode === "drop" ? Math.max(1, Math.round(usd * 0.04)) : life.premium;
-  const shown = policy ? (rows.find((r) => r.id === policy.id) ?? policy) : null;
+  const shown =
+    (policy ? rows.find((r) => r.id === policy.id) ?? policy : null) ??
+    rows.find((r) => r.status === "open") ??
+    null;
+
+  function crossedStrike(row: ChainCover): boolean {
+    const live = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
+    if (!(row.strike > 0) || !(live > 0)) return false;
+    // Drop pays only after the print trades through the locked strike and the ten percent line.
+    if (row.kind === "drop") return live < row.strike && live <= row.strike * 0.9;
+    return live > row.strike;
+  }
 
   function refresh() {
     setRows(listChainCovers());
@@ -101,15 +109,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           days: 1,
         });
         setPolicy(row);
-        rememberClear({
-          desk: "cover",
-          title: `${name.symbol} cover`,
-          legs: [{ side: "out", asset: "USDC", amount: premium, where: "cover account" }],
-          feeUsd: 0,
-          sig: row.sig,
-          status: "signed",
-        });
-        toast.success(`Premium left Phantom. If ${name.symbol} falls 10%, settle buys $${usd}.`);
+        toast.success(`Premium left Phantom. ${row.sig.slice(0, 8)} · $${row.premium} USDC. If ${name.symbol} falls 10%, settle buys $${usd}.`);
       } else {
         const row = await openChainCover({
           owner: who,
@@ -119,15 +119,8 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           premium: life.premium,
           days: 30,
         });
-        rememberClear({
-          desk: "cover",
-          title: `${life.title} cover`,
-          legs: [{ side: "out", asset: "USDC", amount: life.premium, where: "cover account" }],
-          feeUsd: 0,
-          sig: row.sig,
-          status: "signed",
-        });
-        toast.success(`${life.title} premium is on-chain. The payout is only what that account holds.`);
+        setPolicy(row);
+        toast.success(`${life.title} premium is on-chain. ${row.sig.slice(0, 8)} · $${row.premium} USDC. The payout is only what that account holds.`);
       }
       refresh();
     } catch (e) {
@@ -161,15 +154,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         days: 1,
       });
       setPolicy(row);
-      rememberClear({
-        desk: "cover",
-        title: `${live.symbol} 10% cover`,
-        legs: [{ side: "out", asset: "USDC", amount: premiumNow, where: "cover account" }],
-        feeUsd: 0,
-        sig: row.sig,
-        status: "signed",
-      });
-      toast.success(`${row.symbol || live.symbol} is ${row.status}. Premium $${row.premium}. Strike ${formatUsd(row.strike)}.`);
+      toast.success(`${row.symbol || live.symbol} is ${row.status}. ${row.sig.slice(0, 8)} · $${row.premium} USDC. Strike ${formatUsd(row.strike)}.`);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The cover did not send.");
@@ -184,27 +169,11 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     try {
       if (cancel) {
         const sig = await cancelChainCover(row, owner);
-        rememberClear({
-          desk: "cover",
-          title: `${row.symbol || row.title} returned`,
-          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
-          feeUsd: 0,
-          sig,
-          status: "signed",
-        });
         toast.success(`USDC sent back. ${sig.slice(0, 8)}`);
       } else {
         const price = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
         const out = await settleChainCover(row, owner, price);
-        rememberClear({
-          desk: "cover",
-          title: `${row.symbol || row.title} settled`,
-          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
-          feeUsd: 0,
-          sig: out.sig,
-          status: "signed",
-        });
-        toast.success(out.bought ? "Premium returned. The buy is signed." : "Premium returned.");
+        toast.success(`${out.bought ? "Premium returned. The buy is signed." : "Premium returned."} ${out.sig}`);
       }
       refresh();
     } catch (e) {
@@ -227,7 +196,6 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
         ]}
         coming={["A licensed insurer.", "A pooled premium."]}
       />
-      <MoneyBar />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -288,34 +256,23 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
             <dd className="font-mono text-3xl">{shown ? shown.status : "—"}</dd>
           </div>
         </dl>
+        {shown ? (
+          <p className="mt-3 font-mono text-xs text-accent">
+            <a href={`https://solscan.io/tx/${shown.sig}`} target="_blank" rel="noreferrer">
+              {shown.sig.slice(0, 8)}
+            </a>
+            {" · "}${shown.premium} USDC
+          </p>
+        ) : null}
         {shown && shown.strike > 0 ? (
-          <p className="mt-3 text-xs text-muted">
-            Pays if the print is at or under {formatUsd(shown.strike * 0.9)}. Settle is a second signature.
+          <p className="mt-2 text-xs text-muted">
+            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
           </p>
-        ) : name ? (
-          <p className="mt-3 text-xs text-muted">
-            Pays if {name.symbol} prints at or under {formatUsd(name.last * 0.9)}. You are {((1 - 0.9) * 100).toFixed(0)}% above that line at the current print. Premium is 4% of the size, in USDC, when you sign.
-          </p>
+        ) : shown ? (
+          <p className="mt-2 text-xs text-muted">The payout is only what the cover account holds.</p>
         ) : (
           <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Status stays blank until Phantom signs.</p>
         )}
-        {name && mode === "drop" ? (
-          <div className="mt-4">
-            <div className="flex justify-between text-[11px] text-subtle">
-              <span>Pays at {formatUsd(name.last * 0.9)}</span>
-              <span>Now {formatUsd(name.last)}</span>
-            </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-[90%] bg-accent" />
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              The line is 10% under this print. Premium is ${Math.max(1, Math.round(usd * 0.04))} USDC when you sign.
-              {owner && usdc + 0.001 < Math.max(1, Math.round(usd * 0.04))
-                ? ` Wallet has ${usdc.toFixed(2)}. Convert SOL first if that is short.`
-                : ""}
-            </p>
-          </div>
-        ) : null}
       </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
@@ -426,23 +383,26 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           <p className="text-sm font-semibold">Signed covers</p>
           {rows.length === 0 ? <p className="mt-3 text-xs text-subtle">None. A cover does not exist until the USDC moves.</p> : null}
           <ul className="mt-2 space-y-2">
-            {rows.map((r) => (
-              <li key={r.id} className="rounded-2xl bg-black/40 px-3 py-3">
-                <p className="text-sm font-semibold">{r.title}</p>
-                <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
-                <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
-                {r.status === "open" ? (
-                  <div className="mt-3 flex gap-2">
-                    <button type="button" disabled={busy} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
-                    <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
+            {rows.map((r) => {
+              const crossed = crossedStrike(r);
+              return (
+                <li key={r.id} className="rounded-2xl bg-black/40 px-3 py-3">
+                  <p className="text-sm font-semibold">{r.title}</p>
+                  <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
+                  <p className="mt-1 font-mono text-[11px] text-accent">{r.sig.slice(0, 8)} · ${r.premium} USDC</p>
+                  <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
+                  {r.status === "open" ? (
+                    <div className="mt-3 flex gap-2">
+                      <button type="button" disabled={busy || !crossed} title={crossed ? undefined : "Disabled until the live price crosses the strike"} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
+                      <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </section>
-      <ClearStrip desk="cover" />
     </div>
   );
 }

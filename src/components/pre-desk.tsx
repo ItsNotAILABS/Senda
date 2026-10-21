@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { listedMarks } from "@/lib/equities";
 import { connectPhantom, mintDecimals, readChain, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
@@ -8,7 +9,7 @@ import { FilmBand } from "@/components/film-band";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
-import { listChainCovers, openChainCover } from "@/lib/cover-chain";
+import { listChainCovers, openChainCover, type ChainCover } from "@/lib/cover-chain";
 import { type ClosedPrint } from "@/lib/closed-prints";
 import { formatPremium, formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -72,7 +73,28 @@ export function PreDesk({
   const [store, setStore] = useState("");
   const [reveal, setReveal] = useState<{ pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const wallet = useWallet();
-  const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
+  const [liveLast, setLiveLast] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const mints = [...new Set(rows.map((n) => n.mint).filter((m) => m.length >= 32))];
+    if (!mints.length) return;
+    let live = true;
+    const pull = async () => {
+      const next: Record<string, number> = {};
+      for (let i = 0; i < mints.length; i += 30) {
+        const part = await listedMarks({ data: mints.slice(i, i + 30) }).catch(() => ({} as Record<string, number>));
+        Object.assign(next, part);
+      }
+      if (live && Object.keys(next).length) setLiveLast(next);
+    };
+    void pull();
+    const id = window.setInterval(() => void pull(), 8_000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [rows]);
+  const picked = rows.find((r) => r.symbol === symbol) ?? rows[0];
+  const name = picked && liveLast[picked.mint] ? { ...picked, last: liveLast[picked.mint] } : picked;
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; value: number; note?: string }>>([]);
   const [sector, setSector] = useState("All");
@@ -408,7 +430,7 @@ export function PreDesk({
                       {r.liquidity > 0 && r.liquidity < 1000 ? " · thin pool" : ""}
                     </span>
                   </span>
-                  <span className="w-24 text-right font-mono text-sm tabular-nums">{formatUsd(r.last)}</span>
+                  <span className="w-24 text-right font-mono text-sm tabular-nums">{formatUsd(liveLast[r.mint] || r.last)}</span>
                   <span className={cn("w-16 text-right font-mono text-xs tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
                     {formatPremium(r.premium)}
                   </span>
@@ -680,7 +702,7 @@ export function PreDesk({
                       <span className="block truncate text-[11px] text-subtle">{n.name}</span>
                     </span>
                   </div>
-                  <p className="mt-3 font-mono text-lg tabular-nums">{formatUsd(n.last)}</p>
+                  <p className="mt-3 font-mono text-lg tabular-nums">{formatUsd(liveLast[n.mint] || n.last)}</p>
                   <p className={cn("font-mono text-[11px] tabular-nums", (n.premium ?? 0) < 0 ? "text-up" : "text-down")}>
                     {formatPremium(n.premium)}
                   </p>
@@ -797,6 +819,47 @@ function QuoteLine({ quote, usd, decimals }: { quote: JupQuote | { error: string
         <span className="text-subtle">{quote.route[0] || "Jupiter"}</span>
         <span className="font-mono tabular-nums text-muted">{impactPct.toFixed(2)}% impact</span>
       </div>
+    </div>
+  );
+}
+
+export function OpenBook({
+  rows,
+  names,
+  busy,
+  onClose,
+}: {
+  rows: ChainCover[];
+  names: HouseListing[];
+  busy: boolean;
+  onClose: (row: ChainCover) => void;
+}) {
+  const open = rows.filter((row) => row.status === "open");
+  if (!open.length) return <p className="mt-3 text-xs text-muted">No open cover on this wallet.</p>;
+  return (
+    <div className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
+      <p className="text-sm font-semibold">Open covers</p>
+      <ul className="mt-2 divide-y divide-white/10">
+        {open.map((row) => {
+          const house = names.find((n) => n.mint === row.mint || n.symbol === row.symbol);
+          return (
+            <li key={row.id} className="flex items-center justify-between gap-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">
+                  {row.symbol} · {row.title}
+                </p>
+                <p className="font-mono text-[11px] text-subtle">
+                  Strike {formatUsd(row.strike)}
+                  {house ? ` · last ${formatUsd(house.last)}` : ""} · premium ${row.premium.toFixed(2)}
+                </p>
+              </div>
+              <button type="button" disabled={busy} onClick={() => onClose(row)} className="min-h-9 shrink-0 rounded-full border border-white/15 px-3 text-xs">
+                Close
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

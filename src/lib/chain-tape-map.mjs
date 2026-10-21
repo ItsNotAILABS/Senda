@@ -14,7 +14,24 @@ export const SOLANA_DECIMALS = {
   "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm": 9,
   DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263: 5,
   EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm: 6,
-  CrAr4RRJMBVwRsZtT62pEhfA9H5utymC2mVx8e7FreP2: 8,
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: 6,
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": 6,
+  orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE: 6,
+  HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3: 6,
+  jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL: 9,
+  "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": 6,
+  rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof: 8,
+  "85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ": 6,
+  DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7: 6,
+  hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux: 8,
+  KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS: 6,
+  "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv": 6,
+  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr": 9,
+  "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN": 6,
+  MEFNBXixkEbait3xn9bkm8WsJzXtVsaJEn4c8Sam21u: 6,
+  ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82: 6,
+  BZLbGTNCSFfoth2GYDtwr7e4imWzpR5jqcUuGEwr646K: 8,
+  TNSRxcUxoT9xBG3de7PiJyTDYu7kskLqcpddxnEJAS6: 9,
 };
 
 export const SOLANA_MORE = [
@@ -27,7 +44,24 @@ export const SOLANA_MORE = [
   ["INF", "Sanctum INF", "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm"],
   ["BONK", "Bonk", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"],
   ["WIF", "dogwifhat", "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"],
-  ["WMON", "Wrapped MON", "CrAr4RRJMBVwRsZtT62pEhfA9H5utymC2mVx8e7FreP2"],
+  ["JUP", "Jupiter", "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"],
+  ["RAY", "Raydium", "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R"],
+  ["ORCA", "Orca", "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE"],
+  ["PYTH", "Pyth", "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3"],
+  ["JTO", "Jito", "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL"],
+  ["JLP", "Jupiter LP", "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4"],
+  ["RENDER", "Render", "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof"],
+  ["W", "Wormhole", "85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ"],
+  ["DRIFT", "Drift", "DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7"],
+  ["HNT", "Helium", "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux"],
+  ["KMNO", "Kamino", "KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS"],
+  ["PENGU", "Pudgy Penguins", "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv"],
+  ["POPCAT", "Popcat", "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"],
+  ["TRUMP", "Official Trump", "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN"],
+  ["ME", "Magic Eden", "MEFNBXixkEbait3xn9bkm8WsJzXtVsaJEn4c8Sam21u"],
+  ["BOME", "BOOK OF MEME", "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82"],
+  ["IO", "io.net", "BZLbGTNCSFfoth2GYDtwr7e4imWzpR5jqcUuGEwr646K"],
+  ["TNSR", "Tensor", "TNSRxcUxoT9xBG3de7PiJyTDYu7kskLqcpddxnEJAS6"],
 ];
 
 export const CHAINS = [
@@ -51,7 +85,6 @@ export const CHAINS = [
   ["ATOM", "Cosmos", "Cosmos", "cosmos"],
   ["DOGE", "Dogecoin", "Dogecoin", "dogecoin"],
   ["LTC", "Litecoin", "Litecoin", "litecoin"],
-  ["MON", "Monad", "Monad", "monad"],
 ];
 
 function num(value) {

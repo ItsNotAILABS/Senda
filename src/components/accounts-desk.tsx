@@ -101,13 +101,10 @@ export function AccountsDesk() {
         <div className="min-w-0">
           <p className="font-mono text-xs tracking-[0.22em] text-accent uppercase">Accounts</p>
           <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-5xl">
-            Phantom signs Solana. Not us.
+            One wallet. You sign.
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted sm:text-base">
-            Paper chips on this pit stay paper. Tessera T-Tokens and PreStocks
-            trade permissionlessly — no KYC, no minimums. Live size is a
-            Jupiter swap from the Phantom you link. We do not hold SOL or
-            tokens, and live routing is not armed yet.
+            Phantom holds the assets. Jupiter routes a swap when you sign. Senda does not hold SOL or the tokens.
           </p>
         </div>
       </div>
@@ -115,7 +112,7 @@ export function AccountsDesk() {
       <div className="grid gap-2 rounded-xl bg-elevated p-4 shadow-panel sm:grid-cols-3">
         <Stat label="Cash" value="Senda wallet" />
         <Stat label="Phantom" value={sol ? shortAddress(sol.address) : "Not linked"} />
-        <Stat label="Live path" value="Jupiter · not armed" />
+        <Stat label="Live path" value="Jupiter · you sign" />
       </div>
 
       <article className="flex flex-col rounded-2xl bg-elevated p-5 shadow-panel sm:p-6">
@@ -126,11 +123,11 @@ export function AccountsDesk() {
         <p className="mt-2 text-sm leading-relaxed text-muted">
           T-Kalshi, T-OpenAI, T-SpaceX and the PreStocks book live on Solana
           as Token-2022 mints. You sign in Phantom. Jupiter routes the swap.
-          The Senda wallet is paper until routing is armed.
+          Senda never holds the key.
         </p>
         <ol className="mt-4 space-y-2 text-sm text-muted">
           <li>01 · Connect Phantom (or any injected Solana wallet).</li>
-          <li>02 · Buys in Invest debit Senda USD. Paper until routing is armed.</li>
+          <li>02 · A buy asks Phantom to sign a Jupiter swap. The key never comes here.</li>
           <li>03 · “Swap on Jupiter” opens USDC → mint in your wallet. We never see the key.</li>
         </ol>
         <div className="mt-5">

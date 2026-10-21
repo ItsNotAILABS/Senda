@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
 import { AccountDetails } from "@/components/account-details";
-import { MoneyBar } from "@/components/money-bar";
-import { mastercardStatus, payOneTimeCard, spinOneTimeCard } from "@/lib/mastercard-vcn";
 import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
@@ -68,16 +66,16 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
 
   return (
     <main className="senda-rise space-y-3 px-3 py-3 lg:px-4">
+      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+
       <TabLead
-        kicker="Shop"
-        title="A number for the store"
-        accent="not the token."
-        line="Receive account details through verified onboarding, or pay a Solana address in USDC."
+        kicker="Pay"
+        title="One ticket."
+        accent="USDC."
+        line="Pay, payroll, or collect. The size is the order. Phantom signs. A Visa is not issued here."
         live={["Account details", "USDC address", "One charge"]}
-        coming={["Provider account after approval", "A Rain Visa"]}
+        coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
-      <MoneyBar />
-      <MastercardSpin />
 
       <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
 
@@ -91,8 +89,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
-
-      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
 
       <CardRails />
 
@@ -321,6 +317,7 @@ function CheckoutPay({
               )}
             </button>
           ) : null}
+          <p className="basis-full text-xs leading-snug text-white/70">A store will not charge the number.</p>
         </div>
       </div>
 
@@ -372,7 +369,7 @@ function PayOnChain({ owner }: { owner: string }) {
         <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Solana Pay</p>
         <h2 className="mt-1 text-lg">Pay the address in USDC</h2>
         <p className="mt-1 max-w-xl text-sm text-muted">
-          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number above is a cap on this browser. This one moves on mainnet.
+          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number below is a cap on this browser. This one moves on mainnet.
         </p>
       </div>
       <div className="grid gap-2">
@@ -429,138 +426,6 @@ function McMark() {
     <span className="font-mono text-[11px] tracking-[0.16em] text-white/70" aria-label="Senda number">
       SENDA
     </span>
-  );
-}
-
-type SpunCard = { accountId: string; last4: string; expiry: string; pan: string; cvv: string; masked: boolean };
-
-function MastercardSpin() {
-  const [ready, setReady] = useState<boolean | null>(null);
-  const [missing, setMissing] = useState<string[]>([]);
-  const [usd, setUsd] = useState("50");
-  const [hours, setHours] = useState(24);
-  const [card, setCard] = useState<SpunCard | null>(null);
-  const [supplier, setSupplier] = useState("");
-  const [debtorName, setDebtorName] = useState("");
-  const [country, setCountry] = useState("US");
-  const [postalCode, setPostalCode] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    void mastercardStatus()
-      .then((row) => {
-        if (!live) return;
-        setReady(row.ready);
-        setMissing(row.missing);
-      })
-      .catch(() => {
-        if (live) setReady(false);
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  async function spin() {
-    setBusy(true);
-    try {
-      const spun = await spinOneTimeCard({ data: { spendUsd: Number(usd), hours } });
-      if ("error" in spun && spun.error) {
-        toast.error(spun.error);
-        return;
-      }
-      if (!("card" in spun) || !spun.card) {
-        toast.error("Mastercard did not return a card.");
-        return;
-      }
-      setCard(spun.card);
-      toast.success(spun.card.masked ? "Mastercard returned the last four only." : "One-time card. Copy it now. It is not saved.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Mastercard did not spin a card.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function pay() {
-    if (!card?.accountId) return;
-    const email = supplier.includes("@") ? supplier.trim() : undefined;
-    const supplierId = email ? undefined : supplier.trim();
-    setBusy(true);
-    try {
-      const paid = await payOneTimeCard({
-        data: {
-          accountId: card.accountId,
-          spendUsd: Number(usd),
-          supplierId,
-          email,
-          debtorName,
-          country,
-          postalCode,
-        },
-      });
-      if ("error" in paid && paid.error) toast.error(paid.error);
-      else if ("payment" in paid && paid.payment) toast.success(paid.payment.status || paid.payment.paymentId || "Mastercard accepted the payment.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Mastercard did not take the payment.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className={cn(PANEL, "p-4")}>
-      <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">Mastercard</p>
-      <h2 className="mt-1 text-lg font-semibold">One charge, spun by Mastercard</h2>
-      <p className="mt-2 max-w-2xl text-sm text-muted">
-        Commercial Connect creates the virtual card with a single authorization. The number, expiry, and security code are shown once so they can be typed on another site. Paying a supplier from here is a second call, and only when that call is accepted.
-      </p>
-      {ready === false ? (
-        <p className="mt-3 text-sm text-down">Commercial Connect is not connected{missing.length ? ` (${missing.join(", ")})` : ""}. This desk will not mint a number and call it a Mastercard.</p>
-      ) : null}
-      <div className="mt-4 grid gap-3 sm:grid-cols-[8rem_auto_auto] sm:items-end">
-        <label className="block">
-          <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Cap</span>
-          <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none" />
-        </label>
-        <div className="flex gap-2">
-          {[1, 24, 168].map((n) => (
-            <button key={n} type="button" onClick={() => setHours(n)} className={hours === n ? "min-h-12 rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg" : "min-h-12 rounded-full bg-white/10 px-3 text-sm"}>
-              {n === 1 ? "1 hour" : n === 24 ? "1 day" : "7 days"}
-            </button>
-          ))}
-        </div>
-        <button type="button" disabled={busy || ready === false} onClick={() => void spin()} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-40">
-          Spin a one-time card
-        </button>
-      </div>
-      {card ? (
-        <div className="mt-4 rounded-2xl bg-black/30 p-4">
-          <p className="font-mono text-lg tracking-[0.14em]">{card.masked ? `•••• ${card.last4 || "????"}` : card.pan.replace(/(\d{4})(?=\d)/g, "$1 ")}</p>
-          <p className="mt-2 font-mono text-sm text-muted">
-            {card.expiry || "—"} {card.masked ? "" : card.cvv}
-          </p>
-          {card.masked ? <p className="mt-2 text-sm text-muted">Mastercard masked the number. The project has to return the full card. Nothing was invented to fill the gap.</p> : (
-            <p className="mt-2 text-sm text-muted">Type this on a site that takes Mastercard. It leaves this page when you leave.</p>
-          )}
-          {!card.masked ? (
-            <button type="button" className="mt-3 text-sm font-semibold text-accent" onClick={() => void navigator.clipboard.writeText(`${card.pan} ${card.expiry} ${card.cvv}`).then(() => toast.success("Copied for this checkout."))}>
-              Copy number, expiry, and code
-            </button>
-          ) : null}
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            <input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="Supplier id or email" className="min-h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm outline-none" />
-            <input value={debtorName} onChange={(e) => setDebtorName(e.target.value)} placeholder="Your name" className="min-h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm outline-none" />
-            <input value={country} onChange={(e) => setCountry(e.target.value.toUpperCase())} placeholder="Country" className="min-h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm outline-none" />
-            <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="Postal code" className="min-h-12 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm outline-none" />
-          </div>
-          <button type="button" disabled={busy} onClick={() => void pay()} className="mt-3 min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-black disabled:opacity-40">
-            Pay this supplier from here
-          </button>
-        </div>
-      ) : null}
-    </section>
   );
 }
 
@@ -623,7 +488,7 @@ function CardRails() {
         </div>
         <div>
           <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">3 · A real swipe</p>
-          <p className="mt-1 text-sm text-muted">A store clears a number from an issuer. The one-time card above is Mastercard Commercial Connect. The desk cash number below is not. Rain and Bridge still need their own program.</p>
+          <p className="mt-1 text-sm text-muted">A store clears only a number from an issuer. The pipes under Solana cards are Rain and Bridge. Both need a program and KYC. There is no button for that yet.</p>
         </div>
       </div>
       <div className="mt-4 overflow-x-auto">

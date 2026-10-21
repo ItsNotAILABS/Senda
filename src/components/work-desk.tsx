@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
-import { WorkJobs } from "@/components/work-jobs";
+import { WorkHub } from "@/components/work-hub";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 
@@ -66,24 +65,25 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
     <div className="space-y-3 px-3 py-3 lg:px-4">
       <TabLead
         kicker="Work"
-        title="Your sheet"
-        accent="next to the book."
-        line="Post a job and pay it in USDC. The sheet stays next to the live print."
-        live={["Pay a job in USDC. You sign.", "The live sheet, a note on every name."]}
-        coming={["A shared sheet on someone else's computer."]}
+        title="Work, then get paid."
+        accent="USDC to their wallet."
+        line="Post what you need, or offer to do it. A person or one of your agents takes it. Paying is a USDC transfer. The token book stays on PreStocks."
+        live={["The board is shared on this app.", "Take it, then pay the wallet that did the work."]}
+        coming={["Work that pays in a PreStock instead of USDC."]}
       />
-      <MoneyBar />
-      <WorkJobs symbol={name?.symbol ?? ""} />
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
+      <WorkHub />
+      <details className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <summary className="cursor-pointer text-sm font-semibold">Name notes</summary>
+        <div className="mt-4">
         {name ? (
           <>
             <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
             <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-4xl tracking-tight lg:text-5xl">{name.symbol}</h2>
+                <h2 className="text-2xl font-semibold tracking-tight">{name.symbol}</h2>
                 <p className="mt-1 text-sm text-muted">{name.name}</p>
               </div>
-              <p className="font-mono text-4xl tabular-nums">{formatUsd(name.last)}</p>
+              <p className="font-mono text-2xl tabular-nums">{formatUsd(name.last)}</p>
             </div>
             <p className="mt-2 font-mono text-sm tabular-nums text-muted">
               Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
@@ -149,7 +149,8 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
             </tbody>
           </table>
         </div>
-      </section>
+      </div>
+      </details>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>

@@ -1,24 +1,12 @@
 /** Listed tokenized equities (xStocks) and the Kamino market that lends against them. */
 
 import { createServerFn } from "@tanstack/react-start";
-import { FILL_PROBE_USD } from "@/lib/jup-fill.mjs";
-import { fillableMints } from "@/lib/jup-exec";
-import { mintDecimalsExact } from "@/lib/phantom";
+import { z } from "zod";
 
 export const XSTOCKS_MARKET = "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua";
 export const KAMINO_MARKET = `https://kamino.com/markets/${XSTOCKS_MARKET}`;
 const ASSETS = "https://api.xstocks.fi/api/v2/public/assets";
 const METRICS = `https://api.kamino.finance/kamino-market/${XSTOCKS_MARKET}/reserves/metrics`;
-const VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified";
-const SEARCH = "https://lite-api.jup.ag/tokens/v2/search?query=xStock&limit=100";
-const HEADERS = { accept: "application/json", "user-agent": "Senda" };
-const CACHE_MS = 3 * 60_000;
-
-/** PreStock SPVs. Same mints as the house seeds. Not shares of those companies. */
-const PRE_IPO = [
-  { symbol: "OPENAI", name: "OpenAI", mint: "PreweJYECqtQwBtpxHL171nL2K6umo692gTm7Q3rpgF" },
-  { symbol: "SPACEX", name: "SpaceX", mint: "PreANxuXjsy2pvisWWMNB6YaJNzr7681wJJr2rHsfTh" },
-] as const;
 
 export type ListedStock = {
   symbol: string;
@@ -28,9 +16,13 @@ export type ListedStock = {
   halted: boolean;
   hours: string;
   period: string;
-  /** xStock is a tokenized equity. spv is PreStock exposure, not a share. */
-  kind: "xstock" | "spv";
-  decimals: number;
+  underlying: string;
+  exchange: string;
+  isin: string;
+  nextChange: string;
+  minOrder: number;
+  maxOrder: number;
+  logo: string;
 };
 
 export type StockReserve = {
@@ -43,35 +35,7 @@ export type StockReserve = {
   borrowUsd: number;
 };
 
-export type EquityBook = {
-  stocks: ListedStock[];
-  reserves: StockReserve[];
-  /** Unhalted xStocks catalog rows that have a Solana mint. Null when that catalog did not load. */
-  universe: number | null;
-  probeUsd: number;
-};
-
-type CatalogNode = {
-  symbol?: string;
-  name?: string;
-  isTradingHalted?: boolean;
-  trading?: { tradingHoursMode?: string; openNow?: boolean; currentPeriod?: string };
-  deployments?: Array<{ network?: string; address?: string }>;
-};
-
-type CatalogMeta = {
-  symbol: string;
-  name: string;
-  open: boolean;
-  halted: boolean;
-  hours: string;
-  period: string;
-};
-
-type JupToken = { id?: string; symbol?: string; name?: string; decimals?: number; tags?: string[] };
-
-let bookCache: { at: number; book: EquityBook } | null = null;
-let inflight: Promise<EquityBook> | null = null;
+export type EquityBook = { stocks: ListedStock[]; reserves: StockReserve[] };
 
 function hoursLabel(mode: string | undefined): string {
   if (mode === "TwentyFourFive") return "24/5";
@@ -79,66 +43,55 @@ function hoursLabel(mode: string | undefined): string {
   return mode || "session";
 }
 
-function solanaMint(node: CatalogNode): string | null {
-  for (const dep of node.deployments || []) {
-    if (String(dep.network || "").toLowerCase() === "solana" && dep.address) return dep.address;
-  }
-  return null;
+type AssetNode = {
+  name?: string;
+  symbol?: string;
+  isin?: string;
+  underlyingSymbol?: string;
+  logo?: string;
+  isTradingHalted?: boolean;
+  trading?: {
+    tradingHoursMode?: string;
+    openNow?: boolean;
+    currentPeriod?: string;
+    nextChangeAt?: string;
+    exchange?: { abbreviation?: string };
+    limitsPerPeriod?: Record<string, { minOrderFiatValue?: number; maxOrderFiatValue?: number }>;
+  };
+  deployments?: Array<{ network?: string; address?: string }>;
+};
+
+function stockFromNode(n: AssetNode, fallbackMint: string): ListedStock | null {
+  const sol = n.deployments?.find((d) => d.network === "Solana" && d.address);
+  const mint = sol?.address || fallbackMint;
+  if (!n.symbol || !mint) return null;
+  const period = n.trading?.currentPeriod || "";
+  const limits = n.trading?.limitsPerPeriod?.[period];
+  return {
+    symbol: n.symbol,
+    name: n.name || n.symbol,
+    mint,
+    open: Boolean(n.trading?.openNow),
+    halted: Boolean(n.isTradingHalted),
+    hours: hoursLabel(n.trading?.tradingHoursMode),
+    period,
+    underlying: n.underlyingSymbol || "",
+    exchange: n.trading?.exchange?.abbreviation || "",
+    isin: n.isin || "",
+    nextChange: n.trading?.nextChangeAt || "",
+    minOrder: Number(limits?.minOrderFiatValue) || 0,
+    maxOrder: Number(limits?.maxOrderFiatValue) || 0,
+    logo: n.logo || "",
+  };
 }
 
-function takeTagged(rows: unknown, into: Map<string, { symbol: string; name: string; decimals: number }>) {
-  if (!Array.isArray(rows)) return;
-  for (const row of rows as JupToken[]) {
-    if (!row?.id || !row.symbol || !row.tags?.includes("xstocks")) continue;
-    into.set(row.id, {
-      symbol: row.symbol,
-      name: row.name || row.symbol,
-      decimals: Number.isInteger(row.decimals) ? (row.decimals as number) : 8,
-    });
-  }
-}
-
-async function jupiterXStocks(): Promise<Map<string, { symbol: string; name: string; decimals: number }>> {
-  const into = new Map<string, { symbol: string; name: string; decimals: number }>();
-  const [verified, search] = await Promise.all([
-    fetch(VERIFIED, { headers: HEADERS }),
-    fetch(SEARCH, { headers: HEADERS }),
+export async function fetchEquityBook(): Promise<EquityBook> {
+  const [metricsRes, assetsRes] = await Promise.all([
+    fetch(METRICS, { headers: { accept: "application/json", "user-agent": "Senda" } }),
+    fetch(ASSETS, { headers: { accept: "application/json", "user-agent": "Senda" } }),
   ]);
-  if (verified.ok) takeTagged(await verified.json(), into);
-  if (search.ok) takeTagged(await search.json(), into);
-  if (into.size === 0) throw new Error("Jupiter xStocks list did not load.");
-  return into;
-}
-
-async function unhaltedCatalog(): Promise<{ universe: number; byMint: Map<string, CatalogMeta> }> {
-  const byMint = new Map<string, CatalogMeta>();
-  let universe = 0;
-  for (let page = 0; page < 40; page += 1) {
-    const res = await fetch(`${ASSETS}?isTradingHalted=false&page=${page}&pageSize=100`, { headers: HEADERS });
-    if (!res.ok) throw new Error(`xStocks ${res.status}`);
-    const body = (await res.json()) as { nodes?: CatalogNode[]; page?: { hasNextPage?: boolean } };
-    const nodes = body.nodes || [];
-    for (const node of nodes) {
-      const mint = solanaMint(node);
-      if (!mint) continue;
-      universe += 1;
-      byMint.set(mint, {
-        symbol: node.symbol || mint.slice(0, 4),
-        name: node.name || node.symbol || mint.slice(0, 4),
-        open: Boolean(node.trading?.openNow),
-        halted: Boolean(node.isTradingHalted),
-        hours: hoursLabel(node.trading?.tradingHoursMode),
-        period: node.trading?.currentPeriod || "",
-      });
-    }
-    if (!body.page?.hasNextPage || nodes.length === 0) break;
-  }
-  return { universe, byMint };
-}
-
-async function kaminoReserves(): Promise<StockReserve[]> {
-  const metricsRes = await fetch(METRICS, { headers: HEADERS });
-  if (!metricsRes.ok) return [];
+  if (!metricsRes.ok) throw new Error(`Kamino ${metricsRes.status}`);
+  if (!assetsRes.ok) throw new Error(`xStocks ${assetsRes.status}`);
   const metrics = (await metricsRes.json()) as Array<{
     liquidityToken?: string;
     liquidityTokenMint?: string;
@@ -148,7 +101,7 @@ async function kaminoReserves(): Promise<StockReserve[]> {
     totalSupplyUsd?: string;
     totalBorrowUsd?: string;
   }>;
-  return metrics
+  const reserves: StockReserve[] = metrics
     .filter((m) => m.liquidityToken && m.liquidityTokenMint)
     .map((m) => ({
       symbol: m.liquidityToken as string,
@@ -159,68 +112,77 @@ async function kaminoReserves(): Promise<StockReserve[]> {
       supplyUsd: Number(m.totalSupplyUsd) || 0,
       borrowUsd: Number(m.totalBorrowUsd) || 0,
     }));
-}
 
-async function buildEquityBook(): Promise<EquityBook> {
-  const [reserves, tagged, catalog] = await Promise.all([
-    kaminoReserves(),
-    jupiterXStocks(),
-    unhaltedCatalog().catch(() => null),
-  ]);
-  const candidates = [...tagged.keys()].filter((mint) => (catalog ? catalog.byMint.has(mint) : true));
-  const fillable = await fillableMints(candidates, FILL_PROBE_USD);
-  const stocks: ListedStock[] = candidates
-    .filter((mint) => fillable.has(mint))
-    .map((mint) => {
-      const token = tagged.get(mint)!;
-      const meta = catalog?.byMint.get(mint);
-      return {
-        symbol: meta?.symbol || token.symbol,
-        name: meta?.name || token.name,
-        mint,
-        open: meta?.open ?? false,
-        halted: false,
-        hours: meta?.hours || "session",
-        period: meta?.period || "",
-        kind: "xstock" as const,
-        decimals: token.decimals,
-      };
-    })
-    .sort((a, b) => a.symbol.localeCompare(b.symbol));
-
-  const spvFill = await fillableMints(PRE_IPO.map((row) => row.mint), FILL_PROBE_USD);
-  for (const row of PRE_IPO) {
-    if (!spvFill.has(row.mint)) continue;
-    const decimals = (await mintDecimalsExact(row.mint)) ?? 6;
-    stocks.push({
-      symbol: row.symbol,
-      name: row.name,
-      mint: row.mint,
-      open: true,
+  const body = (await assetsRes.json()) as { nodes?: AssetNode[] } | AssetNode[];
+  const nodes = Array.isArray(body) ? body : body.nodes || [];
+  const bySymbol = new Map<string, ListedStock>();
+  for (const node of nodes) {
+    const row = stockFromNode(node, "");
+    if (row) bySymbol.set(row.symbol, row);
+  }
+  for (const r of reserves) {
+    if (r.symbol === "USDC" || bySymbol.has(r.symbol)) continue;
+    bySymbol.set(r.symbol, {
+      symbol: r.symbol,
+      name: r.symbol,
+      mint: r.mint,
+      open: false,
       halted: false,
-      hours: "SPV",
+      hours: "24/5",
       period: "",
-      kind: "spv",
-      decimals,
+      underlying: "",
+      exchange: "",
+      isin: "",
+      nextChange: "",
+      minOrder: 0,
+      maxOrder: 0,
+      logo: "",
     });
   }
-
-  return { stocks, reserves, universe: catalog?.universe ?? null, probeUsd: FILL_PROBE_USD };
+  const stocks = [...bySymbol.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  return { stocks, reserves };
 }
 
-export async function fetchEquityBook(): Promise<EquityBook> {
-  if (bookCache && Date.now() - bookCache.at < CACHE_MS) return bookCache.book;
-  if (!inflight) {
-    inflight = buildEquityBook()
-      .then((book) => {
-        bookCache = { at: Date.now(), book };
-        return book;
-      })
-      .finally(() => {
-        inflight = null;
-      });
+export const getEquityBook = createServerFn({ method: "GET" }).handler(async () => {
+  const book = await fetchEquityBook();
+  try {
+    const { registerOfferings } = await import("./offering-book");
+    await registerOfferings(
+      book.stocks
+        .filter((row) => row.mint && row.symbol)
+        .map((row) => ({
+          id: `listed:${row.mint}`,
+          family: "listed",
+          symbol: row.symbol,
+          name: row.name || row.symbol,
+          chain: "Solana",
+          mint: row.mint,
+          venue: "xStock",
+          signPath: "jupiter",
+          status: row.open ? "open" : "listed",
+          note: row.open ? "A listed share. The wallet signs." : "Listed, not open for a swap right now.",
+        })),
+    );
+  } catch {
+    /* The equity book still returns. */
   }
-  return inflight;
-}
+  return book;
+});
 
-export const getEquityBook = createServerFn({ method: "GET" }).handler(async () => fetchEquityBook());
+/** Jupiter last for listed mints. Used to price a digital the same way a PreStock last does. */
+export const listedMarks = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.array(z.string().min(32).max(48)).max(30).parse(input))
+  .handler(async ({ data }) => {
+    const r = await fetch(`https://api.jup.ag/price/v3?ids=${data.join(",")}`, {
+      headers: { accept: "application/json", "user-agent": "Senda" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) return {} as Record<string, number>;
+    const raw = (await r.json()) as Record<string, { usdPrice?: number }>;
+    const out: Record<string, number> = {};
+    for (const mint of data) {
+      const n = Number(raw[mint]?.usdPrice);
+      if (n > 0) out[mint] = n;
+    }
+    return out;
+  });

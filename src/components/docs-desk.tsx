@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { OUTSIDE } from "@/lib/outside-paper";
 
 type Page = { id: string; title: string; body: { h: string; p: string[] }[] };
 
@@ -24,6 +25,42 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
             h: "What it is not",
             p: [
               "Not a broker. Not a bank. Not a card network. Not a custodian. The private key never enters Senda. If a wallet is not installed in this browser, it is not offered.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "digitals",
+        title: "Digital contracts",
+        body: [
+          {
+            h: "What you are buying",
+            p: [
+              "A digital contract on a name. You post a debit in USDC. You do not receive the shares. The debit sits in a premium account this browser holds until you close. Close sends that debit back to the Phantom that signed. A call names the upside above the strike. A put names the downside below it. Neither one pays more than the debit, because no one else posted a payout. The strike, the size, and the debit are on the memo of the transfer.",
+            ],
+          },
+          {
+            h: "The ticket",
+            p: [
+              "After the fill the blotter shows the side, the name, the debit, the size, the strike, last, when it opened, when it ends, and the premium account. That account is not another trader. It is the USDC account holding your debit so the ticket can be closed. If you signed on a phone, the close is on that phone.",
+            ],
+          },
+          {
+            h: "The price",
+            p: [
+              "Last is S. Strike is K. Time is the tenor as a fraction of a year, floored at one minute. Sigma is the absolute 24h move times the square root of 365, floored at 35% and capped at 250%, because a pre-IPO print is wide. The fair value is N(d2) for a call and N(-d2) for a put, with d2 = (ln(S/K) − ½ σ² t) / (σ √t). The ask is that probability plus a 4% vig, clamped between 3¢ and 98¢. Strikes sit 10%, 5%, and 2% around last, plus last itself and the SPV mark when there is one.",
+            ],
+          },
+          {
+            h: "A pocket",
+            p: [
+              "A pocket is a contract with USDC in it. You create it from Phantom. Time pays a named address after the clock. A constraint pays when last is through the line you set. A decision pays when you release it. Cash can move from one pocket into another. The key stays in the browser that created it, so that browser can also take the money back. The rule is not a Solana program. It is this desk.",
+            ],
+          },
+          {
+            h: "Above the strike, and not",
+            p: [
+              "A call above the strike does not pay a profit. A put below the strike does not pay a profit. The premium account only holds the debit you sent. There is no other side that posted a payout. Close sends that same debit back, so the P&L is zero. If you do not close, the debit stays in the premium account. It is still yours. It was not taken by another trader.",
             ],
           },
         ],
@@ -254,6 +291,7 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
       },
     ],
   },
+  OUTSIDE,
   {
     id: "limits",
     label: "Limits",
@@ -278,7 +316,7 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "Do not read these as done",
             p: [
-              "A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id.",
+              "A brokerage account. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id. Margin on a book Senda matches is not built. A Base perp uses Avantis margin, and the wallet signs their contract. The liquidation on the ticket is a preview.",
             ],
           },
         ],

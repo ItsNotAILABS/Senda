@@ -5,7 +5,6 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { fillableMints } from "@/lib/jup-exec";
 
 export type HouseVenue = "tessera" | "prestocks";
 
@@ -122,6 +121,12 @@ export function jupiterSwap(mint: string): string {
   return `https://jup.ag/swap/USDC-${mint}`;
 }
 
+/** xAI token discontinued after the SpaceX deal. Off the book. */
+function skippedName(symbol: string, name = "", url = ""): boolean {
+  const blob = `${symbol} ${name} ${url}`.toUpperCase();
+  return /\bXAI\b/.test(blob) && !blob.includes("SPACEX");
+}
+
 export function sectorFor(symbol: string, fallback = "Pre-IPO"): string {
   const s = symbol.toUpperCase().replace(/[^A-Z]/g, "");
   if (s.includes("KALSHI") || s.includes("POLY")) return "Prediction Markets";
@@ -136,13 +141,7 @@ export function sectorFor(symbol: string, fallback = "Pre-IPO"): string {
     return "Artificial Intelligence";
   }
   if (s.includes("KRAKEN")) return "Crypto";
-  if (s.includes("OURA")) return "Health";
-  if (s.includes("XAI") || s.includes("OPENAI") || s.includes("ANTHROP")) return "Artificial Intelligence";
   if (s.includes("SARON") || s.includes("CHAOS")) return "Defense";
-  if (s.includes("APPTRON") || s.includes("APTRNK")) return "Robotics";
-  if (s.includes("ADDEPAR")) return "Infrastructure";
-  if (s.includes("BLABLA")) return "Consumer";
-  if (s.includes("IMPOSSIBLE") || s.includes("IMFOOD")) return "Food";
   return fallback;
 }
 
@@ -176,7 +175,7 @@ async function jupPrices(mints: string[]): Promise<Record<string, JupRow>> {
 
 function chgFrac(v: number | undefined): number | null {
   if (v == null || !Number.isFinite(v)) return null;
-  return Math.abs(v) > 1 ? v / 100 : v;
+  return v / 100;
 }
 
 function premium(last: number, mark: number): number | null {
@@ -356,36 +355,6 @@ const SEEDS: Seed[] = [
     sector: "Robotics",
     description: "SPV-backed PreStock tracking Figure AI. Economic exposure only — not a share.",
   },
-  {
-    venue: "prestocks",
-    mint: "Pre9atBqkocK1QngFy7Q7zvyQictEFpXdLi6bZ2qnYy",
-    symbol: "OURA",
-    name: "Oura PreStocks",
-    mark: 71.25,
-    last: 69.9,
-    valuation: 14_631_069_727,
-    holders: 0,
-    liquidity: 44854,
-    change24h: -0.0133,
-    url: "https://www.prestocks.com/oura",
-    sector: "Health",
-    description: "SPV-backed PreStock tracking Oura. Economic exposure only — not a share.",
-  },
-  {
-    venue: "prestocks",
-    mint: "PreC1KtJ1sBPPqaeeqL6Qb15GTLCYVvyYEwxhdfTwfx",
-    symbol: "XAI",
-    name: "xAI PreStocks",
-    mark: 75.46,
-    last: 89.53,
-    valuation: 250_000_000_000,
-    holders: 0,
-    liquidity: 185,
-    change24h: 0.0187,
-    url: "https://www.prestocks.com/xai",
-    sector: "Artificial Intelligence",
-    description: "SPV-backed PreStock tracking xAI. The pool is thin. Economic exposure only — not a share.",
-  },
 ];
 
 const SEED_MINTS = new Set(SEEDS.map((s) => s.mint));
@@ -426,8 +395,6 @@ function rank(s: HouseListing): number {
   else if (blob.includes("NEURAL")) name = 6;
   else if (blob.includes("ANDURIL")) name = 7;
   else if (blob.includes("FIGURE")) name = 8;
-  else if (blob.includes("OURA")) name = 9;
-  else if (blob.includes("XAI")) name = 10;
   return venueBoost + name;
 }
 
@@ -450,6 +417,7 @@ function tesseraRows(raw: unknown, px: Record<string, JupRow>): HouseListing[] {
     if (!mint) continue;
     const symbol = String(r.symbol ?? r.code ?? "T");
     const name = String(r.name ?? symbol);
+    if (skippedName(symbol, name)) continue;
     const mark = n(r.markPrice);
     const last = n(px[mint]?.usdPrice) || mark;
     out.push({
@@ -486,6 +454,7 @@ function prestocksRows(raw: unknown, px: Record<string, JupRow>): HouseListing[]
     if (!mint) continue;
     const symbol = String(r.symbol ?? "");
     const name = String(r.name ?? symbol);
+    if (skippedName(symbol, name, String(r.external_url ?? ""))) continue;
     const mark = n(r.markPrice);
     const token = n(r.tokenPrice) || n(px[mint]?.usdPrice) || mark;
     const desc = String(r.description ?? "").split("\n\n")[0] ?? "";
@@ -540,18 +509,39 @@ export async function fetchHouse(): Promise<HouseListing[]> {
     const live = [...tesseraRows(tess, px), ...prestocksRows(pre, px)];
     const have = new Set(live.map((r) => r.mint));
     const rows = sortHouse([...live, ...fillSeeds(have, px)]);
-    const fillable = await fillableMints(rows.map((row) => row.mint));
-    const listed = rows.filter((row) => fillable.has(row.mint));
-    cache = { at: Date.now(), rows: listed };
-    return listed;
+    const filled = rows.length ? rows : HOUSE_FALLBACK;
+    cache = { at: Date.now(), rows: filled };
+    return filled;
   } catch {
-    return [];
+    return HOUSE_FALLBACK;
   }
 }
 
-export const getHouse = createServerFn({ method: "GET" }).handler(
-  async (): Promise<HouseListing[]> => fetchHouse(),
-);
+export const getHouse = createServerFn({ method: "GET" }).handler(async (): Promise<HouseListing[]> => {
+  const rows = await fetchHouse();
+  try {
+    const { registerOfferings } = await import("./offering-book");
+    await registerOfferings(
+      rows
+        .filter((row) => row.mint && row.symbol)
+        .map((row) => ({
+          id: `name:${row.mint}`,
+          family: "name",
+          symbol: row.symbol,
+          name: row.name,
+          chain: "Solana",
+          mint: row.mint,
+          venue: row.venue,
+          signPath: "prestock",
+          status: row.last > 0 ? "open" : "listed",
+          note: "The wallet signs the swap. The token stays in the wallet.",
+        })),
+    );
+  } catch {
+    /* A missed write does not hide the book. */
+  }
+  return rows;
+});
 
 export const getHouseOne = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ id: z.string().min(1).max(48) }).parse(input))

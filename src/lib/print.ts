@@ -26,6 +26,7 @@ async function topPool(mint: string): Promise<string> {
   if (hit && Date.now() - hit.at < 120_000) return hit.pool;
   const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`, {
     headers: { accept: "application/json", "user-agent": "Senda" },
+    signal: AbortSignal.timeout(7000),
   });
   if (res.status === 429) return "";
   if (!res.ok) throw new Error(`Pools ${res.status}`);
@@ -35,25 +36,64 @@ async function topPool(mint: string): Promise<string> {
   return pool;
 }
 
+function llamaPeriod(tf: PrintTf): { period: string; step: number; limit: number } {
+  if (tf === "15m") return { period: "15m", step: 15 * 60, limit: 96 };
+  if (tf === "4H") return { period: "4h", step: 4 * 3600, limit: 60 };
+  if (tf === "1D") return { period: "1d", step: 86400, limit: 90 };
+  return { period: "1h", step: 3600, limit: 72 };
+}
+
+/** Real prints from DefiLlama. Each point is a traded price, not a flat line. */
+async function llamaCandles(mint: string, tf: PrintTf): Promise<PrintBar[]> {
+  const q = llamaPeriod(tf);
+  const now = Math.floor(Date.now() / 1000);
+  const res = await fetch(
+    `https://coins.llama.fi/chart/solana:${mint}?start=${now - q.step * (q.limit + 2)}&span=${q.limit}&period=${q.period}`,
+    { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(8000) },
+  );
+  if (!res.ok) return [];
+  const json = (await res.json()) as { coins?: Record<string, { prices?: Array<{ timestamp?: number; price?: number }> }> };
+  const prices = Object.values(json.coins ?? {})[0]?.prices ?? [];
+  const bars: PrintBar[] = [];
+  for (const point of prices) {
+    const px = Number(point.price);
+    const t = Number(point.timestamp) * 1000;
+    if (!(px > 0) || !(t > 0)) continue;
+    const prev = bars.length ? bars[bars.length - 1].c : px;
+    bars.push({ t, o: prev, h: Math.max(prev, px), l: Math.min(prev, px), c: px, v: 0 });
+  }
+  return bars;
+}
+
 async function pullCandles(mint: string, tf: PrintTf): Promise<{ bars: PrintBar[]; note: string }> {
   const key = `${mint}:${tf}`;
   const hit = candleCache.get(key);
-  if (hit && Date.now() - hit.at < 90_000) return { bars: hit.bars, note: hit.note };
+  if (hit && Date.now() - hit.at < 15_000) return { bars: hit.bars, note: hit.note };
   const pending = inflight.get(key);
   if (pending) return pending;
   const job = (async () => {
+    try {
+      const fromLlama = await llamaCandles(mint, tf);
+      if (fromLlama.length >= 2) {
+        const out = { bars: fromLlama, note: "Price history." };
+        candleCache.set(key, { at: Date.now(), ...out });
+        return out;
+      }
+    } catch {
+      /* The pool candles are the next try. */
+    }
     const pool = await topPool(mint);
     if (!pool) return { bars: [], note: "Candle feed is busy. The last price is still live." };
     const q = tfQuery(tf);
     let res = await fetch(
       `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-      { headers: { accept: "application/json", "user-agent": "Senda" } },
+      { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(8000) },
     );
     if (res.status === 429) {
       await sleep(900);
       res = await fetch(
         `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-        { headers: { accept: "application/json", "user-agent": "Senda" } },
+        { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(8000) },
       );
     }
     if (!res.ok) return { bars: [], note: res.status === 429 ? "Candle feed is busy. The last price is still live." : `Print ${res.status}` };

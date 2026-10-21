@@ -26,12 +26,8 @@ export function TabLead({
       </div>
       <p className="mt-3 text-xs text-muted">
         <span className="text-accent">Live</span> {live.join(" · ")}
-        {coming.length > 0 ? (
-          <>
-            <span className="mx-2 text-subtle">/</span>
-            <span className="text-subtle">Coming</span> {coming.join(" · ")}
-          </>
-        ) : null}
+        <span className="mx-2 text-subtle">/</span>
+        <span className="text-subtle">Coming</span> {coming.join(" · ")}
       </p>
     </section>
   );

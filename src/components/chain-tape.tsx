@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { MarketTicket } from "@/components/market-ticket";
+import { LiveChart } from "@/components/price-chart";
 import { formatChg } from "@/lib/sol-house";
 import type { ChainTape } from "@/lib/chain-tape";
 import type { TapeRow } from "@/lib/chain-tape-map.mjs";
@@ -21,9 +22,9 @@ export function ChainTapeView({ tape }: { tape: ChainTape }) {
     <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h2 className="text-3xl tracking-tight">Trade</h2>
+          <h2 className="text-2xl tracking-tight">Chains</h2>
           <p className="mt-1 max-w-xl text-sm text-muted">
-            A Solana market is listed after a $100 Jupiter quote fills inside 100 bps. Wrapped MON is in that list when the quote fills. Ethereum, Arbitrum, Optimism, BNB Chain, and Avalanche sign through LI.FI. Monad mainnet stays a price until LI.FI quotes it.
+            Solana markets sign through Jupiter. Ethereum, Arbitrum, Optimism, BNB Chain, and Avalanche sign through LI.FI. A chain with no signer stays a price.
           </p>
         </div>
         <p className="font-mono text-sm text-subtle">
@@ -38,7 +39,12 @@ export function ChainTapeView({ tape }: { tape: ChainTape }) {
           <TapeList title="Other chains" rows={chains} onPick={setPicked} />
         </div>
       )}
-      {picked ? <div className="mt-5"><MarketTicket row={picked} onClose={() => setPicked(null)} /></div> : null}
+      {picked ? (
+        <div className="mt-5 space-y-3">
+          {picked.mint ? <LiveChart mint={picked.mint} symbol={picked.symbol} live={picked.usd} /> : null}
+          <MarketTicket row={picked} onClose={() => setPicked(null)} />
+        </div>
+      ) : null}
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
+import { StrategyBuilder } from "@/components/strategy-builder";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
@@ -10,9 +11,10 @@ import { JOBS, think, type Job, type Queue } from "@/lib/agent-shift";
 import { createEnvelope, dropEnvelope, listEnvelopes, patchEnvelope, writeLog, type Envelope } from "@/lib/agent-envelope";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
 import { spendCap } from "@/lib/spend-cap";
+import { noteAct } from "@/lib/book";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
-import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
+import { connectPhantom, mintDecimals, phantomProvider, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -116,6 +118,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [jobs, setJobs] = useState<AgentJobs>(() => loadJobs());
   const [envs, setEnvs] = useState<Envelope[]>(() => listEnvelopes());
   const [made, setMade] = useState<string | null>(null);
+  const [face, setFace] = useState<"sign" | "roster" | "desks" | "build">("sign");
   const [draftName, setDraftName] = useState("");
   const [draftSay, setDraftSay] = useState("");
   const [draftJob, setDraftJob] = useState<Job>("scout");
@@ -165,6 +168,12 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     return () => window.clearInterval(timer);
   }, [book]);
 
+  useEffect(() => {
+    if (book.length) lookNow();
+    // The first pass queues a desk as soon as the book is here. Sign is on the roster.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book.length]);
+
   const focus = id === "rich" ? rich : id === "daily" ? picked : cheap;
   const side = id === "rich" ? "sell" : "buy";
   const gate: Gate | null = focus
@@ -202,22 +211,38 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   }
 
   async function owner(): Promise<string> {
-    const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-    const who = existing || (await connectPhantom());
-    if (!existing) {
-      const linked = wallet.linkChain(who, "Phantom", "phantom");
-      if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
-    }
+    const live = phantomProvider()?.publicKey?.toString();
+    const who = live || (await connectPhantom());
+    const linked = wallet.linkChain(who, "Phantom", "phantom");
+    if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
     return who;
   }
 
   async function run() {
+    if (gate?.blocked) {
+      toast.error(gate.blocked);
+      return;
+    }
+    const usd = sendUsd;
+    if (!(usd > 0)) {
+      toast.error("The risk gate cut this to nothing.");
+      return;
+    }
+    if (id === "cheap" && !cheap) {
+      toast.error("No names on the book.");
+      return;
+    }
+    if (id !== "rich" && id !== "cheap" && !picked) {
+      toast.error("Pick a name.");
+      return;
+    }
+    if (id === "daily" && picked && jobs.daily?.mint === picked.mint && jobs.daily.lastDay === todayKey()) {
+      toast.error(`Today's buy of ${picked.symbol} already went out.`);
+      return;
+    }
     setBusy(true);
     try {
       const who = await owner();
-      if (gate?.blocked) throw new Error(gate.blocked);
-      const usd = sendUsd;
-      if (!(usd > 0)) throw new Error("The risk gate cut this to nothing.");
       const buyMint = id === "cheap" ? cheap?.mint : picked?.mint;
       const buySymbol = id === "cheap" ? cheap?.symbol : picked?.symbol;
       if (id !== "rich" && payWith === "SOL") {
@@ -240,6 +265,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         if (id === "daily" && picked) put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
         if (id === "cheap" && cheap) put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
         toast.success(`Bought ${buySymbol} with SOL. ${done.signature.slice(0, 8)}…`);
+        noteAct({ kind: "swap", title: `Bought ${buySymbol}`, detail: `$${usd} · SOL`, signature: done.signature });
         note(buySymbol, "buy", usd, id === "cheap" ? cheap : picked);
         return;
       }
@@ -248,6 +274,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: cheap.mint, side: "buy", usd, price: cheap.last });
         put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
         toast.success(`Bought ${cheap.symbol}. ${done.signature.slice(0, 8)}…`);
+        noteAct({ kind: "swap", title: `Bought ${cheap.symbol}`, detail: `$${usd}`, signature: done.signature });
         note(cheap.symbol, "buy", usd, cheap);
       } else if (id === "rich") {
         const snap = await readChain(who);
@@ -257,6 +284,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: target.mint, side: "sell", usd, price: target.last });
         put({ ...jobs, rich: { usd } });
         toast.success(`Sold ${target.symbol}. ${done.signature.slice(0, 8)}…`);
+        noteAct({ kind: "swap", title: `Sold ${target.symbol}`, detail: `$${usd}`, signature: done.signature });
         note(target.symbol, "sell", usd, target);
       } else {
         if (!picked) throw new Error("Pick a name.");
@@ -266,6 +294,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const done = await runPrestock({ owner: who, mint: picked.mint, side: "buy", usd, price: picked.last });
         put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
         toast.success(`Bought ${picked.symbol}. ${done.signature.slice(0, 8)}…`);
+        noteAct({ kind: "swap", title: `Bought ${picked.symbol}`, detail: `$${usd}`, signature: done.signature });
         note(picked.symbol, "buy", usd, picked);
       }
     } catch (e) {
@@ -280,6 +309,10 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   async function runMade(target?: Envelope) {
     const row = target ?? env;
     if (!row) return;
+    if (row.queue && !book.some((n) => n.symbol === row.queue?.symbol)) {
+      toast.error(`${row.queue.symbol} is not on the book. Nothing was sent.`);
+      return;
+    }
     setMade(row.id);
     setBusy(true);
     try {
@@ -308,6 +341,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       setEnvs(listEnvelopes());
       note(pick.symbol, side, g.usd, pick);
       toast.success(`${row.name} sent ${pick.symbol}. ${done.signature.slice(0, 8)}…`);
+      noteAct({ kind: "swap", title: `${row.name} ${side} ${pick.symbol}`, detail: `$${g.usd}`, signature: done.signature });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "It did not send.";
       writeLog(row.id, msg);
@@ -430,6 +464,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setEnvs(listEnvelopes());
     setMade(row.id);
     const queued = listEnvelopes().find((e) => e.id === row.id)?.queue;
+    setFace(queued ? "roster" : "desks");
     toast.success(
       queued
         ? `${desk.title} queued ${queued.side} ${queued.symbol} for $${queued.usd}. Sign it in the queue.`
@@ -473,8 +508,24 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         coming={["An agent you host off this browser", "A key of its own"]}
       />
       <MoneyBar />
+      <div className="flex gap-2">
+        {(
+          [
+            ["sign", "Sign"],
+            ["build", "Build"],
+            ["roster", "Roster"],
+            ["desks", "Desks"],
+          ] as const
+        ).map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setFace(id)} className={cn("min-h-10 flex-1 rounded-full text-sm font-semibold", face === id ? "bg-white text-black" : "bg-[#2a2a2e] text-white/80")}>
+            {label}
+          </button>
+        ))}
+      </div>
 
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+      {face === "build" ? <StrategyBuilder names={book.length ? book : names} onSaved={() => setEnvs(listEnvelopes())} /> : null}
+
+      <section className={cn("grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]", face !== "roster" && "hidden")}>
         <div className="space-y-3">
           <form
             onSubmit={(e) => {
@@ -689,7 +740,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      <section>
+      <section className={cn(face !== "desks" && "hidden")}>
         <p className="mb-2 px-1 text-sm font-semibold">Ready desks</p>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         {READY.map((desk) => {
@@ -739,7 +790,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+      <section className={cn("grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6", face !== "desks" && "hidden")}>
         {JOBS.map((j) => {
           const Icon = JOB_ICON[j.id];
           const on = draftJob === j.id;
@@ -763,7 +814,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         })}
       </section>
 
-      <section className="grid gap-2 sm:grid-cols-3">
+      <section className={cn("grid gap-2 sm:grid-cols-3", face !== "sign" && "hidden")}>
         {rows.map((r) => {
           const Icon = BUILT_ICON[r.id];
           const on = !env && id === r.id;
@@ -792,7 +843,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         })}
       </section>
 
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
+      <section className={cn("rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5", face !== "sign" && "hidden")}>
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-sm font-semibold">Cap</p>
           <p className="font-mono text-sm tabular-nums">
@@ -824,7 +875,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         </div>
       </section>
 
-      {!env ? (
+      {face === "sign" ? (
         <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4 sm:p-5">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Sign</p>
           <h3 className="mt-1 text-2xl tracking-tight">{move?.title}</h3>

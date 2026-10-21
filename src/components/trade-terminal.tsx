@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { FillButton } from "@/components/fill-button";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { getPrint, type PrintBar } from "@/lib/print";
+import { CandleChart } from "@/components/price-chart";
 import { askTrade, type TradeSetup } from "@/lib/trade-assist";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
@@ -262,7 +263,7 @@ export function TradeTerminal({
             ))}
             <span className="ml-auto font-mono text-[11px] text-subtle">{printNote}</span>
           </div>
-          <PrintChart symbol={under?.symbol ?? ""} bars={bars} note={printNote} tf={tf} />
+          <CandleChart symbol={under?.symbol ?? ""} bars={bars} note={printNote} tf={tf} className="min-h-[360px]" />
           <div className="grid gap-3 border-t border-white/10 p-3 sm:grid-cols-[minmax(0,1fr)_200px]">
             <div>
               <div className="grid grid-cols-2 gap-1">
@@ -413,79 +414,6 @@ export function TradeTerminal({
         </table>
       </div>
     </section>
-  );
-}
-
-function PrintChart({
-  symbol,
-  bars,
-  note,
-  tf,
-}: {
-  symbol: string;
-  bars: { t: number; o: number; h: number; l: number; c: number; v: number }[];
-  note: string;
-  tf: string;
-}) {
-  if (bars.length < 2) {
-    return <div className="grid min-h-[360px] flex-1 place-items-center px-6 text-center text-sm text-muted">{note || "No pool candles."}</div>;
-  }
-  const w = 860;
-  const h = 420;
-  const padL = 8;
-  const padR = 72;
-  const padT = 16;
-  const volH = 64;
-  const padB = 22;
-  const chartH = h - padT - volH - padB;
-  const hi = Math.max(...bars.map((b) => b.h));
-  const lo = Math.min(...bars.map((b) => b.l));
-  const span = hi - lo || hi * 0.01;
-  const maxVol = Math.max(1, ...bars.map((b) => b.v));
-  const innerW = w - padL - padR;
-  const slot = innerW / bars.length;
-  const y = (price: number) => padT + ((hi - price) / span) * chartH;
-  const ticks = [hi, hi - span / 2, lo];
-  const up = bars[bars.length - 1].c >= bars[0].o;
-  const fmt = (price: number) => (price >= 100 ? price.toFixed(2) : price.toFixed(4));
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="min-h-[360px] w-full flex-1" role="img" aria-label={`${symbol} pool candles`}>
-      {ticks.map((price) => (
-        <g key={price}>
-          <line x1={padL} x2={w - padR} y1={y(price)} y2={y(price)} stroke="#ffffff" strokeOpacity="0.08" />
-          <text x={w - padR + 8} y={y(price) + 4} fill="#9aa3b5" fontSize="11" fontFamily="ui-monospace, monospace">
-            {fmt(price)}
-          </text>
-        </g>
-      ))}
-      {bars.map((b, i) => {
-        const x = padL + i * slot + slot / 2;
-        const green = b.c >= b.o;
-        const color = green ? "#3dd68c" : "#ff5d73";
-        const top = y(Math.max(b.o, b.c));
-        const bot = y(Math.min(b.o, b.c));
-        const body = Math.max(1, bot - top);
-        const bw = Math.max(2.2, slot * 0.62);
-        return (
-          <g key={b.t}>
-            <line x1={x} x2={x} y1={y(b.h)} y2={y(b.l)} stroke={color} strokeWidth="1" />
-            <rect x={x - bw / 2} y={top} width={bw} height={body} fill={color} />
-            <rect
-              x={x - bw / 2}
-              y={padT + chartH + 8 + (1 - b.v / maxVol) * (volH - 10)}
-              width={bw}
-              height={(b.v / maxVol) * (volH - 10)}
-              fill={color}
-              opacity="0.4"
-            />
-          </g>
-        );
-      })}
-      <text x={padL} y={h - 4} fill="#9aa3b5" fontSize="11" fontFamily="ui-monospace, monospace">
-        {symbol} · {tf} · {bars.length} candles · {up ? "up" : "down"} over the window
-      </text>
-    </svg>
   );
 }
 

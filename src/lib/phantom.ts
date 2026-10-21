@@ -1,6 +1,7 @@
 import { activeSolProvider, rememberWallet, type WalletId } from "@/lib/wallets";
 import { humanWalletError, canSignHere, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
 import { unlockSeal } from "@/lib/seal";
+import { clearMove, sealMove } from "@/lib/moves";
 
 type Pub = { toString: () => string };
 
@@ -26,6 +27,20 @@ export function phantomProvider(): PhantomProvider | null {
   const p = w.phantom?.solana ?? w.solana;
   if (!p?.connect) return null;
   return p;
+}
+
+/** The address Phantom already trusts. Does not open a new connect prompt. */
+export async function trustedPhantom(): Promise<string> {
+  const p = phantomProvider();
+  if (!p) return "";
+  const ready = p.publicKey?.toString();
+  if (ready) return ready;
+  try {
+    const res = await p.connect({ onlyIfTrusted: true });
+    return res.publicKey?.toString() || p.publicKey?.toString() || "";
+  } catch {
+    return "";
+  }
 }
 
 function currentSolProvider(): PhantomProvider | null {
@@ -158,27 +173,39 @@ async function providerOrLeave(): Promise<PhantomProvider | null> {
 }
 
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
-  const p = await providerOrLeave();
-  if (!p) return new Promise(() => {});
-  await simulateFirst(tx);
-  if (p.signAndSendTransaction) {
-    const out = await p.signAndSendTransaction(tx);
-    const sig = out.signature;
-    if (typeof sig === "string") return sig;
-    return bytesToBase58(sig);
+  try {
+    const p = await providerOrLeave();
+    if (!p) return new Promise(() => {});
+    await simulateFirst(tx);
+    if (p.signAndSendTransaction) {
+      const out = await p.signAndSendTransaction(tx);
+      const sig = out.signature;
+      const signature = typeof sig === "string" ? sig : bytesToBase58(sig);
+      sealMove(signature, true);
+      return signature;
+    }
+    if (!p.signTransaction) throw new Error("This Phantom cannot send a transaction.");
+    const signed = await p.signTransaction(tx);
+    return broadcastSigned(signed);
+  } catch (error) {
+    clearMove();
+    throw error;
   }
-  if (!p.signTransaction) throw new Error("This Phantom cannot send a transaction.");
-  const signed = await p.signTransaction(tx);
-  return broadcastSigned(signed);
 }
 
 /** Simulate and submit a transaction that is already signed. Does not ask the wallet again. */
 export async function broadcastSigned(tx: { serialize: () => Uint8Array }): Promise<string> {
-  await simulateFirst(tx);
-  const raw = tx.serialize();
-  const body = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false }]);
-  if (typeof body !== "string") throw new Error("RPC did not return a signature.");
-  return body;
+  try {
+    await simulateFirst(tx);
+    const raw = tx.serialize();
+    const body = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: false }]);
+    if (typeof body !== "string") throw new Error("RPC did not return a signature.");
+    sealMove(body, true);
+    return body;
+  } catch (error) {
+    clearMove();
+    throw error;
+  }
 }
 
 async function simulateFirst(tx: { serialize: () => Uint8Array }): Promise<void> {
@@ -224,7 +251,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const RPCS = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
 
-async function rpc(method: string, params: unknown[]): Promise<unknown> {
+export async function chainRpc(method: string, params: unknown[]): Promise<unknown> {
   let last = "RPC failed";
   for (const url of RPCS) {
     try {
@@ -246,17 +273,14 @@ async function rpc(method: string, params: unknown[]): Promise<unknown> {
   throw new Error(last);
 }
 
-export async function mintDecimals(mint: string): Promise<number> {
-  const exact = await mintDecimalsExact(mint);
-  return exact ?? 9;
-}
+const rpc = chainRpc;
 
-export async function mintDecimalsExact(mint: string): Promise<number | null> {
+export async function mintDecimals(mint: string): Promise<number> {
   const result = (await rpc("getAccountInfo", [mint, { encoding: "jsonParsed" }])) as {
     value?: { data?: { parsed?: { info?: { decimals?: number } } } };
   };
   const d = result?.value?.data?.parsed?.info?.decimals;
-  return typeof d === "number" ? d : null;
+  return typeof d === "number" ? d : 9;
 }
 
 export async function splHolding(owner: string, mint: string): Promise<{ ui: number; raw: string; decimals: number }> {

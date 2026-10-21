@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
+import { DeskStake } from "@/components/desk-stake";
 import { PlayFloor } from "@/components/play-floor";
 import { getHouse, type HouseListing } from "@/lib/sol-house";
 
@@ -21,7 +22,10 @@ function SocialPage() {
   const names = house.filter((h) => h.venue === "prestocks");
   return (
     <AppShell>
-      <PlayFloor names={names} />
+      <div className="space-y-3 px-3 py-3 lg:px-4">
+        <DeskStake names={names} mode="pred" />
+        <PlayFloor names={names} />
+      </div>
     </AppShell>
   );
 }

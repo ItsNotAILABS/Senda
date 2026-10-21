@@ -20,7 +20,7 @@ const CONTRACT = {
   sign: "The user signs in Phantom. This API does not return a key and cannot sign.",
   balances: "POST { action: 'balances', address }",
   quote: "POST { action: 'quote', address, mint, usd, side: 'buy' | 'sell' }. Same book, sell sizing, $100 probe, and sanity rule as quote_swap. ok is true only when that quote is offered.",
-  open: "POST { action: 'open', page } \u2014 Phantom browse URL. First open creates the wallet.",
+  open: "POST { action: 'open', page } — Phantom browse URL. First open creates the wallet.",
   holds: ["SOL", "USDC", "CASH", "USDT", "any other SPL on that address"],
 };
 

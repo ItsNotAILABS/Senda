@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { TabLead } from "@/components/tab-lead";
 import { MoneyBar } from "@/components/money-bar";
-import { humanWalletError, insideWalletApp, isPhoneBrowser } from "@/lib/mobile-wallet";
+import { humanWalletError, insideWalletApp, isPhoneBrowser, openInWallet } from "@/lib/mobile-wallet";
 import { robinhoodBuyingPowerUrl } from "@/lib/robinhood";
-import { connectWallet, detectWallets, type WalletChoice, type WalletId } from "@/lib/wallets";
+import { connectWallet, detectWallets, rememberWallet, type WalletChoice, type WalletId } from "@/lib/wallets";
+import { readChain } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +14,10 @@ const JOB: { id: WalletId; does: string }[] = [
   { id: "phantom", does: "PreStocks, USDC, cover, and work pay. This is the wallet that signs a buy." },
   { id: "solflare", does: "Same Solana book as Phantom, if this is the wallet you already use." },
   { id: "backpack", does: "Same Solana book. Swaps still sign here. Senda does not take the key." },
+  { id: "coinbase-sol", does: "Coinbase Wallet on Solana. USDC, names, and sends sign here." },
   { id: "metamask", does: "Ethereum. Use it when a desk asks for a Base wallet. It does not buy a PreStock." },
   { id: "rabby", does: "Ethereum, same job as MetaMask." },
-  { id: "coinbase", does: "Ethereum. Not the Solana buy path." },
+  { id: "coinbase", does: "Coinbase Wallet on Base. Gold, oil, and FX. It does not buy a PreStock." },
 ];
 
 export function WalletsDesk() {
@@ -24,6 +27,9 @@ export function WalletsDesk() {
   const [usd, setUsd] = useState(50);
   const [phone, setPhone] = useState(false);
   const [inApp, setInApp] = useState(false);
+  const [usdc, setUsdc] = useState<number | null>(null);
+  const [solBal, setSolBal] = useState<number | null>(null);
+  const [held, setHeld] = useState<{ symbol: string; ui: number }[]>([]);
   const sol = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
 
   useEffect(() => {
@@ -31,7 +37,43 @@ export function WalletsDesk() {
     setInApp(insideWalletApp());
   }, []);
 
+  useEffect(() => {
+    if (!sol?.address) {
+      setUsdc(null);
+      setSolBal(null);
+      setHeld([]);
+      return;
+    }
+    let live = true;
+    readChain(sol.address)
+      .then((snap) => {
+        if (!live) return;
+        setUsdc(snap.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0);
+        setSolBal(snap.sol);
+        setHeld(
+          snap.tokens
+            .filter((t) => t.ui > 0 && t.symbol !== "USDC")
+            .sort((a, b) => b.ui - a.ui)
+            .slice(0, 8)
+            .map((t) => ({ symbol: t.symbol, ui: t.ui })),
+        );
+      })
+      .catch(() => {
+        if (!live) return;
+        setUsdc(null);
+        setSolBal(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [sol?.address]);
+
   async function go(c: WalletChoice) {
+    if (!c.installed && (c.id === "phantom" || c.id === "solflare" || c.id === "backpack" || c.id === "coinbase-sol") && isPhoneBrowser() && !insideWalletApp()) {
+      openInWallet(c.id === "coinbase-sol" ? "coinbase" : c.id);
+      toast.success("Opening the wallet. The same page loads inside it. Tap the wallet again there.");
+      return;
+    }
     setBusy(c.id);
     try {
       const got = await connectWallet(c.id);
@@ -40,6 +82,7 @@ export function WalletsDesk() {
       if (!r.ok && r.error !== "Already linked.") toast.error(r.error);
       else {
         if (got.chain === "solana") w.openCurrency("SOL");
+        window.dispatchEvent(new Event("senda-chain"));
         toast.success(`${got.label} is on the desk.`);
         setChoices(detectWallets());
       }
@@ -65,16 +108,18 @@ export function WalletsDesk() {
         kicker="Wallets"
         title="Each wallet"
         accent="has a job."
-        line="Connect what you already have. Buys and USDC sign on Solana. Ethereum is a different signature."
-        live={["Phantom, Solflare, Backpack", "MetaMask and other Ethereum wallets", "Robinhood buying power into USDC"]}
+        line="Phantom, Backpack, Solflare, and Coinbase Wallet sign a Solana buy. On a phone the page opens inside the wallet. MetaMask and Coinbase on Base do not sign a Solana transfer."
+        live={["Phantom, Solflare, Backpack, Coinbase", "MetaMask and Coinbase on Base", "Revolut and Robinhood into this address"]}
         coming={["A wallet Senda custodies"]}
       />
       <MoneyBar />
       <section className="grid gap-3 lg:grid-cols-3">
         {[
-          ["1", "Connect Phantom", "That address is the account for PreStocks."],
-          ["2", "If you only hold SOL", "Convert it to USDC, then come back and buy."],
-          ["3", "Pay, cover, or send", "Each one asks that same wallet to sign."],
+          ["1", "Phantom", "On a phone this page opens inside Phantom. You sign there."],
+          ["2", "This address", sol ? (usdc == null ? "Reading the wallet…" : `${solBal == null ? "" : `${solBal.toFixed(4)} SOL · `}$${usdc.toFixed(2)} USDC`) : "Connect first. If the wallet only has SOL, convert it."],
+          ["3", "Backpack", "Same Solana book as Phantom. The next buy signs there if you choose it."],
+          ["4", "MetaMask", "Base and the other EVM desks. It does not buy a PreStock."],
+          ["5", "Revolut", sol ? "Copy this address into Revolut → Crypto → Send. USDC or SOL lands here." : "Connect a Solana wallet first. Revolut sends to that address."],
         ].map(([n, t, d]) => (
           <div key={n} className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
             <p className="font-mono text-[11px] text-accent">{n}</p>
@@ -82,6 +127,14 @@ export function WalletsDesk() {
             <p className="mt-1 text-sm text-muted">{d}</p>
           </div>
         ))}
+      </section>
+      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <Link to="/pre" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Buy a name</Link>
+        <Link to="/social" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Above or below</Link>
+        <Link to="/solana" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Buy on Solana</Link>
+        <Link to="/payments" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Send USDC</Link>
+        <Link to="/wallet" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Convert SOL</Link>
+        <Link to="/invest" className="flex min-h-12 items-center rounded-2xl border border-white/10 bg-[#10131c] px-4 text-sm font-semibold">Open gold, oil, FX</Link>
       </section>
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
         <h2 className="text-sm font-semibold">On this desk</h2>
@@ -93,17 +146,49 @@ export function WalletsDesk() {
                 <p className="text-sm font-semibold">{l.label}</p>
                 <p className="font-mono text-[11px] text-subtle">{l.address}</p>
               </div>
-              <button type="button" onClick={() => w.unlink(l.address)} className="text-xs text-muted">
-                Remove
-              </button>
+              <span className="flex shrink-0 items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const id = l.kind === "evm"
+                      ? l.label.toLowerCase().includes("coinbase")
+                        ? "coinbase"
+                        : "metamask"
+                      : l.label.toLowerCase().includes("backpack")
+                        ? "backpack"
+                        : l.label.toLowerCase().includes("solflare")
+                          ? "solflare"
+                          : l.label.toLowerCase().includes("coinbase")
+                            ? "coinbase-sol"
+                            : "phantom";
+                    if (l.kind !== "evm") rememberWallet(id);
+                    toast.success(l.kind === "evm" ? "MetaMask stays on for Base. A Solana buy still uses Phantom, Backpack, or Solflare." : `${l.label} signs the next Solana buy.`);
+                  }}
+                  className="text-xs font-semibold text-accent"
+                >
+                  {l.kind === "evm" ? "EVM" : "Signs next"}
+                </button>
+                <button type="button" onClick={() => w.unlink(l.address)} className="text-xs text-muted">
+                  Remove
+                </button>
+              </span>
             </li>
           ))}
         </ul>
+        {held.length > 0 ? (
+          <ul className="mt-2 flex gap-2 overflow-x-auto">
+            {held.map((row) => (
+              <li key={row.symbol} className="shrink-0 rounded-full border border-white/10 px-3 py-1 font-mono text-xs">
+                {row.symbol} {row.ui >= 1 ? row.ui.toFixed(2) : row.ui.toPrecision(3)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
       <section className="grid gap-2 md:grid-cols-2">
         {choices.map((c) => {
           const job = JOB.find((j) => j.id === c.id);
-          const opens = phone && !inApp && !c.installed && (c.id === "phantom" || c.id === "solflare" || c.id === "backpack");
+          const opens = phone && !inApp && !c.installed && (c.id === "phantom" || c.id === "solflare" || c.id === "backpack" || c.id === "coinbase-sol");
           return (
             <button
               key={c.id}
@@ -125,9 +210,29 @@ export function WalletsDesk() {
           );
         })}
       </section>
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Revolut</p>
+        <h2 className="mt-2 text-xl font-semibold">Send crypto to this address.</h2>
+        <p className="mt-2 text-sm text-muted">In Revolut: Crypto, Send, Solana, paste the address. USDC or SOL arrives in the wallet below. This desk does not see the Revolut balance.</p>
+        <p className="mt-3 break-all font-mono text-xs text-white/70">{sol?.address ?? "Connect Phantom, Backpack, or Solflare first."}</p>
+        <button
+          type="button"
+          disabled={!sol}
+          onClick={() => {
+            if (!sol) return;
+            void navigator.clipboard.writeText(sol.address).then(
+              () => toast.success("Copied. Paste it in Revolut."),
+              () => toast.error("Could not copy. Select the address."),
+            );
+          }}
+          className="mt-4 min-h-11 rounded-full bg-white px-5 text-sm font-semibold text-black disabled:opacity-40"
+        >
+          Copy address
+        </button>
+      </section>
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Robinhood</p>
-        <h2 className="mt-2 text-3xl tracking-tight">Buying power into USDC.</h2>
+        <h2 className="mt-2 text-xl font-semibold">Buying power into USDC.</h2>
         <p className="mt-2 max-w-xl text-sm text-muted">
           Robinhood opens. You confirm there. USDC is aimed at {sol ? `${sol.address.slice(0, 4)}…${sol.address.slice(-4)}` : "the Solana wallet you connect"}. It does not sit in a Senda balance.
         </p>

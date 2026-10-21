@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { LiveQuote, useLiveQuote } from "@/components/live-quote";
+import { challengePay } from "@/lib/engine";
 import { dropChallenge, loadPlay, settleCloser, settleDirection, type Challenge, type PlayKind } from "@/lib/play";
 import { formatMoney } from "@/lib/wallet";
 import { connectPhantom } from "@/lib/phantom";
@@ -18,6 +20,7 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
   const [stake, setStake] = useState(0);
   const [log, setLog] = useState(loadPlay);
   const stock = names.find((n) => n.id === stockId) ?? names[0];
+  const live = useLiveQuote(stock?.mint, stake);
 
   async function play() {
     if (!stock) return;
@@ -28,6 +31,10 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
     }
     if (!(stake > 0)) {
       toast.error("Enter a stake.");
+      return;
+    }
+    if (!live.ready) {
+      toast.error(live.why || "No route.");
       return;
     }
     const friend = wallet.remember(who, who);
@@ -49,7 +56,7 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
         stake,
         pick,
         result,
-        pnl: 0,
+        pnl: challengePay(stake, result === "win"),
         createdAt: new Date().toISOString(),
       };
       setLog(dropChallenge(log, row));
@@ -144,11 +151,14 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
         placeholder="0"
         className="mt-1 min-h-12 rounded-2xl bg-elevated px-4 text-lg font-semibold tabular-nums outline-none"
       />
+      <div className="mt-3">
+        <LiveQuote quote={live.quote} why={live.why} symbol={stock?.symbol || ""} usd={stake} />
+      </div>
       <button
         type="button"
-        disabled={!stock}
+        disabled={!stock || !live.ready}
         onClick={play}
-        className="mt-4 min-h-12 rounded-full bg-fg text-base font-semibold text-bg"
+        className="mt-4 min-h-12 rounded-full bg-fg text-base font-semibold text-bg disabled:opacity-40"
       >
         Play {tag || "—"} · {stake > 0 ? formatMoney(stake) : "$0"}
       </button>

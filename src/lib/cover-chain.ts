@@ -28,6 +28,9 @@ export type ChainCover = {
   premium: number;
   until: number;
   status: "open" | "settled" | "cancelled";
+  /** USDC account holding the debit. */
+  escrow?: string;
+  openedAt?: number;
 };
 
 function rpc(method: string, params: unknown[]): Promise<unknown> {
@@ -73,6 +76,18 @@ export function coverPubkey(): string {
   return coverKey().publicKey.toBase58();
 }
 
+export function localCoverPubkey(): string {
+  if (typeof window === "undefined") return "";
+  const raw = window.localStorage.getItem(KP) || "";
+  if (!raw) return "";
+  try {
+    const secret = JSON.parse(raw) as number[];
+    return Keypair.fromSecretKey(Uint8Array.from(secret)).publicKey.toBase58();
+  } catch {
+    return "";
+  }
+}
+
 function coverKey(): Keypair {
   const raw = typeof window === "undefined" ? "" : window.localStorage.getItem(KP) || "";
   if (raw) {
@@ -96,6 +111,66 @@ export function listChainCovers(): ChainCover[] {
 
 function save(rows: ChainCover[]) {
   window.localStorage.setItem(BOOK, JSON.stringify(rows));
+}
+
+function dollars(n: number): number {
+  return n >= 1_000_000 ? n / 1_000_000 : n;
+}
+
+/** Fills already on the wallet. The memo is the ticket. The other USDC owner is the premium account. */
+export async function readCoverFills(owner: string): Promise<ChainCover[]> {
+  const sigs = (await rpc("getSignaturesForAddress", [owner, { limit: 25 }])) as Array<{
+    signature: string;
+    blockTime?: number;
+    memo?: string | null;
+  }>;
+  const hits = (sigs || []).filter((s) => (s.memo || "").includes("Senda cover")).slice(0, 8);
+  const out: ChainCover[] = [];
+  for (const s of hits) {
+    const raw = s.memo || "";
+    const text = raw.includes("]") ? raw.slice(raw.indexOf("]") + 1).trim() : raw;
+    const symbol = (text.match(/Senda cover (?:life|drop) (\S+)/) || [])[1] || "";
+    const num = (k: string) => {
+      const m = text.match(new RegExp(`${k}=([0-9.]+)`));
+      return m ? Number(m[1]) : 0;
+    };
+    const untilSec = num("until");
+    let escrow = "";
+    try {
+      const tx = (await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }])) as {
+        meta?: {
+          preTokenBalances?: Array<{ owner?: string; mint?: string; uiTokenAmount?: { uiAmount?: number } }>;
+          postTokenBalances?: Array<{ owner?: string; mint?: string; uiTokenAmount?: { uiAmount?: number } }>;
+        };
+      };
+      const mint = USDC_MINT.toBase58();
+      const pre = new Map(
+        (tx.meta?.preTokenBalances || []).filter((b) => b.mint === mint).map((b) => [b.owner, b.uiTokenAmount?.uiAmount || 0]),
+      );
+      for (const b of tx.meta?.postTokenBalances || []) {
+        if (b.mint !== mint || !b.owner || b.owner === owner) continue;
+        if ((b.uiTokenAmount?.uiAmount || 0) > (pre.get(b.owner) || 0)) escrow = b.owner;
+      }
+    } catch {
+      escrow = "";
+    }
+    out.push({
+      id: s.signature,
+      sig: s.signature,
+      kind: text.includes("cover drop") ? "drop" : "life",
+      title: symbol,
+      symbol,
+      mint: "",
+      strike: dollars(num("strike")),
+      cover: dollars(num("cover") || num("size")),
+      premium: dollars(num("premium")),
+      until: untilSec > 1_000_000_000 ? untilSec * 1000 : Date.now() + 86_400_000,
+      status: "open",
+      escrow,
+      openedAt: (s.blockTime || 0) * 1000,
+    });
+  }
+  return out;
 }
 
 async function blockhash(): Promise<string> {
@@ -161,7 +236,8 @@ export async function openChainCover(input: {
       data: Buffer.from(u64(raw)),
     }),
   );
-  const memo = `Senda cover ${input.kind} ${input.symbol || input.title} premium=${input.premium} size=${input.cover} strike=${input.strike || 0}`;
+  const until = Date.now() + input.days * 86_400_000;
+  const memo = `Senda cover ${input.kind} ${input.symbol || input.title} premium=${input.premium} size=${input.cover} strike=${input.strike || 0} until=${Math.floor(until / 1000)}`;
   ix.push(
     new TransactionInstruction({
       programId: MEMO,
@@ -187,8 +263,10 @@ export async function openChainCover(input: {
     strike: input.strike || 0,
     cover: input.cover,
     premium: input.premium,
-    until: Date.now() + input.days * 86_400_000,
+    until,
     status: "open",
+    escrow: vault.publicKey.toBase58(),
+    openedAt: Date.now(),
   };
   save([row, ...listChainCovers()]);
   return row;

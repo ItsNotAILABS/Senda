@@ -1,7 +1,6 @@
 /** Every PreStock is the same object: a mint, a live route, a signed swap. */
 
 import { createServerFn } from "@tanstack/react-start";
-import { fillableMints } from "@/lib/jup-exec";
 import { signStockSwap } from "@/lib/jup-sign";
 import { mintDecimals, splHolding } from "@/lib/phantom";
 
@@ -22,8 +21,9 @@ export async function runPrestock(input: {
   usd: number;
   /** Token price in USD. Used to size a partial sell. */
   price?: number;
-  /** Listed share from the equities book. Still has to be that mint. */
-  listed?: boolean;
+  symbol?: string;
+  pay?: string;
+  solUsd?: number;
 }): Promise<{ signature: string; outUi: number }> {
   const holding = input.side === "sell" ? await splHolding(input.owner, input.mint) : null;
   const decimals = holding?.decimals || (await mintDecimals(input.mint));
@@ -46,7 +46,9 @@ export async function runPrestock(input: {
     side: input.side,
     decimals,
     tokenAmount,
-    extraMints: input.listed ? [input.mint] : undefined,
+    symbol: input.symbol,
+    pay: input.pay,
+    solUsd: input.solUsd,
   });
 }
 
@@ -60,13 +62,9 @@ export const getPreRoutes = createServerFn({ method: "GET" }).handler(async (): 
   const res = await fetch(PRE, { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error(`PreStocks ${res.status}`);
   const rows = (await res.json()) as Array<{ symbol?: string; contract_address?: string }>;
-  const drafted = rows.map((r) => ({ symbol: String(r.symbol ?? ""), mint: String(r.contract_address ?? "") }));
-  const fillable = await fillableMints(drafted.map((row) => row.mint));
-  return drafted.map((row) => ({
-    symbol: row.symbol,
-    mint: row.mint,
-    route: fillable.has(row.mint) ? "Jupiter" : "",
-    outRaw: "",
-    ok: fillable.has(row.mint),
-  }));
+  return rows.map((r) => {
+    const mint = String(r.contract_address ?? "");
+    const symbol = String(r.symbol ?? "");
+    return { symbol, mint, route: mint.length >= 32 ? "Jupiter" : "", outRaw: "", ok: mint.length >= 32 };
+  });
 });

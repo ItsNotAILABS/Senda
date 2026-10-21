@@ -7,7 +7,6 @@
   <img src="https://img.shields.io/badge/wallet-you%20sign-c6f135?style=flat-square&labelColor=111111" alt="You sign">
   <img src="https://img.shields.io/badge/route-Jupiter-111111?style=flat-square" alt="Jupiter">
   <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC">
-  <img src="https://img.shields.io/badge/live-senda.pocketnova.app-14F195?style=flat-square&labelColor=111111" alt="Live">
   <img src="https://img.shields.io/github/last-commit/ItsNotAILABS/Senda?style=flat-square&color=111111" alt="Last commit">
 </p>
 
@@ -16,8 +15,7 @@
 <p align="center">
   Senda is the desk for tokenized pre-IPO names on Solana.<br>
   The wallet you already have is the account. Jupiter quotes the route. You sign.<br>
-  A payment is USDC to their address. The print does not close at four.<br>
-  <a href="https://senda.pocketnova.app"><strong>senda.pocketnova.app</strong></a>
+  A payment is USDC to their address. The print does not close at four.
 </p>
 
 <p align="center">
@@ -30,6 +28,29 @@
 A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. Senda is the layer in between: buy the name, hold it in your wallet, cover a drop, pay someone in USDC, play the print, or hand an agent a job it cannot sign.
 
 There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
+
+## The book
+
+Counted from the live venues on 21 October 2026. One row is one instrument. A mint on Jupiter is counted once: an xStock, a PreStock, and a staked-SOL token that already sit in the verified set are classified, not added a second time. A perpetual, a Hyperliquid spot pair, and an Ostium pair are their own rows. They are not the Solana token.
+
+**5,105 individual offerings.**
+
+| Family | Count | What it is |
+| --- | ---: | --- |
+| Pre-IPO names | 10 | PreStocks. Jupiter swap. Phantom signs. |
+| Listed shares (xStocks) | 1,374 | Solana xStocks inside the Jupiter verified set. |
+| Staked SOL | 163 | Liquid staking tokens inside the same set. |
+| Solana spot | 2,486 | The rest of Jupiter verified. |
+| Perpetuals | 619 | Hyperliquid, every builder dex, plus Drift and Jupiter perps. |
+| Hyperliquid spot | 337 | Spot pairs. The Ethereum account signs. |
+| Ostium | 83 | Arbitrum. USDC margin. The Ethereum account signs. |
+| EVM tokens | 9 | LiFi. The Ethereum account signs. |
+| Loans | 2 | Against a name or a listed share this wallet holds. |
+| Send USDC | 1 | The wallet signs the transfer. |
+| Native chains | 21 | The chain itself. A wrapper is already in spot. |
+| **Total** | **5,105** | |
+
+The full list, every symbol, is [docs/OFFERINGS.md](docs/OFFERINGS.md). The same rows are [docs/offerings.csv](docs/offerings.csv).
 
 ## Devnet
 
@@ -65,10 +86,6 @@ Minting, redemption, and most of the issuer interfaces block a U.S. address or a
 | **Play** | Ten games. The result is the live print. Practice cash never touches the wallet. | Play |
 | **Pay** | USDC to a Solana address. Their token account receives it. | Shop |
 | **Number** | Shown once. Caps cash in this browser. A card terminal will decline it. It is not a BIN. | Shop |
-| **Wallets** | Connect the wallet you already have. Solana signs the buy. Ethereum is a different signature. | Wallets |
-| **Work** | Post a job. Pay is USDC to their address, or a Solana Pay link they open. | Work |
-| **Trade** | The live PreStock names, pool candles for the one you pick, a Jupiter quote, then you sign. | Trade |
-| **Listed** | xStocks that already trade, and the cash Kamino will lend against a share. The share stays. | Listed |
 | **Agent** | You write what it is for. It can read the book and queue a trade. You still sign. | Agents |
 | **Make** | Post a job, software, a service, hardware, or what a class needs. The price is USDC. The whole amount goes to their address. | Make |
 
@@ -132,38 +149,12 @@ The desk is on port 8080. `npm run typecheck` has to pass. No env var is require
 
 Open the book. Load practice cash and play a print. Connect a wallet and quote the same name. On Shop, paste an address and sign a dollar of USDC.
 
-## For another agent
-
-The manual is [AGENTS.md](AGENTS.md). The map of the code is [docs/MODULES.md](docs/MODULES.md).
-
-`node mcp/server.mjs` speaks MCP over stdio. `GET /api/agent` and `POST /api/agent` are the same tools over HTTP. An agent can list the live prints, see which markets can be signed, quote Jupiter or LI.FI, read a public address, build a USDC pay link, price a cover, and read the clearing posture. It cannot sign, and it cannot see a key. Claude Code and any client that reads `.mcp.json` start that process as the `senda` server.
-
-```bash
-node --test mcp/tools.test.mjs
-```
-
 [AGENTS.md](AGENTS.md) is the manual for anyone changing the code. The same file is `CLAUDE.md`, `GEMINI.md`, and `llms.txt`. Do not invent a balance, a card, or a position the wallet does not have. Do not add a program id that was not deployed.
 
 The submission note is [public/senda-submission.md](public/senda-submission.md).
-
-## Handoff
-
-This is the stopping point. The live desk is [senda.pocketnova.app](https://senda.pocketnova.app). The source is this repository. The next person starts at [HANDOFF.md](HANDOFF.md), then [AGENTS.md](AGENTS.md).
-
-Do not rebuild the rail. Do not replace a working desk with a paragraph. Do not draw candles when the pool feed is empty. The wallet still signs.
 
 <p align="center">
   <img src="public/og.jpg" width="720" alt="Senda">
 </p>
 
 <p align="center"><sub>ItsNotAILABS · <a href="https://github.com/ItsNotAILABS/Senda">github.com/ItsNotAILABS/Senda</a></sub></p>
-
-## Engineering memo · September 25, 2026
-
-Senda’s wallet foundation now includes single-use signed authorization, scoped account approvals, and encrypted continuity between devices. Each wallet’s record names and contents travel together inside an AES-GCM vault, with the encryption key held in browser memory. Revision checks protect newer saves, and wallet changes reset the active desk.
-
-The account integration now uses a verified customer binding for each wallet, with currency-specific approval, revocation checks, idempotent requests and bounded provider timeouts. Bank details are taken from the provider’s response.
-
-Regression coverage exercises signature replay, expiry, wallet isolation, customer revocation, concurrent saves, encrypted migration and deletion. These improvements strengthen the same principle throughout Senda: the wallet authorizes, the application checks, and state changes remain explicit.
-
-[Engineering and rollout details](docs/wallet-security.md)

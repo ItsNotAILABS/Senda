@@ -1,50 +1,76 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, ArrowUpRight, Bluetooth, Gift, Link2, Plus, RefreshCw } from "lucide-react";
-import { AccountDetails } from "@/components/account-details";
-import { ClearingCard } from "@/components/clearing-card";
-import { ClearStrip } from "@/components/clear-strip";
-import { CrossSend } from "@/components/cross-send";
-import { MexicoSend } from "@/components/mexico-send";
-import { MoneyBar } from "@/components/money-bar";
+import { ArrowDownLeft, ArrowUpRight, Bluetooth, Plus, RefreshCw } from "lucide-react";
+import { AddMoneyScreen } from "@/components/add-money";
 import { SpaceDesk } from "@/components/space-desk";
-import { GiftDesk } from "@/components/gift-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
-import { rememberClear } from "@/lib/clearing";
-import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
-import { humanWalletError } from "@/lib/mobile-wallet";
-import { connectPhantom } from "@/lib/phantom";
-import { assetPayLink, payAsset, SEND_ASSETS, type SendAssetId } from "@/lib/solana-pay";
-import { CCYS, CCY_META, formatMoney, type Ccy } from "@/lib/wallet";
+import { MoneyBar } from "@/components/money-bar";
+import { MexicoSend } from "@/components/mexico-send";
+import { ClearingCard } from "@/components/clearing-card";
+import { CCYS, CCY_META, formatMoney, revolutFee, type Ccy, type Contact, type Tx } from "@/lib/wallet";
+import { rate } from "@/lib/wallet-fx";
+import { FillCard } from "@/components/fill-card";
+import { PayQr } from "@/components/pay-qr";
+import { connectPhantom, readChain } from "@/lib/phantom";
+import { SEND_ASSETS, paySol, payUsdc, splPayLink } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "chain" | "gift";
+export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "link";
 
 const ACTS: { id: PayAct; label: string; icon: typeof ArrowUpRight }[] = [
   { id: "send", label: "Send", icon: ArrowUpRight },
-  { id: "chain", label: "On chain", icon: Link2 },
-  { id: "gift", label: "Gift", icon: Gift },
   { id: "request", label: "Request", icon: ArrowDownLeft },
   { id: "nearby", label: "Nearby", icon: Bluetooth },
   { id: "exchange", label: "Exchange", icon: RefreshCw },
   { id: "add", label: "Add", icon: Plus },
+  { id: "link", label: "QR", icon: ArrowDownLeft },
+  { id: "withdraw", label: "Revolut", icon: ArrowUpRight },
 ];
 
 const field =
   "min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none placeholder:text-subtle";
 
-const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const SWAP_USDC = `https://phantom.com/ul/v1/swap?sell=${encodeURIComponent(`solana:101/address:${SOL}`)}&buy=${encodeURIComponent(`solana:101/address:${USDC_MINT}`)}`;
-const OPEN_USDC = `https://phantom.com/ul/v1/fungible?token=${encodeURIComponent(`solana:101/address:${USDC_MINT}`)}`;
+const SEND_PRESETS = [1, 5, 20, 100] as const;
 
-export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?: string }) {
-  const start: PayAct = ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
+const PERSON_TX = new Set<Tx["kind"]>(["send", "receive", "request", "nearby", "split"]);
+
+/** Latest person per counterparty. Only rows that already exist on the wallet. */
+function payAgainRows(txs: Tx[], contacts: Contact[]) {
+  const seen = new Set<string>();
+  const rows: { id: string; label: string; tag: string; name: string; amount: number; ccy: Ccy; note: string }[] = [];
+  for (const t of txs) {
+    if (!PERSON_TX.has(t.kind)) continue;
+    const who = t.counterparty.trim();
+    if (!who) continue;
+    if (t.kind === "nearby" && !who.startsWith("@")) continue;
+    const key = who.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const contact = contacts.find((c) => {
+      const raw = who.toLowerCase();
+      const handle = c.tag.trim().toLowerCase();
+      return c.name.trim().toLowerCase() === raw || handle === raw || handle === `@${raw.replace(/^@/, "")}`;
+    });
+    const tag = contact?.tag || who;
+    const name = contact?.name || (who.startsWith("@") ? "" : who);
+    const note = t.note.trim();
+    const userNote = /^pain\.001|^nearby |^iso /i.test(note) ? "" : note;
+    rows.push({ id: t.id, label: who, tag, name, amount: t.amount, ccy: t.ccy, note: userNote });
+  }
+  return rows;
+}
+
+export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string; initialFrom?: string }) {
+  const start: PayAct = initialAct === "revolut" ? "withdraw" : ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
   const [act, setAct] = useState<PayAct>(start);
+  useEffect(() => {
+    setAct(start);
+  }, [start]);
   const [pocket, setPocket] = useState<Ccy | null>(null);
   const w = useWallet();
-  const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
 
   const total = CCYS.reduce((s, c) => s + (w.w.balances[c] || 0) * (w.usdPer[c] || (c === "USD" || c === "USDC" ? 1 : 0)), 0);
   const open = CCYS.filter((c) => w.w.opened.includes(c) || (w.w.balances[c] || 0) > 0);
@@ -56,33 +82,24 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
       <TabLead
-        kicker="Account"
-        title="USDC in your wallet."
-        accent="That is the balance."
-        line="Send it, request it, swap SOL for it, gift it, or load it. Each one hits the chain. The address on this page is the account."
-        live={["Send", "Request", "Gift", "SOL, USDC, USDT, PYUSD", "USDC onto Base, Ethereum, Arbitrum, or Polygon", "A clearing address on this device"]}
-        coming={[]}
+        kicker="Send"
+        title="Send USDC."
+        accent="They get the token."
+        line="A peso figure is a quote. The transfer is USDC. You sign it. Senda does not hold it."
+        live={["Send", "Request", "Nearby", "Exchange", "Add"]}
+        coming={["Bank wires", "A handle that exists outside this browser"]}
       />
+
       <MoneyBar />
 
-      <SpaceDesk />
-
       <section className={cn("rounded-[22px] border border-white/10 bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
-        {act === "send" ? (
-          <MexicoSend
-            owner={owner}
-            onLinked={(addr) => {
-              const linked = w.linkChain(addr, "Phantom", "phantom");
-              if (!linked.ok && linked.error !== "Already linked.") toast.error(linked.error || "The wallet did not stay.");
-            }}
-          />
-        ) : null}
-        {act === "chain" ? <ChainPay w={w} /> : null}
-        {act === "gift" ? <GiftDesk /> : null}
+        {act === "send" ? <SendForm w={w} /> : null}
         {act === "nearby" ? <NearbyDesk /> : null}
-        {act === "request" ? <RequestForm owner={owner} /> : null}
-        {act === "exchange" ? <ExchangeForm key={pocket ?? "sol"} owner={owner} /> : null}
-        {act === "add" ? <AddForm owner={owner} onExchange={() => setAct("exchange")} /> : null}
+        {act === "request" ? <RequestForm w={w} /> : null}
+        {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
+        {act === "add" ? <AddForm w={w} /> : null}
+        {act === "link" ? <PayLinkForm w={w} /> : null}
+        {act === "withdraw" ? <RevolutSend w={w} /> : null}
         <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-4 border-t border-white/10 pt-3")}>
           {ACTS.map((a) => {
             const Icon = a.icon;
@@ -105,11 +122,23 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
         </div>
       </section>
 
+      <MexicoSend
+        owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
+        onLinked={(addr) => {
+          w.linkChain(addr, "Phantom", "phantom");
+        }}
+      />
+      <ClearingCard />
+
+      <SpaceDesk />
+
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
         <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
           <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
-            <h2 className="text-sm font-semibold">Practice pockets</h2>
-            <p className="font-mono text-[11px] text-subtle">This browser. Not a bank. {formatMoney(total, "USD")}</p>
+            <h2 className="text-sm font-semibold">Pockets</h2>
+            <p className="font-mono text-[11px] text-subtle">
+              {formatMoney(total, "USD")} · {w.w.tag}
+            </p>
           </div>
           <ul>
             {pockets.map((p) => {
@@ -163,20 +192,94 @@ export function PaymentsDesk({ initialAct }: { initialAct?: string; initialFrom?
           </ul>
         </aside>
       </section>
-      <ClearStrip desk="send" />
     </div>
   );
 }
 
-function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
+function PayLinkForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const [raw, setRaw] = useState("1");
+  const [mint, setMint] = useState(SEND_ASSETS[1].mint);
+  const [held, setHeld] = useState<{ symbol: string; mint: string }[]>([]);
+  const [link, setLink] = useState("");
+  const amount = Number(raw) || 0;
   const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const choices = [
+    ...SEND_ASSETS.map((a) => ({ symbol: a.label, mint: a.mint })),
+    ...held.filter((h) => !SEND_ASSETS.some((a) => a.mint === h.mint || (a.id === "SOL" && h.symbol === "SOL"))),
+  ];
+
+  useEffect(() => {
+    if (!owner) {
+      setHeld([]);
+      return;
+    }
+    let live = true;
+    readChain(owner)
+      .then((s) => {
+        if (!live) return;
+        const rows = s.sol > 0 ? [{ symbol: "SOL", mint: "" }] : [];
+        for (const token of s.tokens) {
+          if (token.ui > 0) rows.push({ symbol: token.symbol, mint: token.mint });
+        }
+        setHeld(rows);
+      })
+      .catch(() => live && setHeld([]));
+    return () => {
+      live = false;
+    };
+  }, [owner]);
+
+  async function make() {
+    try {
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = w.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
+      }
+      const url = splPayLink(who, mint, amount, "Senda");
+      setLink(url);
+      await navigator.clipboard?.writeText(url);
+      toast.success("QR is ready. They scan it in Phantom. Nothing moves until they sign.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The link was not made.");
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="text-xl tracking-tight">Pay QR</h2>
+      <p className="mt-2 text-sm text-muted">
+        A code can request SOL, USDC, CASH, USDT, PYUSD, or any other token this address already holds. That is the whole Send tab a camera can move. A bank payout, an eSIM, and a Circle burn are not in the code. Nothing leaves until the other wallet signs. A send you sign still stops at your spend cap.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {choices.map((row) => (
+          <button key={`${row.symbol}-${row.mint}`} type="button" onClick={() => { setMint(row.mint); setLink(""); }} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", mint === row.mint ? "bg-white text-black" : "bg-white/10")}>
+            {row.symbol}
+          </button>
+        ))}
+      </div>
+      <input inputMode="decimal" value={raw} onChange={(e) => { setRaw(e.target.value); setLink(""); }} aria-label="Amount" className={cn(field, "mt-3 font-mono")} />
+      <button type="button" disabled={!(amount > 0)} onClick={() => void make()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50">
+        Make the QR
+      </button>
+      {link ? (
+        <div className="mt-4">
+          <PayQr value={link} />
+          <p className="mt-3 break-all font-mono text-xs text-subtle">{link}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RevolutSend({ w }: { w: ReturnType<typeof useWallet> }) {
   const [to, setTo] = useState("");
-  const [asset, setAsset] = useState<SendAssetId>("USDC");
-  const [usd, setUsd] = useState(1);
-  const [memo, setMemo] = useState("");
+  const [raw, setRaw] = useState("1");
+  const [asset, setAsset] = useState<"USDC" | "SOL">("USDC");
   const [busy, setBusy] = useState(false);
-  const [sig, setSig] = useState("");
-  const link = useMemo(() => (to.trim() ? assetPayLink(asset, to.trim(), usd, memo) : ""), [asset, to, usd, memo]);
+  const [fill, setFill] = useState<{ amount: string; asset: string; sig: string } | null>(null);
+  const amount = Number(raw) || 0;
+  const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
   async function send() {
     setBusy(true);
@@ -184,21 +287,16 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
       const who = owner || (await connectPhantom());
       if (!owner) {
         const linked = w.linkChain(who, "Phantom", "phantom");
-        if (!linked.ok) throw new Error(linked.error || "The wallet did not stay.");
+        if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
       }
-      const out = await payAsset({ owner: who, to, asset, amount: usd, memo: memo || `Senda ${asset}` });
-      setSig(out.signature);
-      rememberClear({
-        desk: "send",
-        title: `${asset} to ${to.slice(0, 4)}…`,
-        legs: [{ side: "out", asset, amount: usd, where: to }],
-        feeUsd: 0,
-        sig: out.signature,
-        status: "signed",
-      });
-      toast.success(`Sent. ${out.signature.slice(0, 8)}`);
+      const done =
+        asset === "USDC"
+          ? await payUsdc({ owner: who, to, usd: amount, memo: "Senda Revolut USDC" })
+          : await paySol({ owner: who, to, sol: amount, memo: "Senda Revolut SOL" });
+      toast.success(`Signed. ${done.signature.slice(0, 8)}…`);
+      setFill({ amount: String(amount), asset, sig: done.signature });
     } catch (e) {
-      toast.error(humanWalletError(e instanceof Error ? e.message : "The send did not go."));
+      toast.error(e instanceof Error ? e.message : "The withdraw did not sign.");
     } finally {
       setBusy(false);
     }
@@ -206,254 +304,334 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
 
   return (
     <div>
-      <p className="text-sm text-muted">The asset leaves the wallet you connect and lands in theirs. You sign. Senda does not hold it. SOL is priced in dollars only for the spend cap.</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {SEND_ASSETS.map((row) => (
-          <button
-            key={row.id}
-            type="button"
-            onClick={() => setAsset(row.id)}
-            className={cn("min-h-10 rounded-full px-3 text-sm font-semibold", asset === row.id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted")}
-          >
-            {row.label}
-          </button>
-        ))}
-      </div>
-      {asset === "PYUSD" ? <p className="mt-2 text-xs text-subtle">PYUSD can be frozen by its issuer. This transfer uses Token-2022.</p> : null}
-      <label className="mt-3 block text-xs text-subtle">
-        Their Solana address
-        <input value={to} onChange={(e) => setTo(e.target.value)} className={`${field} mt-1 font-mono`} placeholder="Address" />
-      </label>
-      <label className="mt-3 block text-xs text-subtle">
-        {asset}
-        <input value={usd} onChange={(e) => setUsd(Math.max(0.01, Number(e.target.value) || 0))} inputMode="decimal" className={`${field} mt-1 font-mono`} />
-      </label>
-      <label className="mt-3 block text-xs text-subtle">
-        Note
-        <input value={memo} onChange={(e) => setMemo(e.target.value)} className={`${field} mt-1`} placeholder="What this is for" />
-      </label>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" disabled={busy} onClick={() => void send()} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50">
-          {busy ? "Waiting for the wallet…" : `Send ${usd} ${asset}`}
-        </button>
-        <button
-          type="button"
-          disabled={!link}
-          onClick={() => {
-            void navigator.clipboard.writeText(link);
-            toast.success("Payment link copied.");
-          }}
-          className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-semibold disabled:opacity-40"
-        >
-          Copy payment link
-        </button>
-      </div>
-      {link ? <p className="mt-3 break-all font-mono text-[11px] text-subtle">{link}</p> : null}
-      {sig ? (
-        <a className="mt-2 block font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
-          {sig}
-        </a>
+      {fill ? (
+        <FillCard title={`To Revolut · ${fill.asset}`} symbol={fill.asset} amount={fill.amount} paid={`${fill.amount} ${fill.asset}`} received="Their Revolut Solana address" where="Solana" when="Just now" sig={fill.sig} onDone={() => setFill(null)} />
       ) : null}
-      <CrossSend owner={owner} />
-    </div>
-  );
-}
-
-function RequestForm({ owner }: { owner: string }) {
-  const [usd, setUsd] = useState(20);
-  const [memo, setMemo] = useState("");
-  const link = owner
-    ? `solana:${owner}?amount=${usd}&spl-token=${USDC_MINT}&label=Senda&message=${encodeURIComponent(memo.trim() || "Senda")}`
-    : "";
-
-  async function share() {
-    if (!link) return;
-    try {
-      if (typeof navigator.share === "function") await navigator.share({ title: "Pay USDC", text: link, url: link });
-      else {
-        await navigator.clipboard.writeText(link);
-        toast.success("Request link copied.");
-      }
-    } catch {
-      /* cancelled */
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">They pay the address on this account. The USDC shows up here when their signature confirms.</p>
-      {owner ? <p className="break-all font-mono text-xs">{owner}</p> : <p className="text-sm text-muted">Show my account first. The request has to name that address.</p>}
-      <label className="block text-xs text-subtle">
-        USDC
-        <input value={usd} onChange={(e) => setUsd(Math.max(0.01, Number(e.target.value) || 0))} inputMode="decimal" className={`${field} mt-1 font-mono`} />
-      </label>
-      <label className="block text-xs text-subtle">
-        Note
-        <input value={memo} onChange={(e) => setMemo(e.target.value)} className={field} placeholder="What this is for" aria-label="Note" />
-      </label>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" disabled={!link} onClick={() => void share()} className="min-h-12 rounded-full bg-accent px-5 text-base font-semibold text-accent-fg disabled:opacity-40">
-          Share request
-        </button>
-        <button
-          type="button"
-          disabled={!link}
-          onClick={() => {
-            void navigator.clipboard.writeText(link);
-            toast.success("Request link copied.");
-          }}
-          className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-semibold disabled:opacity-40"
-        >
-          Copy link
-        </button>
-      </div>
-      {link ? <p className="break-all font-mono text-[11px] text-subtle">{link}</p> : null}
-    </div>
-  );
-}
-
-function ExchangeForm({ owner }: { owner: string }) {
-  const [side, setSide] = useState<"sol-usdc" | "usdc-sol">("sol-usdc");
-  const [raw, setRaw] = useState("0.1");
-  const [quote, setQuote] = useState<RouteQuote | null>(null);
-  const [quoteErr, setQuoteErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [sig, setSig] = useState("");
-  const sellingSol = side === "sol-usdc";
-
-  useEffect(() => {
-    const amount = Number(raw);
-    if (!(amount > 0)) {
-      setQuote(null);
-      setQuoteErr("");
-      return;
-    }
-    let live = true;
-    const timer = window.setTimeout(() => {
-      void quoteRoute({
-        inputMint: sellingSol ? SOL : USDC_MINT,
-        outputMint: sellingSol ? USDC_MINT : SOL,
-        amountRaw: Math.round(amount * (sellingSol ? 1e9 : 1e6)),
-        outDecimals: sellingSol ? 6 : 9,
-      })
-        .then((next) => {
-          if (!live) return;
-          setQuote(next);
-          setQuoteErr("");
-        })
-        .catch((e) => {
-          if (!live) return;
-          setQuote(null);
-          setQuoteErr(e instanceof Error ? e.message : "No quote.");
-        });
-    }, 350);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [raw, sellingSol]);
-
-  async function go() {
-    const amount = Number(raw);
-    if (!(amount > 0) || !quote) return;
-    setBusy(true);
-    setSig("");
-    try {
-      const who = owner || (await connectPhantom());
-      const done = await signRoute({
-        owner: who,
-        inputMint: sellingSol ? SOL : USDC_MINT,
-        outputMint: sellingSol ? USDC_MINT : SOL,
-        amountRaw: Math.round(amount * (sellingSol ? 1e9 : 1e6)),
-        outDecimals: sellingSol ? 6 : 9,
-        usd: sellingSol ? quote.outUi : amount,
-      });
-      setSig(done.signature);
-      rememberClear({
-        desk: "send",
-        title: sellingSol ? "SOL to USDC" : "USDC to SOL",
-        legs: [
-          { side: "out", asset: sellingSol ? "SOL" : "USDC", amount, where: "Jupiter" },
-          { side: "in", asset: sellingSol ? "USDC" : "SOL", amount: done.outUi, where: who },
-        ],
-        feeUsd: 0,
-        sig: done.signature,
-        status: "signed",
-      });
-      toast.success("Signed. The swap is on the chain.");
-    } catch (e) {
-      toast.error(humanWalletError(e instanceof Error ? e.message : "The swap did not sign."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const impact = quote ? Math.abs(quote.impact) <= 1 ? quote.impact * 100 : quote.impact : 0;
-  const outLabel = quote ? (sellingSol ? `${quote.outUi.toFixed(2)} USDC` : `${quote.outUi.toFixed(4)} SOL`) : "—";
-
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted">Jupiter quotes. You sign. USDC or SOL moves in the wallet on this page.</p>
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          ["sol-usdc", "SOL → USDC"],
-          ["usdc-sol", "USDC → SOL"],
-        ] as const).map(([id, label]) => (
+      <h2 className="text-xl tracking-tight">Revolut</h2>
+      <p className="mt-2 text-sm text-muted">
+        Their app gives you a Solana address. Paste it. Phantom signs the USDC or SOL to that address. This is not browser cash.
+      </p>
+      <div className="mt-4 flex gap-2">
+        {(["USDC", "SOL"] as const).map((id) => (
           <button
             key={id}
             type="button"
-            onClick={() => setSide(id)}
-            className={cn("min-h-11 rounded-full text-sm font-semibold", side === id ? "bg-accent text-accent-fg" : "border border-white/10")}
+            onClick={() => setAsset(id)}
+            className={cn("min-h-11 flex-1 rounded-full text-sm font-semibold", asset === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted")}
           >
-            {label}
+            {id}
           </button>
         ))}
+      </div>
+      <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Solana address from Revolut" className={cn(field, "mt-3")} />
+      <input inputMode="decimal" value={raw} onChange={(e) => setRaw(e.target.value)} className={cn(field, "mt-2")} />
+      <button type="button" disabled={busy || !(amount > 0) || to.trim().length < 32} onClick={() => void send()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50">
+        {busy ? "Waiting for the wallet…" : `Withdraw ${amount || 0} ${asset}`}
+      </button>
+    </div>
+  );
+}
+
+function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const [tag, setTag] = useState("");
+  const [name, setName] = useState("");
+  const [ccy, setCcy] = useState<Ccy>("USD");
+  const [raw, setRaw] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [fill, setFill] = useState<{ amount: string; to: string; sig: string } | null>(null);
+  const amount = Number(raw) || 0;
+  const again = payAgainRows(w.w.txs, w.w.contacts);
+
+  function go() {
+    if (busy) return;
+    const t = tag.trim();
+    if (!t) {
+      toast.error("Who is it for?");
+      return;
+    }
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t)) {
+      toast.error("Paste their Solana address. USDC was not sent.");
+      return;
+    }
+    if (!(amount > 0)) {
+      toast.error("Enter an amount.");
+      return;
+    }
+    setBusy(true);
+    void (async () => {
+      try {
+        const existing = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+        const owner = existing || (await connectPhantom());
+        if (!existing) {
+          const linked = w.linkChain(owner, "Phantom", "phantom");
+          if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+        }
+        const paid = await payUsdc({ owner, to: t, usd: amount, memo: note || "Senda send" });
+        setFill({ amount: String(amount), to: t, sig: paid.signature });
+        toast.success(`USDC signed. ${paid.signature.slice(0, 8)}…`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "The payment did not send.");
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {fill ? (
+        <FillCard title="USDC sent" symbol="USDC" amount={`$${fill.amount}`} paid={`$${fill.amount} USDC`} received={fill.to} where="Solana" when="Just now" sig={fill.sig} onDone={() => setFill(null)} />
+      ) : null}
+      <p className="text-sm text-white/55">USDC leaves your Phantom and lands in their wallet. That is the spendable dollar. Phantom signs it. Nothing moves before that.</p>
+      <label className="block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Person</span>
+        <input
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+          placeholder="Solana address"
+          aria-label="Person"
+          className={cn(field, "mt-1 text-lg")}
+        />
+      </label>
+      {w.w.contacts.length > 0 ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {w.w.contacts.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => {
+                setTag(c.tag);
+                setName(c.name);
+              }}
+              className="min-h-10 shrink-0 rounded-full border border-white/10 px-4 text-sm font-medium"
+            >
+              {c.tag}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <label className="block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
+        <div className="mt-1 flex items-end gap-3">
+          <input
+            inputMode="decimal"
+            value={raw}
+            onChange={(e) => setRaw(e.target.value)}
+            placeholder="0"
+            aria-label="Amount"
+            className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
+          />
+          <select
+            value={ccy}
+            onChange={(e) => setCcy(e.target.value as Ccy)}
+            aria-label="Currency"
+            className="mb-1 min-h-11 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
+          >
+            {CCYS.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="font-mono text-xs tabular-nums text-subtle">Available {formatMoney(w.w.balances[ccy], ccy)}</p>
+      </label>
+
+      <div className="flex gap-2">
+        {SEND_PRESETS.map((n) => (
+          <button
+            key={n}
+            type="button"
+            onClick={() => {
+              setRaw(String(n));
+              setCcy("USD");
+            }}
+            className={cn(
+              "min-h-11 flex-1 rounded-full font-mono text-sm font-semibold",
+              ccy === "USD" && Number(raw) === n ? "bg-accent text-accent-fg" : "border border-white/10",
+            )}
+          >
+            ${n}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        disabled={busy || !(amount > 0)}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Send USDC
+      </button>
+
+      {again.length > 0 ? (
+        <div>
+          <p className="text-xs font-medium text-subtle">Pay again</p>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+            {again.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => {
+                  setTag(row.tag);
+                  setName(row.name);
+                  setCcy(row.ccy);
+                  setRaw(String(row.amount));
+                  setNote(row.note);
+                }}
+                className="min-w-[8.5rem] shrink-0 rounded-[22px] border border-white/10 bg-black/30 px-3 py-3 text-left"
+              >
+                <span className="block truncate text-sm font-semibold">{row.label}</span>
+                <span className="mt-1 block font-mono text-sm tabular-nums">{formatMoney(row.amount, row.ccy)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RequestForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const opened = w.w.opened?.length ? w.w.opened : ["USD"];
+  const [tag, setTag] = useState("");
+  const [ccy, setCcy] = useState<Ccy>("USD");
+  const [raw, setRaw] = useState("");
+  const amount = Number(raw) || 0;
+
+  function go() {
+    const t = tag.trim();
+    if (!t) {
+      toast.error("Who from?");
+      return;
+    }
+    const who = w.remember(t, t);
+    const r = w.receive(amount, ccy, who.tag, `Paid your request · ${ccy}`);
+    if (r.ok) toast.success(`${who.tag} paid ${formatMoney(amount, ccy)}.`);
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <input value={tag} onChange={(e) => setTag(e.target.value)} placeholder="@someone" aria-label="Person" className={field} />
+      <div className="flex gap-2">
+        <input
+          inputMode="decimal"
+          value={raw}
+          onChange={(e) => setRaw(e.target.value)}
+          placeholder="0"
+          aria-label="Amount"
+          className={cn(field, "flex-1 font-mono text-lg tabular-nums")}
+        />
+        <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} aria-label="Currency" className={cn(field, "w-28 font-mono")}>
+          {opened.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+      </div>
+      <button
+        type="button"
+        disabled={!(amount > 0)}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Request {amount > 0 ? formatMoney(amount, ccy) : ""}
+      </button>
+    </div>
+  );
+}
+
+function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromInit: Ccy }) {
+  const opened: Ccy[] = w.w.opened?.length ? w.w.opened : ["USD"];
+  const [from, setFrom] = useState<Ccy>(opened.includes(fromInit) ? fromInit : "USD");
+  const [to, setTo] = useState<Ccy>("EUR");
+  const [raw, setRaw] = useState("");
+  const amount = Number(raw) || 0;
+  const r = rate(from, to, w.usdPer);
+  const got = amount * r;
+  const amountUsd = amount * (w.usdPer[from] || 0);
+  const rev = revolutFee("fx", amountUsd, w.weekend);
+  const oneToOne = (from === "USD" && to === "USDC") || (from === "USDC" && to === "USD");
+
+  const preview = useMemo(() => got, [got]);
+
+  function go() {
+    const res = w.convert(from, to, amount);
+    if (!res.ok) toast.error(res.error);
+    else toast.success(`Now holding ${formatMoney(preview, to)}.`);
+  }
+
+  const choices = Array.from(new Set([...opened, from, to]));
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-2">
+        <select value={from} onChange={(e) => setFrom(e.target.value as Ccy)} aria-label="From" className={cn(field, "font-mono")}>
+          {choices.map((c) => (
+            <option key={c} value={c}>
+              From {c}
+            </option>
+          ))}
+        </select>
+        <select value={to} onChange={(e) => setTo(e.target.value as Ccy)} aria-label="Hold" className={cn(field, "font-mono")}>
+          {CCYS.map((c) => (
+            <option key={c} value={c}>
+              Hold {c}
+            </option>
+          ))}
+        </select>
       </div>
       <input
         inputMode="decimal"
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
+        placeholder="0"
         aria-label="Amount"
-        className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums outline-none"
+        className="min-h-14 w-full bg-transparent font-mono text-4xl tabular-nums outline-none placeholder:text-white/20"
       />
+      <p className="font-mono text-xs tabular-nums text-subtle">Available {formatMoney(w.w.balances[from] ?? 0, from)}</p>
       <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
-        <p className="font-mono tabular-nums">You receive about {outLabel}</p>
+        <p className="font-mono font-medium tabular-nums">You hold {formatMoney(got, to)}</p>
         <p className="mt-1 text-muted">
-          {quote ? `${quote.route} · impact ${impact.toFixed(3)}% · minimum ${sellingSol ? quote.minUi.toFixed(2) + " USDC" : quote.minUi.toFixed(4) + " SOL"}` : quoteErr || "Quoting…"}
+          {oneToOne ? "USDC ↔ USD is 1:1. No spread." : `1 ${from} = ${r.toFixed(4)} ${to} · mid-market · $0`}
         </p>
+        {rev > 0 ? <p className="mt-1 text-muted">Revolut weekend/over-cap would take {formatMoney(rev)}.</p> : null}
       </div>
-      <button type="button" disabled={busy || !quote} onClick={() => void go()} className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40">
-        {busy ? "Waiting on the wallet…" : "Sign swap"}
+      <button
+        type="button"
+        disabled={!(amount > 0) || from === to}
+        onClick={go}
+        className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
+      >
+        Exchange
       </button>
-      {sig ? (
-        <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
-          {sig}
-        </a>
-      ) : null}
     </div>
   );
 }
 
-function AddForm({ owner, onExchange }: { owner: string; onExchange: () => void }) {
+function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted">Load the wallet on this desk. USDC that lands there shows under In the wallet.</p>
-      {owner ? <p className="break-all font-mono text-xs">{owner}</p> : <p className="text-sm text-muted">Show my account so loads have an address.</p>}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={onExchange} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-          Swap SOL to USDC here
-        </button>
-        <a href={SWAP_USDC} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
-          Open Phantom swap
-        </a>
-        <a href={OPEN_USDC} className="inline-flex min-h-12 items-center rounded-full border border-white/15 px-5 text-sm font-semibold">
-          Open USDC in Phantom
-        </a>
-      </div>
-      <AccountDetails owner={owner} />
-      <div className="mt-4">
-        <ClearingCard />
-      </div>
+    <div className="flex flex-col gap-3">
+      {open ? <AddMoneyScreen onClose={() => setOpen(false)} /> : null}
+      <button type="button" onClick={() => setOpen(true)} className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg">
+        Add money
+      </button>
+      <button
+        type="button"
+        className="min-h-12 rounded-full border border-white/15 text-sm font-semibold"
+        onClick={() => {
+          const r = w.withdraw(Math.min(w.w.balances.USD, 2500), "USD");
+          if (!r.ok) toast.error(r.error);
+          else toast.success("On the way to checking.");
+        }}
+      >
+        Withdraw to bank
+      </button>
     </div>
   );
 }

@@ -1,12 +1,14 @@
 /** Injected wallets. We only connect what is actually in this browser. */
 
-import { canSignHere, isPhoneBrowser, openInWallet, type MobileWallet } from "@/lib/mobile-wallet";
+import { unlockSeal } from "@/lib/seal";
 
 type SolProvider = {
   isPhantom?: boolean;
   isSolflare?: boolean;
   isBackpack?: boolean;
-  connect: () => Promise<{ publicKey?: { toString: () => string } }>;
+  isCoinbaseWallet?: boolean;
+  publicKey?: { toString: () => string };
+  connect: (opts?: { onlyIfTrusted?: boolean }) => Promise<{ publicKey?: { toString: () => string } }>;
   signAndSendTransaction?: (tx: unknown) => Promise<{ signature: string | Uint8Array }>;
   signTransaction?: (tx: unknown) => Promise<{ serialize: () => Uint8Array }>;
 };
@@ -48,13 +50,13 @@ const SOL: { id: WalletId; name: string; pick: (w: Window) => SolProvider | unde
   { id: "okx", name: "OKX", pick: (w) => (w as Win).okxwallet?.solana },
   { id: "bitget", name: "Bitget", pick: (w) => (w as Win).bitkeep?.solana },
   { id: "trust", name: "Trust", pick: (w) => (w as Win).trustwallet?.solana },
-  { id: "coinbase-sol", name: "Coinbase", pick: (w) => (w as Win).coinbaseSolana },
+  { id: "coinbase-sol", name: "Coinbase · Solana", pick: (w) => coinbaseSol(w) },
 ];
 
 const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] = [
   { id: "metamask", name: "MetaMask", pick: (e) => Boolean(e.isMetaMask && !e.isBraveWallet) },
   { id: "rabby", name: "Rabby", pick: (e) => Boolean(e.isRabby) },
-  { id: "coinbase", name: "Coinbase Wallet", pick: (e) => Boolean(e.isCoinbaseWallet) },
+  { id: "coinbase", name: "Coinbase · Base", pick: (e) => Boolean(e.isCoinbaseWallet) },
   { id: "brave", name: "Brave Wallet", pick: (e) => Boolean(e.isBraveWallet) },
 ];
 
@@ -67,8 +69,20 @@ type Win = Window & {
   bitkeep?: { solana?: SolProvider };
   trustwallet?: { solana?: SolProvider };
   coinbaseSolana?: SolProvider;
+  coinbaseWalletExtension?: { solana?: SolProvider };
+  coinbaseWallet?: { solana?: SolProvider };
+  solana?: SolProvider;
   ethereum?: EvmProvider & { providers?: EvmProvider[] };
 };
+
+function coinbaseSol(w: Window): SolProvider | undefined {
+  const win = w as Win;
+  if (win.coinbaseSolana?.connect) return win.coinbaseSolana;
+  if (win.coinbaseWalletExtension?.solana?.connect) return win.coinbaseWalletExtension.solana;
+  if (win.coinbaseWallet?.solana?.connect) return win.coinbaseWallet.solana;
+  if (win.solana?.isCoinbaseWallet) return win.solana;
+  return undefined;
+}
 
 function ethereumProviders(): EvmProvider[] {
   if (typeof window === "undefined") return [];
@@ -124,40 +138,9 @@ export function activeSolProvider(): SolProvider | null {
   return null;
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function waitChoice(id: WalletId, ms: number): Promise<WalletChoice | undefined> {
-  const started = Date.now();
-  const found = () => detectWallets().find((w) => w.id === id);
-  const first = found();
-  if (first?.installed) return first;
-  while (Date.now() - started < ms) {
-    await wait(120);
-    const row = found();
-    if (row?.installed) return row;
-  }
-  return found();
-}
-
 export async function connectWallet(id: WalletId): Promise<{ address: string; label: string; chain: "solana" | "evm" }> {
-  const canOpen = id === "phantom" || id === "solflare" || id === "backpack";
-  let choice = detectWallets().find((w) => w.id === id);
-  if (!choice?.installed && (canSignHere() || (isPhoneBrowser() && canOpen))) {
-    choice = await waitChoice(id, canSignHere() ? 8000 : 500);
-  }
-  if (!choice?.installed && !canSignHere() && isPhoneBrowser() && canOpen) {
-    openInWallet(id as MobileWallet);
-    return new Promise(() => {});
-  }
-  if (!choice?.installed) {
-    throw new Error(
-      canSignHere()
-        ? "This page is already inside the wallet. Tap Show my account again."
-        : `${choice?.name ?? "That wallet"} is not in this browser. On a phone, Phantom, Solflare, or Backpack opens this page.`,
-    );
-  }
+  const choice = detectWallets().find((w) => w.id === id);
+  if (!choice?.installed) throw new Error(`${choice?.name ?? "That wallet"} is not in this browser.`);
   if (choice.chain === "solana") {
     const spec = SOL.find((s) => s.id === id);
     const provider = spec?.pick(window);
@@ -166,6 +149,7 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
     const address = res?.publicKey?.toString();
     if (!address) throw new Error(`${choice.name} returned no account.`);
     rememberWallet(id);
+    await unlockSeal(address);
     return { address, label: choice.name, chain: "solana" };
   }
   const spec = EVM.find((e) => e.id === id);
@@ -174,6 +158,5 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
   const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
   const address = accounts?.[0];
   if (!address) throw new Error(`${choice.name} returned no account.`);
-  rememberWallet(id);
   return { address, label: choice.name, chain: "evm" };
 }
