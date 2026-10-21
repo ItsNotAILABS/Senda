@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { verifySwapQuote } from "../src/lib/quote-guard.mjs";
+import { verifySwapQuote, verifyStableSpend } from "../src/lib/quote-guard.mjs";
 
 const intent = { inputMint: "MintIn", outputMint: "MintOut", amountRaw: 10_000_000 };
 const valid = () => ({
@@ -36,4 +36,18 @@ test("rejects an unsafe JS integer rather than silently rounding financial amoun
 test("accepts the impact limit but rejects above the limit", () => {
   assert.equal(verifySwapQuote({ ...valid(), priceImpactPct: "0.05" }, intent).impactPercent, 5);
   assert.throws(() => verifySwapQuote({ ...valid(), priceImpactPct: "0.0501" }, intent), denied);
+});
+
+test("bounds Jupiter raw quantities to Solana's u64 range", () => {
+  for (const outAmount of ["18446744073709551616", "9999999999999999999999", "1.1", "0"]) {
+    assert.throws(() => verifySwapQuote({ ...valid(), outAmount }, intent), denied);
+  }
+});
+test("checks six-decimal stable input against the cap in raw units, not the displayed USD", () => {
+  const stableMints = ["USDCmint", "USDTmint"];
+  const base = { inputMint: "USDCmint", capUsd: 100, stableMints };
+  verifyStableSpend({ ...base, amountRaw: 100_000_000 });
+  assert.throws(() => verifyStableSpend({ ...base, amountRaw: 100_000_001 }), denied);
+  assert.throws(() => verifyStableSpend({ ...base, amountRaw: Number.MAX_SAFE_INTEGER + 1 }), denied);
+  verifyStableSpend({ ...base, inputMint: "non-stable-mint", amountRaw: 1_000_000_000 });
 });
