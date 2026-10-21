@@ -7,7 +7,7 @@ import { stageMove } from "@/lib/moves";
 import { PRESTOCK_MINTS, sendVersioned, splHolding } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
 import { pairAllowed } from "@/lib/trade-book.mjs";
-import { verifySwapQuote } from "@/lib/quote-guard.mjs";
+import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
 const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
@@ -150,7 +150,8 @@ export async function signRoute(input: {
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
   assertPrestockRoute(input.inputMint, input.outputMint, input.extraMints ?? []);
   const cap = spendCap();
-  if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
+  if (input.usd > cap) throw new Error(`That is about ${input.usd.toFixed(0)}. Your send cap is ${cap}. Raise it on Your money.`);
+  verifyStableSpend({ inputMint: input.inputMint, amountRaw: input.amountRaw, capUsd: cap, stableMints: [USDC, CASH, USDT, PYUSD] });
   // The exact quote sent to Jupiter's swap builder must pass every guard.
   // Never validate one quote and build the transaction from a second unchecked quote.
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${input.amountRaw}&slippageBps=100&restrictIntermediateTokens=true`;
