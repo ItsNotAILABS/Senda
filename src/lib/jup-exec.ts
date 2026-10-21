@@ -5,7 +5,6 @@ import { z } from "zod";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
 
 export type JupQuote = {
   inAmount: string;
@@ -33,7 +32,7 @@ export async function fetchQuote(mint: string, usd: number, side: "buy" | "sell"
   const outputMint = side === "buy" ? mint : USDC;
   const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter unreachable.";
-  for (const base of [QUOTE, QUOTE_LITE]) {
+  for (const base of [QUOTE]) {
     try {
       const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
       const text = await r.text();

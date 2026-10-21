@@ -27,9 +27,8 @@ export const SPEND_DEFAULT = 100;
 export const SPEND_MAX = 5000;
 
 const PRESTOCKS = "https://prestocks.com/api/prestocks";
-const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
-const QUOTE_API = "https://api.jup.ag/swap/v1/quote";
-const PRICE = "https://lite-api.jup.ag/price/v3?ids=";
+const QUOTE = "https://api.jup.ag/swap/v1/quote";
+const PRICE = "https://api.jup.ag/price/v3?ids=";
 const LIFI = "https://li.quest/v1/quote";
 const LLAMA = "https://coins.llama.fi";
 const RPCS = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
@@ -217,7 +216,7 @@ export async function listPrints() {
 async function jupQuote(inputMint, outputMint, amount) {
   const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter unreachable.";
-  for (const base of [QUOTE_API, QUOTE]) {
+  for (const base of [QUOTE]) {
     try {
       const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json", "user-agent": "Senda/1.0 (no custody)" } });
       const text = await r.text();

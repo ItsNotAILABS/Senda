@@ -137,7 +137,7 @@ export async function settleTable(to: string, usd: number, memo: string): Promis
 }
 
 export const readSolPrice = createServerFn({ method: "GET" }).handler(async (): Promise<{ usd: number }> => {
-  const res = await fetch(`https://lite-api.jup.ag/price/v3?ids=${SOL}`, { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
+  const res = await fetch(`https://api.jup.ag/price/v3?ids=${SOL}`, { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
   if (!res.ok) return { usd: 0 };
   const body = (await res.json()) as Record<string, { usdPrice?: number }>;
   return { usd: Number(body[SOL]?.usdPrice) || 0 };

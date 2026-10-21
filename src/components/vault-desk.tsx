@@ -129,7 +129,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     const ids = [...new Set([SOL_MINT, ...chain.tokens.filter((token) => token.ui > 0 && token.mint).map((token) => token.mint)])].slice(0, 50);
     if (!ids.length) return;
     let live = true;
-    fetch(`https://lite-api.jup.ag/price/v3?ids=${ids.join(",")}`, { headers: { accept: "application/json" } })
+    fetch(`https://api.jup.ag/price/v3?ids=${ids.join(",")}`, { headers: { accept: "application/json" } })
       .then((res) => res.json())
       .then((body: Record<string, { usdPrice?: number; priceChange24h?: number }>) => {
         if (!live || !body) return;

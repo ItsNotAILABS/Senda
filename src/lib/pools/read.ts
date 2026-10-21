@@ -8,7 +8,6 @@ import { fetchHouse } from "@/lib/sol-house";
 import { USDC_MINT, programForLabel, type SharedBook, type SharedHop } from "@/lib/pools/model";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
 const PROBE_USD = 25;
 
 type RawHop = {
@@ -23,7 +22,7 @@ async function quoteHops(mint: string): Promise<{ hops: SharedHop[]; outAmount: 
   const amount = PROBE_USD * 1_000_000;
   const qs = `inputMint=${USDC_MINT}&outputMint=${mint}&amount=${amount}&slippageBps=100`;
   let last = "No route.";
-  for (const base of [QUOTE_LITE, QUOTE]) {
+  for (const base of [QUOTE]) {
     try {
       const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
       if (!r.ok) {
