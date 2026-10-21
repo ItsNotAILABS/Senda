@@ -18,3 +18,11 @@ Keyless access to Jupiter's gateway is available but severely rate-limited per I
 Jupiter's Metis Swap v1 endpoints are no longer the recommended integration. Migrating to Swap v2 requires understanding its order and execution contracts and separate wallet/failure tests; it must **not** be done by blindly rewriting URL paths.
 
 The fee-payer check and quote guard are not a complete disassembly or audit of all swap instructions. A transaction signature is a submission acknowledgment, not confirmation of settlement. Verify the on-chain result before presenting an irreversible fill. No live wallet transaction, KYC/financial approval or deployment was performed during this patch.
+
+## Confirmation-sensitive fill records
+
+The client now checks `getSignatureStatuses` on the submitted signature before writing a trade to the local fill ledger. Only a status of `confirmed` or `finalized` accompanied by an explicit `err: null` is treated as successful. A transaction with an on-chain error is rejected; missing status, malformed status and temporary RPC errors never become fills.
+
+After the bounded confirmation window, Senda leaves the fill unrecorded, writes an awaiting-confirmation activity note and shows the signature so the user can verify it before another attempt. This is **not** automatic reconciliation: an eventually confirmed transaction needs a separate reconciliation flow to appear in the local fills. A confirmed transaction can still be subject to a rare chain reorganization until finality. The server-side move record is a submission receipt, not a settlement certificate.
+
+Run `node --test scripts/confirmation-gate.test.mjs scripts/quote-guard.test.mjs scripts/jupiter-host.test.mjs` for the targeted checks.
