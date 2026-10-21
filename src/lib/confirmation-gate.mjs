@@ -12,7 +12,7 @@ export async function waitForChainConfirmation(signature, getStatus, options = {
       if (status?.err != null) {
         throw Object.assign(new Error(`Transaction failed on-chain: ${signature}. Check the explorer before retrying.`), { onChainFailure: true });
       }
-      if (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized") {
+      if (status?.err === null && (status?.confirmationStatus === "confirmed" || status?.confirmationStatus === "finalized")) {
         return { signature, confirmationStatus: status.confirmationStatus };
       }
     } catch (error) {
