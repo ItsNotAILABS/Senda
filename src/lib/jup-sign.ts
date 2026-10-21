@@ -148,7 +148,7 @@ export async function signRoute(input: {
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
   assertPrestockRoute(input.inputMint, input.outputMint, input.extraMints ?? []);
   const cap = spendCap();
-  if (input.usd > cap) throw new Error(`That is about ${input.usd.toFixed(0)}. Your send cap is ${cap}. Raise it on Your money.`);
+  if (input.usd > cap) throw new Error(`That is about USD ${input.usd.toFixed(0)}. Your send cap is USD ${cap}. Raise it on Your money.`);
   verifyStableSpend({ inputMint: input.inputMint, amountRaw: input.amountRaw, capUsd: cap, stableMints: [USDC, CASH, USDT, PYUSD] });
   // The exact quote sent to Jupiter's swap builder must pass every guard.
   // Never validate one quote and build the transaction from a second unchecked quote.
