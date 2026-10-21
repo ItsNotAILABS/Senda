@@ -266,7 +266,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
   useEffect(() => {
     if (!owner) return;
     let live = true;
-    fetch("https://lite-api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112", { headers: { accept: "application/json" } })
+    fetch("https://api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112", { headers: { accept: "application/json" } })
       .then((r) => r.json())
       .then((body: Record<string, { usdPrice?: number }>) => {
         const px = Number(body.So11111111111111111111111111111111111111112?.usdPrice);
@@ -806,8 +806,8 @@ function Movers() {
         }));
     const pull = () => {
       Promise.all([
-        fetch("https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=16", { headers: { accept: "application/json" } }).then((r) => r.json()),
-        fetch("https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=40", { headers: { accept: "application/json" } }).then((r) => r.json()),
+        fetch("https://api.jup.ag/tokens/v2/toptrending/24h?limit=16", { headers: { accept: "application/json" } }).then((r) => r.json()),
+        fetch("https://api.jup.ag/tokens/v2/toptraded/24h?limit=40", { headers: { accept: "application/json" } }).then((r) => r.json()),
       ])
         .then(([trend, traded]) => {
           if (!live) return;

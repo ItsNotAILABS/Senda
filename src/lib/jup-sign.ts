@@ -10,9 +10,7 @@ import { pairAllowed } from "@/lib/trade-book.mjs";
 import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
 const SWAP = "https://api.jup.ag/swap/v1/swap";
-const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
 
 export const SOL = "So11111111111111111111111111111111111111112";
 export const PYUSD = "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo";
@@ -101,7 +99,7 @@ export async function quoteRoute(input: {
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter did not quote.";
-  for (const base of [QUOTE, QUOTE_LITE]) {
+  for (const base of [QUOTE]) {
     const res = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
     const text = await res.text();
     let quote: RawQuote = {};
@@ -158,7 +156,7 @@ export async function signRoute(input: {
   let quote: RawQuote | null = null;
   let checked: ReturnType<typeof verifySwapQuote> | null = null;
   let lastQuoteError = "Jupiter did not quote.";
-  for (const base of [QUOTE, QUOTE_LITE]) {
+  for (const base of [QUOTE]) {
     try {
       const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
       const text = await quoteRes.text();
@@ -178,7 +176,7 @@ export async function signRoute(input: {
   if (!quote || !checked) throw new Error(lastQuoteError);
   let swapTx = "";
   let swapErr = "Jupiter did not build a transaction.";
-  for (const base of [SWAP, SWAP_LITE]) {
+  for (const base of [SWAP]) {
     const swapRes = await fetch(base, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },

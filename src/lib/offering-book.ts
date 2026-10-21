@@ -333,9 +333,9 @@ async function liveExtras(): Promise<Draft[]> {
 }
 
 const TAPE = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
+  "https://api.jup.ag/tokens/v2/tag?query=verified",
+  "https://api.jup.ag/tokens/v2/tag?query=lst",
+  "https://api.jup.ag/tokens/v2/tag?query=stocks",
 ];
 
 async function tapeDrafts(): Promise<Draft[]> {

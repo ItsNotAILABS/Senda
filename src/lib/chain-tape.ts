@@ -3,7 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CHAINS, SOLANA_MORE, mapChains, mapSolana, type TapeRow } from "@/lib/chain-tape-map.mjs";
 
-const JUP = "https://lite-api.jup.ag/price/v3?ids=";
+const JUP = "https://api.jup.ag/price/v3?ids=";
 const LLAMA = "https://coins.llama.fi";
 
 export type ChainTape = {

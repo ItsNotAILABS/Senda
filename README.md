@@ -113,7 +113,7 @@ Cluster is **mainnet-beta**.
 - Token program `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
 - Associated token program `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`
 - Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`
-- Jupiter quote `https://lite-api.jup.ag/swap/v1/quote`
+- Jupiter quote `https://api.jup.ag/swap/v1/quote`
 - RPC `https://api.mainnet-beta.solana.com`, then `https://solana-rpc.publicnode.com`
 - Wallets: the Solana injector that is actually in the window. Phantom, Solflare, Backpack, and the others in [src/lib/wallets.ts](src/lib/wallets.ts). A missing extension is not drawn as connected.
 

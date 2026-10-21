@@ -156,7 +156,7 @@ export function splPayLink(to: string, mint: string, amount: number, memo = ""):
 }
 
 async function solPrice(): Promise<number> {
-  const res = await fetch(`https://lite-api.jup.ag/price/v3?ids=${SOL_MINT}`, { headers: { accept: "application/json" } });
+  const res = await fetch(`https://api.jup.ag/price/v3?ids=${SOL_MINT}`, { headers: { accept: "application/json" } });
   if (!res.ok) throw new Error("Could not price SOL.");
   const body = (await res.json()) as Record<string, { usdPrice?: number }>;
   const px = Number(body[SOL_MINT]?.usdPrice);
