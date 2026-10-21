@@ -3,10 +3,14 @@ export const SWAP_SLIPPAGE_BPS = 100;
 export const MAX_PRICE_IMPACT_PERCENT = 5;
 
 function rawPositive(value, label) {
-  if (typeof value !== "string" || !/^[0-9]+$/.test(value) || BigInt(value) <= 0n) {
+  if (typeof value !== "string" || !/^[0-9]{1,20}$/.test(value)) {
     throw new Error(`Jupiter returned an invalid ${label}. The wallet was not asked to sign.`);
   }
-  return BigInt(value);
+  const raw = BigInt(value);
+  if (raw <= 0n || raw > (1n << 64n) - 1n) {
+    throw new Error(`Jupiter returned an out-of-range ${label}. The wallet was not asked to sign.`);
+  }
+  return raw;
 }
 
 /** Fail closed on price and identity changes. Never use a different quote in /swap. */
@@ -47,4 +51,22 @@ export function verifySwapQuote(quote, intent) {
     minOutAmount: minimum.toString(),
     impactPercent,
   };
+}
+
+/**
+ * The display's estimated USD value cannot authorize a larger six-decimal
+ * stablecoin input. Call before fetching a quote or asking for a signature.
+ * This covers the stablecoin mints supported by Senda; other tokens require
+ * their own independent price oracle and wallet confirmation.
+ */
+export function verifyStableSpend({ inputMint, amountRaw, capUsd, stableMints }) {
+  if (!stableMints.includes(inputMint)) return;
+  if (!Number.isSafeInteger(amountRaw) || amountRaw <= 0 ||
+      !Number.isFinite(capUsd) || capUsd <= 0) {
+    throw new Error("Invalid stablecoin spend amount or cap. The wallet was not asked to sign.");
+  }
+  const capRaw = BigInt(Math.floor(capUsd * 1_000_000));
+  if (BigInt(amountRaw) > capRaw) {
+    throw new Error("Stablecoin input exceeds the wallet spend cap. The wallet was not asked to sign.");
+  }
 }
