@@ -32,6 +32,13 @@ test("transient RPC errors remain unconfirmed, and can recover", async () => {
   }, options);
   assert.equal(result.confirmationStatus, "finalized");
 });
+test("missing execution status is never mistaken for success", async () => {
+  await assert.rejects(
+    () => waitForChainConfirmation(signature, async () => ({ confirmationStatus: "confirmed" }), options),
+    /not yet confirmed/,
+  );
+});
+
 test("timeouts never claim a fill or invite blind re-signing", async () => {
   await assert.rejects(
     () => waitForChainConfirmation(signature, async () => null, options),
