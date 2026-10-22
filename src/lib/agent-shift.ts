@@ -17,7 +17,16 @@ export const JOBS: { id: Job; title: string; line: string }[] = [
   { id: "clerk", title: "Clerk", line: "Writes a line on your sheet for each name it watches." },
 ];
 
-export type Queue = { symbol: string; side: "buy" | "sell"; usd: number; why: string };
+export type Queue = {
+  symbol: string;
+  side: "buy" | "sell";
+  usd: number;
+  why: string;
+  order?: "market" | "limit" | "stop";
+  action?: "swap" | "pay" | "lend" | "watch";
+  limitPx?: number;
+  payTo?: string;
+};
 
 const SHEET = "senda.sheet.v1";
 
@@ -45,13 +54,51 @@ function gateQueue(env: Envelope, name: HouseListing, side: "buy" | "sell", book
   if (gate.blocked || !(gate.usd > 0)) return { log: `${gate.blocked || gate.risk}${memory}` };
   return {
     log: `${name.symbol} queued at $${gate.usd}. ${gate.risk}${memory}`,
-    queue: { symbol: name.symbol, side, usd: gate.usd, why: gate.risk },
+    queue: stamp(env, { symbol: name.symbol, side, usd: gate.usd, why: gate.risk }),
+  };
+}
+
+function throughPrice(env: Envelope, name: HouseListing, side: "buy" | "sell"): { ok: boolean; log: string } {
+  const order = env.order || "market";
+  if (order === "market") return { ok: true, log: "" };
+  const px = env.limitPx ?? 0;
+  if (!(px > 0)) return { ok: false, log: "Set a price on the contract before this can queue." };
+  if (!(name.last > 0)) return { ok: false, log: `${name.symbol} has no last.` };
+  const touched = order === "limit" ? (side === "buy" ? name.last <= px : name.last >= px) : side === "sell" ? name.last <= px : name.last >= px;
+  return touched
+    ? { ok: true, log: "" }
+    : { ok: false, log: `${name.symbol} is ${name.last}. The ${order} is ${px}. Not touched.` };
+}
+
+function stamp(env: Envelope, queue: Queue): Queue {
+  return {
+    ...queue,
+    order: env.order || "market",
+    action: env.action || "swap",
+    limitPx: env.limitPx,
+    payTo: env.payTo,
   };
 }
 
 export function think(env: Envelope, book: HouseListing[]): { log: string; queue?: Queue } | null {
   if (env.armed === false) return null;
+  const day = new Date().toISOString().slice(0, 10);
+  if (env.signedOn === day) return { log: "This contract already signed today." };
   if (env.lastTick && Date.now() - Date.parse(env.lastTick) < 18_000) return null;
+  if (env.action === "pay") {
+    if (!env.payTo) return { log: "No address on the contract. Nothing to sign." };
+    return {
+      log: `Pay $${env.maxUsd} USDC is waiting on your signature.`,
+      queue: stamp(env, { symbol: "USDC", side: "buy", usd: env.maxUsd, why: "Approved pay" }),
+    };
+  }
+  if (env.action === "lend") {
+    return {
+      log: "SPYx, QQQx, and NVDAx can be lent on the Kamino xStocks market. Yield comes back as the same token. Open that market and sign there.",
+      queue: stamp(env, { symbol: "SPYx", side: "buy", usd: env.maxUsd, why: "In-kind yield" }),
+    };
+  }
+  if (env.action === "watch") return { log: "Watching. This contract does not send." };
   const rows = pool(env, book);
   if (!rows.length) return { log: "Nothing on the book to watch." };
   const job = env.job || "scout";
@@ -60,11 +107,21 @@ export function think(env: Envelope, book: HouseListing[]): { log: string; queue
   if (job === "scout") {
     return { log: `${cheap.symbol} is the cheap one. ${rich.symbol} is the rich one.` };
   }
-  if (job === "discount" && (cheap.premium ?? 0) < -0.03) return gateQueue(env, cheap, "buy", rows);
-  if (job === "rich" && (rich.premium ?? 0) > 0.03) return gateQueue(env, rich, "sell", rows);
+  if (job === "discount" && (cheap.premium ?? 0) < -0.03) {
+    const gate = throughPrice(env, cheap, "buy");
+    if (!gate.ok) return { log: gate.log };
+    return gateQueue(env, cheap, "buy", rows);
+  }
+  if (job === "rich" && (rich.premium ?? 0) > 0.03) {
+    const gate = throughPrice(env, rich, "sell");
+    if (!gate.ok) return { log: gate.log };
+    return gateQueue(env, rich, "sell", rows);
+  }
   if (job === "daily") {
     const day = new Date().toISOString().slice(0, 10);
     if (env.lastTick?.slice(0, 10) === day) return { log: "Today's buy already queued." };
+    const gate = throughPrice(env, rows[0], "buy");
+    if (!gate.ok) return { log: gate.log };
     return gateQueue(env, rows[0], "buy", rows);
   }
   if (job === "cover") {
