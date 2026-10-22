@@ -1,22 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { WalletDesk } from "@/components/wallet-desk";
-
-type MoneySearch = { buy?: string };
+import { ProductShell } from "@/components/product-shell";
+import { CONVERT_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/wallet")({
-  validateSearch: (raw: Record<string, unknown>): MoneySearch => {
+  validateSearch: (raw: Record<string, unknown>): { buy?: string } => {
     const buy = typeof raw.buy === "string" ? raw.buy : undefined;
     return buy ? { buy } : {};
   },
-  component: WalletPage,
+  component: Layout,
 });
 
-function WalletPage() {
-  const { buy } = Route.useSearch();
+function Layout() {
   return (
     <AppShell>
-      <WalletDesk buy={buy} />
+      <ProductShell title="Convert" pages={CONVERT_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

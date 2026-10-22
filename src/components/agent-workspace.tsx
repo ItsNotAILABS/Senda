@@ -137,7 +137,7 @@ const AUTONOMY_LABELS: Record<AgentAutonomy, string> = {
   queue: "Queue actions",
 };
 
-export function AgentWorkspace({ names }: { names: HouseListing[] }) {
+export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing[]; pane?: "studio" | "build" }) {
   const book = useMemo(() => names.filter((name) => name.venue === "prestocks" && name.last > 0), [names]);
   const wallet = useWallet();
   const [rows, setRows] = useState<Worker[]>(() => (typeof window === "undefined" ? [] : listWorkers()));
@@ -402,8 +402,8 @@ export function AgentWorkspace({ names }: { names: HouseListing[] }) {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-[1600px] lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="border-white/10 lg:min-h-[calc(100dvh-220px)] lg:border-r">
+      <div className={cn("mx-auto grid max-w-[1600px]", pane === "studio" && "lg:grid-cols-[280px_minmax(0,1fr)_320px]")}>
+        <aside className={cn("border-white/10 lg:min-h-[calc(100dvh-220px)] lg:border-r", pane === "build" && "hidden")}>
           <div className="border-b border-white/10 p-4">
             <label className="flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3">
               <Search className="size-4 text-white/35" />
@@ -445,7 +445,7 @@ export function AgentWorkspace({ names }: { names: HouseListing[] }) {
         </aside>
 
         <section className="min-w-0 px-5 py-6 lg:px-8">
-          {selected ? (
+          {pane !== "build" && selected ? (
             <AgentDetail
               row={selected}
               onRun={() => run(selected)}
@@ -491,7 +491,7 @@ export function AgentWorkspace({ names }: { names: HouseListing[] }) {
           )}
         </section>
 
-        <aside className="border-white/10 px-5 py-6 lg:border-l">
+        <aside className={cn("border-white/10 px-5 py-6 lg:border-l", pane === "build" && "hidden")}>
           <p className="text-[11px] tracking-[0.16em] text-white/40 uppercase">Control room</p>
           {selected ? (
             <>

@@ -1,72 +1,53 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { MoneyBar } from "@/components/money-bar";
+import { TradeTerminal } from "@/components/trade-terminal";
+import { FillButton } from "@/components/fill-button";
 import { CurveDesk } from "@/components/curve-desk";
 import { AddMoneyScreen } from "@/components/add-money";
 import { BasketDesk } from "@/components/basket-desk";
-import { CoverDesk } from "@/components/cover-desk";
-import { CrossSend } from "@/components/cross-send";
-import { DeskStake } from "@/components/desk-stake";
 import { EcosystemDesk } from "@/components/ecosystem-desk";
-import { TradeBuy } from "@/components/jup-ticket";
-import { LiveChart } from "@/components/price-chart";
+import { JupBoard } from "@/components/jup-ticket";
 import { LaunchDesk } from "@/components/launch-desk";
 import { LendDesk } from "@/components/lend-desk";
 import { MarketStream } from "@/components/market-stream";
 import { PerpDesk } from "@/components/perp-desk";
-import { PreDesk } from "@/components/pre-desk";
 import { RadarDesk } from "@/components/radar-desk";
-import { OfferingBook } from "@/components/offering-book";
 import { OptionChain } from "@/components/option-chain";
-import { DerivDesk } from "@/components/deriv-desk";
-import { SolanaFloor } from "@/components/solana-floor";
-import { SpotCards } from "@/components/world-desk";
-import { XStockLane } from "@/components/xstock-desk";
-import { ChainMount } from "@/components/trade-mounts";
+import { type DeskMode } from "@/components/watchlist";
 import { applyHouseDrop, loadHouseBook, markHouse, saveHouseBook, type HouseBook } from "@/lib/house-paper";
-import { openChainCover } from "@/lib/cover-chain";
 import { connectPhantom } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import type { Side } from "@/lib/lmsr";
-import { chainFor, formatStrike, type OptContract, type OptTenor } from "@/lib/option-chain";
+import { chainFor, type OptContract, type OptTenor } from "@/lib/option-chain";
 import { settleOptions } from "@/lib/option-book";
-import { getChainTape, type ChainTape } from "@/lib/chain-tape";
-import { getHouse, HOUSE_FALLBACK, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
-import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { getHouse, HOUSE_FALLBACK, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
-type TradeTab =
-  | "spot"
-  | "world"
-  | "comms"
-  | "options"
-  | "perps"
-  | "pre"
-  | "bridge"
-  | "vault"
-  | "tape"
-  | "prog"
-  | "book"
-  | "basket"
-  | "lend"
-  | "minty"
-  | "curve"
-  | "wrap"
-  | "eco"
-  | "xstock"
-  | "futures"
-  | "loans"
-  | "hedge"
-  | "cover"
-  | "pred"
-  | "index"
-  | "shares"
-  | "chains"
-  | "products";
+function Dollars({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <label className="block px-1 pb-3">
+      <span className="text-xs font-medium text-subtle">Dollars</span>
+      <input
+        inputMode="decimal"
+        value={value ? String(value) : ""}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        placeholder="0"
+        className="mt-1 min-h-12 w-full rounded-full border border-white/10 bg-black/40 px-4 font-mono text-lg tabular-nums outline-none"
+      />
+    </label>
+  );
+}
 
 export function PitFloor({
   frozen,
   chips,
-  desk: startDesk,
   onBuyIn,
   onTrade,
   onCredit,
@@ -74,7 +55,6 @@ export function PitFloor({
 }: {
   frozen: boolean;
   chips: number;
-  desk?: string;
   onBuyIn: () => Promise<{ ok: boolean; error?: string }>;
   onTrade: (
     marketId: string,
@@ -84,22 +64,15 @@ export function PitFloor({
   onCredit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
   onDebit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const opened = (startDesk as TradeTab) || "spot";
   const [addOpen, setAddOpen] = useState(false);
-  const [desk, setDesk] = useState<TradeTab>(opened);
-  useEffect(() => {
-    if (!startDesk) return;
-    setDesk(startDesk as TradeTab);
-  }, [startDesk]);
+  const [desk, setDesk] = useState<DeskMode>("spot");
   const [armed, setArmed] = useState(0);
   const [house, setHouse] = useState<HouseListing[]>(HOUSE_FALLBACK);
   const [book, setBook] = useState<HouseBook>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [tenor, setTenor] = useState<OptTenor>("1d");
   const [underId, setUnderId] = useState<string | null>(null);
-  const [optKind, setOptKind] = useState<"call" | "put">("put");
-  const wallet = useWallet();
-  const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const [ticketSide, setTicketSide] = useState<"buy" | "sell">("buy");
 
   useEffect(() => {
     setBook(loadHouseBook());
@@ -116,11 +89,13 @@ export function PitFloor({
           const prices = Object.fromEntries(rows.map((r) => [r.id, r.last]));
           const settled = settleOptions(prices);
           for (const t of settled) {
+            if (t.pnl > 0) void onCredit(t.pnl + t.spend, t.id);
+            else if (t.pnl === 0) void onCredit(t.spend, t.id);
             toast(
               t.pnl > 0
-                ? `${t.symbol} ${t.kind} finished above the strike. Settle the cover on Cover.`
+                ? `${t.symbol} ${t.kind} paid`
                 : t.pnl < 0
-                  ? `${t.symbol} ${t.kind} expired.`
+                  ? `${t.symbol} ${t.kind} expired`
                   : `${t.symbol} push`,
             );
           }
@@ -188,19 +163,8 @@ export function PitFloor({
       if (!(spend > 0)) throw new Error("Enter the size. The premium is a slice of it.");
       if (!stock) throw new Error("That name is not on the book.");
       const owner = await connectPhantom();
-      const premium = Math.max(1, Math.round(spend * c.ask));
-      const row = await openChainCover({
-        owner,
-        kind: c.kind === "put" ? "drop" : "life",
-        title: `${c.symbol} ${c.kind} ${formatStrike(c.strike)}`,
-        symbol: stock.symbol,
-        mint: stock.mint,
-        strike: c.strike,
-        cover: spend,
-        premium,
-        days: c.tenor === "7d" ? 7 : 1,
-      });
-      toast.success(`Premium signed. ${row.sig.slice(0, 8)}… Settle it on Cover.`);
+      const done = await runPrestock({ owner, mint: stock.mint, side: "buy", usd: spend, price: stock.last });
+      toast.success(`No listed ${c.kind}. Bought $${spend} of ${stock.symbol}. ${done.signature.slice(0, 8)}…`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "The premium did not send.");
     } finally {
@@ -208,215 +172,150 @@ export function PitFloor({
     }
   }
 
-  const desks: [TradeTab, string][] = [
-    ["spot", "Quotes"],
-    ["tape", "Coins"],
-    ["xstock", "xStocks"],
-    ["pre", "PreStocks"],
-    ["world", "FX & metals"],
-    ["comms", "Commodities"],
-    ["index", "Indexes"],
-    ["shares", "Shares"],
-    ["perps", "Perps"],
-    ["options", "Options"],
-    ["pred", "Predict"],
-    ["futures", "Futures"],
-    ["products", "Products"],
-    ["chains", "Chains"],
-    ["vault", "Solana"],
-    ["bridge", "Bridge"],
-    ["lend", "Borrow"],
-    ["loans", "Loans"],
-    ["cover", "Cover"],
-    ["hedge", "Hedge"],
-    ["book", "Protect"],
-    ["basket", "Index"],
-    ["prog", "Programs"],
-    ["minty", "Launch"],
-    ["curve", "Curve"],
-    ["wrap", "Radar"],
-    ["eco", "Rails"],
-  ];
-  const blurb: Partial<Record<TradeTab, string>> = {
-    spot: "A name, a last price, and a ticket. Phantom signs the swap.",
-    world: "FX and metals. The spot you can keep is on the card.",
-    comms: "Oil, energy, softs, and the metals you can hold.",
-    index: "US500, US100, and the other indexes.",
-    shares: "NVDA, AAPL, and the other listed names.",
-    options: "A call or a put. The premium is the USDC you sign.",
-    perps: "Margin and leverage. Phantom signs the order.",
-    pred: "Above or below the print. You post USDC.",
-    futures: "Long or short the implied valuation.",
-    pre: "The pre-IPO book. Buy, cover, or spend against it.",
-    bridge: "Move USDC to another chain. This wallet signs.",
-    vault: "Everything this address holds, marked live.",
-    tape: "Jupiter coins, including the ones under a cent.",
-    xstock: "Listed shares. The token lands in the wallet.",
-    prog: "The program book and the PRE8 index.",
-    book: "Protect a name against the print.",
-    basket: "Buy a pack of names. Each swap is signed.",
-    lend: "Borrow against a holding. The token stays yours.",
-    loans: "Each loan, its rate, and how it pays back.",
-    minty: "Names that already trade. Buy one here.",
-    curve: "A curve on a name. Phantom signs the swap.",
-    wrap: "Cheapest and richest names versus the mark.",
-    eco: "How a name settles, and a buy on the same list.",
-    hedge: "Cover a drop. The premium is what you sign.",
-    cover: "Cover a drop. The token stays in the wallet.",
-    chains: "Solana signs here. Other chains sign through LI.FI.",
-    products: "Every product on one card. The button is the route that product can sign.",
-  };
+  const desks = [
+    ["spot", "Spot", "Buy or sell on Jupiter"],
+    ["book", "Protect", "Peg last to the SPV mark"],
+    ["options", "Options", "Call or put on the print"],
+    ["perps", "Perps", "Levered long or short"],
+    ["basket", "Index", "PRE8 basket"],
+    ["lend", "Borrow", "Cash against a holding"],
+    ["minty", "Launch", "Pump, LetsBonk, Clanker"],
+    ["curve", "Curve", "Bonding curve"],
+    ["wrap", "Radar", "Names off their mark"],
+    ["eco", "Rails", "Jupiter, Meteora, Raydium"],
+  ] as const;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mx-3 mt-3">
-        <MoneyBar />
-      </div>
-      <p className="mx-3 mt-3 font-mono text-xs text-muted" suppressHydrationWarning>
-        {pnl >= 0 ? "+" : ""}
-        {pnl.toFixed(2)} on the book
-      </p>
-      <main className="m-3 flex min-h-0 flex-1 flex-col gap-3">
-      {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
-      <nav className="sticky top-0 z-20 space-y-2 border-b border-white/10 bg-[#07070f]/95 px-1 py-2 backdrop-blur">
-        <div className="flex gap-1 overflow-x-auto">
+      <main className="m-3 min-h-0 flex-1">
+        {addOpen ? <AddMoneyScreen onClose={() => setAddOpen(false)} /> : null}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <p className="mr-2 font-mono text-sm tabular-nums" suppressHydrationWarning>
+            ${equity.toFixed(2)}
+            <span className={cn("ml-2 text-xs", pnl < 0 ? "text-down" : "text-accent")}>
+              {pnl >= 0 ? "+" : ""}
+              {pnl.toFixed(2)}
+            </span>
+          </p>
           {desks.map(([id, label]) => (
             <button
               key={id}
               type="button"
               aria-pressed={desk === id}
               onClick={() => setDesk(id)}
-              className={cn("min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold", desk === id ? "bg-white text-black" : "bg-[#2a2a2e] text-white/80")}
+              className={cn(
+                "min-h-9 rounded-full px-3 text-sm",
+                desk === id ? "bg-accent font-semibold text-accent-fg" : "bg-white/5 text-muted hover:text-fg",
+              )}
             >
               {label}
             </button>
           ))}
         </div>
-      </nav>
-      {desk === "spot" ? null : <p className="px-1 text-xs text-subtle">{blurb[desk] || "Same books. Open More for the rest."}</p>}
-      <div className={cn("min-h-0 flex-1 overflow-auto", desk === "spot" ? "" : "rounded-[22px] border border-white/10 bg-[#10131c]")}>
-
-      {desk === "spot" ? <TradeBuy names={pre} /> : null}
-      {desk === "tape" ? <TradeBuy names={pre} startLane="spot" /> : null}
-      {desk === "xstock" ? <XStockLane /> : null}
-      {desk === "world" ? (
-        <>
-          <SpotCards lane="all" />
-          <DerivDesk lane="fx" lanes={["fx", "metals"]} />
-        </>
-      ) : null}
-      {desk === "comms" ? (
-        <>
-          <SpotCards lane="metals" />
-          <DerivDesk lane="metals" lanes={["metals", "energy", "softs", "crypto"]} />
-        </>
-      ) : null}
-      {desk === "index" ? <DerivDesk lane="index" lanes={["index"]} /> : null}
-      {desk === "shares" ? <DerivDesk lane="shares" lanes={["shares"]} /> : null}
-      {desk === "chains" ? <ChainMount /> : null}
-      {desk === "products" ? <OfferingBook /> : null}
-      {desk === "perps" ? <PerpDesk house={pre} /> : null}
-      {desk === "pred" ? <DeskStake names={pre} mode="pred" /> : null}
-      {desk === "futures" ? <DeskStake names={pre} mode="perp" /> : null}
-      {desk === "pre" ? <PreDesk names={pre} routes={[]} /> : null}
-      {desk === "bridge" ? <div className="p-3">{owner ? <CrossSend owner={owner} /> : <p className="text-sm text-muted">Connect Phantom. That wallet signs the bridge.</p>}</div> : null}
-      {desk === "vault" ? <TradeSolana house={pre} /> : null}
-      {desk === "minty" ? <LaunchDesk names={pre} /> : null}
-      {desk === "curve" ? <CurveDesk /> : null}
-      {desk === "basket" ? <BasketDesk house={pre} /> : null}
-      {desk === "lend" || desk === "loans" ? <LendDesk house={pre} /> : null}
-      {desk === "book" ? <MarketStream house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
-      {desk === "wrap" ? <RadarDesk house={pre} /> : null}
-      {desk === "eco" || desk === "prog" ? <EcosystemDesk house={pre} /> : null}
-      {desk === "cover" || desk === "hedge" ? <CoverDesk names={pre} /> : null}
-
-      {desk === "options" && under ? (
-        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div>
-            <div className="flex gap-1 overflow-x-auto px-3 py-3">
-              {pre.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setUnderId(r.id)}
-                  className={cn(
-                    "min-h-10 shrink-0 rounded-full px-3 text-sm font-medium",
-                    under.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
-                  )}
-                >
-                  {r.symbol}
-                </button>
-              ))}
+        <div className="min-h-0">
+          {desk === "spot" ? (
+            <>
+              <TradeTerminal
+                names={pre}
+                under={under}
+                onPick={setUnderId}
+                armed={armed}
+                side={ticketSide}
+                onArmed={setArmed}
+                onSide={setTicketSide}
+                positions={pre
+                  .filter((r) => (book[r.id]?.shares ?? 0) !== 0)
+                  .map((r) => ({
+                    id: r.id,
+                    symbol: r.symbol,
+                    shares: book[r.id]?.shares ?? 0,
+                    cost: book[r.id]?.cost ?? 0,
+                    last: r.last,
+                  }))}
+              />
+              <JupBoard names={pre} />
+            </>
+          ) : (
+            <div className="overflow-auto rounded-[22px] border border-white/10 bg-[#10131c]">
+              {desk === "minty" ? <LaunchDesk /> : null}
+              {desk === "curve" ? <CurveDesk /> : null}
+              {desk === "perps" ? <PerpDesk /> : null}
+              {desk === "basket" ? <BasketDesk house={pre} /> : null}
+              {desk === "lend" ? <LendDesk house={pre} /> : null}
+              {desk === "book" ? <MarketStream house={pre} cash={chips} onDebit={onDebit} onCredit={onCredit} /> : null}
+              {desk === "wrap" ? <RadarDesk house={pre} /> : null}
+              {desk === "eco" ? <EcosystemDesk house={pre} /> : null}
+              {desk === "options" ? (
+                <>
+                  <div className="flex gap-1 overflow-x-auto px-3 py-3">
+                    {house
+                      .filter((r) => r.venue === "prestocks")
+                      .map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setUnderId(r.id)}
+                          className={cn(
+                            "min-h-10 shrink-0 rounded-full px-3 text-sm font-medium",
+                            under?.id === r.id ? "bg-accent text-accent-fg" : "bg-black/40 text-muted",
+                          )}
+                        >
+                          {r.symbol}
+                        </button>
+                      ))}
+                  </div>
+                  {under ? (
+                    <div className="px-4 pb-2">
+                      <p className="text-sm text-muted">
+                        {under.symbol} last {formatUsd(under.last)} · mark {formatUsd(under.mark)}. Put is insurance on last.
+                      </p>
+                      <p className="mt-1 truncate font-mono text-[11px] text-subtle">{under.mint}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <FillButton
+                          mint={under.mint}
+                          usd={10}
+                          price={under.last}
+                          label={`Buy $10 ${under.symbol}`}
+                          className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                        />
+                        <Link
+                          to="/wallet"
+                          search={{ buy: under.symbol }}
+                          className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm font-semibold"
+                        >
+                          Pay with SOL
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            const put = chainFor(under, tenor).find((c) => c.atm && c.kind === "put");
+                            if (put) void liftOpt(put);
+                          }}
+                          className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+                        >
+                          Insure last
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="px-3 pb-3">
+                    <Dollars value={armed} onChange={setArmed} />
+                  </div>
+                  <OptionChain
+                    stock={under?.venue === "prestocks" ? under : house.find((h) => h.venue === "prestocks") ?? under}
+                    tenor={tenor}
+                    onTenor={setTenor}
+                    busy={busy}
+                    onBuy={(c) => void liftOpt(c)}
+                  />
+                </>
+              ) : null}
             </div>
-            <div className="px-4 pb-2">
-              <p className="font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">Future purchase</p>
-              <p className="mt-1 text-2xl tracking-tight">{under.symbol}</p>
-              <p className="mt-1 text-sm text-muted">
-                Last {formatUsd(under.last)} · mark {formatUsd(under.mark)}. A call is the right to the upside. A put is insurance on last. The premium is USDC you sign. The token stays in your wallet.
-              </p>
-              <div className="mt-3">
-                <LiveChart mint={under.mint} symbol={under.symbol} live={under.last} />
-              </div>
-            </div>
-            <OptionChain stock={under} tenor={tenor} onTenor={setTenor} busy={busy} onBuy={(c) => void liftOpt(c)} />
-          </div>
-          <aside className="border-t border-white/10 p-4 lg:border-t-0 lg:border-l">
-            <p className="text-sm font-semibold">Sign the premium</p>
-            <p className="mt-1 text-xs text-muted">Phantom signs USDC. Settle it on Cover if the print hits the strike.</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {(["call", "put"] as const).map((k) => (
-                <button key={k} type="button" onClick={() => setOptKind(k)} className={cn("min-h-11 rounded-full text-sm font-semibold capitalize", optKind === k ? "bg-white text-black" : "border border-white/10")}>
-                  {k}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              {(["1d", "7d"] as const).map((t) => (
-                <button key={t} type="button" onClick={() => setTenor(t)} className={cn("min-h-10 flex-1 rounded-full font-mono text-xs", tenor === t ? "bg-accent text-accent-fg" : "border border-white/10")}>
-                  {t}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              {[1, 10, 25].map((n) => (
-                <button key={n} type="button" onClick={() => setArmed(n)} className={cn("min-h-10 flex-1 rounded-full font-mono text-sm", armed === n ? "bg-accent text-accent-fg" : "border border-white/10")}>
-                  ${n}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                const row = chainFor(under, tenor).find((c) => c.atm && c.kind === optKind);
-                if (row) void liftOpt(row);
-                else toast.error("No strike on that name yet.");
-              }}
-              className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-            >
-              {busy ? "Waiting for the wallet…" : `Sign ${optKind} · $${armed || 0}`}
-            </button>
-          </aside>
+          )}
         </div>
-      ) : null}
-      </div>
-    </main>
+      </main>
     </div>
   );
 }
 
-const EMPTY_TAPE: ChainTape = { ok: false, rows: [], note: "", jupiter: false, defillama: false };
-
-function TradeSolana({ house }: { house: HouseListing[] }) {
-  const [tape, setTape] = useState<ChainTape>(EMPTY_TAPE);
-  useEffect(() => {
-    let live = true;
-    getChainTape()
-      .then((next) => live && setTape(next))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
-  return <SolanaFloor house={house} tape={tape} />;
-}

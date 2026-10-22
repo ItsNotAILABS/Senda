@@ -21,7 +21,7 @@ export function FillCard({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/50" role="dialog">
-      <div className="w-full rounded-t-[28px] bg-[#0c0c0f] px-4 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="w-full animate-[senda-rise_220ms_ease-out] rounded-t-[28px] bg-[#0c0c0f] px-4 pt-2 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <div className="rounded-[28px] bg-[#d7e36a] px-4 py-4 text-black">
           <p className="text-[11px] font-semibold tracking-[0.16em]">FILLED</p>
           <h2 className="mt-1 text-4xl font-semibold tracking-tight">{title}</h2>
@@ -44,7 +44,9 @@ export function FillCard({
           <div className="flex justify-between"><dt className="text-white/50">When</dt><dd>{when}</dd></div>
         </dl>
         <p className="mt-3 truncate font-mono text-xs text-[#d7e36a]">{sig}</p>
-        <button type="button" onClick={onDone} className="mt-4 min-h-12 w-full rounded-full bg-[#d7e36a] text-sm font-semibold text-black">Done</button>
+        <button type="button" onClick={onDone} className="mt-4 min-h-12 w-full rounded-full bg-[#d7e36a] text-sm font-semibold text-black">
+          Done
+        </button>
       </div>
     </div>
   );

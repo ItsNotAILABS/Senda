@@ -55,7 +55,7 @@ export function CurveDesk() {
   return (
     <div className="flex flex-col px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        Meteora DBC · USDC in, tokens out. At 100% the curve graduates to Jupiter. Same Senda cash.
+        The swap is Jupiter. USDC leaves the wallet when you sign. At 100% the curve graduates.
       </p>
       <div className="mt-3 flex gap-1 overflow-x-auto">
         {rows.map((r) => (

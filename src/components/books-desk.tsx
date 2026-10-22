@@ -1,10 +1,12 @@
+import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { digestBooks } from "@/lib/books";
 import { formatMoney } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export function BooksDesk() {
+export function BooksDesk({ view = "all" }: { view?: "all" | "journal" | "tokens" }) {
   const { w, usdPer } = useWallet();
   const d = digestBooks(w, usdPer);
   const lines = w.txs;
@@ -15,44 +17,22 @@ export function BooksDesk() {
         kicker="Books"
         title="The ledger"
         accent="of this account."
-        line="What this account already wrote down."
+        line="What this account already wrote down. No invented lines."
         live={["The lines already stored on this account."]}
         coming={["An export a CPA would take."]}
       />
-      <header className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
-        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
-          <h1 className="text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            Digest <span className="font-mono text-accent">{d.id}</span>
-          </h1>
-          <p className={cn("rounded-full px-3 py-1 text-sm font-semibold", d.tied ? "bg-accent text-accent-fg" : "bg-down/20 text-down")}>
-            {d.tied ? "The books tie" : "The books do not tie"}
-          </p>
-        </div>
-        <p className="mt-3 max-w-2xl text-sm text-muted">
-          These lines are what this browser already wrote down. A signature on Solana is the payment. This digest is not a bank statement. It replays every send, card, cover, and buy in this account.
-        </p>
-        <p className="mt-4 font-mono text-5xl tabular-nums">{d.suspense.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-        <p className="mt-2 max-w-2xl text-sm text-muted">
-          Suspense is the gap between the journal and the cash this account can still spend. {d.tied ? "Zero means the books tie." : "The journal and the cash do not match."}
-        </p>
-      </header>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat k="Assets" v={d.assets} line="Cash plus stock at cost" />
-        <Stat k="Capital" v={d.equity} line="What the books say you own" />
-        <Stat k="Suspense" v={d.suspense} line="Journal versus the balance" />
-        <Stat k="Ghost" v={d.ghost} line="Still chargeable on a number" />
-      </dl>
+      <MoneyBar />
+      {view === "tokens" ? null : (
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <div className="flex flex-wrap items-end justify-between gap-2">
           <div>
             <h2 className="text-3xl tracking-tight">The lines</h2>
-            <p className="mt-1 text-sm text-muted">{lines.length === 0 ? "Stored on this account. Nothing filled in." : "Stored on this account."}</p>
+            <p className="mt-1 text-sm text-muted">Stored on this account. Nothing filled in.</p>
           </div>
           <p className="font-mono text-sm text-subtle">{d.id}</p>
         </div>
         {lines.length === 0 ? (
-          <p className="mt-5 text-sm text-subtle">The book is empty. None.</p>
+          <p className="mt-5 text-sm text-subtle">None.</p>
         ) : (
           <ul className="mt-4 space-y-2">
             {lines.map((t) => (
@@ -70,15 +50,30 @@ export function BooksDesk() {
           </ul>
         )}
       </section>
+      )}
+      {view === "journal" ? null : (
+      <>
       <header className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Books</p>
-        <h2 className="mt-3 text-4xl tracking-tight">
-          Digest <span className="font-mono text-accent">{d.id}</span>
-        </h2>
-        <p className="mt-2 text-sm font-semibold">{d.tied ? "The books tie" : "The books do not tie"}</p>
-        <p className="mt-2 text-sm text-muted">What this account already wrote down.</p>
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-4xl leading-[1.05] tracking-tight lg:text-5xl">
+            Digest <span className="font-mono text-accent">{d.id}</span>
+          </h1>
+          <p className={cn("rounded-full px-3 py-1 text-sm font-semibold", d.tied ? "bg-accent text-accent-fg" : "bg-down/20 text-down")}>
+            {d.tied ? "The books tie" : "The books do not tie"}
+          </p>
+        </div>
+        <p className="mt-3 max-w-2xl text-sm text-muted">
+          This replays every send, card, cover, and buy in this account and checks it against the cash you can still spend. Suspense is the gap. Ghost is what a one-time number can still charge. It is the app's own book, not a chain balance.
+        </p>
       </header>
-      <p className="px-1 text-sm font-semibold">The books, replayed.</p>
+      <FilmBand poster="/images/term-sheet.jpg" label="The books, replayed." />
+      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat k="Assets" v={d.assets} line="Cash plus stock at cost" />
+        <Stat k="Capital" v={d.equity} line="What the books say you own" />
+        <Stat k="Suspense" v={d.suspense} line="Journal versus the balance" />
+        <Stat k="Ghost" v={d.ghost} line="Still chargeable on a number" />
+      </dl>
       <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
         <table className="w-full text-left text-sm">
           <thead className="text-xs text-subtle">
@@ -104,6 +99,8 @@ export function BooksDesk() {
           </tbody>
         </table>
       </section>
+      </>
+      )}
     </div>
   );
 }

@@ -1,11 +1,12 @@
-/** The product registry. Neon in production, the same table on the local fallback. */
+/** Product register. A new row is inserted. A row that is already stored is not rewritten. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { CHAIN_LANES } from "@/lib/chain-book";
 import { getSql, type Sql } from "@/lib/db";
-import { WORLD } from "@/lib/world-book";
-import { SOLANA_MORE, CHAINS } from "@/lib/chain-tape-map.mjs";
-import { EVM_MARKETS } from "@/lib/trade-book.mjs";
-import { JUP_PERPS } from "@/lib/jup-perps";
+import { PERP_MARKETS } from "@/lib/jup-perps";
+import { PAIR_MARKETS } from "@/lib/market-catalog";
+import { listedPrints } from "@/lib/world-book";
+import { loadKaminoVaults } from "@/lib/vault-book";
 
 export type OfferingRow = {
   id: string;
@@ -22,241 +23,102 @@ export type OfferingRow = {
 
 type Draft = OfferingRow;
 
-const STAKES: Draft[] = [
+const STRUCTURES: Draft[] = [
   { id: "stake:jitosol", family: "stake", symbol: "JitoSOL", name: "Jito staked SOL", chain: "Solana", mint: "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn", venue: "Jito", signPath: "jupiter", status: "open", note: "SOL in. The token stays in the wallet." },
   { id: "stake:msol", family: "stake", symbol: "mSOL", name: "Marinade SOL", chain: "Solana", mint: "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", venue: "Marinade", signPath: "jupiter", status: "open", note: "SOL in. The token stays in the wallet." },
   { id: "stake:bsol", family: "stake", symbol: "bSOL", name: "BlazeStake SOL", chain: "Solana", mint: "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1", venue: "Blaze", signPath: "jupiter", status: "open", note: "SOL in. The token stays in the wallet." },
   { id: "stake:jupsol", family: "stake", symbol: "JupSOL", name: "Jupiter staked SOL", chain: "Solana", mint: "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v", venue: "Jupiter", signPath: "jupiter", status: "open", note: "SOL in. The token stays in the wallet." },
   { id: "stake:inf", family: "stake", symbol: "INF", name: "Sanctum INF", chain: "Solana", mint: "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm", venue: "Sanctum", signPath: "jupiter", status: "open", note: "A pool of staked SOL." },
-];
-
-const LOANS: Draft[] = [
-  { id: "loan:prestock", family: "loan", symbol: "NAME", name: "Borrow against a pre-IPO name", chain: "Solana", mint: "", venue: "Jupiter", signPath: "prestock", status: "open", note: "Sells up to half. Repay buys it back." },
-  { id: "loan:listed", family: "loan", symbol: "SHARE", name: "Borrow against a listed share", chain: "Solana", mint: "", venue: "Jupiter", signPath: "jupiter", status: "open", note: "Only a share this wallet holds. Kamino is not signed here." },
-];
-
-const RAILS: Draft[] = [
+  { id: "loan:name", family: "loan", symbol: "NAME", name: "Borrow against a pre-IPO name", chain: "Solana", mint: "", venue: "Senda", signPath: "prestock", status: "open", note: "Only against a name this wallet holds." },
+  { id: "loan:share", family: "loan", symbol: "SHARE", name: "Borrow against a listed share", chain: "Solana", mint: "", venue: "Senda", signPath: "jupiter", status: "open", note: "Only a share this wallet holds." },
   { id: "rail:usdc", family: "rail", symbol: "USDC", name: "Send USDC", chain: "Solana", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", venue: "Solana", signPath: "phantom", status: "open", note: "The wallet signs the transfer." },
+  { id: "option:call", family: "option", symbol: "CALL", name: "Call on a pre-IPO name", chain: "Solana", mint: "", venue: "Senda", signPath: "prestock", status: "open", note: "Premium in USDC. The name stays in the wallet." },
+  { id: "option:put", family: "option", symbol: "PUT", name: "Put on a pre-IPO name", chain: "Solana", mint: "", venue: "Senda", signPath: "prestock", status: "open", note: "Premium in USDC. The name stays in the wallet." },
+  { id: "cover:drop", family: "cover", symbol: "COVER", name: "Downside cover", chain: "Solana", mint: "", venue: "Senda", signPath: "prestock", status: "open", note: "A premium against a drop. The token is not sold." },
+  { id: "cctp:eth-base", family: "rail", symbol: "USDC", name: "USDC Ethereum to Base", chain: "Ethereum", mint: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", venue: "CCTP", signPath: "cctp", status: "open", note: "Phantom burns on Ethereum and mints on Base." },
+  { id: "cctp:base-eth", family: "rail", symbol: "USDC", name: "USDC Base to Ethereum", chain: "Base", mint: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", venue: "CCTP", signPath: "cctp", status: "open", note: "Phantom burns on Base and mints on Ethereum." },
+  { id: "cctp:arb-export", family: "rail", symbol: "USDC", name: "USDC via Arbitrum", chain: "Arbitrum", mint: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", venue: "CCTP", signPath: "cctp", status: "print", note: "Phantom's network list excludes Arbitrum. The payload is exported. There is no mint button." },
+  { id: "chain:robinhood-stocks", family: "listed", symbol: "RH", name: "Robinhood Chain stock tokens", chain: "Robinhood Chain", mint: "", venue: "Robinhood", signPath: "wallet", status: "chain", note: "Chain 4663. Chainlink prices the stock tokens. US persons are excluded. Senda adds the chain. It does not invent the swap." },
 ];
 
-const PERPS: Draft[] = [
-  { id: "perp:drift-sol", family: "perp", symbol: "SOL-PERP", name: "SOL perpetual", chain: "Solana", mint: "", venue: "Drift", signPath: "drift", status: "open", note: "Signed on Solana." },
-  { id: "perp:drift-btc", family: "perp", symbol: "BTC-PERP", name: "BTC perpetual", chain: "Solana", mint: "", venue: "Drift", signPath: "drift", status: "open", note: "Signed on Solana." },
-  { id: "perp:drift-eth", family: "perp", symbol: "ETH-PERP", name: "ETH perpetual", chain: "Solana", mint: "", venue: "Drift", signPath: "drift", status: "open", note: "Signed on Solana." },
-  ...JUP_PERPS.map((row) => ({
-    id: `perp:jup-${row.asset.toLowerCase()}`,
-    family: "perp",
-    symbol: `${row.asset}-PERP`,
-    name: `${row.asset} perpetual`,
-    chain: "Solana",
-    mint: row.mint,
-    venue: "Jupiter",
-    signPath: "jup-perps",
-    status: "open",
-    note: "Jupiter builds the order. Phantom signs it.",
-  })),
-];
+const FAMILY: Record<string, string> = {
+  fx: "fx",
+  metals: "metal",
+  energy: "commodity",
+  softs: "commodity",
+  index: "index",
+  crypto: "spot",
+  shares: "listed",
+};
 
 function staticBook(): Draft[] {
-  const stakeMints = new Set(STAKES.map((row) => row.mint));
-  const rows: Draft[] = [...STAKES, ...LOANS, ...RAILS, ...PERPS];
-  for (const asset of WORLD) {
-    if (stakeMints.has(asset.mint)) continue;
-    const family = asset.lane === "metals" ? "metal" : asset.lane === "fx" ? "fx" : "spot";
+  const rows: Draft[] = [...STRUCTURES];
+  for (const print of listedPrints()) {
     rows.push({
-      id: `${family}:${asset.id}`,
-      family,
-      symbol: asset.symbol,
-      name: asset.name,
-      chain: asset.chain,
-      mint: asset.mint,
-      venue: asset.via,
-      signPath: "jupiter",
-      status: "open",
-      note: asset.note,
+      id: `print:${print.id}`,
+      family: FAMILY[print.lane] ?? "spot",
+      symbol: print.symbol,
+      name: print.id.replace("-", " / "),
+      chain: print.mint ? "Solana" : "Arbitrum",
+      mint: print.mint,
+      venue: print.mint ? "Jupiter" : "Ostium",
+      signPath: print.mint ? "jupiter" : "arbitrum",
+      status: print.mint ? "open" : "print",
+      note: print.note,
     });
   }
-  for (const [symbol, name, mint] of SOLANA_MORE) {
-    if (rows.some((row) => row.mint === mint)) continue;
+  for (const market of PAIR_MARKETS) {
     rows.push({
-      id: `spot:${symbol.toLowerCase()}`,
-      family: "spot",
-      symbol,
-      name,
-      chain: "Solana",
-      mint,
-      venue: "Jupiter",
-      signPath: "jupiter",
-      status: "open",
-      note: "Listed Solana market.",
-    });
-  }
-  for (const market of EVM_MARKETS) {
-    rows.push({
-      id: `evm:${market.symbol.toLowerCase()}`,
-      family: "spot",
+      id: `pair:${market.id}`,
+      family: market.group === "metal" ? "metal" : market.group === "fx" ? "fx" : "spot",
       symbol: market.symbol,
       name: market.name,
-      chain: market.chain,
-      mint: market.token,
-      venue: "LiFi",
-      signPath: "lifi",
-      status: "open",
-      note: "The Ethereum address signs.",
+      chain: "Solana",
+      mint: market.mint ?? "",
+      venue: market.mint ? "Jupiter" : "Ostium",
+      signPath: market.mint ? "jupiter" : "arbitrum",
+      status: market.mint ? "open" : "print",
+      note: market.ostium ? `Ostium print ${market.ostium}.` : "Jupiter quote. The wallet signs.",
     });
   }
-  for (const [symbol, name, chain] of CHAINS) {
+  for (const market of PERP_MARKETS) {
     rows.push({
-      id: `chain:${symbol.toLowerCase()}`,
-      family: "chain",
-      symbol,
-      name,
-      chain,
-      mint: "",
-      venue: chain,
-      signPath: "",
-      status: "print",
-      note: "The native chain. A wrapper on Solana or an EVM token is a different row.",
+      id: `perp:jup-${market.asset.toLowerCase()}`,
+      family: "perp",
+      symbol: `${market.asset}-PERP`,
+      name: `${market.name} perpetual`,
+      chain: "Solana",
+      mint: market.mint,
+      venue: "Jupiter",
+      signPath: "jup-perps",
+      status: "open",
+      note: "Jupiter builds the order. Phantom signs it.",
     });
   }
-  rows.push({
-    id: "chain:mon",
-    family: "chain",
-    symbol: "MON",
-    name: "Monad",
-    chain: "Monad",
-    mint: "",
-    venue: "Monad",
-    signPath: "wallet",
-    status: "chain",
-    note: "Chain 143 can be added in the wallet. No swap is sent.",
-  });
-  return rows;
-}
-
-async function writeRows(sql: Sql, rows: Draft[]) {
-  for (let i = 0; i < rows.length; i += 100) {
-    const part = rows.slice(i, i + 100);
-    await sql.query(
-      `insert into offering (id, family, symbol, name, chain, mint, venue, sign_path, status, note, updated_at)
-       select u.id, u.family, u.symbol, u.name, u.chain, u.mint, u.venue, u.sign_path, u.status, u.note, now()
-       from unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], $9::text[], $10::text[])
-         as u(id, family, symbol, name, chain, mint, venue, sign_path, status, note)
-       on conflict (id) do nothing`,
-      [
-        part.map((row) => row.id),
-        part.map((row) => row.family),
-        part.map((row) => row.symbol),
-        part.map((row) => row.name),
-        part.map((row) => row.chain),
-        part.map((row) => row.mint),
-        part.map((row) => row.venue),
-        part.map((row) => row.signPath),
-        part.map((row) => row.status),
-        part.map((row) => row.note),
-      ],
-    );
+  for (const lane of CHAIN_LANES) {
+    rows.push({
+      id: `chain:${lane.id}`,
+      family: "chain",
+      symbol: lane.name.toUpperCase(),
+      name: lane.name,
+      chain: lane.name,
+      mint: "",
+      venue: lane.name,
+      signPath: lane.live ? "wallet" : "",
+      status: lane.live ? "open" : "chain",
+      note: lane.clears,
+    });
   }
+  return rows;
 }
 
 const GRAPH = "https://api.subgraph.ormilabs.com/api/public/67a599d5-c8d2-4cc4-9c4d-2975a97bc5d8/subgraphs/ost-prod/live/gn";
-
-async function ostiumDrafts(): Promise<Draft[]> {
-  const res = await fetch(GRAPH, {
-    method: "POST",
-    headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda" },
-    body: JSON.stringify({ query: "{ pairs(first: 200) { id from to maxLeverage } }" }),
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!res.ok) return [];
-  const json = (await res.json()) as { data?: { pairs?: { id?: string; from?: string; to?: string; maxLeverage?: string }[] } };
-  return (json.data?.pairs ?? [])
-    .filter((pair) => pair.from && pair.to && pair.id != null)
-    .map((pair) => {
-      const max = Number(pair.maxLeverage) || 0;
-      return {
-        id: `ostium:${pair.id}`,
-        family: "ostium",
-        symbol: `${pair.from}/${pair.to}`,
-        name: `${pair.from} / ${pair.to}`,
-        chain: "Arbitrum",
-        mint: "",
-        venue: "Ostium",
-        signPath: "arbitrum",
-        status: "open",
-        note: max > 0 ? `Up to ${max / 100}x. USDC on Arbitrum.` : "USDC on Arbitrum. The Ethereum account signs.",
-      };
-    });
-}
-
-let hlAt = 0;
-let hlRows: Draft[] = [];
-
-async function hlDrafts(): Promise<Draft[]> {
-  if (hlRows.length && Date.now() - hlAt < 10 * 60_000) return hlRows;
-  const info = "https://api.hyperliquid.xyz/info";
-  const post = async (body: unknown) => {
-    const res = await fetch(info, {
-      method: "POST",
-      headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) throw new Error(`Hyperliquid ${res.status}`);
-    return res.json();
-  };
-  const dexes = (await post({ type: "perpDexs" })) as Array<{ name?: string } | null>;
-  const rows: Draft[] = [];
-  for (const dex of dexes) {
-    const name = dex && typeof dex === "object" ? dex.name || "" : "";
-    const meta = (await post(name ? { type: "meta", dex: name } : { type: "meta" })) as {
-      universe?: { name?: string; maxLeverage?: number }[];
-    };
-    const label = name || "main";
-    for (const market of meta.universe ?? []) {
-      if (!market.name) continue;
-      const max = Number(market.maxLeverage) || 0;
-      rows.push({
-        id: `hl:${label}:${market.name}`.toLowerCase(),
-        family: "perp",
-        symbol: market.name.slice(0, 24),
-        name: `${market.name} perpetual`.slice(0, 80),
-        chain: "Hyperliquid",
-        mint: "",
-        venue: `Hyperliquid ${label}`,
-        signPath: "hyperliquid",
-        status: "open",
-        note: max > 0 ? `Up to ${max}x. The Ethereum account signs.` : "The Ethereum account signs.",
-      });
-    }
-  }
-  const spot = (await post({ type: "spotMeta" })) as { universe?: { name?: string }[] };
-  for (const market of spot.universe ?? []) {
-    if (!market.name) continue;
-    rows.push({
-      id: `hlspot:${market.name}`.toLowerCase(),
-      family: "hl-spot",
-      symbol: market.name.slice(0, 24),
-      name: market.name.slice(0, 80),
-      chain: "Hyperliquid",
-      mint: "",
-      venue: "Hyperliquid spot",
-      signPath: "hyperliquid",
-      status: "open",
-      note: "Hyperliquid spot. The Ethereum account signs.",
-    });
-  }
-  hlRows = rows;
-  hlAt = Date.now();
-  return rows;
-}
 
 async function liveExtras(): Promise<Draft[]> {
   const out: Draft[] = [];
   try {
     const { fetchHouse } = await import("./sol-house");
-    const rows = await fetchHouse();
-    for (const row of rows) {
+    for (const row of await fetchHouse()) {
       if (!row.mint || !row.symbol) continue;
       out.push({
         id: `name:${row.mint}`,
@@ -272,7 +134,7 @@ async function liveExtras(): Promise<Draft[]> {
       });
     }
   } catch {
-    /* names still register the next time the house loads */
+    /* the house still registers from its own page */
   }
   try {
     const { fetchEquityBook } = await import("./equities");
@@ -289,92 +151,73 @@ async function liveExtras(): Promise<Draft[]> {
         venue: "xStock",
         signPath: "jupiter",
         status: row.open ? "open" : "listed",
-        note: row.open ? "A listed share. The wallet signs." : "Listed, not open for a swap right now.",
+        note: row.open ? "A listed share. The wallet signs." : "Listed. The session is not open for a swap.",
       });
     }
   } catch {
-    /* shares still register when the listed book loads */
+    /* shares still register when that book loads */
   }
   try {
-    out.push(...(await tapeDrafts()));
+    const res = await fetch(GRAPH, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda" },
+      body: JSON.stringify({ query: "{ pairs(first: 200) { id from to maxLeverage } }" }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { pairs?: { id?: string; from?: string; to?: string; maxLeverage?: string }[] } };
+      for (const pair of json.data?.pairs ?? []) {
+        if (!pair.from || !pair.to || pair.id == null) continue;
+        const max = Number(pair.maxLeverage) || 0;
+        out.push({
+          id: `ostium:${pair.id}`,
+          family: "ostium",
+          symbol: `${pair.from}/${pair.to}`,
+          name: `${pair.from} / ${pair.to}`,
+          chain: "Arbitrum",
+          mint: "",
+          venue: "Ostium",
+          signPath: "arbitrum",
+          status: "open",
+          note: max > 0 ? `Up to ${max / 100}x. USDC on Arbitrum.` : "USDC on Arbitrum. The Ethereum account signs.",
+        });
+      }
+    }
   } catch {
-    /* the Jupiter book stays as it was */
+    /* the Arbitrum book stays as stored */
   }
   try {
-    out.push(...(await ostiumDrafts()));
-  } catch {
-    /* the Arbitrum book stays as it was */
-  }
-  try {
-    out.push(...(await hlDrafts()));
-  } catch {
-    /* the Hyperliquid book stays as it was */
-  }
-  try {
-    const { driftMarkets } = await import("./drift-book");
-    for (const row of driftMarkets()) {
+    for (const vault of await loadKaminoVaults()) {
       out.push({
-        id: `drift:${row.symbol.toLowerCase()}`,
-        family: "perp",
-        symbol: `${row.symbol}-PERP`,
-        name: `${row.symbol} perpetual`,
+        id: `vault:kamino:${vault.address}`,
+        family: "vault",
+        symbol: vault.name.slice(0, 24),
+        name: vault.name,
         chain: "Solana",
-        mint: "",
-        venue: "Drift",
-        signPath: "drift",
+        mint: vault.sharesMint,
+        venue: "Kamino",
+        signPath: "jupiter",
         status: "open",
-        note: "Drift perp. SOL, ETH, and BTC are the ones this desk can sign.",
+        note: vault.perfBps > 0 ? `Share token. Jupiter quotes it. Performance fee ${(vault.perfBps / 100).toFixed(2)}%. Senda does not deposit.` : "Share token. Jupiter quotes it. Senda does not deposit.",
       });
     }
   } catch {
-    /* the Drift book stays as it was */
+    /* the vault list stays as stored */
   }
   return out;
 }
 
-const TAPE = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
-];
-
-async function tapeDrafts(): Promise<Draft[]> {
-  const seen = new Set<string>();
-  const rows: Draft[] = [];
-  const pages = await Promise.all(
-    TAPE.map(async (url) => {
-      try {
-        const res = await fetch(url, { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(20000) });
-        if (!res.ok) return [];
-        return (await res.json()) as Array<{ id?: string; symbol?: string; name?: string }>;
-      } catch {
-        return [];
-      }
-    }),
-  );
-  for (const page of pages) {
-    const list = Array.isArray(page) ? page : [];
-    for (const row of list) {
-      const mint = String(row.id ?? "");
-      const symbol = String(row.symbol ?? "").slice(0, 24);
-      if (mint.length < 32 || !symbol || seen.has(mint)) continue;
-      seen.add(mint);
-      const stock = /x$/i.test(symbol);
-      rows.push({
-        id: `${stock ? "listed" : "spot"}:${mint}`,
-        family: stock ? "listed" : "spot",
-        symbol,
-        name: String(row.name || symbol).slice(0, 80),
-        chain: "Solana",
-        mint,
-        venue: stock ? "xStock" : "Jupiter",
-        signPath: "jupiter",
-        status: "open",
-        note: "On the Jupiter book Phantom signs.",
-      });
-    }
+async function writeRows(sql: Sql, rows: Draft[]) {
+  for (const row of rows) {
+    await sql`
+      insert into offering (id, family, symbol, name, chain, mint, venue, sign_path, status, note, updated_at)
+      values (
+        ${row.id}, ${row.family}, ${row.symbol}, ${row.name}, ${row.chain}, ${row.mint},
+        ${row.venue}, ${row.signPath}, ${row.status}, ${row.note}, now()
+      )
+      on conflict (id) do nothing
+    `;
   }
-  return rows;
 }
 
 export async function registerOfferings(extra: Draft[] = []): Promise<number> {
@@ -388,37 +231,14 @@ export async function registerOfferings(extra: Draft[] = []): Promise<number> {
   }
   const have = await sql<{ id: string }>`select id from offering`;
   const known = new Set(have.map((row) => row.id));
-  await writeRows(sql, rows.filter((row) => !known.has(row.id)));
-  return known.size + rows.filter((row) => !known.has(row.id)).length;
+  const fresh = rows.filter((row) => !known.has(row.id));
+  await writeRows(sql, fresh);
+  return known.size + fresh.length;
 }
 
 function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
-
-export const syncOfferings = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    const body = (input ?? {}) as { rows?: Draft[] };
-    const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
-    return rows
-      .filter((row) => row && typeof row.id === "string" && typeof row.symbol === "string" && typeof row.name === "string")
-      .map((row) => ({
-        id: row.id.slice(0, 80),
-        family: asText(row.family).slice(0, 24) || "name",
-        symbol: row.symbol.slice(0, 24),
-        name: row.name.slice(0, 80),
-        chain: asText(row.chain).slice(0, 32),
-        mint: asText(row.mint).slice(0, 80),
-        venue: asText(row.venue).slice(0, 40),
-        signPath: asText(row.signPath).slice(0, 24),
-        status: asText(row.status).slice(0, 16) || "open",
-        note: asText(row.note).slice(0, 180),
-      }));
-  })
-  .handler(async ({ data }) => {
-    const count = await registerOfferings(data);
-    return { count };
-  });
 
 export const listOfferings = createServerFn({ method: "GET" }).handler(async () => {
   await registerOfferings(await liveExtras());
@@ -438,7 +258,7 @@ export const listOfferings = createServerFn({ method: "GET" }).handler(async () 
     select id, family, symbol, name, chain, mint, venue, sign_path, status, note
     from offering
     order by family, symbol
-    limit 12000
+    limit 8000
   `;
   return rows.map((row) => ({
     id: row.id,
@@ -467,11 +287,7 @@ export const patchOffering = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const sql = await getSql();
-    if (data.status != null) {
-      await sql`update offering set status = ${data.status}, updated_at = now() where id = ${data.id}`;
-    }
-    if (data.note != null) {
-      await sql`update offering set note = ${data.note}, updated_at = now() where id = ${data.id}`;
-    }
+    if (data.status != null) await sql`update offering set status = ${data.status}, updated_at = now() where id = ${data.id}`;
+    if (data.note != null) await sql`update offering set note = ${data.note}, updated_at = now() where id = ${data.id}`;
     return { id: data.id };
   });

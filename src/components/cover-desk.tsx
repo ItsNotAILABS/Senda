@@ -1,20 +1,23 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Shield, TrendingDown } from "lucide-react";
+import { ClearStrip } from "@/components/clear-strip";
+import { LiveChart } from "@/components/price-chart";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
+import { rememberClear } from "@/lib/clearing";
 import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
-import { COVERS, formatCover } from "@/lib/cover";
+import { COVERS } from "@/lib/cover";
 import {
   cancelChainCover,
   coverPubkey,
-  coverUsdc,
   listChainCovers,
-  openChainCover,
   settleChainCover,
   type ChainCover,
 } from "@/lib/cover-chain";
-import { connectPhantom, readChain } from "@/lib/phantom";
+import { connectPhantom, readChain, splHolding } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -31,38 +34,24 @@ const LOGO: Record<string, string> = {
   XAI: "/logos/xai.png",
 };
 
-export function CoverDesk({ names }: { names: HouseListing[] }) {
+export function CoverDesk({ names, view = "all" }: { names: HouseListing[]; view?: "all" | "drop" | "life" | "open" }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const wallet = useWallet();
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const [mode, setMode] = useState<"drop" | "life">("drop");
+  const [mode, setMode] = useState<"drop" | "life">(view === "life" ? "life" : "drop");
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [lifeId, setLifeId] = useState(COVERS[0].id);
   const [usd, setUsd] = useState(100);
   const [usdc, setUsdc] = useState(0);
-  const [locked, setLocked] = useState(0);
   const [rows, setRows] = useState<ChainCover[]>([]);
   const [busy, setBusy] = useState(false);
   const [policy, setPolicy] = useState<ChainCover | null>(null);
   const name = book.find((n) => n.symbol === symbol) ?? book[0];
   const life = COVERS.find((c) => c.id === lifeId) ?? COVERS[0];
-  const premium = mode === "drop" ? Math.max(1, Math.round(usd * 0.04)) : life.premium;
-  const shown =
-    (policy ? rows.find((r) => r.id === policy.id) ?? policy : null) ??
-    rows.find((r) => r.status === "open") ??
-    null;
-
-  function crossedStrike(row: ChainCover): boolean {
-    const live = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
-    if (!(row.strike > 0) || !(live > 0)) return false;
-    // Drop pays only after the print trades through the locked strike and the ten percent line.
-    if (row.kind === "drop") return live < row.strike && live <= row.strike * 0.9;
-    return live > row.strike;
-  }
+  const shown = policy ? (rows.find((r) => r.id === policy.id) ?? policy) : null;
 
   function refresh() {
     setRows(listChainCovers());
-    void coverUsdc().then(setLocked).catch(() => setLocked(0));
   }
 
   useEffect(() => {
@@ -91,40 +80,22 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     return who;
   }
 
+  async function sellHeld(who: string, symbol: string, mint: string, last: number, size: number) {
+    const held = await splHolding(who, mint);
+    if (!(held.ui > 0)) throw new Error(`No ${symbol} in this wallet. There is no listed put.`);
+    const done = await runPrestock({ owner: who, mint, side: "sell", usd: size, price: last });
+    toast.success(`Sold about $${size} of ${symbol}. ${done.signature.slice(0, 8)}… That is the hedge. No premium was sent.`);
+  }
+
   async function open() {
     setBusy(true);
     try {
+      if (mode !== "drop") throw new Error("Life cover does not move USDC. There is no policy to sign.");
       const who = await payer();
-      if (mode === "drop") {
-        if (!name) throw new Error("No PreStock to cover.");
-        const row = await openChainCover({
-          owner: who,
-          kind: "drop",
-          title: `${name.symbol} drop`,
-          symbol: name.symbol,
-          mint: name.mint,
-          strike: name.last,
-          cover: usd,
-          premium,
-          days: 1,
-        });
-        setPolicy(row);
-        toast.success(`Premium left Phantom. ${row.sig.slice(0, 8)} · $${row.premium} USDC. If ${name.symbol} falls 10%, settle buys $${usd}.`);
-      } else {
-        const row = await openChainCover({
-          owner: who,
-          kind: "life",
-          title: life.title,
-          cover: life.cover,
-          premium: life.premium,
-          days: 30,
-        });
-        setPolicy(row);
-        toast.success(`${life.title} premium is on-chain. ${row.sig.slice(0, 8)} · $${row.premium} USDC. The payout is only what that account holds.`);
-      }
-      refresh();
+      if (!name) throw new Error("No PreStock to sell.");
+      await sellHeld(who, name.symbol, name.mint, name.last, usd);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The cover did not send.");
+      toast.error(e instanceof Error ? e.message : "The sell did not send.");
     } finally {
       setBusy(false);
     }
@@ -133,7 +104,7 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
   async function coverTen() {
     const live = name ?? book[0];
     if (!live) {
-      toast.error("No PreStock to cover.");
+      toast.error("No PreStock to sell.");
       return;
     }
     setSymbol(live.symbol);
@@ -141,23 +112,9 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     setBusy(true);
     try {
       const who = await payer();
-      const premiumNow = Math.max(1, Math.round(usd * 0.04));
-      const row = await openChainCover({
-        owner: who,
-        kind: "drop",
-        title: `${live.symbol} drop`,
-        symbol: live.symbol,
-        mint: live.mint,
-        strike: live.last,
-        cover: usd,
-        premium: premiumNow,
-        days: 1,
-      });
-      setPolicy(row);
-      toast.success(`${row.symbol || live.symbol} is ${row.status}. ${row.sig.slice(0, 8)} · $${row.premium} USDC. Strike ${formatUsd(row.strike)}.`);
-      refresh();
+      await sellHeld(who, live.symbol, live.mint, live.last, usd);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The cover did not send.");
+      toast.error(e instanceof Error ? e.message : "The sell did not send.");
     } finally {
       setBusy(false);
     }
@@ -169,11 +126,27 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     try {
       if (cancel) {
         const sig = await cancelChainCover(row, owner);
+        rememberClear({
+          desk: "cover",
+          title: `${row.symbol || row.title} returned`,
+          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
+          feeUsd: 0,
+          sig,
+          status: "signed",
+        });
         toast.success(`USDC sent back. ${sig.slice(0, 8)}`);
       } else {
         const price = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
         const out = await settleChainCover(row, owner, price);
-        toast.success(`${out.bought ? "Premium returned. The buy is signed." : "Premium returned."} ${out.sig}`);
+        rememberClear({
+          desk: "cover",
+          title: `${row.symbol || row.title} settled`,
+          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
+          feeUsd: 0,
+          sig: out.sig,
+          status: "signed",
+        });
+        toast.success(out.bought ? "Premium returned. The buy is signed." : "Premium returned.");
       }
       refresh();
     } catch (e) {
@@ -185,25 +158,30 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      {view === "all" ? (
+      <>
       <TabLead
         kicker="Cover"
-        title="If the print drops"
-        accent="the cover pays."
-        line="Name the size. Sign once. A ten percent drop is the cover you can buy on this desk."
-        live={[
-          "Buy a 10% drop cover on a live PreStock.",
-          "The premium leaves as USDC on the on-chain path this page already calls.",
-        ]}
-        coming={["A licensed insurer.", "A pooled premium."]}
+        title="If you hold it"
+        accent="you can sell it."
+        line="There is no listed put. The hedge is a Jupiter sell of the token this wallet holds."
+        live={["A sell of what you hold, signed in the wallet.", "No premium into a browser key."]}
+        coming={["A listed option.", "A licensed insurer."]}
       />
+      <MoneyBar />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <h2 className="text-4xl tracking-tight lg:text-5xl">{name ? name.symbol : "No PreStock"}</h2>
           <p className="font-mono text-sm text-muted">{name ? `${formatUsd(name.last)} last` : "Nothing priced."}</p>
         </div>
+        {name?.mint ? (
+          <div className="mt-3 overflow-hidden rounded-2xl bg-black/30">
+            <LiveChart compact mint={name.mint} symbol={name.symbol} live={name.last} />
+          </div>
+        ) : null}
         <p className="mt-2 max-w-lg text-sm text-muted">
-          One signature on {name ? name.symbol : "the first name"}. The premium leaves Phantom. Strike, premium, and status come back from that cover. Nothing is paid out here.
+          There is no contract that pays if {name ? name.symbol : "a name"} drops 10%. Selling the token you hold is the hedge. USDC comes back to this wallet.
         </p>
         {book.length > 0 ? (
           <div className="mt-5 flex gap-2 overflow-x-auto">
@@ -240,12 +218,12 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           onClick={() => void coverTen()}
           className="mt-4 flex min-h-16 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-fg disabled:opacity-50"
         >
-          {busy ? "Waiting for Phantom…" : "Cover 10%"}
+          {busy ? "Waiting for the wallet…" : "Sell this size"}
         </button>
         <dl className="mt-5 grid gap-3 sm:grid-cols-3">
           <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
-            <dt className="text-[11px] text-subtle">Premium</dt>
-            <dd className="font-mono text-3xl tabular-nums">{shown ? `$${shown.premium}` : name ? `$${Math.max(1, Math.round(usd * 0.04))}` : "—"}</dd>
+            <dt className="text-[11px] text-subtle">Size</dt>
+            <dd className="font-mono text-3xl tabular-nums">{name ? `$${usd}` : "—"}</dd>
           </div>
           <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
             <dt className="text-[11px] text-subtle">Strike</dt>
@@ -256,32 +234,40 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
             <dd className="font-mono text-3xl">{shown ? shown.status : "—"}</dd>
           </div>
         </dl>
-        {shown ? (
-          <p className="mt-3 font-mono text-xs text-accent">
-            <a href={`https://solscan.io/tx/${shown.sig}`} target="_blank" rel="noreferrer">
-              {shown.sig.slice(0, 8)}
-            </a>
-            {" · "}${shown.premium} USDC
-          </p>
-        ) : null}
         {shown && shown.strike > 0 ? (
-          <p className="mt-2 text-xs text-muted">
-            10% line {formatUsd(shown.strike * 0.9)}. Settle is a separate signature. This screen does not pay it.
+          <p className="mt-3 text-xs text-muted">
+            An older cover still says it would pay under {formatUsd(shown.strike * 0.9)}. Settle only returns what that old transfer holds. It is not a new hedge.
           </p>
-        ) : shown ? (
-          <p className="mt-2 text-xs text-muted">The payout is only what the cover account holds.</p>
+        ) : name ? (
+          <p className="mt-3 text-xs text-muted">
+            No listed product pays that line. Selling ${usd} of what you hold is the hedge.
+          </p>
         ) : (
           <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Status stays blank until Phantom signs.</p>
         )}
+        {name && mode === "drop" ? (
+          <div className="mt-4">
+            <div className="flex justify-between text-[11px] text-subtle">
+              <span>10% under {formatUsd(name.last * 0.9)}</span>
+              <span>Now {formatUsd(name.last)}</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full w-[90%] bg-accent" />
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              The line is 10% under this print. Nothing here pays it. The button sells ${usd} of the token if the wallet holds it.
+            </p>
+          </div>
+        ) : null}
       </section>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
           <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            The premium <span className="text-accent">leaves Phantom</span>.
+            The hedge is a <span className="text-accent">sell</span>.
           </h1>
           <p className="mt-4 max-w-md text-sm text-muted">
-            One signature. USDC moves into a cover account, and the terms are written on the transaction. Senda does not invent the payout. If a PreStock falls 10%, settle sends the premium back and asks you to buy that size.
+            Jupiter sells the token this wallet already holds. Senda does not take a premium and does not keep a key. Life rows do not move USDC.
           </p>
           <div className="mt-6 flex gap-2">
             <button type="button" onClick={() => setMode("drop")} className={cn("min-h-11 rounded-full px-5 text-sm font-semibold", mode === "drop" ? "bg-accent text-accent-fg" : "border border-white/15")}>
@@ -296,17 +282,17 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
             <p className="text-xs text-subtle">Phantom USDC</p>
             <p className="mt-2 font-mono text-4xl">{owner ? usdc.toFixed(2) : "—"}</p>
-            <p className="mt-1 text-xs text-muted">{owner ? "This is what can pay a premium." : "Connect Phantom. Nothing is covered until you sign."}</p>
+            <p className="mt-1 text-xs text-muted">{owner ? "USDC in the wallet. A sell brings more back. A hedge does not spend it." : "Connect a wallet to read the balance."}</p>
           </figure>
           <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-            <p className="text-xs text-subtle">Cover account</p>
-            <p className="mt-2 font-mono text-4xl">{locked.toFixed(2)}</p>
+            <p className="text-xs text-subtle">Old cover key</p>
+            <p className="mt-2 text-sm text-muted">New hedges do not send USDC here. Older covers can still be settled below.</p>
             <p className="mt-1 break-all font-mono text-[11px] text-subtle">{coverPubkey()}</p>
           </figure>
         </div>
       </section>
 
-      <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
+      <FilmBand poster="/images/hero.jpg" label="The hedge is a sell." />
 
       <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <button type="button" onClick={() => setMode("drop")} className="flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left">
@@ -324,17 +310,19 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           </span>
         </button>
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
-          <p className="text-[11px] text-subtle">Premium</p>
-          <p className="font-mono text-xl">${premium}</p>
+          <p className="text-[11px] text-subtle">Sell</p>
+          <p className="font-mono text-xl">${usd}</p>
         </div>
         <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
           <p className="text-[11px] text-subtle">Open</p>
           <p className="font-mono text-xl">{rows.filter((r) => r.status === "open").length}</p>
         </div>
       </section>
+      </>
+      ) : null}
 
-      <section className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2">
+      <section className={cn("grid gap-3", view === "open" ? "" : "xl:grid-cols-[280px_minmax(0,1fr)_320px]")}>
+        <div className={cn("rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2", view === "open" && "hidden")}>
           {mode === "drop"
             ? book.map((n) => (
                 <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className={cn("flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left", n.symbol === name?.symbol ? "bg-white/10" : "")}>
@@ -351,13 +339,17 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
               ))}
         </div>
 
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6">
+        <div className={cn("rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6", view === "open" && "hidden")}>
           {mode === "drop" && name ? (
             <>
-              <p className="text-xs text-subtle">Locks this print for a day</p>
+              <p className="text-xs text-subtle">There is no listed put</p>
               <h2 className="mt-2 text-4xl">{name.symbol}</h2>
+              <p className="mt-1 font-mono text-sm text-white/55">{formatUsd(name.last)} last</p>
+              <div className="mt-3 overflow-hidden rounded-2xl bg-black/30">
+                <LiveChart compact mint={name.mint} symbol={name.symbol} live={name.last} />
+              </div>
               <p className="mt-2 text-sm text-muted">
-                Premium ${premium} USDC leaves now. Strike {formatUsd(name.last)}. If the token is at or under {formatUsd(name.last * 0.9)}, settle returns the premium and you sign a buy of ${usd}. If it does not fall, cancel returns the USDC. Nothing is paid from a local balance.
+                Selling about ${usd} of {name.symbol} is the hedge. The wallet has to hold it. No premium leaves.
               </p>
               <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-4 min-h-12 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono text-lg outline-none" />
             </>
@@ -366,43 +358,40 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
               <p className="text-xs text-subtle">{life.term} · not a licensed policy</p>
               <h2 className="mt-2 text-4xl">{life.title}</h2>
               <p className="mt-2 text-sm text-muted">
-                {life.blurb} The premium, ${life.premium} USDC, is what moves. A claim can only return what the cover account holds. It cannot pay {formatCover(life.cover)} out of nothing.
+                {life.blurb} This does not move USDC. There is no chain policy and no payout from this page.
               </p>
             </>
           )}
           {owner ? (
             <button type="button" disabled={busy} onClick={() => void open()} className="mt-5 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-60">
-              {busy ? "Waiting for Phantom…" : `Sign the premium · $${premium} USDC`}
+              {busy ? "Waiting for the wallet…" : mode === "drop" ? `Sell $${usd}` : "Life does not move USDC"}
             </button>
           ) : (
             <div className="mt-5"><WalletPicker /></div>
           )}
         </div>
 
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
+        <div className={cn("rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4", view === "drop" || view === "life" ? "hidden" : "")}>
           <p className="text-sm font-semibold">Signed covers</p>
           {rows.length === 0 ? <p className="mt-3 text-xs text-subtle">None. A cover does not exist until the USDC moves.</p> : null}
           <ul className="mt-2 space-y-2">
-            {rows.map((r) => {
-              const crossed = crossedStrike(r);
-              return (
-                <li key={r.id} className="rounded-2xl bg-black/40 px-3 py-3">
-                  <p className="text-sm font-semibold">{r.title}</p>
-                  <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
-                  <p className="mt-1 font-mono text-[11px] text-accent">{r.sig.slice(0, 8)} · ${r.premium} USDC</p>
-                  <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
-                  {r.status === "open" ? (
-                    <div className="mt-3 flex gap-2">
-                      <button type="button" disabled={busy || !crossed} title={crossed ? undefined : "Disabled until the live price crosses the strike"} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
-                      <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
+            {rows.map((r) => (
+              <li key={r.id} className="rounded-2xl bg-black/40 px-3 py-3">
+                <p className="text-sm font-semibold">{r.title}</p>
+                <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
+                <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
+                {r.status === "open" ? (
+                  <div className="mt-3 flex gap-2">
+                    <button type="button" disabled={busy} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
+                    <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
+                  </div>
+                ) : null}
+              </li>
+            ))}
           </ul>
         </div>
       </section>
+      <ClearStrip desk="cover" />
     </div>
   );
 }

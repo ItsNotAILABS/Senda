@@ -1,26 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { TabLead } from "@/components/tab-lead";
-import { ActivityTape } from "@/components/activity-tape";
 import { toast } from "sonner";
-import { setIntent } from "@/lib/book";
-import { localLine, usdRates } from "@/lib/fx";
 import { quoteRoute, signRoute, SOL, type RouteQuote } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, PRESTOCK_MINTS, readChain, type ChainWallet } from "@/lib/phantom";
 import { getHouse, formatUsd, type HouseListing } from "@/lib/sol-house";
-import { WORLD } from "@/lib/world-book";
 import { runPrestock, spendable } from "@/lib/prestock";
 import { payUsdc } from "@/lib/solana-pay";
-import { WalletsDesk } from "@/components/wallets-desk";
-import { MexicoSend } from "@/components/mexico-send";
-import { CrossSend } from "@/components/cross-send";
-import { FillCard } from "@/components/fill-card";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
-
-type Pay = "SOL" | "USDC" | string;
-type Lane = "stakes" | "crypto" | "names" | "listed";
-type Face = "swap" | "wallets" | "stake" | "pesos" | "chains";
 
 const STAKES: [string, string][] = [
   ["JitoSOL", "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn"],
@@ -29,7 +17,9 @@ const STAKES: [string, string][] = [
   ["INF", "5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm"],
 ];
 
-export function WalletDesk({ buy }: { buy?: string }) {
+type Pay = "SOL" | "USDC" | string;
+
+export function WalletDesk({ buy, view: _view = "all" }: { buy?: string; view?: "all" | "swap" | "sell" }) {
   const wallet = useWallet();
   const link = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
   const owner = link?.address ?? "";
@@ -49,10 +39,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
   const [sellSig, setSellSig] = useState<string | null>(null);
   const [sellOut, setSellOut] = useState<number | null>(null);
   const [sellErr, setSellErr] = useState("");
-  const [fx, setFx] = useState("");
-  const [lane, setLane] = useState<Lane>("stakes");
-  const [face, setFace] = useState<Face>("swap");
-  const [fill, setFill] = useState<{ title: string; symbol: string; amount: string; paid: string; received: string; sig: string } | null>(null);
   const [jupTo, setJupTo] = useState("");
   const [jupUsd, setJupUsd] = useState(10);
   const [jupBusy, setJupBusy] = useState(false);
@@ -91,11 +77,8 @@ export function WalletDesk({ buy }: { buy?: string }) {
     };
     pull();
     const id = window.setInterval(pull, 20_000);
-    const again = () => pull();
-    window.addEventListener("senda-chain", again);
     return () => {
       live = false;
-      window.removeEventListener("senda-chain", again);
       window.clearInterval(id);
     };
   }, [owner]);
@@ -125,11 +108,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
 
   const payMint = pay === "SOL" ? SOL : pay === "USDC" ? USDC : pay;
   const recvMint =
-    recv === "USDC"
-      ? USDC
-      : recv === "SOL"
-        ? SOL
-        : STAKES.find(([s]) => s === recv)?.[1] || PRESTOCK_MINTS.find(([s]) => s === recv)?.[1] || WORLD.find((w) => w.symbol === recv)?.mint || house.find((h) => h.symbol === recv)?.mint || (recv.length > 30 ? recv : "");
+    recv === "USDC" ? USDC : recv === "SOL" ? SOL : STAKES.find(([s]) => s === recv)?.[1] || PRESTOCK_MINTS.find(([s]) => s === recv)?.[1] || (recv.length > 30 ? recv : "");
   const amount = Number(raw) || 0;
   const payHeld = pay === "SOL" ? (snap?.sol ?? 0) : pay === "USDC" ? (snap?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0) : (snap?.tokens.find((t) => t.mint === payMint)?.ui ?? 0);
   const payUsd = pay === "SOL" ? amount * solPx : pay === "USDC" ? amount : amount * (marks.get(payMint) ?? 0);
@@ -170,14 +149,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
   }, [amount, pay, payMint, recv, recvMint]);
 
   useEffect(() => {
-    let live = true;
-    usdRates().then((rates) => live && setFx(localLine(payUsd || 0, rates)));
-    return () => {
-      live = false;
-    };
-  }, [payUsd]);
-
-  useEffect(() => {
     if (heldPre.length === 0) return;
     if (heldPre.some((h) => h.mint === sellMint)) return;
     setSellMint(heldPre[0].mint);
@@ -192,7 +163,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
         const linked = wallet.linkChain(who, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
-      setIntent(recv === "USDC" ? "trade" : "hold");
       const dIn = pay === "SOL" ? 9 : pay === "USDC" ? 6 : await mintDecimals(payMint);
       const dOut = recv === "USDC" ? 6 : await mintDecimals(recvMint);
       const done = await signRoute({
@@ -204,14 +174,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
         usd: payUsd || amount,
       });
       toast.success(`Sent ${done.signature.slice(0, 8)}…`);
-      setFill({
-        title: `Swapped ${payLabel}`,
-        symbol: recvLabel.slice(0, 6),
-        amount: quote.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 }),
-        paid: `${amount} ${payLabel}`,
-        received: recvLabel,
-        sig: done.signature,
-      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The swap did not send.");
     } finally {
@@ -282,40 +244,12 @@ export function WalletDesk({ buy }: { buy?: string }) {
         kicker="Swap"
         title="One desk."
         accent="Swap, send, or cross a chain."
-        line="Jupiter swaps any coin in this wallet. A send moves USDC or SOL to another wallet you linked. Across chains, the source wallet signs."
+        line="Jupiter swaps any coin in this wallet. A send moves USDC or SOL. Across chains, the source wallet signs."
         live={["Jupiter quote", "Phantom sign", "Sell a slice back"]}
-        coming={["Limit orders"]}
+        coming={["Limit orders", "A fiat ramp that isn’t a card"]}
       />
-      <div className="flex gap-2 overflow-x-auto">
-        {(
-          [
-            ["swap", "Swap"],
-            ["wallets", "Wallets"],
-            ["stake", "Stake"],
-            ["pesos", "Pesos"],
-            ["chains", "Chains"],
-          ] as const
-        ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setFace(id)} className={cn("min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold", face === id ? "bg-white text-black" : "border border-white/15 text-white/70")}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <section className="flex items-center justify-between rounded-[22px] border border-white/10 px-4 py-3">
-        <div>
-          <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">In Phantom</p>
-          <p className="font-mono text-sm">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Not connected"}</p>
-        </div>
-        <p className="font-mono text-sm tabular-nums">
-          {snap ? `${snap.sol.toFixed(4)} SOL` : "—"}
-          <span className="ml-3">{snap ? `${(snap.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0).toFixed(2)} USDC` : ""}</span>
-        </p>
-      </section>
-      {face === "wallets" ? <WalletsDesk /> : null}
-      {face === "pesos" ? <MexicoSend owner={owner} onLinked={(addr) => wallet.linkChain(addr, "Phantom", "phantom")} /> : null}
-      {face === "chains" ? <CrossSend owner={owner} /> : null}
-      {face === "swap" || face === "stake" ? (
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-6">
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div>
             <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">You pay</p>
@@ -332,14 +266,12 @@ export function WalletDesk({ buy }: { buy?: string }) {
               {` · ${payHeld.toLocaleString("en-US", { maximumFractionDigits: 4 })} in the wallet`}
             </p>
             <div className="mt-3 flex gap-2">
-              {(
-                [
-                  ["25%", 0.25],
-                  ["Half", 0.5],
-                  ["Max", pay === "SOL" ? 0.98 : 1],
-                ] as const
-              ).map(([label, frac]) => (
-                <button key={label} type="button" onClick={() => setRaw(String(Math.floor(payHeld * frac * 1e6) / 1e6 || 0))} className="min-h-9 rounded-full bg-white/10 px-4 text-xs">
+              {[
+                ["25%", 0.25],
+                ["Half", 0.5],
+                ["Max", pay === "SOL" ? 0.98 : 1],
+              ].map(([label, frac]) => (
+                <button key={String(label)} type="button" onClick={() => setRaw(String(Math.floor(payHeld * Number(frac) * 1e6) / 1e6 || 0))} className="min-h-9 rounded-full bg-white/10 px-3 text-xs">
                   {label}
                 </button>
               ))}
@@ -356,14 +288,6 @@ export function WalletDesk({ buy }: { buy?: string }) {
                 </button>
               ))}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {(pay === "USDC" ? [0.5, 1, 5, 25] : [0.01, 0.05, 0.1, 0.5]).map((n) => (
-                <button key={n} type="button" onClick={() => setRaw(String(n))} className={chip(amount === n)}>
-                  {pay === "USDC" ? `$${n}` : n}
-                </button>
-              ))}
-            </div>
-            {fx ? <p className="mt-2 text-[11px] text-subtle">{fx}</p> : null}
           </div>
 
           <div>
@@ -374,52 +298,20 @@ export function WalletDesk({ buy }: { buy?: string }) {
             <p className="font-mono text-sm text-muted">{recvLabel}</p>
             {qErr && amount > 0 && payMint !== recvMint ? <p className="mt-1 text-sm text-down">{qErr}</p> : null}
             {payMint === recvMint ? <p className="mt-1 text-sm text-muted">Pick a different name.</p> : null}
-            <div className="mt-3 flex gap-2 overflow-x-auto">
-              {(
-                [
-                  ["stakes", "Stakes"],
-                  ["crypto", "Crypto"],
-                  ["names", "Names"],
-                  ["listed", "Listed"],
-                ] as const
-              ).map(([id, label]) => (
-                <button key={id} type="button" onClick={() => setLane(id)} className={cn("min-h-9 shrink-0 rounded-full px-4 text-sm font-semibold", lane === id ? "bg-white text-black" : "text-white/60")}>
-                  {label}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setRecv("USDC")} className={chip(recv === "USDC")}>
+                USDC
+              </button>
+              {PRESTOCK_MINTS.map(([symbol]) => (
+                <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={chip(recv === symbol)}>
+                  {symbol}
                 </button>
               ))}
-            </div>
-            <div className="mt-3 flex gap-2 overflow-x-auto">
-              {lane === "stakes"
-                ? STAKES.map(([symbol]) => (
-                    <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={chip(recv === symbol)}>
-                      {symbol}
-                    </button>
-                  ))
-                : null}
-              {lane === "crypto"
-                ? WORLD.filter((w) => w.lane === "crypto").map((w) => (
-                    <button key={w.mint} type="button" onClick={() => setRecv(w.symbol)} className={chip(recv === w.symbol)}>
-                      {w.symbol}
-                    </button>
-                  ))
-                : null}
-              {lane === "names"
-                ? PRESTOCK_MINTS.map(([symbol]) => (
-                    <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={chip(recv === symbol)}>
-                      {symbol}
-                    </button>
-                  ))
-                : null}
-              {lane === "listed"
-                ? house
-                    .filter((h) => h.venue !== "prestocks" && h.mint)
-                    .slice(0, 12)
-                    .map((h) => (
-                      <button key={h.mint} type="button" onClick={() => setRecv(h.symbol)} className={chip(recv === h.symbol)}>
-                        {h.symbol}
-                      </button>
-                    ))
-                : null}
+              {STAKES.map(([symbol]) => (
+                <button key={symbol} type="button" onClick={() => setRecv(symbol)} className={chip(recv === symbol)}>
+                  {symbol}
+                </button>
+              ))}
             </div>
             <input
               value={recv.length > 30 ? recv : ""}
@@ -457,70 +349,12 @@ export function WalletDesk({ buy }: { buy?: string }) {
         </button>
         <button
           type="button"
-          onClick={() =>
-            void navigator.clipboard.writeText(`Swap ${amount} ${payLabel} for ${recvLabel}. Route ${quote?.route ?? "Jupiter"}.`).then(() => toast.success("Copied for an agent."))
-          }
+          onClick={() => void navigator.clipboard.writeText(`Swap ${amount} ${payLabel} for ${recvLabel}. Route ${quote?.route ?? "Jupiter"}.`).then(() => toast.success("Copied for an agent."))}
           className="mt-3 w-full text-center text-sm text-white/55"
         >
           Copy for an agent
         </button>
       </section>
-      ) : null}
-      <section className="rounded-[22px] border border-white/10 bg-gradient-to-br from-[#10131c] to-[#0c1a14] p-4">
-        <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Jupiter · Rain</p>
-        <p className="mt-2 text-2xl">Not issued</p>
-        <p className="mt-1 text-sm text-muted">{snap ? `${(snap.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0).toFixed(2)} USDC ready` : "Connect Phantom"}</p>
-        <p className="mt-4 text-right text-xs text-white/40">Needs Global ID</p>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => window.open("https://jup.ag", "_blank", "noopener,noreferrer")} className="rounded-full bg-white px-3 py-2 text-left text-sm font-semibold text-black">Jupiter<span className="block text-[10px] font-normal">SENDS NOW</span></button>
-          <div className="rounded-full bg-white/10 px-3 py-2 text-sm">Rain<span className="block text-[10px] text-white/40">PROGRAM SLOT</span></div>
-          <div className="rounded-full bg-white/10 px-3 py-2 text-sm">Bridge<span className="block text-[10px] text-white/40">NOT SIGNED</span></div>
-          <div className="rounded-full bg-white/10 px-3 py-2 text-sm">Stablecard<span className="block text-[10px] text-white/40">SWAP</span></div>
-        </div>
-        <ol className="mt-4 space-y-3 text-sm">
-          <li><p className="text-[#d7e36a]">1</p><p className="font-semibold">Open Spend</p><p className="text-white/50">Jupiter app, card icon. Sign in with email, Google, or Apple.</p></li>
-          <li><p className="text-[#d7e36a]">2</p><p className="font-semibold">Global ID</p><p className="text-white/50">Document, phone, liveness. Jupiter decides the country. This desk does not get a Visa issued in the United States, Mexico, or the rest of Latin America.</p></li>
-          <li><p className="text-[#d7e36a]">3</p><p className="font-semibold">Fund it here</p><p className="text-white/50">Copy the Solana USDC address they show. Paste it once. Phantom sends. The 16 digits stay in Jupiter.</p></li>
-        </ol>
-        <button type="button" onClick={() => window.open("https://jup.ag", "_blank", "noopener,noreferrer")} className="mt-4 min-h-11 rounded-full bg-white px-5 text-sm font-semibold text-black">Open Jupiter</button>
-        <p className="mt-4 text-[11px] tracking-[0.16em] text-subtle uppercase">Stable · Western Union</p>
-        <p className="mt-2 text-sm text-muted">USDPT in this Phantom. Visa lives in their app.</p>
-        <div className="mt-3 flex gap-2">
-          {[10, 25, 50].map((n) => (
-            <button key={n} type="button" onClick={() => setJupUsd(n)} className={cn("min-h-10 flex-1 rounded-full text-sm", jupUsd === n ? "bg-white text-black" : "border border-white/15")}>
-              ${n}
-            </button>
-          ))}
-        </div>
-        <input value={jupTo} onChange={(e) => setJupTo(e.target.value)} placeholder="Paste the address Jupiter showed" className="mt-3 min-h-11 w-full rounded-full border border-white/10 bg-transparent px-4 text-sm outline-none" />
-        <button
-          type="button"
-          disabled={jupBusy}
-          onClick={() => {
-            void (async () => {
-              if (!jupTo.trim()) return toast.error("Paste the address Jupiter showed.");
-              setJupBusy(true);
-              try {
-                const who = owner || (await connectPhantom());
-                if (!owner) {
-                  const kept = wallet.linkChain(who, "Phantom", "phantom");
-                  if (!kept.ok && kept.error !== "Already linked.") throw new Error(kept.error || "The wallet did not stay.");
-                }
-                const done = await payUsdc({ owner: who, to: jupTo.trim(), usd: jupUsd, memo: "Senda to Jupiter" });
-                toast.success(`Sent. ${done.signature.slice(0, 8)}…`);
-              } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Phantom did not sign.");
-              } finally {
-                setJupBusy(false);
-              }
-            })();
-          }}
-          className="mt-3 min-h-12 w-full rounded-full bg-[#d7e36a] text-sm font-semibold text-black"
-        >
-          {jupBusy ? "Waiting for Phantom…" : "Send to Jupiter"}
-        </button>
-      </section>
-      <ActivityTape />
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -605,7 +439,7 @@ export function WalletDesk({ buy }: { buy?: string }) {
               type="button"
               disabled={sellBusy || busy || !(sellSlice > 0)}
               onClick={() => void sellBack()}
-              className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-60 lg:shrink-0"
             >
               {sellBusy ? "Waiting for the wallet…" : `Sell $${sellSlice.toFixed(2)}`}
             </button>
@@ -628,19 +462,87 @@ export function WalletDesk({ buy }: { buy?: string }) {
         ) : null}
         {sellErr ? <p className="mt-2 text-sm text-down">{sellErr}</p> : null}
       </section>
-      {fill ? (
-        <FillCard
-          title={fill.title}
-          symbol={fill.symbol}
-          amount={fill.amount}
-          paid={fill.paid}
-          received={fill.received}
-          where="This wallet"
-          when={new Date().toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
-          sig={fill.sig}
-          onDone={() => setFill(null)}
-        />
-      ) : null}
+
+      <section className="rounded-[22px] border border-white/10 bg-gradient-to-br from-[#10131c] to-[#0c1a14] p-4">
+        <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Jupiter · Rain</p>
+        <p className="mt-3 text-2xl">Not issued</p>
+        <p className="mt-1 text-sm text-muted">{snap ? `${(snap.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0).toFixed(2)} USDC ready` : "Connect Phantom"}</p>
+        <p className="mt-6 text-right text-xs text-white/40">Needs Global ID</p>
+      </section>
+      <section className="rounded-[22px] border border-white/10 bg-gradient-to-br from-[#10131c] to-[#142018] p-4">
+        <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Stable · Western Union</p>
+        <p className="mt-6 text-2xl">—</p>
+        <div className="mt-2 flex items-end justify-between">
+          <p className="text-sm text-muted">USDPT in this Phantom</p>
+          <p className="text-xs text-white/40">Visa lives in their app</p>
+        </div>
+      </section>
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => window.open("https://jup.ag", "_blank", "noopener,noreferrer")} className="rounded-full bg-white px-3 py-2 text-left text-sm font-semibold text-black">
+            Jupiter
+            <span className="block text-[10px] font-normal">SENDS NOW</span>
+          </button>
+          <div className="rounded-full bg-white/10 px-3 py-2 text-sm">
+            Rain
+            <span className="block text-[10px] text-white/40">PROGRAM SLOT</span>
+          </div>
+        </div>
+        <ol className="mt-4 space-y-3 text-sm">
+          <li>
+            <p className="text-[#d7e36a]">1</p>
+            <p className="font-semibold">Open Spend</p>
+            <p className="text-white/50">Jupiter app, card icon. Sign in with email, Google, or Apple.</p>
+          </li>
+          <li>
+            <p className="text-[#d7e36a]">2</p>
+            <p className="font-semibold">Global ID</p>
+            <p className="text-white/50">Document, phone, liveness. Jupiter decides the country. This desk does not get a Visa issued in the United States, Mexico, or the rest of Latin America.</p>
+          </li>
+          <li>
+            <p className="text-[#d7e36a]">3</p>
+            <p className="font-semibold">Fund it here</p>
+            <p className="text-white/50">Copy the Solana USDC address they show. Paste it once. Phantom sends. The 16 digits stay in Jupiter.</p>
+          </li>
+        </ol>
+        <button type="button" onClick={() => window.open("https://jup.ag", "_blank", "noopener,noreferrer")} className="mt-4 min-h-11 rounded-full bg-white px-5 text-sm font-semibold text-black">
+          Open Jupiter
+        </button>
+        <div className="mt-3 flex gap-2">
+          {[10, 25, 50].map((n) => (
+            <button key={n} type="button" onClick={() => setJupUsd(n)} className={cn("min-h-10 flex-1 rounded-full text-sm", jupUsd === n ? "bg-white text-black" : "border border-white/15")}>
+              ${n}
+            </button>
+          ))}
+        </div>
+        <input value={jupTo} onChange={(e) => setJupTo(e.target.value)} placeholder="Paste once. Senda keeps it." className="mt-3 min-h-11 w-full rounded-full border border-white/10 bg-transparent px-4 text-sm outline-none" />
+        <button
+          type="button"
+          disabled={jupBusy}
+          onClick={() => {
+            void (async () => {
+              if (!jupTo.trim()) return toast.error("Paste the address Jupiter showed.");
+              setJupBusy(true);
+              try {
+                const who = owner || (await connectPhantom());
+                if (!owner) {
+                  const kept = wallet.linkChain(who, "Phantom", "phantom");
+                  if (!kept.ok && kept.error !== "Already linked.") throw new Error(kept.error || "The wallet did not stay.");
+                }
+                const done = await payUsdc({ owner: who, to: jupTo.trim(), usd: jupUsd, memo: "Senda to Jupiter" });
+                toast.success(`Sent. ${done.signature.slice(0, 8)}…`);
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Phantom did not sign.");
+              } finally {
+                setJupBusy(false);
+              }
+            })();
+          }}
+          className="mt-3 min-h-12 w-full rounded-full bg-[#d7e36a] text-sm font-semibold text-black"
+        >
+          {jupBusy ? "Waiting for Phantom…" : "Send to Jupiter"}
+        </button>
+      </section>
     </div>
   );
 }

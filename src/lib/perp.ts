@@ -1,4 +1,4 @@
-/** A perp row is the label. The token move is the Jupiter swap. */
+/** Perps on PreStocks last. Funding from premium-to-mark. Paper. */
 
 const KEY = "senda.perp.v1";
 

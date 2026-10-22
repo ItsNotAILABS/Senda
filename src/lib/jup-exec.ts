@@ -4,8 +4,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
+const QUOTE_URLS = [
+  (qs: string) => `https://public.jupiterapi.com/quote?${qs}`,
+  (qs: string) => `https://lite-api.jup.ag/swap/v1/quote?${qs}`,
+  (qs: string) => `https://api.jup.ag/swap/v1/quote?${qs}`,
+];
 
 export type JupQuote = {
   inAmount: string;
@@ -33,9 +36,9 @@ export async function fetchQuote(mint: string, usd: number, side: "buy" | "sell"
   const outputMint = side === "buy" ? mint : USDC;
   const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter unreachable.";
-  for (const base of [QUOTE, QUOTE_LITE]) {
+  for (const url of QUOTE_URLS) {
     try {
-      const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+      const r = await fetch(url(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
       const text = await r.text();
       if (!r.ok) {
         last = r.status === 429 ? "Jupiter is busy. Wait a moment." : `Jupiter ${r.status}`;
@@ -91,6 +94,12 @@ export function jupFillUrl(mint: string, side: "buy" | "sell"): string {
     : `https://jup.ag/swap/${mint}-${USDC}`;
 }
 
+/** Jupiter sends a fraction at or under 1, and a percent when the number is already above 1. */
+export function impactFromRaw(priceImpactPct: string | number | undefined | null): number {
+  const n = Math.abs(Number(priceImpactPct) || 0);
+  return n > 1 ? n : n * 100;
+}
+
 export function impactPct(q: JupQuote): number {
-  return Math.abs(Number(q.priceImpactPct) || 0) * (Number(q.priceImpactPct) > 1 ? 1 : 100);
+  return impactFromRaw(q.priceImpactPct);
 }

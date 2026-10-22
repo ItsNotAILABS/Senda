@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { OUTSIDE } from "@/lib/outside-paper";
 
 type Page = { id: string; title: string; body: { h: string; p: string[] }[] };
 
@@ -25,42 +24,6 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
             h: "What it is not",
             p: [
               "Not a broker. Not a bank. Not a card network. Not a custodian. The private key never enters Senda. If a wallet is not installed in this browser, it is not offered.",
-            ],
-          },
-        ],
-      },
-      {
-        id: "digitals",
-        title: "Digital contracts",
-        body: [
-          {
-            h: "What you are buying",
-            p: [
-              "A digital contract on a name. You post a debit in USDC. You do not receive the shares. The debit sits in a premium account this browser holds until you close. Close sends that debit back to the Phantom that signed. A call names the upside above the strike. A put names the downside below it. Neither one pays more than the debit, because no one else posted a payout. The strike, the size, and the debit are on the memo of the transfer.",
-            ],
-          },
-          {
-            h: "The ticket",
-            p: [
-              "After the fill the blotter shows the side, the name, the debit, the size, the strike, last, when it opened, when it ends, and the premium account. That account is not another trader. It is the USDC account holding your debit so the ticket can be closed. If you signed on a phone, the close is on that phone.",
-            ],
-          },
-          {
-            h: "The price",
-            p: [
-              "Last is S. Strike is K. Time is the tenor as a fraction of a year, floored at one minute. Sigma is the absolute 24h move times the square root of 365, floored at 35% and capped at 250%, because a pre-IPO print is wide. The fair value is N(d2) for a call and N(-d2) for a put, with d2 = (ln(S/K) − ½ σ² t) / (σ √t). The ask is that probability plus a 4% vig, clamped between 3¢ and 98¢. Strikes sit 10%, 5%, and 2% around last, plus last itself and the SPV mark when there is one.",
-            ],
-          },
-          {
-            h: "A pocket",
-            p: [
-              "A pocket is a contract with USDC in it. You create it from Phantom. Time pays a named address after the clock. A constraint pays when last is through the line you set. A decision pays when you release it. Cash can move from one pocket into another. The key stays in the browser that created it, so that browser can also take the money back. The rule is not a Solana program. It is this desk.",
-            ],
-          },
-          {
-            h: "Above the strike, and not",
-            p: [
-              "A call above the strike does not pay a profit. A put below the strike does not pay a profit. The premium account only holds the debit you sent. There is no other side that posted a payout. Close sends that same debit back, so the P&L is zero. If you do not close, the debit stays in the premium account. It is still yours. It was not taken by another trader.",
             ],
           },
         ],
@@ -237,8 +200,7 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "The terms",
             p: [
-              "You lock a print and pay a premium. If that name falls ten percent from the print, the cover pays the size back into cash. The token stays in the wallet. It is not a licensed insurance policy.",
-              "On chain, the premium is a USDC transfer into a cover account whose key stays in this browser, with the terms in a memo. You sign it.",
+              "There is no listed put. The hedge is a Jupiter sell of the token the wallet holds. A premium is not sent to a key stored in this browser.",
             ],
           },
         ],
@@ -291,7 +253,6 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
       },
     ],
   },
-  OUTSIDE,
   {
     id: "limits",
     label: "Limits",
@@ -316,7 +277,53 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "Do not read these as done",
             p: [
-              "A brokerage account. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id. Margin on a book Senda matches is not built. A Base perp uses Avantis margin, and the wallet signs their contract. The liquidation on the ticket is a preview.",
+              "A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "chains",
+    label: "Chains",
+    lede: "Solana, Bitcoin, Ethereum, Arbitrum, Base, Monad. Nothing else was taken off the desk.",
+    pages: [
+      {
+        id: "map",
+        title: "Where each chain clears",
+        body: [
+          {
+            h: "Solana",
+            p: [
+              "This is the account. Phantom, Solflare, or Backpack signs. Jupiter quotes the route. PreStocks, xStocks, perps, USDC sends, and the coin book all land in that wallet.",
+              "Bitcoin and ether on this desk are the Solana wrappers, WBTC, cbBTC, and portal ETH. Native bitcoin is not signed here.",
+            ],
+          },
+          {
+            h: "Ethereum and its rollups",
+            p: [
+              "Ostium longs and shorts clear in USDC on Arbitrum. Phantom’s Ethereum account or MetaMask signs. The margin stays in the wallet until the contract locks it.",
+              "Base is the Ethereum account already on the Wallets desk. It is not a second Solana buy.",
+            ],
+          },
+          {
+            h: "Monad",
+            p: [
+              "Chain 143. The Chains desk asks the wallet to add it. A Monad token swap is not listed until a router is actually called. The button does not pretend one.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "kept",
+        title: "What stays",
+        body: [
+          {
+            h: "Desks that are not replaced",
+            p: [
+              "Chart, Quotes, Spot, PreStocks, xStocks, Perps, FX and metals, Commodities, Pairs, Ostium, Options, Stakes, Borrow, Cover, Send, and Portfolio each keep their own page.",
+              "A new chain is a row on the Chains desk. It is not a reason to delete a market.",
             ],
           },
         ],
@@ -325,9 +332,10 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
   },
 ];
 
-export function DocsDesk() {
-  const [bookId, setBookId] = useState(BOOKS[0].id);
-  const book = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
+export function DocsDesk({ bookId }: { bookId?: string }) {
+  const start = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
+  const [bookIdState, setBookId] = useState(start.id);
+  const book = BOOKS.find((b) => b.id === bookIdState) ?? BOOKS[0];
   const [pageId, setPageId] = useState(book.pages[0].id);
   const page = book.pages.find((p) => p.id === pageId) ?? book.pages[0];
 
@@ -337,8 +345,14 @@ export function DocsDesk() {
     setPageId(next.pages[0].id);
   }
 
+  useEffect(() => {
+    if (!bookId) return;
+    openBook(bookId);
+  }, [bookId]);
+
   return (
     <main className="flex min-h-[calc(100dvh-88px)] flex-col">
+      {bookId ? null : (
       <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-4">
         {BOOKS.map((b) => (
           <button
@@ -354,6 +368,7 @@ export function DocsDesk() {
           </button>
         ))}
       </div>
+      )}
       <div className="grid flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
         <aside className="border-white/10 px-3 py-4 lg:border-r">
           <p className="px-2 text-[11px] tracking-[0.16em] text-white/35 uppercase">{book.label}</p>

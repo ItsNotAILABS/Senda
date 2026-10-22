@@ -175,7 +175,7 @@ async function jupPrices(mints: string[]): Promise<Record<string, JupRow>> {
 
 function chgFrac(v: number | undefined): number | null {
   if (v == null || !Number.isFinite(v)) return null;
-  return v / 100;
+  return Math.abs(v) > 1 ? v / 100 : v;
 }
 
 function premium(last: number, mark: number): number | null {
@@ -517,31 +517,9 @@ export async function fetchHouse(): Promise<HouseListing[]> {
   }
 }
 
-export const getHouse = createServerFn({ method: "GET" }).handler(async (): Promise<HouseListing[]> => {
-  const rows = await fetchHouse();
-  try {
-    const { registerOfferings } = await import("./offering-book");
-    await registerOfferings(
-      rows
-        .filter((row) => row.mint && row.symbol)
-        .map((row) => ({
-          id: `name:${row.mint}`,
-          family: "name",
-          symbol: row.symbol,
-          name: row.name,
-          chain: "Solana",
-          mint: row.mint,
-          venue: row.venue,
-          signPath: "prestock",
-          status: row.last > 0 ? "open" : "listed",
-          note: "The wallet signs the swap. The token stays in the wallet.",
-        })),
-    );
-  } catch {
-    /* A missed write does not hide the book. */
-  }
-  return rows;
-});
+export const getHouse = createServerFn({ method: "GET" }).handler(
+  async (): Promise<HouseListing[]> => fetchHouse(),
+);
 
 export const getHouseOne = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ id: z.string().min(1).max(48) }).parse(input))

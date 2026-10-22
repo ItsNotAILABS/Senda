@@ -58,7 +58,7 @@ function tell() {
 }
 
 async function aesFrom(sig: Uint8Array): Promise<CryptoKey> {
-  const raw = await crypto.subtle.digest("SHA-256", sig);
+  const raw = await crypto.subtle.digest("SHA-256", sig as BufferSource);
   return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
@@ -77,7 +77,7 @@ async function unpack(stored: string): Promise<string | null> {
   try {
     const iv = unb64(stored.slice(MARK.length, cut));
     const box = unb64(stored.slice(cut + 1));
-    const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aes, box);
+    const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, aes, box as BufferSource);
     return new TextDecoder().decode(clear);
   } catch {
     return null;

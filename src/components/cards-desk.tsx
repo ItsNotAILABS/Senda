@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { MCC } from "@/lib/card-issuing";
 import { AccountDetails } from "@/components/account-details";
+import { MoneyBar } from "@/components/money-bar";
 import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
@@ -46,7 +47,13 @@ const STORES: { id: string; label: string; merchant: string; cap: number; mcc: s
   { id: "travel", label: "Travel", merchant: "United Airlines", cap: 240, mcc: "4511" },
 ];
 
-export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
+export function CardsDesk({
+  initialSpend = 0,
+  view = "all",
+}: {
+  initialSpend?: number;
+  view?: "all" | "account" | "pay" | "chain" | "number" | "expenses" | "rails";
+}) {
   const { w, freeze, cardSpend, issue, terminate, replace, setLimit, sealIssued, issueCheckout } = useWallet();
   const [openId, setOpenId] = useState<string | null>(null);
   const [kind, setKind] = useState<CardKind>("virtual");
@@ -66,19 +73,25 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
 
   return (
     <main className="senda-rise space-y-3 px-3 py-3 lg:px-4">
-      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-
+      {view === "all" ? (
+      <>
       <TabLead
-        kicker="Pay"
-        title="One ticket."
-        accent="USDC."
-        line="Pay, payroll, or collect. The size is the order. Phantom signs. A Visa is not issued here."
+        kicker="Shop"
+        title="A number for the store"
+        accent="not the token."
+        line="The dollar number is a Lead Bank account. Deposits become USDC in the wallet. The Visa is Rain’s, not a number made here."
         live={["Account details", "USDC address", "One charge"]}
         coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
+      <MoneyBar />
+      </>
+      ) : null}
 
+      {view === "all" || view === "account" ? (
       <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+      ) : null}
 
+      {view === "all" || view === "pay" ? (
       <CheckoutPay
         initialSpend={initialSpend}
         onMint={(cap, merchant, name) => issueCheckout(cap, merchant, name)}
@@ -89,9 +102,15 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
+      ) : null}
 
-      <CardRails />
+      {view === "all" || view === "chain" ? (
+      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+      ) : null}
 
+      {view === "all" || view === "rails" ? <CardRails /> : null}
+
+      {view === "all" || view === "expenses" ? (
       <section className={cn(PANEL, "p-4")}>
         <h2 className="text-sm font-semibold">Expenses</h2>
         {expenses.length === 0 ? (
@@ -115,7 +134,10 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           </ul>
         )}
       </section>
+      ) : null}
 
+      {view === "all" || view === "number" ? (
+      <>
       <div className="flex justify-end">
         <button
           type="button"
@@ -207,6 +229,8 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
             />
           ))}
         </section>
+      ) : null}
+      </>
       ) : null}
     </main>
   );
@@ -317,7 +341,6 @@ function CheckoutPay({
               )}
             </button>
           ) : null}
-          <p className="basis-full text-xs leading-snug text-white/70">A store will not charge the number.</p>
         </div>
       </div>
 
@@ -369,7 +392,7 @@ function PayOnChain({ owner }: { owner: string }) {
         <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Solana Pay</p>
         <h2 className="mt-1 text-lg">Pay the address in USDC</h2>
         <p className="mt-1 max-w-xl text-sm text-muted">
-          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number below is a cap on this browser. This one moves on mainnet.
+          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number above is a cap on this browser. This one moves on mainnet.
         </p>
       </div>
       <div className="grid gap-2">

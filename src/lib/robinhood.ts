@@ -1,13 +1,12 @@
 /** Opens Robinhood Connect so buying power can land as USDC on a Solana address. */
 
-export function robinhoodBuyingPowerUrl(input: { wallet: string; usd: number; origin: string; asset?: "USDC" | "SOL" }): string {
-  const asset = input.asset ?? "USDC";
+export function robinhoodBuyingPowerUrl(input: { wallet: string; usd: number; origin: string }): string {
   const params = new URLSearchParams({
     walletAddress: input.wallet,
-    supportedAssets: asset,
+    supportedAssets: "USDC",
     supportedNetworks: "SOLANA",
     paymentMethod: "buying_power",
-    assetCode: asset,
+    assetCode: "USDC",
     fiatCode: "USD",
     fiatAmount: String(Math.max(1, Math.round(input.usd))),
     connectId: crypto.randomUUID(),

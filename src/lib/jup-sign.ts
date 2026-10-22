@@ -1,64 +1,27 @@
 /** Jupiter builds the swap. Phantom signs it. Senda never holds the key. */
 
-import { USDC } from "@/lib/jup-exec";
-import { CASH, USDT } from "@/lib/wallet-engine";
-import { currentIntent, noteAct, recordFill } from "@/lib/book";
-import { stageMove } from "@/lib/moves";
-import { PRESTOCK_MINTS, sendVersioned, splHolding } from "@/lib/phantom";
+import { impactFromRaw, USDC } from "@/lib/jup-exec";
+import { sendVersioned } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
-import { pairAllowed } from "@/lib/trade-book.mjs";
 
-const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
-const SWAP = "https://api.jup.ag/swap/v1/swap";
-const SWAP_LITE = "https://lite-api.jup.ag/swap/v1/swap";
-
-export const SOL = "So11111111111111111111111111111111111111112";
-export const PYUSD = "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo";
-
-/** What a wallet can pay or receive. USDC stays the default. */
-export const PAY = [
-  { symbol: "USDC", mint: USDC, decimals: 6 },
-  { symbol: "SOL", mint: SOL, decimals: 9 },
-  { symbol: "CASH", mint: CASH, decimals: 6 },
-  { symbol: "USDT", mint: USDT, decimals: 6 },
-  { symbol: "PYUSD", mint: PYUSD, decimals: 6 },
-] as const;
-
-export function payAsset(symbol?: string) {
-  return PAY.find((row) => row.symbol === symbol) ?? PAY[0];
-}
-
-export function isPayMint(mint: string) {
-  return PAY.some((row) => row.mint === mint);
-}
-
-/** Dollar size into raw units. SOL needs a live dollar price. Stables are one dollar. */
-export function payRaw(symbol: string, usd: number, solUsd = 0) {
-  const pay = payAsset(symbol);
-  if (!(usd > 0)) return 0;
-  if (pay.symbol === "SOL") {
-    if (!(solUsd > 0)) throw new Error("SOL has no live price, so this size cannot be signed in SOL.");
-    return Math.max(1, Math.floor((usd / solUsd) * 10 ** pay.decimals));
-  }
-  return Math.max(1, Math.round(usd * 10 ** pay.decimals));
-}
-
-/** USDC, SOL, CASH, USDT, or PYUSD against any mint Jupiter can quote. Listed-to-listed still passes. */
-const TESSERA_MINTS = [
-  "TKLSidmLVt3cqGaaodG8tyRzoANfQwoh67AccjmubeZ",
-  "oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ",
-  "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v",
+const QUOTE_URLS = [
+  (qs: string) => `https://public.jupiterapi.com/quote?${qs}`,
+  (qs: string) => `https://lite-api.jup.ag/swap/v1/quote?${qs}`,
+  (qs: string) => `https://api.jup.ag/swap/v1/quote?${qs}`,
+];
+const SWAP_URLS = [
+  "https://public.jupiterapi.com/swap",
+  "https://lite-api.jup.ag/swap/v1/swap",
+  "https://api.jup.ag/swap/v1/swap",
 ];
 
-export function assertPrestockRoute(inputMint: string, outputMint: string, extraMints: string[] = []) {
-  const listed = PRESTOCK_MINTS.map(([, mint]) => mint);
-  const extra = [inputMint, outputMint].filter(
-    (mint) => /^Pre[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) || TESSERA_MINTS.includes(mint),
-  );
-  if (!pairAllowed(inputMint, outputMint, [...listed, ...extra, ...extraMints])) {
-    throw new Error("That pair is not on this desk. The wallet was not asked to sign.");
-  }
+export const SOL = "So11111111111111111111111111111111111111112";
+
+/** One side is USDC or SOL. The other side is the mint Jupiter quoted. */
+export function assertPrestockRoute(inputMint: string, outputMint: string) {
+  const cash = new Set([SOL, USDC]);
+  const ok = (cash.has(inputMint) && outputMint.length >= 32) || (cash.has(outputMint) && inputMint.length >= 32);
+  if (!ok) throw new Error("That pair is not USDC or SOL against a mint. The wallet was not asked to sign.");
 }
 
 export type RouteQuote = {
@@ -95,8 +58,8 @@ export async function quoteRoute(input: {
   if (!(input.amountRaw > 0)) throw new Error("Enter an amount.");
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter did not quote.";
-  for (const base of [QUOTE, QUOTE_LITE]) {
-    const res = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+  for (const url of QUOTE_URLS) {
+    const res = await fetch(url(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
     const text = await res.text();
     let quote: RawQuote = {};
     try {
@@ -109,7 +72,7 @@ export async function quoteRoute(input: {
       last = res.status === 429 ? "Jupiter is busy. Wait a moment." : quote.error || `Jupiter quote ${res.status}`;
       continue;
     }
-    const impact = Number(quote.priceImpactPct ?? 0);
+    const impact = impactFromRaw(quote.priceImpactPct);
     const outUi = Number(quote.outAmount) / 10 ** input.outDecimals;
     const minRaw = Number(quote.otherAmountThreshold || quote.outAmount);
     return {
@@ -124,11 +87,6 @@ export async function quoteRoute(input: {
   throw new Error(last);
 }
 
-function impactPct(impact: number): number {
-  if (!Number.isFinite(impact)) return 0;
-  return Math.abs(impact) <= 1 ? impact * 100 : impact;
-}
-
 export async function signRoute(input: {
   owner: string;
   inputMint: string;
@@ -136,21 +94,17 @@ export async function signRoute(input: {
   amountRaw: number;
   outDecimals: number;
   usd: number;
-  symbol?: string;
-  qty?: number;
-  extraMints?: string[];
 }): Promise<{ signature: string; outUi: number }> {
   if (!(input.usd > 0)) throw new Error("Enter an amount.");
-  assertPrestockRoute(input.inputMint, input.outputMint, input.extraMints ?? []);
+  assertPrestockRoute(input.inputMint, input.outputMint);
   const cap = spendCap();
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
   const quoted = await quoteRoute(input);
-  const impact = impactPct(quoted.impact);
-  if (impact > 5) throw new Error(`Price impact is ${impact.toFixed(1)}%. The wallet was not asked to sign.`);
+  if (quoted.impact > 5) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
   let quote: RawQuote | null = null;
-  for (const base of [QUOTE, QUOTE_LITE]) {
-    const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+  for (const base of QUOTE_URLS) {
+    const quoteRes = await fetch(base(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
     const text = await quoteRes.text();
     try {
       const parsed = JSON.parse(text) as RawQuote;
@@ -165,7 +119,7 @@ export async function signRoute(input: {
   if (!quote?.outAmount) throw new Error("Jupiter did not quote.");
   let swapTx = "";
   let swapErr = "Jupiter did not build a transaction.";
-  for (const base of [SWAP, SWAP_LITE]) {
+  for (const base of SWAP_URLS) {
     const swapRes = await fetch(base, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -193,33 +147,7 @@ export async function signRoute(input: {
   if (!globalThis.Buffer) globalThis.Buffer = Buffer;
   const { VersionedTransaction } = await import("@solana/web3.js");
   const tx = VersionedTransaction.deserialize(b64ToBytes(swapTx));
-  const side = isPayMint(input.inputMint) && !isPayMint(input.outputMint) ? "Bought" : !isPayMint(input.inputMint) && isPayMint(input.outputMint) ? "Sold" : "Swapped";
-  const sideName = input.symbol ? `${side} ${input.symbol}` : "Jupiter swap";
-  stageMove({ usd: input.usd, kind: "swap", title: sideName });
   const signature = await sendVersioned(tx);
-  const outName = PRESTOCK_MINTS.find(([, mint]) => mint === input.outputMint)?.[0];
-  const inName = PRESTOCK_MINTS.find(([, mint]) => mint === input.inputMint)?.[0];
-  const label = (mint: string, named?: string) =>
-    named || (mint === SOL ? "SOL" : mint === USDC ? "USDC" : mint === CASH ? "CASH" : mint === USDT ? "USDT" : mint === PYUSD ? "PYUSD" : "token");
-  if (outName) {
-    recordFill({ symbol: outName, mint: input.outputMint, side: "buy", bucket: currentIntent(), usd: input.usd, qty: quoted.outUi, signature });
-  } else if (inName) {
-    const qty = input.amountRaw / 1e9;
-    recordFill({ symbol: inName, mint: input.inputMint, side: "sell", bucket: currentIntent(), usd: input.usd, qty: qty > 0 ? qty : quoted.outUi, signature });
-  } else {
-    const buying = isPayMint(input.inputMint) && !isPayMint(input.outputMint);
-    const selling = isPayMint(input.outputMint) && !isPayMint(input.inputMint);
-    const mint = buying ? input.outputMint : selling ? input.inputMint : input.outputMint;
-    const qty = input.qty && input.qty > 0 ? input.qty : quoted.outUi;
-    recordFill({ symbol: input.symbol || label(mint), mint, side: selling ? "sell" : "buy", bucket: currentIntent(), usd: input.usd, qty, signature });
-  }
-  noteAct({
-    kind: "swap",
-    title: input.symbol ? `${isPayMint(input.outputMint) && !isPayMint(input.inputMint) ? "Sold" : "Bought"} ${input.symbol}` : `${label(input.inputMint, inName)} → ${label(input.outputMint, outName)}`,
-    detail: `$${input.usd.toFixed(2)} · Jupiter · ${currentIntent() === "trade" ? "Trade" : "Hold"}`,
-    signature,
-    usd: input.usd,
-  });
   return { signature, outUi: quoted.outUi };
 }
 
@@ -230,43 +158,16 @@ export async function signStockSwap(input: {
   side: "buy" | "sell";
   tokenAmount?: bigint;
   decimals?: number;
-  extraMints?: string[];
-  symbol?: string;
-  /** USDC, SOL, CASH, USDT, or PYUSD. Defaults to USDC. */
-  pay?: string;
-  solUsd?: number;
 }): Promise<{ signature: string; outUi: number }> {
-  const pay = payAsset(input.pay);
   const amount =
-    input.side === "buy" ? payRaw(pay.symbol, input.usd, input.solUsd) : Number(input.tokenAmount ?? 0n);
+    input.side === "buy" ? Math.max(1, Math.round(input.usd * 1e6)) : Number(input.tokenAmount ?? 0n);
   if (!(amount > 0)) throw new Error("Nothing to sell.");
   return signRoute({
     owner: input.owner,
-    inputMint: input.side === "buy" ? pay.mint : input.mint,
-    outputMint: input.side === "buy" ? input.mint : pay.mint,
+    inputMint: input.side === "buy" ? USDC : input.mint,
+    outputMint: input.side === "buy" ? input.mint : USDC,
     amountRaw: amount,
-    outDecimals: input.decimals ?? (input.side === "buy" ? 9 : pay.decimals),
+    outDecimals: input.decimals ?? (input.side === "buy" ? 9 : 6),
     usd: input.usd,
-    symbol: input.symbol,
-    extraMints: [...(input.extraMints ?? []), pay.mint],
-  });
-}
-
-/** Swap Phantom CASH into USDC when the send is short. Does nothing if USDC already covers it. */
-export async function fundUsdc(owner: string, usd: number): Promise<void> {
-  const have = await splHolding(owner, USDC);
-  if (have.ui + 0.01 >= usd) return;
-  const need = Math.round((usd - have.ui) * 100) / 100;
-  const cash = await splHolding(owner, CASH);
-  if (cash.ui + 0.01 < need) throw new Error("This account does not hold enough USDC or Phantom CASH for that send.");
-  await signRoute({
-    owner,
-    inputMint: CASH,
-    outputMint: USDC,
-    amountRaw: Math.max(1, Math.floor(need * 1e6)),
-    outDecimals: 6,
-    usd: need,
-    symbol: "USDC",
-    extraMints: [CASH],
   });
 }

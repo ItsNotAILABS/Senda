@@ -3,7 +3,7 @@ import { markHouse, type HouseBook } from "@/lib/house-paper";
 import type { HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
-export type DeskMode = "spot" | "world" | "minty" | "book" | "options" | "wrap" | "curve" | "perps" | "basket" | "lend" | "eco" | "xstock" | "tokens";
+export type DeskMode = "spot" | "minty" | "book" | "options" | "wrap" | "curve" | "perps" | "basket" | "lend" | "eco";
 
 export function Watchlist({
   rows,

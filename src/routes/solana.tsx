@@ -1,38 +1,18 @@
-import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { MarketsDesk } from "@/components/markets-desk";
-import { SolanaFloor } from "@/components/solana-floor";
-import { getChainTape, type ChainTape } from "@/lib/chain-tape";
-import { getHouse, type HouseListing } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { SOLANA_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/solana")({
-  loader: () => getHouse(),
-  component: MarketsPage,
+  component: Layout,
 });
 
-const EMPTY_TAPE: ChainTape = { ok: false, rows: [], note: "", jupiter: false, defillama: false };
-
-function MarketsPage() {
-  const house = Route.useLoaderData();
+function Layout() {
   return (
     <AppShell>
-      <MarketsDesk house={house} coins={[]} />
-      <SolanaBlock house={house.filter((row) => row.venue === "prestocks")} />
+      <ProductShell title="Solana" pages={SOLANA_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
-}
-
-function SolanaBlock({ house }: { house: HouseListing[] }) {
-  const [tape, setTape] = useState<ChainTape>(EMPTY_TAPE);
-  useEffect(() => {
-    let live = true;
-    getChainTape()
-      .then((next) => live && setTape(next))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, []);
-  return <SolanaFloor house={house} tape={tape} />;
 }

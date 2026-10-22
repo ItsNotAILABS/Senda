@@ -159,7 +159,7 @@ export function WebDesk() {
           </Rail>
           <Rail title="Cards">
             {w.cards.length === 0 ? (
-              <Link to="/cards" search={{ spend: 0 }} className="block px-4 py-2 text-sm font-medium">
+              <Link to="/cards" className="block px-4 py-2 text-sm font-medium">
                 Issue a debit
               </Link>
             ) : (

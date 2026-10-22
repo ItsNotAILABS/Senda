@@ -62,7 +62,7 @@ async function info(body: unknown): Promise<unknown> {
 type Universe = { name?: string; maxLeverage?: number; szDecimals?: number };
 type Ctx = { markPx?: string; prevDayPx?: string; funding?: string; openInterest?: string; dayNtlVlm?: string };
 
-export const hlBook = createServerFn({ method: "GET" }).handler(async (): Promise<HlMarket[]> => {
+export async function loadHlMarkets(): Promise<HlMarket[]> {
   const dexes = (await info({ type: "perpDexs" })) as Array<{ name?: string } | null>;
   const books = await Promise.all(
     dexes.map(async (dex, dexIndex) => {
@@ -104,7 +104,9 @@ export const hlBook = createServerFn({ method: "GET" }).handler(async (): Promis
     }),
   );
   return books.flat().filter((row) => row.mark > 0);
-});
+}
+
+export const hlBook = createServerFn({ method: "GET" }).handler(async () => loadHlMarkets());
 
 export type HlCash = { perp: number; spot: number; abstraction: string };
 

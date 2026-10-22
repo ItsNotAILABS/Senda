@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { AddMoneyScreen } from "@/components/add-money";
+import { LiveChart } from "@/components/price-chart";
 import { TokenMark } from "@/components/token-mark";
-import { applyHouseDrop, loadHouseBook, saveHouseBook } from "@/lib/house-paper";
 import { formatClock, minuteId, remainingMs } from "@/lib/minute-book";
 import { formatUsdTiny, protectCost, quotePeg, type PegQuote } from "@/lib/peg";
-import { loadPegs, openPeg, settlePegs } from "@/lib/peg-book";
+import { loadPegs, settlePegs } from "@/lib/peg-book";
 import { connectPhantom } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -14,39 +14,11 @@ import { cn } from "@/lib/utils";
 
 const CHIPS = [10, 25, 100];
 
-function Spark({ last, mark, chg }: { last: number; mark: number; chg: number }) {
-  const d = useMemo(() => {
-    const n = 28;
-    const pts: number[] = [];
-    for (let i = 0; i < n; i += 1) {
-      const t = i / (n - 1);
-      const from = last / (1 + chg * (1 - t) * 0.85);
-      pts.push(from);
-    }
-    pts[n - 1] = last;
-    const lo = Math.min(...pts, mark) * 0.995;
-    const hi = Math.max(...pts, mark) * 1.005;
-    const span = hi - lo || 1;
-    const line = pts
-      .map((y, i) => `${(i / (n - 1)) * 100},${((hi - y) / span) * 36 + 2}`)
-      .join(" ");
-    const my = ((hi - mark) / span) * 36 + 2;
-    return { line, my };
-  }, [last, mark, chg]);
-
-  return (
-    <svg viewBox="0 0 100 40" className="h-16 w-full" aria-hidden>
-      <polyline fill="none" stroke="currentColor" strokeWidth="1.4" points={d.line} className="text-down" />
-      <line x1="0" x2="100" y1={d.my} y2={d.my} className="text-muted" stroke="currentColor" strokeWidth="0.6" strokeDasharray="2 2" />
-    </svg>
-  );
-}
-
 export function MarketStream({
   house,
   cash,
-  onDebit,
-  onCredit,
+  onDebit: _onDebit,
+  onCredit: _onCredit,
 }: {
   house: HouseListing[];
   cash: number;
@@ -83,7 +55,7 @@ export function MarketStream({
     for (const t of done) {
       toast.message(`${t.symbol} window closed. The token is what you hold, not a cash prize.`);
     }
-  }, [now, names, onCredit]);
+  }, [now, names]);
 
   const clock = now ? formatClock(remainingMs(now)) : "—:—";
   const q = focus ? quotePeg(focus) : null;
@@ -104,22 +76,7 @@ export function MarketStream({
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
       const done = await runPrestock({ owner, mint: stock.mint, side: "buy", usd: spend, price: stock.last });
-      const shares = stock.last > 0 ? spend / stock.last : 0;
-      saveHouseBook(applyHouseDrop(loadHouseBook(), stock.id, "yes", spend, stock.last));
-      const quote = quotePeg(stock);
-      if (quote) {
-        openPeg({
-          stockId: stock.id,
-          symbol: stock.symbol,
-          shares,
-          spend,
-          premiumPaid: 0,
-          elPerShare: quote.expectedLoss,
-          entryLast: stock.last,
-          entryMark: stock.mark,
-        });
-      }
-      toast.success(`${stock.symbol} bought. ${done.signature.slice(0, 8)}…`);
+      toast.success(`${stock.symbol} bought. ${done.signature.slice(0, 8)}… The token is in the wallet. The peg on this page is a note, not a second balance.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The swap did not send.");
     } finally {
@@ -155,7 +112,9 @@ export function MarketStream({
         <p className={cn("mt-2 text-sm font-semibold", (focus.change24h ?? 0) < 0 ? "text-down" : "text-up")}>
           {formatChg(focus.change24h)} · {formatPremium(focus.premium)} vs mark
         </p>
-        <Spark last={focus.last} mark={focus.mark} chg={focus.change24h ?? 0} />
+        <div className="mt-3 overflow-hidden rounded-2xl bg-black/40">
+          <LiveChart compact mint={focus.mint} symbol={focus.symbol} live={focus.last} />
+        </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <QuoteBox label="Token price" value={formatUsd(focus.last)} hint="SPL print · Jupiter" />
           <QuoteBox label="SPV mark" value={formatUsd(focus.mark)} hint="1:1 SPV backing" />

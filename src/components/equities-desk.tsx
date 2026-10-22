@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FillButton } from "@/components/fill-button";
-import { LiveChart } from "@/components/price-chart";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { type EquityBook, type ListedStock, type StockReserve } from "@/lib/equities";
 import { WalletPicker } from "@/components/wallet-picker";
@@ -10,10 +9,9 @@ import { CCYS, formatMoney } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export function EquitiesDesk({ book }: { book: EquityBook }) {
+export function EquitiesDesk({ book, view = "all", note }: { book: EquityBook; view?: "all" | "market" | "borrow"; note?: string }) {
   const [symbol, setSymbol] = useState(book.stocks.find((s) => s.symbol === "SPYx")?.symbol ?? book.stocks[0]?.symbol ?? "");
   const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<"all" | "etf" | "stock">("all");
   const stock = book.stocks.find((s) => s.symbol === symbol) ?? book.stocks[0];
   const reserve = book.reserves.find((r) => r.symbol === stock?.symbol);
   const [usd, setUsd] = useState(100);
@@ -21,18 +19,16 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
   const wallet = useWallet();
   const borrow = stock && reserve ? usd * reserve.maxLtv * pct : 0;
   const digest = digestBooks(wallet.w, wallet.usdPer);
-  const isEtf = (s: ListedStock) => /etf/i.test(`${s.name} ${s.symbol} ${s.underlying}`);
-  const etfCount = book.stocks.filter(isEtf).length;
   const rows = useMemo(() => {
-    const pool = kind === "etf" ? book.stocks.filter((s) => /etf/i.test(`${s.name} ${s.symbol} ${s.underlying}`)) : kind === "stock" ? book.stocks.filter((s) => !/etf/i.test(`${s.name} ${s.symbol} ${s.underlying}`)) : book.stocks;
     const q = query.trim().toLowerCase();
-    if (!q) return pool;
-    return pool.filter((s) => [s.symbol, s.name, s.underlying, s.exchange].join(" ").toLowerCase().includes(q));
-  }, [book.stocks, query, kind]);
+    if (!q) return book.stocks;
+    return book.stocks.filter((s) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q));
+  }, [book.stocks, query]);
 
   return (
     <div className="flex flex-col">
-      <section className="order-2 grid gap-8 border-b border-border px-5 py-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
+      {view === "market" ? null : (
+      <section className="grid gap-8 border-b border-border px-5 py-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
         <div>
           <p className="text-sm text-muted">
             {reserve ? `You can spend this without selling ${stock?.symbol}` : "Pick a share Kamino will lend against"}
@@ -64,96 +60,76 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
           />
         ) : null}
       </section>
+      )}
 
-      <div className="order-1 grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
+      {view === "borrow" ? null : (
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="border-b border-border xl:border-r xl:border-b-0">
-          <div className="flex gap-2 overflow-x-auto px-4 pt-4">
-            {(
-              [
-                ["all", `All ${book.stocks.length}`],
-                ["etf", `ETFs ${etfCount}`],
-                ["stock", `Stocks ${book.stocks.length - etfCount}`],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setKind(id)} className={cn("min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold", kind === id ? "bg-white text-black" : "bg-[#2a2a2e] text-white/80")}>
-                {label}
-              </button>
-            ))}
-          </div>
-          <div className="px-4 py-3">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 lg:px-8">
+            <div>
+              <h2 className="text-sm font-medium">Market</h2>
+              {note ? <p className="mt-1 max-w-xl text-xs text-muted">{note}</p> : null}
+            </div>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Find a name"
-              className="min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none placeholder:text-white/35"
+              placeholder="Find a share"
+              className="min-h-9 w-44 rounded-lg bg-elevated px-3 text-sm outline-none placeholder:text-subtle"
             />
           </div>
           <table className="w-full text-left text-sm">
-            <thead className="text-xs text-white/40">
+            <thead className="text-xs text-subtle">
               <tr>
-                <th className="px-4 py-2 font-medium">Share</th>
+                <th className="px-5 py-2 font-medium lg:px-8">Share</th>
                 <th className="px-2 py-2 font-medium">Session</th>
-                <th className="px-2 py-2 text-right font-medium">24h</th>
-                <th className="px-4 py-2 text-right font-medium">Borrow</th>
+                <th className="px-2 py-2 text-right font-medium">Max borrow</th>
+                <th className="px-5 py-2 text-right font-medium lg:px-8">Rate</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((s) => {
                 const r = book.reserves.find((x) => x.symbol === s.symbol);
                 const on = s.symbol === stock?.symbol;
-                const vol = r?.supplyUsd ? (r.supplyUsd >= 1e6 ? `$${(r.supplyUsd / 1e6).toFixed(1)}M` : r.supplyUsd >= 1e3 ? `$${Math.round(r.supplyUsd / 1e3)}k` : `$${Math.round(r.supplyUsd)}`) : "—";
                 return (
-                  <tr key={s.mint} onClick={() => setSymbol(s.symbol)} className={cn("cursor-pointer border-t border-white/10", on ? "bg-white/5" : "")}>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold">{s.symbol}</span>
-                      <span className="mt-0.5 block text-xs text-white/45">{s.name}</span>
+                  <tr
+                    key={s.mint}
+                    onClick={() => setSymbol(s.symbol)}
+                    className={cn("cursor-pointer border-t border-border", on ? "bg-elevated" : "hover:bg-surface")}
+                  >
+                    <td className="px-5 py-3 lg:px-8">
+                      <span className="font-medium">{s.symbol}</span>
+                      <span className="mt-0.5 block text-xs text-muted">{s.name}</span>
+                      {s.route ? (
+                        <span className="mt-0.5 block font-mono text-[10px] text-subtle">
+                          {s.impactPct?.toFixed(2)}% · {s.route}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-2 py-3">
-                      <span className={cn("text-xs", s.open ? "text-[#d7e36a]" : "text-white/45")}>{s.halted ? "Halted" : s.open ? "Open" : "Closed"}</span>
-                      <span className="mt-0.5 block text-[11px] text-white/40">{s.hours}</span>
+                      <span className={cn("text-xs", s.halted ? "text-down" : s.open ? "text-up" : "text-muted")}>
+                        {s.halted ? "Halted" : s.open ? "Open" : "Closed"}
+                      </span>
+                      <span className="mt-0.5 block font-mono text-[11px] text-subtle">{s.hours}</span>
                     </td>
-                    <td className="px-2 py-3 text-right font-mono text-xs tabular-nums">{vol}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs tabular-nums">{r ? `${(r.maxLtv * 100).toFixed(0)}%` : "—"}</td>
+                    <td className="px-2 py-3 text-right font-mono tabular-nums">{r ? `${(r.maxLtv * 100).toFixed(0)}%` : "—"}</td>
+                    <td className="px-5 py-3 text-right font-mono tabular-nums lg:px-8">{r ? `${(r.borrowApy * 100).toFixed(2)}%` : "—"}</td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {rows.length === 0 ? <p className="px-5 py-6 text-sm text-muted">No share by that name.</p> : null}
+          {rows.length === 0 ? <p className="px-5 py-6 text-sm text-muted">Nothing filled at $25 inside 1% impact.</p> : null}
         </section>
 
         <aside className="px-5 py-4 lg:px-6">
           {stock ? (
             <>
               <p className="text-xs text-subtle">{stock.name}</p>
-              <h2 className="text-2xl font-semibold">{stock.symbol}</h2>
+              <h2 className="font-display text-4xl">{stock.symbol}</h2>
               <p className="mt-2 text-sm text-muted">
-                {stock.underlying ? `${stock.underlying} on ${stock.exchange || "the listing exchange"}.` : "Listed share."}{" "}
-                {stock.open && !stock.halted ? `Session is ${stock.period || "open"}.` : stock.halted ? "Halted." : "Session is closed."}
-                {stock.isin ? ` ISIN ${stock.isin}.` : ""}
+                {stock.open && !stock.halted ? "Session is open." : stock.halted ? "Halted." : "Session is closed. Loan terms are still live."}
               </p>
-              <p className="mt-2 break-all font-mono text-[11px] text-subtle">{stock.mint}</p>
-              <div className="mt-3">
-                <LiveChart mint={stock.mint} symbol={stock.symbol} />
-              </div>
-              {stock.minOrder ? (
-                <p className="mt-2 text-xs text-muted">
-                  Issuer min ${stock.minOrder.toLocaleString("en-US")}
-                  {stock.maxOrder ? ` · max $${stock.maxOrder.toLocaleString("en-US")}` : ""} this session. Jupiter on this desk is not that gate.
-                </p>
-              ) : null}
               <div className="mt-4 flex gap-1">
-                <input
-                  inputMode="decimal"
-                  defaultValue={usd}
-                  key={usd}
-                  aria-label="Size in USDC"
-                  onBlur={(e) => {
-                    const n = Number(e.target.value);
-                    if (Number.isFinite(n) && n > 0) setUsd(n);
-                  }}
-                  className="min-h-9 w-16 rounded-lg bg-elevated px-2 font-mono text-xs outline-none"
-                />
                 {[100, 500, 2000].map((n) => (
                   <button
                     key={n}
@@ -191,6 +167,7 @@ export function EquitiesDesk({ book }: { book: EquityBook }) {
           )}
         </aside>
       </div>
+      )}
     </div>
   );
 }

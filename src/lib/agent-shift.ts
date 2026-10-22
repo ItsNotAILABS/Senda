@@ -31,8 +31,10 @@ export type Queue = {
 const SHEET = "senda.sheet.v1";
 
 function pool(env: Envelope, book: HouseListing[]) {
-  const rows = book.filter((n) => n.venue === "prestocks" && n.last > 0);
-  return env.symbols.length ? rows.filter((n) => env.symbols.includes(n.symbol)) : rows;
+  const rows = book.filter((n) => n.last > 0 && n.mint);
+  if (!env.symbols.length) return rows.filter((n) => n.venue === "prestocks");
+  const want = new Set(env.symbols.map((s) => s.toUpperCase()));
+  return rows.filter((n) => want.has(n.symbol.toUpperCase()));
 }
 
 function gateQueue(env: Envelope, name: HouseListing, side: "buy" | "sell", book: HouseListing[]): { log: string; queue?: Queue } {
@@ -40,7 +42,8 @@ function gateQueue(env: Envelope, name: HouseListing, side: "buy" | "sell", book
   const dd = drawdown(series);
   const hits = recall({ premium: name.premium ?? 0, change24h: name.change24h ?? 0, drawdown: dd, side }, 3);
   const again = hits.find((h) => h.memory.symbol === name.symbol && h.memory.side === side && h.score > 0.8);
-  const asked = again ? Math.max(1, Math.round(env.maxUsd / 2)) : env.maxUsd;
+  const left = Math.max(0, env.maxUsd - (env.spentUsd ?? 0));
+  const asked = Math.min(left, again ? Math.max(1, Math.round(left / 2)) : left);
   const gate = review({
     symbol: name.symbol,
     side,
@@ -83,13 +86,15 @@ function stamp(env: Envelope, queue: Queue): Queue {
 export function think(env: Envelope, book: HouseListing[]): { log: string; queue?: Queue } | null {
   if (env.armed === false) return null;
   const day = new Date().toISOString().slice(0, 10);
-  if (env.signedOn === day) return { log: "This contract already signed today." };
+  const spent = env.spentUsd ?? 0;
+  if (spent >= env.maxUsd - 0.001) return { log: "This contract has used its dollars." };
+  if ((env.job || "scout") === "daily" && env.signedOn === day) return { log: "This contract already signed today." };
   if (env.lastTick && Date.now() - Date.parse(env.lastTick) < 18_000) return null;
   if (env.action === "pay") {
     if (!env.payTo) return { log: "No address on the contract. Nothing to sign." };
     return {
       log: `Pay $${env.maxUsd} USDC is waiting on your signature.`,
-      queue: stamp(env, { symbol: "USDC", side: "buy", usd: env.maxUsd, why: "Approved pay" }),
+      queue: stamp(env, { symbol: "USDC", side: "buy", usd: Math.max(1, env.maxUsd - spent), why: "Approved pay" }),
     };
   }
   if (env.action === "lend") {
@@ -100,8 +105,14 @@ export function think(env: Envelope, book: HouseListing[]): { log: string; queue
   }
   if (env.action === "watch") return { log: "Watching. This contract does not send." };
   const rows = pool(env, book);
-  if (!rows.length) return { log: "Nothing on the book to watch." };
+  if (!rows.length) return { log: env.symbols.length ? "That symbol is not on a book this contract can sign." : "Nothing on the book to watch." };
   const job = env.job || "scout";
+  if (env.symbols.length && job !== "scout" && job !== "clerk" && job !== "cover") {
+    const name = rows[0];
+    const gate = throughPrice(env, name, env.side);
+    if (!gate.ok) return { log: gate.log };
+    return gateQueue(env, name, env.side, rows);
+  }
   const cheap = [...rows].sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0))[0];
   const rich = [...rows].sort((a, b) => (b.premium ?? 0) - (a.premium ?? 0))[0];
   if (job === "scout") {

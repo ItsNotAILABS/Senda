@@ -1,12 +1,57 @@
 /** Listed tokenized equities (xStocks) and the Kamino market that lends against them. */
 
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 
 export const XSTOCKS_MARKET = "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua";
 export const KAMINO_MARKET = `https://kamino.com/markets/${XSTOCKS_MARKET}`;
 const ASSETS = "https://api.xstocks.fi/api/v2/public/assets";
 const METRICS = `https://api.kamino.finance/kamino-market/${XSTOCKS_MARKET}/reserves/metrics`;
+const LIST_TTL_MS = 5 * 60 * 1000;
+
+type AssetNode = {
+  symbol?: string;
+  name?: string;
+  isTradingHalted?: boolean;
+  trading?: { tradingHoursMode?: string; openNow?: boolean; currentPeriod?: string };
+  deployments?: Array<{ network?: string; address?: string }>;
+};
+
+let listCache: { at: number; rows: ListedStock[] } | null = null;
+
+function solAddress(node: AssetNode): string {
+  const row = (node.deployments ?? []).find((d) => d.network === "Solana" && (d.address?.length ?? 0) >= 32);
+  return row?.address ?? "";
+}
+
+/** One paged catalog. Do not request each symbol. Those calls 404. */
+export async function listSolanaXStocks(): Promise<ListedStock[]> {
+  if (listCache && Date.now() - listCache.at < LIST_TTL_MS) return listCache.rows;
+  const rows: ListedStock[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= 20; page++) {
+    const res = await fetch(`${ASSETS}?page=${page}`, { headers: { accept: "application/json", "user-agent": "Senda" } });
+    if (!res.ok) break;
+    const body = (await res.json()) as { nodes?: AssetNode[]; page?: { hasNextPage?: boolean } };
+    for (const node of body.nodes ?? []) {
+      const mint = solAddress(node);
+      const symbol = node.symbol || "";
+      if (!mint || !symbol || seen.has(mint)) continue;
+      seen.add(mint);
+      rows.push({
+        symbol,
+        name: node.name || symbol,
+        mint,
+        open: Boolean(node.trading?.openNow),
+        halted: Boolean(node.isTradingHalted),
+        hours: hoursLabel(node.trading?.tradingHoursMode),
+        period: node.trading?.currentPeriod || "",
+      });
+    }
+    if (!body.page?.hasNextPage) break;
+  }
+  if (rows.length) listCache = { at: Date.now(), rows };
+  return rows;
+}
 
 export type ListedStock = {
   symbol: string;
@@ -16,13 +61,8 @@ export type ListedStock = {
   halted: boolean;
   hours: string;
   period: string;
-  underlying: string;
-  exchange: string;
-  isin: string;
-  nextChange: string;
-  minOrder: number;
-  maxOrder: number;
-  logo: string;
+  impactPct?: number;
+  route?: string;
 };
 
 export type StockReserve = {
@@ -43,55 +83,9 @@ function hoursLabel(mode: string | undefined): string {
   return mode || "session";
 }
 
-type AssetNode = {
-  name?: string;
-  symbol?: string;
-  isin?: string;
-  underlyingSymbol?: string;
-  logo?: string;
-  isTradingHalted?: boolean;
-  trading?: {
-    tradingHoursMode?: string;
-    openNow?: boolean;
-    currentPeriod?: string;
-    nextChangeAt?: string;
-    exchange?: { abbreviation?: string };
-    limitsPerPeriod?: Record<string, { minOrderFiatValue?: number; maxOrderFiatValue?: number }>;
-  };
-  deployments?: Array<{ network?: string; address?: string }>;
-};
-
-function stockFromNode(n: AssetNode, fallbackMint: string): ListedStock | null {
-  const sol = n.deployments?.find((d) => d.network === "Solana" && d.address);
-  const mint = sol?.address || fallbackMint;
-  if (!n.symbol || !mint) return null;
-  const period = n.trading?.currentPeriod || "";
-  const limits = n.trading?.limitsPerPeriod?.[period];
-  return {
-    symbol: n.symbol,
-    name: n.name || n.symbol,
-    mint,
-    open: Boolean(n.trading?.openNow),
-    halted: Boolean(n.isTradingHalted),
-    hours: hoursLabel(n.trading?.tradingHoursMode),
-    period,
-    underlying: n.underlyingSymbol || "",
-    exchange: n.trading?.exchange?.abbreviation || "",
-    isin: n.isin || "",
-    nextChange: n.trading?.nextChangeAt || "",
-    minOrder: Number(limits?.minOrderFiatValue) || 0,
-    maxOrder: Number(limits?.maxOrderFiatValue) || 0,
-    logo: n.logo || "",
-  };
-}
-
 export async function fetchEquityBook(): Promise<EquityBook> {
-  const [metricsRes, assetsRes] = await Promise.all([
-    fetch(METRICS, { headers: { accept: "application/json", "user-agent": "Senda" } }),
-    fetch(ASSETS, { headers: { accept: "application/json", "user-agent": "Senda" } }),
-  ]);
+  const metricsRes = await fetch(METRICS, { headers: { accept: "application/json", "user-agent": "Senda" } });
   if (!metricsRes.ok) throw new Error(`Kamino ${metricsRes.status}`);
-  if (!assetsRes.ok) throw new Error(`xStocks ${assetsRes.status}`);
   const metrics = (await metricsRes.json()) as Array<{
     liquidityToken?: string;
     liquidityTokenMint?: string;
@@ -113,76 +107,9 @@ export async function fetchEquityBook(): Promise<EquityBook> {
       borrowUsd: Number(m.totalBorrowUsd) || 0,
     }));
 
-  const body = (await assetsRes.json()) as { nodes?: AssetNode[] } | AssetNode[];
-  const nodes = Array.isArray(body) ? body : body.nodes || [];
-  const bySymbol = new Map<string, ListedStock>();
-  for (const node of nodes) {
-    const row = stockFromNode(node, "");
-    if (row) bySymbol.set(row.symbol, row);
-  }
-  for (const r of reserves) {
-    if (r.symbol === "USDC" || bySymbol.has(r.symbol)) continue;
-    bySymbol.set(r.symbol, {
-      symbol: r.symbol,
-      name: r.symbol,
-      mint: r.mint,
-      open: false,
-      halted: false,
-      hours: "24/5",
-      period: "",
-      underlying: "",
-      exchange: "",
-      isin: "",
-      nextChange: "",
-      minOrder: 0,
-      maxOrder: 0,
-      logo: "",
-    });
-  }
-  const stocks = [...bySymbol.values()].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  const stocks = await listSolanaXStocks();
+
   return { stocks, reserves };
 }
 
-export const getEquityBook = createServerFn({ method: "GET" }).handler(async () => {
-  const book = await fetchEquityBook();
-  try {
-    const { registerOfferings } = await import("./offering-book");
-    await registerOfferings(
-      book.stocks
-        .filter((row) => row.mint && row.symbol)
-        .map((row) => ({
-          id: `listed:${row.mint}`,
-          family: "listed",
-          symbol: row.symbol,
-          name: row.name || row.symbol,
-          chain: "Solana",
-          mint: row.mint,
-          venue: "xStock",
-          signPath: "jupiter",
-          status: row.open ? "open" : "listed",
-          note: row.open ? "A listed share. The wallet signs." : "Listed, not open for a swap right now.",
-        })),
-    );
-  } catch {
-    /* The equity book still returns. */
-  }
-  return book;
-});
-
-/** Jupiter last for listed mints. Used to price a digital the same way a PreStock last does. */
-export const listedMarks = createServerFn({ method: "POST" })
-  .validator((input: unknown) => z.array(z.string().min(32).max(48)).max(30).parse(input))
-  .handler(async ({ data }) => {
-    const r = await fetch(`https://api.jup.ag/price/v3?ids=${data.join(",")}`, {
-      headers: { accept: "application/json", "user-agent": "Senda" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!r.ok) return {} as Record<string, number>;
-    const raw = (await r.json()) as Record<string, { usdPrice?: number }>;
-    const out: Record<string, number> = {};
-    for (const mint of data) {
-      const n = Number(raw[mint]?.usdPrice);
-      if (n > 0) out[mint] = n;
-    }
-    return out;
-  });
+export const getEquityBook = createServerFn({ method: "GET" }).handler(async () => fetchEquityBook());

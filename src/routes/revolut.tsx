@@ -1,17 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { RevolutLane } from "@/components/wallet-lanes";
-import { WalletsDesk } from "@/components/wallets-desk";
+import { RevolutAccount } from "@/components/revolut-account";
 
 export const Route = createFileRoute("/revolut")({
-  component: RevolutPage,
+  component: Page,
 });
 
-function RevolutPage() {
+function Page() {
   return (
     <AppShell>
-      <RevolutLane />
-      <WalletsDesk />
+      <RevolutAccount />
     </AppShell>
   );
 }

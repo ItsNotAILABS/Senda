@@ -8,7 +8,6 @@
  *   1200 Market YES inventory (liability at par)
  *   1210 Market NO inventory (liability at par)
  *   4000 LMSR surplus
- *   4100 Platform fee
  *   5000 Resolution payouts
  */
 
@@ -20,7 +19,6 @@ export const ACCOUNTS = {
   YES_INV: "1200",
   NO_INV: "1210",
   LMSR_SURPLUS: "4000",
-  PLATFORM_FEE: "4100",
   RESOLUTION: "5000",
 } as const;
 
@@ -32,7 +30,6 @@ export const ACCOUNT_LABEL: Record<AccountCode, string> = {
   "1200": "YES inventory",
   "1210": "NO inventory",
   "4000": "LMSR surplus",
-  "4100": "Platform fee",
   "5000": "Resolution payouts",
 };
 
@@ -124,18 +121,6 @@ export function tradeLegs(
   } else {
     legs.push({ account: ACCOUNTS.LMSR_SURPLUS, dr: round2(-surplus), cr: 0, ref });
   }
-  assertBalanced(legs);
-  return legs;
-}
-
-/** Fee taken on the way in. Chips down, fee income up. Same ref as the fill. */
-export function feeLegs(fee: number, ref: string): LedgerLeg[] {
-  const amt = round2(fee);
-  if (!(amt > 0)) return [];
-  const legs: LedgerLeg[] = [
-    { account: ACCOUNTS.PLAYER_CHIPS, dr: amt, cr: 0, ref },
-    { account: ACCOUNTS.PLATFORM_FEE, dr: 0, cr: amt, ref },
-  ];
   assertBalanced(legs);
   return legs;
 }

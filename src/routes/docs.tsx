@@ -1,15 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { DocsDesk } from "@/components/docs-desk";
+import { ProductShell } from "@/components/product-shell";
+import { DOCS_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/docs")({
-  component: DocsPage,
+  component: Layout,
 });
 
-function DocsPage() {
+function Layout() {
   return (
     <AppShell>
-      <DocsDesk />
+      <ProductShell title="Docs" pages={DOCS_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

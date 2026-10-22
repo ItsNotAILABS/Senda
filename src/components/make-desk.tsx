@@ -1,21 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { KINDS, listListings, saveListing, type Listing, type MakeKind } from "@/lib/make-board";
+import { MoneyBar } from "@/components/money-bar";
 import { payUsdc } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
-import { postWork } from "@/lib/work-hub";
 
-const WORK_KIND: Record<MakeKind, "hire" | "build" | "teach" | "deliver"> = {
-  job: "hire",
-  software: "build",
-  service: "deliver",
-  hardware: "deliver",
-  robotics: "build",
-  teaching: "teach",
-};
-
-export function MakeDesk() {
+export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) {
   const wallet = useWallet();
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [rows, setRows] = useState<Listing[]>(() => (typeof window === "undefined" ? [] : listListings()));
@@ -38,21 +29,12 @@ export function MakeDesk() {
     setTitle("");
     setDetail("");
     toast.success("It’s on the board. Payment goes to that address.");
-    void postWork({
-      data: {
-        title: row.title,
-        detail: row.detail,
-        usd: row.usd,
-        kind: WORK_KIND[row.kind],
-        role: "offer",
-        poster: row.payTo,
-      },
-    }).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The shared board did not take it."));
   }
 
   return (
     <main className="space-y-4 px-5 py-4 lg:px-8">
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
+      <section className={`grid gap-6 ${view === "all" ? "xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]" : ""}`}>
+        {view === "post" ? null : (
         <div>
           <h1 className="max-w-3xl font-display text-4xl leading-[1.02] font-medium tracking-[-0.03em] xl:text-6xl">
             Make something a person will pay for.
@@ -60,7 +42,12 @@ export function MakeDesk() {
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/55">
             A job. Software. A service. Hardware. A robot. Or what a teacher’s class is missing. The price is USDC. The wallet signs. The whole amount goes to the address on the listing.
           </p>
+          <div className="mt-5 max-w-xl">
+            <MoneyBar />
+          </div>
         </div>
+        )}
+        {view === "board" ? null : (
         <form
           className="rounded-[28px] bg-[#14141c] p-5"
           onSubmit={(e) => {
@@ -91,9 +78,10 @@ export function MakeDesk() {
             Put it on the board
           </button>
         </form>
+        )}
       </section>
 
-      <div className="flex flex-wrap gap-2">
+      <div className={`flex flex-wrap gap-2 ${view === "post" ? "hidden" : ""}`}>
         <Filter on={filter === "all"} label="All" set={() => setFilter("all")} />
         {KINDS.map((k) => (
           <Filter key={k.id} on={filter === k.id} label={k.label} set={() => setFilter(k.id)} />
