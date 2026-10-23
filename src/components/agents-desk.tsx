@@ -206,7 +206,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const out = think(e, watched(e));
         if (!out) continue;
         changed = true;
-        const raw = out.queue ?? e.queue;
+        // A fresh evaluation with no proposal invalidates any older queued action.
+        const raw = out.queue ?? null;
         const queue = boundQueue(raw);
         writeLog(e.id, out.log);
         if (raw && queue && queue.usd < raw.usd) writeLog(e.id, `Held ${raw.symbol} at the cap. $${raw.usd} is now $${queue.usd}.`);
@@ -358,16 +359,14 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       const order = approved.order;
       const px = row.limitPx || 0;
       const side = approved.side;
-      if (action === "watch") throw new Error("This contract only watches.");
-      if (action === "lend") throw new Error("Open xStocks and sign the deposit on the Kamino market. This desk does not deposit.");
       if (action === "pay") {
         const to = approved.payTo;
         const usd = approved.usd;
         const done = await payUsdc({ owner: who, to, usd, memo: row.name });
-        writeLog(row.id, `Paid $${usd} USDC · ${done.signature.slice(0, 8)}`);
+        writeLog(row.id, `Submitted ${usd} USDC · ${done.signature.slice(0, 8)} · verify settlement on-chain`);
         patchEnvelope(row.id, { queue: null, spentUsd: Math.round(((row.spentUsd ?? 0) + usd) * 100) / 100, signedOn: row.job === "daily" ? new Date().toISOString().slice(0, 10) : row.signedOn });
         setEnvs(listEnvelopes());
-        toast.success(`${row.name} paid $${usd}. ${done.signature.slice(0, 8)}…`);
+        toast.success(`${row.name} submitted ${usd}. Check on-chain: ${done.signature.slice(0, 8)}…`);
         return;
       }
       const scope = watched(row);
@@ -385,7 +384,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         cap: Math.min(row.maxUsd - (row.spentUsd ?? 0), spendCap()),
       });
       if (g.blocked) throw new Error(g.blocked);
-      if (!pick) throw new Error("No name inside this envelope.");
       if (order === "limit" && px > 0) {
         const ok = side === "buy" ? pick.last <= px : pick.last >= px;
         if (!ok) throw new Error(`${pick.symbol} is ${pick.last}. The limit is ${px}.`);
@@ -625,7 +623,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   ];
 
   const capNow = spendCap();
-  const ask = env?.queue ? Math.min(env.queue.usd, capNow) : env ? Math.min(env.maxUsd, capNow) : sendUsd;
+  const remaining = env ? Math.max(0, env.maxUsd - (env.spentUsd ?? 0)) : 0;
+  const ask = env?.queue ? Math.min(env.queue.usd, capNow, remaining) : env ? Math.min(remaining, capNow) : sendUsd;
   const barPct = Math.max(0, Math.min(100, (ask / Math.max(capNow, 1)) * 100));
   const ordered = [...envs].sort((a, b) => Number(Boolean(b.queue)) - Number(Boolean(a.queue)));
   const waiting = ordered.filter((e) => e.queue).length;
@@ -844,7 +843,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                       <div className="px-1 pt-2 pb-1">
                         <button
                           type="button"
-                          disabled={busy}
+                          disabled={busy || e.armed === false}
                           onClick={() => void runMade(e)}
                           className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
                         >
@@ -870,8 +869,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Max</dt>
-                    <dd className="font-mono">${env.maxUsd}</dd>
+                    <dt className="text-[11px] text-subtle">Remaining</dt>
+                    <dd className="font-mono">${remaining.toFixed(2)}</dd>
+                    <dd className="font-mono text-[10px] text-subtle">of ${env.maxUsd}</dd>
                   </div>
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
                     <dt className="text-[11px] text-subtle">Side</dt>
