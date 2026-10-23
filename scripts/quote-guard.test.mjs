@@ -21,7 +21,7 @@ test("rejects changed mints, amounts, slippage, mode, route, and invalid impact"
   const invalid = [
     { inputMint: "AttackerMint" }, { outputMint: "AttackerMint" },
     { inAmount: "10000001" }, { outAmount: "0" },
-    { otherAmountThreshold: "0" }, { otherAmountThreshold: "9900000" },
+    { otherAmountThreshold: "0" }, { otherAmountThreshold: "1" }, { otherAmountThreshold: "9900000" },
     { slippageBps: 1000 }, { swapMode: "ExactOut" }, { routePlan: [] },
     { priceImpactPct: "0.06" }, { priceImpactPct: "NaN" },
     { priceImpactPct: undefined }, { priceImpactPct: "-0.02" },
