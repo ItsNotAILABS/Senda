@@ -6,6 +6,7 @@
 import { Buffer } from "buffer";
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { signAndBroadcast } from "@/lib/phantom";
+import { confirmSolanaPayment } from "@/lib/payment-confirmation.mjs";
 import { spendCap } from "@/lib/spend-cap";
 
 const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -140,6 +141,8 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
   tx.recentBlockhash = await blockhash();
   tx.add(...ix);
   const signature = await signAndBroadcast(tx);
+  // The broadcast signature alone is not an irreversible USDC payment receipt.
+  await confirmSolanaPayment(signature, rpc);
   return { signature, reference: reference.toBase58() };
 }
 
@@ -161,5 +164,7 @@ export async function paySol(input: { owner: string; to: string; sol: number }):
   tx.feePayer = owner;
   tx.recentBlockhash = await blockhash();
   tx.add(SystemProgram.transfer({ fromPubkey: owner, toPubkey: to, lamports }));
-  return signAndBroadcast(tx);
+  const signature = await signAndBroadcast(tx);
+  await confirmSolanaPayment(signature, rpc);
+  return signature;
 }
