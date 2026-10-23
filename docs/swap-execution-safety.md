@@ -26,3 +26,12 @@ The client now checks `getSignatureStatuses` on the submitted signature before w
 After the bounded confirmation window, Senda leaves the fill unrecorded, writes an awaiting-confirmation activity note and shows the signature so the user can verify it before another attempt. This is **not** automatic reconciliation: an eventually confirmed transaction needs a separate reconciliation flow to appear in the local fills. A confirmed transaction can still be subject to a rare chain reorganization until finality. The server-side move record is a submission receipt, not a settlement certificate.
 
 Run `node --test scripts/confirmation-gate.test.mjs scripts/quote-guard.test.mjs scripts/jupiter-host.test.mjs` for the targeted checks.
+
+
+## Payment receipts: USDC, SOL and supported SPL tokens
+
+Every `payUsdc`, `paySol`, and `paySpl` path now calls a shared, testable `confirmSolanaPayment` gate **after broadcast and before the success activity record or successful return**. The gate queries `getSignatureStatuses` using `searchTransactionHistory: true` and requires both an explicit `err: null` and a `confirmed` or `finalized` status. A chain error, missing status, or RPC timeout does not produce a successful client payment receipt.
+
+A timed-out transaction **may still settle later**. The thrown error contains the signature: resolve it against the chain before retrying to avoid duplicate sends. These receipt checks do not themselves create an automatic reconciliation service, and a `confirmed` status is not the strongest finality guarantee. The app-wide server `move` counter still records transaction **submission**, not validated settlement; do not use it as an audited payment volume.
+
+Targeted tests: `node --test scripts/payment-confirmation.test.mjs scripts/confirmation-gate.test.mjs`.
