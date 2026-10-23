@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
@@ -16,6 +16,7 @@ import { USDC } from "@/lib/jup-exec";
 import { payUsdc } from "@/lib/solana-pay";
 import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
 import { assertAgentBox } from "@/lib/agent-box";
+import { approveAgentQueue } from "@/lib/agent-approval.mjs";
 import { guardRoute } from "@/lib/route-guard";
 import { parseIntent } from "@/lib/intent";
 import { runPrestock } from "@/lib/prestock";
@@ -146,7 +147,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [series, setSeries] = useState<number[]>([]);
   const [sheet, setSheet] = useState<Record<string, string>>(() => readSheet());
   const wallet = useWallet();
-  const runRef = useRef<(row?: Envelope) => Promise<void>>(async () => undefined);
   const picked = book.find((n) => n.symbol === symbol) ?? book[0];
 
   function watched(env: Envelope): HouseListing[] {
@@ -206,7 +206,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const out = think(e, watched(e));
         if (!out) continue;
         changed = true;
-        const raw = out.queue ?? e.queue;
+        // A fresh evaluation with no proposal invalidates any older queued action.
+        const raw = out.queue ?? null;
         const queue = boundQueue(raw);
         writeLog(e.id, out.log);
         if (raw && queue && queue.usd < raw.usd) writeLog(e.id, `Held ${raw.symbol} at the cap. $${raw.usd} is now $${queue.usd}.`);
@@ -216,10 +217,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         setEnvs(listEnvelopes());
         setSheet(readSheet());
       }
-      const due = listEnvelopes().find(
-        (e) => e.armed !== false && e.queue && e.queue.action !== "watch" && e.queue.action !== "lend" && e.action !== "watch" && e.action !== "lend",
-      );
-      if (due) void runRef.current(due);
     }, 20_000);
     return () => window.clearInterval(timer);
   }, [book, names, tape]);
@@ -346,49 +343,47 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const env = envs.find((e) => e.id === made) ?? null;
 
   async function runMade(target?: Envelope) {
-    const row = target ?? env;
-    if (!row || signing) return;
+    const requested = target ?? env;
+    if (!requested || signing) return;
+    // Reload the freshest mandate: a paused/deleted or edited contract cannot sign
+    // based on a stale render. Only the Sign button invokes this path.
+    const row = listEnvelopes().find((e) => e.id === requested.id);
+    if (!row) return;
     signing = true;
     setMade(row.id);
     setBusy(true);
     try {
+      const approved = approveAgentQueue(row, spendCap(), todayKey());
       const who = await owner();
-      const action = row.queue?.action || row.action || "swap";
-      const order = row.queue?.order || row.order || "market";
-      const px = row.queue?.limitPx || row.limitPx || 0;
-      const side = row.queue?.side ?? row.side;
-      if (action === "watch") throw new Error("This contract only watches.");
-      if (action === "lend") throw new Error("Open xStocks and sign the deposit on the Kamino market. This desk does not deposit.");
+      const action = approved.action;
+      const order = approved.order;
+      const px = row.limitPx || 0;
+      const side = approved.side;
       if (action === "pay") {
-        const to = (row.queue?.payTo || row.payTo || "").trim();
-        if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(to)) throw new Error("The contract has no Solana address.");
-        const usd = Math.min(row.queue?.usd ?? row.maxUsd, row.maxUsd, spendCap());
-        if (!(usd > 0)) throw new Error("The cap is zero.");
+        const to = approved.payTo;
+        const usd = approved.usd;
         const done = await payUsdc({ owner: who, to, usd, memo: row.name });
-        writeLog(row.id, `Paid $${usd} USDC · ${done.signature.slice(0, 8)}`);
+        writeLog(row.id, `Submitted ${usd} USDC · ${done.signature.slice(0, 8)} · verify settlement on-chain`);
         patchEnvelope(row.id, { queue: null, spentUsd: Math.round(((row.spentUsd ?? 0) + usd) * 100) / 100, signedOn: row.job === "daily" ? new Date().toISOString().slice(0, 10) : row.signedOn });
         setEnvs(listEnvelopes());
-        toast.success(`${row.name} paid $${usd}. ${done.signature.slice(0, 8)}…`);
+        toast.success(`${row.name} submitted ${usd}. Check on-chain: ${done.signature.slice(0, 8)}…`);
         return;
       }
       const scope = watched(row);
-      const queued = row.queue ? scope.find((n) => n.symbol === row.queue?.symbol) : null;
-      const pool = row.symbols.length ? scope.filter((n) => row.symbols.includes(n.symbol)) : scope;
-      const pick =
-        queued ??
-        [...pool].sort((a, b) => (row.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
-      if (!pick) throw new Error("No name inside this envelope.");
+      const queuedSymbol = row.queue?.symbol.toUpperCase() || "";
+      const pool = row.symbols.length ? scope.filter((n) => row.symbols.some((s) => s.toUpperCase() === n.symbol.toUpperCase())) : scope;
+      const pick = pool.find((n) => n.symbol.toUpperCase() === queuedSymbol);
+      if (!pick) throw new Error("The exact queued name is no longer on the approved book. Nothing was signed.");
       const g = review({
         symbol: pick!.symbol,
         side,
-        usd: Math.min(row.queue?.usd ?? row.maxUsd, spendCap()),
+        usd: approved.usd,
         premium: pick!.premium,
         change24h: pick!.change24h,
         series,
-        cap: Math.min(row.maxUsd, spendCap()),
+        cap: Math.min(row.maxUsd - (row.spentUsd ?? 0), spendCap()),
       });
       if (g.blocked) throw new Error(g.blocked);
-      if (!pick) throw new Error("No name inside this envelope.");
       if (order === "limit" && px > 0) {
         const ok = side === "buy" ? pick.last <= px : pick.last >= px;
         if (!ok) throw new Error(`${pick.symbol} is ${pick.last}. The limit is ${px}.`);
@@ -397,7 +392,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         const ok = side === "sell" ? pick.last <= px : pick.last >= px;
         if (!ok) throw new Error(`${pick.symbol} has not traded through ${px}.`);
       }
-      assertAgentBox({ usd: g.usd, mint: pick.mint, allowed: pool.map((n) => n.mint), cap: Math.min(row.maxUsd, spendCap()) });
+      assertAgentBox({ usd: g.usd, mint: pick.mint, allowed: pool.map((n) => n.mint), cap: Math.min(row.maxUsd - (row.spentUsd ?? 0), spendCap()) });
       const preview = await guardRoute({ mint: pick.mint, side, usd: g.usd, price: pick.last, symbol: pick.symbol, maxImpact: row.maxImpact });
       const done = await runPrestock({ owner: who, mint: pick.mint, side, usd: g.usd, price: pick.last });
       const line = `${side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
@@ -421,7 +416,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     }
   }
 
-  runRef.current = runMade;
 
   function sayTrade() {
     const parsed = parseIntent(said, book);
@@ -447,8 +441,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setEnvs(next);
     setMade(row.id);
     setSaid("");
-    toast.success(parsed.refused ? `${parsed.line} ${parsed.refused}` : `${parsed.line} Confirm it in Phantom.`);
-    void runRef.current(next.find((e) => e.id === row.id));
+    toast.success(parsed.refused ? `${parsed.line} ${parsed.refused}` : `${parsed.line} Review it in the roster, then press Sign.`);
   }
 
   function makeAgent() {
@@ -630,7 +623,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   ];
 
   const capNow = spendCap();
-  const ask = env?.queue ? Math.min(env.queue.usd, capNow) : env ? Math.min(env.maxUsd, capNow) : sendUsd;
+  const remaining = env ? Math.max(0, env.maxUsd - (env.spentUsd ?? 0)) : 0;
+  const ask = env?.queue ? Math.min(env.queue.usd, capNow, remaining) : env ? Math.min(remaining, capNow) : sendUsd;
   const barPct = Math.max(0, Math.min(100, (ask / Math.max(capNow, 1)) * 100));
   const ordered = [...envs].sort((a, b) => Number(Boolean(b.queue)) - Number(Boolean(a.queue)));
   const waiting = ordered.filter((e) => e.queue).length;
@@ -642,7 +636,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         kicker="Agents"
         title="An agent that watches the book"
         accent="You still sign."
-        line="An armed contract queues the names on it and asks Phantom to sign, until the dollars on that contract are used. Only the daily desk stops after one fill. The server still has no key."
+        line="An armed contract watches and queues within its remaining budget. Nothing opens the wallet automatically; review a queue and press Sign. The daily desk allows only one submission per day."
         live={["Create an envelope", "Arm a ready desk", "The computer log", "You sign the queue"]}
         coming={["An agent you host off this browser", "A key of its own"]}
       />
@@ -849,11 +843,11 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                       <div className="px-1 pt-2 pb-1">
                         <button
                           type="button"
-                          disabled={busy}
+                          disabled={busy || e.armed === false}
                           onClick={() => void runMade(e)}
                           className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
                         >
-                          {busy ? "Waiting for the wallet…" : `Sign · $${e.queue.usd}`}
+                          {busy ? "Waiting for the wallet…" : `Sign · ${e.queue.usd}`}
                         </button>
                       </div>
                     ) : (
@@ -875,8 +869,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Max</dt>
-                    <dd className="font-mono">${env.maxUsd}</dd>
+                    <dt className="text-[11px] text-subtle">Remaining</dt>
+                    <dd className="font-mono">${remaining.toFixed(2)}</dd>
+                    <dd className="font-mono text-[10px] text-subtle">of ${env.maxUsd}</dd>
                   </div>
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
                     <dt className="text-[11px] text-subtle">Side</dt>
