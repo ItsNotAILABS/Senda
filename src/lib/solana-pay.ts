@@ -6,7 +6,7 @@
 import { Buffer } from "buffer";
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { broadcastSigned, chainRpc, phantomProvider } from "@/lib/phantom";
-import { waitForChainConfirmation } from "@/lib/confirmation-gate.mjs";
+import { confirmSolanaPayment } from "@/lib/payment-confirmation.mjs";
 import { fundUsdc } from "@/lib/jup-sign";
 import { noteAct } from "@/lib/book";
 import { stageMove } from "@/lib/moves";
@@ -21,16 +21,6 @@ export const USDC_MINT = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyT
 
 function rpc(method: string, params: unknown[]): Promise<unknown> {
   return chainRpc(method, params);
-}
-
-/** A successful RPC sendTransaction only proves submission, not payment. */
-async function confirmPayment(signature: string): Promise<void> {
-  await waitForChainConfirmation(signature, async (sig) => {
-    const response = (await rpc("getSignatureStatuses", [
-      [sig], { searchTransactionHistory: true },
-    ])) as { value?: Array<{ err?: unknown; confirmationStatus?: string | null } | null> } | null;
-    return response?.value?.[0] ?? null;
-  });
 }
 
 function ata(owner: PublicKey): PublicKey {
@@ -126,7 +116,7 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
   stageMove({ usd, kind: "send", title: `Sent $${usd.toFixed(2)} USDC` });
   const signature = await broadcastSigned(signed);
   // Submission is not settlement; unknown statuses include a signature for recovery.
-  await confirmPayment(signature);
+  await confirmSolanaPayment(signature, rpc);
   noteAct({
     kind: "send",
     title: `Sent $${usd.toFixed(2)} USDC`,
@@ -211,7 +201,7 @@ export async function paySol(input: { owner: string; to: string; sol: number; me
   stageMove({ usd: 0, kind: "send", title: `Sent ${sol} SOL` });
   const signature = await broadcastSigned(signed);
   // Submission is not settlement; unknown statuses include a signature for recovery.
-  await confirmPayment(signature);
+  await confirmSolanaPayment(signature, rpc);
   noteAct({ kind: "send", title: `Sent ${sol} SOL`, detail: input.memo || `To ${input.to.slice(0, 4)}…${input.to.slice(-4)}`, signature });
   return { signature, reference: reference.toBase58() };
 }
@@ -295,7 +285,7 @@ export async function paySpl(input: {
   stageMove({ usd: input.symbol === "USDC" ? amount : 0, kind: "send", title: `Sent ${amount} ${input.symbol}` });
   const signature = await broadcastSigned(signed);
   // Submission is not settlement; unknown statuses include a signature for recovery.
-  await confirmPayment(signature);
+  await confirmSolanaPayment(signature, rpc);
   noteAct({ kind: "send", title: `Sent ${amount} ${input.symbol}`, detail: input.memo || `To ${input.to.slice(0, 4)}…${input.to.slice(-4)}`, signature });
   return { signature, reference: reference.toBase58() };
 }
