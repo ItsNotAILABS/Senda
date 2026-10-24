@@ -3,7 +3,8 @@
 import { USDC } from "@/lib/jup-exec";
 import { rpc as chainRpc, sendVersioned } from "@/lib/phantom";
 import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
-import { confirmSolanaPayment } from "@/lib/payment-confirmation.mjs";
+import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
+import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
 import { spendCap } from "@/lib/spend-cap";
 
 // Keep the quote and transaction builder on Jupiter's official gateway.
@@ -107,6 +108,15 @@ export async function signRoute(input: {
   const cap = spendCap();
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
   verifyStableSpend({ inputMint: input.inputMint, amountRaw: input.amountRaw, capUsd: cap, stableMints: [USDC] });
+  const journalDraft = {
+    owner: input.owner,
+    kind: "swap" as const,
+    asset: input.inputMint,
+    destination: input.outputMint,
+    amountRaw: String(input.amountRaw),
+  };
+  // An unknown prior submission must be reconciled before the same action can be signed again.
+  assertNoPendingDuplicate(window.localStorage, journalDraft);
   // Validate the SAME raw quote that will be passed to /swap, not a preview quote.
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${input.amountRaw}&slippageBps=100&restrictIntermediateTokens=true`;
   let quote: RawQuote | null = null;
@@ -164,7 +174,7 @@ export async function signRoute(input: {
   const signature = await sendVersioned(tx);
   // A signature is a submission acknowledgment; do not report a completed swap until
   // Solana explicitly confirms success. Unknown status must be reconciled before retrying.
-  await confirmSolanaPayment(signature, chainRpc);
+  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, chainRpc);
   return { signature, outUi: Number(checked.outAmount) / 10 ** input.outDecimals };
 }
 
