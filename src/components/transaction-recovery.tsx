@@ -102,6 +102,14 @@ export function TransactionRecovery({ owner }: { owner: string }) {
                   <p className="text-xs font-semibold">
                     {entry.kind === "swap" ? "Swap" : "Send"} · {entry.asset === "SOL" || entry.asset === "USDC" ? entry.asset : `${entry.asset.slice(0, 5)}…`}
                   </p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    {entry.kind === "send"
+                      ? `${entry.asset === "USDC" ? (Number(entry.amountRaw) / 1e6).toFixed(2) : entry.asset === "SOL" ? (Number(entry.amountRaw) / 1e9).toFixed(6) : entry.amountRaw} ${entry.asset}`
+                      : `${entry.amountRaw} raw input units`}
+                    {" · "}
+                    {entry.kind === "send" ? "To " : "For "}
+                    {entry.destination.slice(0, 5)}…{entry.destination.slice(-5)}
+                  </p>
                   <p className="mt-1 text-[11px] text-muted">{LABELS[entry.status]}</p>
                   <p className="mt-1 truncate font-mono text-[10px] text-subtle">
                     {new Date(entry.submittedAt).toLocaleString()} · {entry.signature.slice(0, 8)}…{entry.signature.slice(-6)}
