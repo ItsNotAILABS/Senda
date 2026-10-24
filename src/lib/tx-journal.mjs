@@ -5,7 +5,6 @@ const ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const STATES = new Set(['pending', 'confirmed', 'finalized', 'failed']);
 const KINDS = new Set(['swap', 'send']);
 const LIMIT = 80;
-const DUPLICATE_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function records(storage) {
   if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
@@ -32,7 +31,8 @@ export function listTransactions(storage, owner) {
 export function assertNoPendingDuplicate(storage, candidate, now = Date.now()) {
   const rows = records(storage);
   for (const row of rows) {
-    if (row.status !== 'pending' || now - row.submittedAt > DUPLICATE_WINDOW_MS || now < row.submittedAt) continue;
+    // Never auto-release an unknown submission merely because time passed.
+    if (row.status !== 'pending') continue;
     if (row.owner === candidate.owner && row.kind === candidate.kind &&
         row.asset === candidate.asset && row.destination === candidate.destination &&
         row.amountRaw === String(candidate.amountRaw)) {
