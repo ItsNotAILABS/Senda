@@ -67,3 +67,14 @@ test('malformed saved entries are not silently ignored as a bypass',()=>{
  const s=mem(); s.corrupt(JSON.stringify([{signature:'not-a-signature',owner:who}]));
  assert.throws(()=>assertNoPendingDuplicate(s,base,clock),/invalid entries/);
 });
+
+test('a fully unresolved journal refuses another signature attempt',()=>{
+ const s=mem();
+ const alphabet='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+ const rows=Array.from({length:80},(_,i)=>({
+  ...base, signature: '3'.repeat(86)+alphabet[Math.floor(i/55)]+alphabet[i%55],
+  submittedAt: clock+i, checkedAt:clock+i, status:'pending',
+ }));
+ s.corrupt(JSON.stringify(rows));
+ assert.throws(()=>assertNoPendingDuplicate(s,{owner:other,kind:'send',asset:'SOL',destination:who,amountRaw:'1'}),/journal is full/);
+});
