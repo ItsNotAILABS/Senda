@@ -5,6 +5,7 @@ import { rpc as chainRpc, sendVersioned } from "@/lib/phantom";
 import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
 import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
 import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
+import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
 import { spendCap } from "@/lib/spend-cap";
 
 // Keep the quote and transaction builder on Jupiter's official gateway.
@@ -101,6 +102,7 @@ export async function signRoute(input: {
   outDecimals: number;
   usd: number;
 }): Promise<{ signature: string; outUi: number }> {
+  return withWalletExecutionLock(input.owner, async () => {
   if (!(input.usd > 0) || !Number.isFinite(input.usd)) throw new Error("Enter an amount.");
   if (!Number.isSafeInteger(input.amountRaw) || input.amountRaw <= 0) throw new Error("Enter an exact raw token amount.");
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
@@ -176,6 +178,7 @@ export async function signRoute(input: {
   // Solana explicitly confirms success. Unknown status must be reconciled before retrying.
   await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, chainRpc);
   return { signature, outUi: Number(checked.outAmount) / 10 ** input.outDecimals };
+  });
 }
 
 export async function signStockSwap(input: {
