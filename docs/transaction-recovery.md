@@ -31,3 +31,14 @@ node --test scripts/tx-journal.test.mjs scripts/tracked-confirmation.test.mjs
 These cover recovery after re-read, owner isolation, duplicate suppression, terminal failures, RPC outages, delayed confirmation, malformed journal contents, and retention.
 
 Before promotion to production: full typecheck and build, injected Phantom/Solflare tests, mobile wallet return-path tests, concurrent-browser idempotency tests, backend ledger, independent chain/finality reconciliation, and end-to-end transfer authorization review. No wallet transaction or deployment was performed here.
+
+
+## Concurrent wallet execution
+
+Jupiter signing and USDC/SOL sends are wrapped in `withWalletExecutionLock`. For a given public wallet address:
+- An in-memory lock rejects overlapping signing attempts in the **same tab**, including attempts made while a previous wallet prompt is unresolved.
+- If supported by the browser, `navigator.locks.request(..., { ifAvailable: true })` also refuses simultaneous requests from other tabs of the same origin. The entire quote/signature/confirmation flow stays inside the lock, so duplicate checking is repeated after access is granted.
+- Locks are released on success and exceptions. A released execution lock does **not** erase a pending journal record after a confirmation timeout. The duplicate guard remains active until a verified chain result.
+- Browser Web Locks are not a server-authorized session key. Older browsers may only get the same-tab fallback; completely separate devices/origins remain independent. Authoritative cross-device concurrency control still requires a durable authenticated backend.
+
+Targeted lock tests: `node --test scripts/wallet-execution-lock.test.mjs`. All **15** new journal, confirmation-wrapper, and execution-lock tests passed locally.
