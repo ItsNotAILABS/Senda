@@ -49,3 +49,21 @@ test('rejects malformed or corrupted records and refuses fake signatures',()=>{
  const s=mem();assert.throws(()=>recordSubmission(s,{...base,signature:'fake'},clock),/Invalid transaction metadata/);
  s.corrupt('{');assert.throws(()=>assertNoPendingDuplicate(s,base,clock),/unreadable/);
 });
+
+test('retention keeps unresolved signatures ahead of resolved history', () => {
+ const s=mem();
+ const make=(i,status) => ({
+  ...base, signature: '3'.repeat(86)+ '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'[Math.floor(i/55)] +
+  '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'[i%55],
+  status, submittedAt: clock+i, checkedAt: clock+i,
+ });
+ s.corrupt(JSON.stringify([...Array.from({length:65},(_,i)=>make(i,'pending')),...Array.from({length:30},(_,i)=>make(65+i,'finalized'))]));
+ recordSubmission(s,{...base,signature:'4'.repeat(88)},clock+100);
+ const all=listTransactions(s,who);
+ assert.equal(all.length,80);
+ assert.equal(all.filter(r=>r.status==='pending').length,66);
+});
+test('malformed saved entries are not silently ignored as a bypass',()=>{
+ const s=mem(); s.corrupt(JSON.stringify([{signature:'not-a-signature',owner:who}]));
+ assert.throws(()=>assertNoPendingDuplicate(s,base,clock),/invalid entries/);
+});
