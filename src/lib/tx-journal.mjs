@@ -14,14 +14,21 @@ function records(storage) {
   try { raw = JSON.parse(storage.getItem(JOURNAL_KEY) || '[]'); }
   catch { throw new Error('Transaction recovery records are unreadable. Do not send again until checked.'); }
   if (!Array.isArray(raw)) throw new Error('Transaction recovery records are invalid.');
-  return raw.filter((r) => r && typeof r === 'object' && SIGNATURE.test(r.signature) &&
+  const valid = (r) => r && typeof r === 'object' && SIGNATURE.test(r.signature) &&
     ADDRESS.test(r.owner) && STATES.has(r.status) && KINDS.has(r.kind) &&
     typeof r.amountRaw === 'string' && /^\d+$/.test(r.amountRaw) &&
     typeof r.asset === 'string' && typeof r.destination === 'string' &&
-    Number.isSafeInteger(r.submittedAt) && r.submittedAt > 0);
+    Number.isSafeInteger(r.submittedAt) && r.submittedAt > 0;
+  if (!raw.every(valid)) throw new Error('Transaction recovery records contain invalid entries. Review the chain before sending.');
+  return raw;
 }
 function persist(storage, rows) {
-  storage.setItem(JOURNAL_KEY, JSON.stringify(rows.sort((a, b) => b.submittedAt - a.submittedAt).slice(0, LIMIT)));
+  const sorted = [...rows].sort((a, b) => b.submittedAt - a.submittedAt);
+  const unresolved = sorted.filter((r) => r.status === 'pending' || r.status === 'confirmed');
+  if (unresolved.length > LIMIT) throw new Error('Too many unresolved transaction records. Reconcile them before sending.');
+  const resolved = sorted.filter((r) => r.status === 'failed' || r.status === 'finalized');
+  const retained = [...unresolved, ...resolved.slice(0, LIMIT - unresolved.length)];
+  storage.setItem(JOURNAL_KEY, JSON.stringify(retained.sort((a, b) => b.submittedAt - a.submittedAt)));
 }
 export function listTransactions(storage, owner) {
   if (owner != null && !ADDRESS.test(owner)) return [];
@@ -30,6 +37,9 @@ export function listTransactions(storage, owner) {
 }
 export function assertNoPendingDuplicate(storage, candidate, now = Date.now()) {
   const rows = records(storage);
+  if (rows.filter((r) => r.status === 'pending' || r.status === 'confirmed').length >= LIMIT) {
+    throw new Error('Recovery journal is full of unresolved transactions. Reconcile before signing.');
+  }
   for (const row of rows) {
     // Never auto-release an unknown submission merely because time passed.
     if (row.status !== 'pending') continue;
