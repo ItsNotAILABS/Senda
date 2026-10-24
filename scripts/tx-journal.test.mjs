@@ -11,7 +11,7 @@ test('persists scoped pending submissions, survives re-read, and deduplicates a 
  assert.equal(listTransactions(s,who).length,1);assert.equal(listTransactions(s,other).length,0);
  recordSubmission(s,base,clock+1); assert.equal(listTransactions(s,who).length,1);
  assert.throws(()=>assertNoPendingDuplicate(s,base,clock+1200),/already be on-chain/);
- assert.doesNotThrow(()=>assertNoPendingDuplicate(s,base,clock+24*60*60*1000+1));
+ assert.throws(()=>assertNoPendingDuplicate(s,base,clock+24*60*60*1000+1),/already be on-chain/);
 });
 test('only explicit clean confirmed/finalized observations advance state',()=>{
  const s=mem();recordSubmission(s,base,clock);
