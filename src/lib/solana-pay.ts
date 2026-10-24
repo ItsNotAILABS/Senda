@@ -8,6 +8,7 @@ import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction 
 import { signAndBroadcast } from "@/lib/phantom";
 import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
 import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
+import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
 import { quoteRoute, SOL } from "@/lib/jup-sign";
 import { spendCap } from "@/lib/spend-cap";
 
@@ -81,6 +82,7 @@ async function accountExists(address: PublicKey): Promise<boolean> {
 
 /** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
 export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string }): Promise<{ signature: string; reference: string }> {
+  return withWalletExecutionLock(input.owner, async () => {
   const usd = Math.round(input.usd * 100) / 100;
   if (!(usd > 0)) throw new Error("Enter an amount.");
   const cap = spendCap();
@@ -151,10 +153,12 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
   // The broadcast signature alone is not an irreversible USDC payment receipt.
   await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
   return { signature, reference: reference.toBase58() };
+  });
 }
 
 /** SOL from the connected wallet. Phantom signs. Senda does not hold the key. */
 export async function paySol(input: { owner: string; to: string; sol: number }): Promise<string> {
+  return withWalletExecutionLock(input.owner, async () => {
   if (!(input.sol > 0)) throw new Error("Enter an amount.");
   let owner: PublicKey;
   let to: PublicKey;
@@ -183,4 +187,5 @@ export async function paySol(input: { owner: string; to: string; sol: number }):
   const signature = await signAndBroadcast(tx);
   await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
   return signature;
+  });
 }
