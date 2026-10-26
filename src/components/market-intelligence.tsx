@@ -6,7 +6,8 @@ import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
 import { inspectMarketQuality, shortlistMarkets, type QualityResult } from "@/lib/market-quality.mjs";
 import type { HouseListing } from "@/lib/sol-house";
 import type { TapeRow } from "@/lib/world-book";
-type Market = {mint:string;symbol:string;name:string;venue:string;price:number|null;changePct:number|null};
+type Market = {mint:string;symbol:string;name:string;venue:string;price:number|null;changePct:number|null;
+ liquidityUsd:number|null;volume24hUsd:number|null;organicScore:number|null;verified:boolean;updatedAt:string|null};
 const WATCH="senda.market-intel.watch.v1";
 const fmt=(n:number|null|undefined,d=2)=>n==null||!Number.isFinite(n)?"—":n>=1? n.toLocaleString("en-US",{maximumFractionDigits:d}):n.toPrecision(4);
 const money=(n:number|null|undefined)=>n==null||!Number.isFinite(n)?"—":"$"+(n>=1e6?(n/1e6).toFixed(2)+"m":n>=1e3?(n/1e3).toFixed(1)+"k":fmt(n));
@@ -19,6 +20,8 @@ function qualityColor(status:string){return status==="verified"?"text-cyan-200 b
 export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListing[];tape:TapeRow[];embedded?:boolean}){
  const [query,setQuery]=useState("");
  const [venue,setVenue]=useState<"all"|"spot"|"prestocks">("all");
+ const [order,setOrder]=useState<"movers"|"volume"|"liquidity">("movers");
+ const [minLiquidity,setMinLiquidity]=useState(0);
  const [focus,setFocus]=useState("");
  const [tf,setTf]=useState<PrintTf>("1H");
  const [refresh,setRefresh]=useState(0);
@@ -32,12 +35,24 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
  const [scan,setScan]=useState<Array<{mint:string;status:string;alignment:number;relativeVolume:number|null}>>([]);
  const candidates=useMemo(()=>{
   const pre:Market[]=house.filter(h=>h.venue==="prestocks"&&h.mint&&h.last>0)
-   .map(h=>({mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",price:h.last,changePct:normalizedPercent(h.change24h)}));
+   .map(h=>({mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",price:h.last,changePct:normalizedPercent(h.change24h),
+    liquidityUsd:null,volume24hUsd:null,organicScore:null,verified:false,updatedAt:null}));
   const coins:Market[]=tape.filter(t=>t.id&&t.price!=null&&t.price>0)
-   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:normalizedPercent(t.change)}));
+   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:normalizedPercent(t.change),
+    liquidityUsd:t.liquidityUsd??null,volume24hUsd:t.volume24hUsd??null,
+    organicScore:t.organicScore??null,verified:t.verified===true,updatedAt:t.updatedAt??null}));
   return shortlistMarkets([...pre,...coins],"",250);
  },[house,tape]);
- const matches=useMemo(()=>shortlistMarkets(candidates.filter(c=>venue==="all"||c.venue===venue),query,80),[candidates,query,venue]);
+ const matches=useMemo(()=>{
+  const filtered=candidates.filter(c=>(venue==="all"||c.venue===venue)&&
+    (!minLiquidity || (c.liquidityUsd!=null && c.liquidityUsd>=minLiquidity)));
+  const rows=shortlistMarkets(filtered,query,250);
+  return rows.sort((a,b)=>{
+   if(order==="volume")return (b.volume24hUsd??-1)-(a.volume24hUsd??-1);
+   if(order==="liquidity")return (b.liquidityUsd??-1)-(a.liquidityUsd??-1);
+   return Math.abs(b.changePct??-1)-Math.abs(a.changePct??-1);
+  }).slice(0,80);
+ },[candidates,query,venue,order,minLiquidity]);
  const chosen=candidates.find(c=>c.mint===focus)??matches[0]??null;
  useEffect(()=>{
   const preferred=window.sessionStorage.getItem("senda.market.focus");
@@ -105,14 +120,27 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
     <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Markets scanner</h3><span className="font-mono text-[10px] text-white/35">{matches.length} shown</span></div>
     <div className="relative mt-3"><Search className="absolute top-3 left-3 size-4 text-white/40"/><input aria-label="Find market" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Token, company, market…" className="min-h-10 w-full rounded-xl border border-white/10 bg-black/25 pl-9 pr-3 text-xs outline-none focus:border-cyan-300/50"/></div>
     <div className="mt-2 flex gap-1">{([["all","All"],["spot","Solana"],["prestocks","PreStocks"]] as const).map(([v,label])=><button type="button" key={v} onClick={()=>{setVenue(v);setFocus("");}} className={`min-h-9 flex-1 rounded-lg px-2 text-[11px] ${venue===v?"bg-cyan-300 text-[#07121b]":"bg-white/5 text-white/60"}`}>{label}</button>)}</div>
+    <div className="mt-2 grid grid-cols-2 gap-2">
+     <label className="text-[10px] text-white/45">Rank by
+      <select value={order} onChange={e=>setOrder(e.target.value as typeof order)} className="mt-1 min-h-9 w-full rounded-lg border border-white/15 bg-[#182334] px-2 text-xs text-white">
+       <option value="movers">24h movers</option><option value="volume">Jupiter 24h volume</option><option value="liquidity">Jupiter liquidity</option>
+      </select>
+     </label>
+     <label className="text-[10px] text-white/45">Minimum reported liquidity
+      <select value={minLiquidity} onChange={e=>setMinLiquidity(Number(e.target.value))} className="mt-1 min-h-9 w-full rounded-lg border border-white/15 bg-[#182334] px-2 text-xs text-white">
+       <option value={0}>Any / unreported</option><option value={50000}>$50k</option><option value={250000}>$250k</option><option value={1000000}>$1m</option>
+      </select>
+     </label>
+    </div>
     <div className="mt-3 max-h-[510px] space-y-1 overflow-y-auto pr-1">
      {matches.map(item=>{const active=item.mint===chosen?.mint;return <button type="button" key={item.mint} onClick={()=>setFocus(item.mint)} className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left ${active?"border-cyan-300/40 bg-cyan-300/10":"border-transparent bg-white/[0.025] hover:border-white/10"}`}>
-      <div className="min-w-0"><p className="truncate text-xs font-semibold">{item.symbol}{watch.includes(item.mint)?<span className="ml-1 text-amber-300">★</span>:null}</p><p className="truncate text-[10px] text-white/45">{item.venue==="prestocks"?"PreStock token":"Solana spot"} · {item.name}</p></div>
+      <div className="min-w-0"><p className="truncate text-xs font-semibold">{item.symbol}{watch.includes(item.mint)?<span className="ml-1 text-amber-300">★</span>:null}</p><p className="truncate text-[10px] text-white/45">{item.venue==="prestocks"?"PreStock token":"Solana spot"} · {item.name}</p>
+      <p className="mt-1 truncate font-mono text-[10px] text-white/35">24h vol {money(item.volume24hUsd)} · Liq {money(item.liquidityUsd)}</p></div>
       <div className="shrink-0 text-right"><p className="font-mono text-xs">{money(item.price)}</p><p className={`font-mono text-[10px] ${item.changePct==null?"text-white/35":item.changePct>=0?"text-emerald-300":"text-rose-300"}`}>{item.changePct==null?"24h —":(item.changePct>0?"+":"")+item.changePct.toFixed(1)+"%"}</p></div>
      </button>;})}
      {!matches.length?<p className="py-8 text-center text-xs text-white/40">No priced Solana markets matched.</p>:null}
     </div>
-    <p className="mt-3 border-t border-white/10 pt-3 text-[10px] text-white/40">List is sorted by absolute reported 24h movement, <strong>not</strong> by unverified volume or profit potential. Scanner checks at most six markets on request.</p>
+    <p className="mt-3 border-t border-white/10 pt-3 text-[10px] text-white/40">Sorts use Jupiter-reported token metrics when available. Unreported values remain blank. Neither venue-level 24h volume nor this scanner establishes executable depth. Six-market scan is manual.</p>
    </aside>
    <div className="min-w-0 space-y-3">
     <div className="rounded-[20px] border border-white/10 bg-[#0e1624] p-3 sm:p-4">
@@ -125,6 +153,9 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
       </div>
      </div>
      <div className="mt-3 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-1 text-[10px] ${qualityColor(model.status)}`}>{statusLabel[model.status]??model.status}</span><span className="font-mono text-[10px] text-white/45">{source||"Awaiting candle source"} · latest bar {age} old</span></div>
+     {chosen?.venue==="spot"?<div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {[["Jupiter 24h volume",money(chosen.volume24hUsd)],["Jupiter liquidity",money(chosen.liquidityUsd)],["Organic score",chosen.organicScore==null?"—":chosen.organicScore.toFixed(0)+"/100"],["Provider update",chosen.updatedAt?new Date(chosen.updatedAt).toLocaleTimeString():"Unreported"]].map(([label,val])=><div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-2"><p className="text-[10px] text-white/45">{label}</p><p className="mt-1 font-mono text-xs">{val}</p></div>)}
+     </div>:null}
      {error?<p className="mt-2 rounded-lg border border-rose-500/25 bg-rose-500/10 p-2 text-xs text-rose-200">{error}</p>:null}
      {chosen?.mint?<div className="mt-3 rounded-xl border border-white/10 bg-[#070c16] p-2"><LiveChart mint={chosen.mint} symbol={chosen.symbol} live={chosen.price??undefined}/></div>:null}
     </div>
