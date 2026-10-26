@@ -40,6 +40,11 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
  const matches=useMemo(()=>shortlistMarkets(candidates.filter(c=>venue==="all"||c.venue===venue),query,80),[candidates,query,venue]);
  const chosen=candidates.find(c=>c.mint===focus)??matches[0]??null;
  useEffect(()=>{
+  const preferred=window.sessionStorage.getItem("senda.market.focus");
+  if(preferred && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(preferred))setFocus(preferred);
+  window.sessionStorage.removeItem("senda.market.focus");
+ },[]);
+ useEffect(()=>{
   try{
    const stored=JSON.parse(window.localStorage.getItem(WATCH)||"[]");
    if(Array.isArray(stored))setWatch(stored.filter(v=>typeof v==="string"&&/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)).slice(0,40));
