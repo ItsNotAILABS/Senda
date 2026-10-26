@@ -1,11 +1,27 @@
 name: Senda overnight agent evidence loop
 on:
+  pull_request:
+  push:
+    branches:
+      - feature/matrix-trading-agent-reliability-20261024
   schedule:
     - cron: "35 8 * * *"
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  validate-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:dev
   analyze-agent-receipts:
     runs-on: ubuntu-latest
     timeout-minutes: 8
