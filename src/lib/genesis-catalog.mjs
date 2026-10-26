@@ -35,10 +35,10 @@ export function blueprintMetadata(id,baseUrl) {
  if(base.protocol!=="https:"&&base.hostname!=="localhost")throw new Error("Metadata must use HTTPS.");
  return {
    name:"Senda Genesis · "+item.name,symbol:"SENDAGEN",description:item.description,
-   image:new URL("/genesis/cards/"+item.character+".svg",base).toString(),
+   image:new URL(item.slot==="character"?"/genesis/cards/"+item.character+".svg":item.slot==="gear"?"/genesis/gear/"+item.id+".svg":"/genesis/code/"+item.id+".svg",base).toString(),
    external_url:new URL("/agents/genesis",base).toString(),
    attributes:[{trait_type:"Character",value:item.character.toUpperCase()},{trait_type:"Type",value:item.slot},
      {trait_type:"Rarity",value:item.rarity},{trait_type:"Runtime",value:findCharacter(item.character)?.runtime??"unknown"}],
-   properties:{category:"image",files:[{uri:new URL("/genesis/cards/"+item.character+".svg",base).toString(),type:"image/svg+xml"}]},
+   properties:{category:"image",files:[{uri:new URL(item.slot==="character"?"/genesis/cards/"+item.character+".svg":item.slot==="gear"?"/genesis/gear/"+item.id+".svg":"/genesis/code/"+item.id+".svg",base).toString(),type:"image/svg+xml"}]},
  };
 }
