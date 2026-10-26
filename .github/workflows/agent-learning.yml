@@ -19,9 +19,22 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm run build:dev
+      - name: Install dependencies
+        run: npm ci 2>&1 | tee install.log
+      - name: TypeScript checks
+        run: npm run typecheck 2>&1 | tee typescript.log
+      - name: Development build
+        run: npm run build:dev 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: senda-app-ci-logs
+          path: |
+            install.log
+            typescript.log
+            build.log
+          if-no-files-found: warn
+          retention-days: 7
   analyze-agent-receipts:
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -31,13 +44,15 @@ jobs:
         with:
           node-version: "22"
       - name: Verify deterministic market and learning engines
-        run: node --test scripts/matrix-engine.test.mjs scripts/agent-learning-loop.test.mjs
+        run: node --test scripts/matrix-engine.test.mjs scripts/agent-learning-loop.test.mjs 2>&1 | tee agent-tests.log
       - name: Analyze previously exported agent logs (if any)
         run: node scripts/agent-learning-loop.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: senda-agent-learning-receipts
-          path: artifacts/skill-proposals/
+          path: |
+            artifacts/skill-proposals/
+            agent-tests.log
           if-no-files-found: warn
           retention-days: 30
