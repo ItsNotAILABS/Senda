@@ -22,6 +22,8 @@ import {
 import { toast } from "sonner";
 import { think } from "@/lib/agent-shift";
 import { remember } from "@/lib/agent-memory";
+import { getPrint } from "@/lib/print";
+import { evaluateMatrix } from "@/lib/matrix-engine.mjs";
 import {
   TOOLS,
   createWorker,
@@ -59,7 +61,7 @@ const STARTERS: Starter[] = [
     category: "markets",
     purpose: "Watch my selected names and give me a clean market brief.",
     instructions: "Call out the cheapest and richest names versus their marks. Keep the brief short.",
-    tools: ["planner", "book", "memory"],
+    tools: ["planner", "book", "matrix", "memory"],
     trigger: "on_open",
     autonomy: "draft",
     side: "buy",
@@ -241,7 +243,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     ];
   }
 
-  function run(row: Worker, automatic = false) {
+  async function run(row: Worker, automatic = false) {
     if (row.status === "paused") {
       if (!automatic) toast.error("Resume this agent before running it.");
       return;
@@ -270,6 +272,25 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
           .map((item) => item.symbol + " " + formatUsd(item.last) + " " + formatPremium(item.premium))
           .join(" · ");
         lines.push({ text: "Live book — " + tape, kind: "action" });
+      }
+    }
+    if (row.tools.includes("matrix")) {
+      const candidates = pool.filter((item) => item.mint && item.last > 0).slice(0, 3);
+      if (!candidates.length) lines.push({ text: "Matrix held: no eligible live token pool." });
+      for (const item of candidates) {
+        try {
+          const print = await getPrint({ data: { mint: item.mint, tf: "1H" } });
+          const matrix = evaluateMatrix({
+            bars: print.bars,
+            source: print.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
+          });
+          lines.push({
+            text: `Matrix ${item.symbol}: ${matrix.market} · volume ${matrix.volumeRatio == null ? "unavailable" : matrix.volumeRatio.toFixed(2) + "x"} · RSI ${matrix.rsi?.toFixed(1) ?? "—"} · ATR ${matrix.atrPct?.toFixed(2) ?? "—"}% · ${print.note}. Research only.`,
+            kind: matrix.volumeReliable ? "action" : "info",
+          });
+        } catch (error) {
+          lines.push({ text: `Matrix ${item.symbol}: feed unavailable; no signal (${error instanceof Error ? error.message : "source error"}).` });
+        }
       }
     }
     if (row.tools.includes("trade") && row.autonomy === "queue") {
@@ -338,7 +359,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
       const key = row.trigger === "daily" ? row.id + ":" + new Date().toISOString().slice(0, 10) : row.id;
       if (automated.current.has(key) || !isWorkerDue(row)) continue;
       automated.current.add(key);
-      run(row, true);
+      void run(row, true);
     }
   }, [book]);
 
@@ -448,7 +469,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
           {pane !== "build" && selected ? (
             <AgentDetail
               row={selected}
-              onRun={() => run(selected)}
+              onRun={() => void run(selected)}
               onToggle={() => {
                 patchWorker(selected.id, { status: selected.status === "active" ? "paused" : "active" });
                 refresh(selected.id);
@@ -505,7 +526,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
                 </p>
                 <button
                   type="button"
-                  onClick={() => run(selected)}
+                  onClick={() => void run(selected)}
                   disabled={selected.status === "paused"}
                   className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-black disabled:opacity-35"
                 >
