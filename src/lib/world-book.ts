@@ -27,6 +27,8 @@ export type TapeRow = {
   name: string;
   price: number | null;
   change: number | null;
+  /** Exact Jupiter Tokens V2 percent, not a 0-1 fractional change. */
+  changePct?: number | null;
   icon?: string;
   liquidityUsd?: number | null;
   volume24hUsd?: number | null;
@@ -405,6 +407,7 @@ async function loadTape(): Promise<TapeRow[]> {
         rows.push({ id: row.id, symbol: row.symbol,
           name: typeof row.name === "string" && row.name ? row.name : row.symbol,
           price: num(row.usdPrice), change: num(row.stats24h?.priceChange),
+          changePct: num(row.stats24h?.priceChange),
           icon: typeof row.icon === "string" ? row.icon : undefined,
           liquidityUsd: num(row.liquidity),
           volume24hUsd: (num(row.stats24h?.buyVolume) != null && num(row.stats24h?.sellVolume) != null)
