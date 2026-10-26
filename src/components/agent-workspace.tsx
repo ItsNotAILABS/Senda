@@ -173,6 +173,34 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     else setId(all[0]?.id ?? null);
   }
 
+  function exportAgentLogs() {
+    const receipts = listWorkers().flatMap((worker) =>
+      worker.log.map((entry) => JSON.stringify({
+        at: entry.at,
+        agentId: worker.id,
+        agentName: worker.name,
+        kind: entry.kind || "info",
+        message: entry.text,
+        source: "senda.browser-agent-workspace",
+      })),
+    );
+    if (!receipts.length) {
+      toast.message("No agent run receipts to export yet.");
+      return;
+    }
+    // Explicit local export only. Never upload browser logs or secrets in the background.
+    const body = receipts.join("\n") + "\n";
+    const url = URL.createObjectURL(new Blob([body], { type: "application/x-ndjson" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `senda-agent-logs-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Run receipts exported locally. Review sensitive text before adding them to any repository.");
+  }
+
   function resetBuilder() {
     setId(null);
     setName("");
@@ -415,6 +443,9 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
             <MiniStat label="Agents" value={String(rows.length)} />
             <MiniStat label="Active" value={String(activeCount)} />
             <MiniStat label="Runs" value={String(runCount)} />
+            <button type="button" onClick={exportAgentLogs} className="min-h-10 rounded-xl border border-white/15 px-3 text-xs font-semibold text-white/70">
+              Export run logs
+            </button>
             <button type="button" onClick={resetBuilder} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg">
               <Plus className="size-4" />
               New agent
