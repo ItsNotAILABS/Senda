@@ -6,7 +6,8 @@ test("ownership demands exact owner mint and verified collection",()=>{
  assert.equal(verifiedGenesisOwnership({asset,owner,collection:coll,expectedMint:mint}),true);
  for(const a of [{...asset,ownership:{owner:other}},{...asset,burnt:true},{...asset,id:other},
  {...asset,grouping:[{group_key:"collection",group_value:other,verified:true}]},
- {...asset,grouping:[{group_key:"collection",group_value:coll,verified:false}]}])assert.equal(verifiedGenesisOwnership({asset:a,owner,collection:coll,expectedMint:mint}),false);
+ {...asset,grouping:[{group_key:"collection",group_value:coll,verified:false}]},
+ {...asset,grouping:[{group_key:"collection",group_value:coll}]}])assert.equal(verifiedGenesisOwnership({asset:a,owner,collection:coll,expectedMint:mint}),false);
 });
 test("registry rejects imaginary mints and returns only known verified assets",()=>{
  const reg=parseRegistry({sen:mint,"raven-wing":other});
