@@ -28,6 +28,11 @@ export type TapeRow = {
   price: number | null;
   change: number | null;
   icon?: string;
+  liquidityUsd?: number | null;
+  volume24hUsd?: number | null;
+  organicScore?: number | null;
+  verified?: boolean;
+  updatedAt?: string;
 };
 
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
@@ -392,14 +397,22 @@ async function loadTape(): Promise<TapeRow[]> {
       for (const raw of json) {
         if (!raw || typeof raw !== "object") continue;
         const row = raw as { id?: unknown; symbol?: unknown; name?: unknown; usdPrice?: unknown;
-          icon?: unknown; stats24h?: { priceChange?: unknown } };
+          icon?: unknown; liquidity?: unknown; organicScore?: unknown; isVerified?: unknown;
+          updatedAt?: unknown; stats24h?: { priceChange?: unknown; buyVolume?: unknown; sellVolume?: unknown } };
         if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
         if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(row.id)) continue;
         seen.add(row.id);
         rows.push({ id: row.id, symbol: row.symbol,
           name: typeof row.name === "string" && row.name ? row.name : row.symbol,
           price: num(row.usdPrice), change: num(row.stats24h?.priceChange),
-          icon: typeof row.icon === "string" ? row.icon : undefined });
+          icon: typeof row.icon === "string" ? row.icon : undefined,
+          liquidityUsd: num(row.liquidity),
+          volume24hUsd: (num(row.stats24h?.buyVolume) != null && num(row.stats24h?.sellVolume) != null)
+            ? Math.max(0, num(row.stats24h?.buyVolume) as number) + Math.max(0, num(row.stats24h?.sellVolume) as number)
+            : null,
+          organicScore: num(row.organicScore),
+          verified: row.isVerified === true,
+          updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : undefined });
       }
     }
     for (const hold of Object.values(HOLDS)) {
