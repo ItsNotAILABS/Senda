@@ -1,6 +1,7 @@
 /** Ostium prints, and the Jupiter tokens that can actually be signed. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { readJupiterTokenMetrics } from "@/lib/jupiter-token-metrics.mjs";
 
 export type WorldLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
@@ -404,18 +405,16 @@ async function loadTape(): Promise<TapeRow[]> {
         if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
         if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(row.id)) continue;
         seen.add(row.id);
+        const metric = readJupiterTokenMetrics(row);
+        if (!metric) continue;
         rows.push({ id: row.id, symbol: row.symbol,
           name: typeof row.name === "string" && row.name ? row.name : row.symbol,
-          price: num(row.usdPrice), change: num(row.stats24h?.priceChange),
-          changePct: num(row.stats24h?.priceChange),
+          price: metric.priceUsd, change: metric.priceChangePct,
+          changePct: metric.priceChangePct,
           icon: typeof row.icon === "string" ? row.icon : undefined,
-          liquidityUsd: num(row.liquidity),
-          volume24hUsd: (num(row.stats24h?.buyVolume) != null && num(row.stats24h?.sellVolume) != null)
-            ? Math.max(0, num(row.stats24h?.buyVolume) as number) + Math.max(0, num(row.stats24h?.sellVolume) as number)
-            : null,
-          organicScore: num(row.organicScore),
-          verified: row.isVerified === true,
-          updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : undefined });
+          liquidityUsd: metric.liquidityUsd, volume24hUsd: metric.volume24hUsd,
+          organicScore: metric.organicScore, verified: metric.verified,
+          updatedAt: metric.updatedAt ?? undefined });
       }
     }
     for (const hold of Object.values(HOLDS)) {
