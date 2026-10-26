@@ -34,9 +34,16 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
  const [scanning,setScanning]=useState(false);
  const [scan,setScan]=useState<Array<{mint:string;status:string;alignment:number;relativeVolume:number|null}>>([]);
  const candidates=useMemo(()=>{
-  const pre:Market[]=house.filter(h=>h.venue==="prestocks"&&h.mint&&h.last>0)
-   .map(h=>({mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",price:h.last,changePct:normalizedPercent(h.change24h),
-    liquidityUsd:null,volume24hUsd:null,organicScore:null,verified:false,updatedAt:null}));
+  // HouseListing contains historic catalogue fallback figures; never present those as live quotes.
+  const byMint = new Map(tape.filter(t=>t.price!=null&&t.price>0).map(t=>[t.id,t]));
+  const pre:Market[]=house.filter(h=>h.venue==="prestocks"&&h.mint)
+   .map(h=>{
+    const live=byMint.get(h.mint);
+    return {mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",
+      price:live?.price??null,changePct:live?.changePct??null,
+      liquidityUsd:live?.liquidityUsd??null,volume24hUsd:live?.volume24hUsd??null,
+      organicScore:live?.organicScore??null,verified:live?.verified===true,updatedAt:live?.updatedAt??null};
+   });
   const coins:Market[]=tape.filter(t=>t.id&&t.price!=null&&t.price>0)
    .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:t.changePct??null,
     liquidityUsd:t.liquidityUsd??null,volume24hUsd:t.volume24hUsd??null,
@@ -153,6 +160,8 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
       </div>
      </div>
      <div className="mt-3 flex flex-wrap items-center gap-2"><span className={`rounded-full border px-3 py-1 text-[10px] ${qualityColor(model.status)}`}>{statusLabel[model.status]??model.status}</span><span className="font-mono text-[10px] text-white/45">{source||"Awaiting candle source"} · latest bar {age} old</span></div>
+     {chosen?.venue==="prestocks"&&chosen.price==null?
+      <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-200">PreStock catalogue listing only. No independent current Jupiter quote was returned for this mint. Historical seeded marks are not shown as live prices.</p>:null}
      {chosen?.venue==="spot"?<div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
       {[["Jupiter 24h volume",money(chosen.volume24hUsd)],["Jupiter liquidity",money(chosen.liquidityUsd)],["Organic score",chosen.organicScore==null?"—":chosen.organicScore.toFixed(0)+"/100"],["Provider update",chosen.updatedAt?new Date(chosen.updatedAt).toLocaleTimeString():"Unreported"]].map(([label,val])=><div key={label} className="rounded-xl border border-white/10 bg-white/[0.03] p-2"><p className="text-[10px] text-white/45">{label}</p><p className="mt-1 font-mono text-xs">{val}</p></div>)}
      </div>:null}
