@@ -71,7 +71,7 @@ const STARTERS: Starter[] = [
     category: "markets",
     purpose: "Watch for a bounded opportunity and prepare the next action for my approval.",
     instructions: "Never exceed the cap. Queue at most one action per run. Never sign.",
-    tools: ["book", "memory", "trade"],
+    tools: ["book", "matrix", "memory", "trade"],
     trigger: "manual",
     autonomy: "queue",
     side: "buy",
@@ -280,6 +280,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     const lines: { text: string; kind?: "info" | "action" | "success" }[] = [];
     let queue = row.queue;
     let checklist = row.checklist;
+    const matrixBySymbol = new Map<string, ReturnType<typeof evaluateMatrix>>();
 
     if (row.tools.includes("planner")) {
       checklist = buildChecklist(row);
@@ -312,6 +313,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
             bars: print.bars,
             source: print.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
           });
+          matrixBySymbol.set(item.symbol, matrix);
           lines.push({
             text: `Matrix ${item.symbol}: ${matrix.market} · volume ${matrix.volumeRatio == null ? "unavailable" : matrix.volumeRatio.toFixed(2) + "x"} · RSI ${matrix.rsi?.toFixed(1) ?? "—"} · ATR ${matrix.atrPct?.toFixed(2) ?? "—"}% · ${print.note}. Research only.`,
             kind: matrix.volumeReliable ? "action" : "info",
@@ -340,18 +342,29 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
       );
       if (output?.log) lines.push({ text: output.log });
       if (output?.queue) {
-        queue = output.queue;
-        lines.push({
-          text:
-            "Queued " +
-            output.queue.side +
-            " " +
-            output.queue.symbol +
-            " for $" +
-            output.queue.usd +
-            ". Waiting for your signature.",
-          kind: "action",
-        });
+        const matrix = matrixBySymbol.get(output.queue.symbol);
+        // Matrix-enabled mandates require a genuine pool-volume confirmation.
+        // Missing/mixed data cannot authorize even a draft financial queue.
+        const wanted = output.queue.side === "buy" ? "bullish-watch" : "bearish-watch";
+        const eligible = !row.tools.includes("matrix") ||
+          (matrix?.market === wanted && (matrix.volumeRatio ?? 0) >= 1.1 &&
+            (matrix.atrPct ?? Infinity) <= 8 && matrix.confidence >= 45);
+        if (!eligible) {
+          queue = null;
+          lines.push({
+            text: `Queue held for ${output.queue.symbol}: requires ${wanted}, real volume ≥1.1x, ATR ≤8%, and alignment ≥45. No signing proposal.`,
+            kind: "info",
+          });
+        } else {
+          queue = output.queue;
+          lines.push({
+            text: "Queued " + output.queue.side + " " + output.queue.symbol +
+              " for $" + output.queue.usd + ". Review the market and sign explicitly.",
+            kind: "action",
+          });
+        }
+      } else {
+        queue = null;
       }
     }
     if (row.tools.includes("memory")) {
