@@ -22,6 +22,9 @@ import {
 import { toast } from "sonner";
 import { think } from "@/lib/agent-shift";
 import { remember } from "@/lib/agent-memory";
+import { readGenesisOwnership } from "@/lib/genesis-chain";
+import { getPrint } from "@/lib/print";
+import { runGenesisResearch } from "@/lib/genesis-runtime.mjs";
 import {
   TOOLS,
   createWorker,
@@ -241,7 +244,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     ];
   }
 
-  function run(row: Worker, automatic = false) {
+  async function run(row: Worker, automatic = false) {
     if (row.status === "paused") {
       if (!automatic) toast.error("Resume this agent before running it.");
       return;
@@ -320,6 +323,38 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
         lines.push({ text: "Saved the latest " + item.symbol + " observation to local memory." });
       }
     }
+    if (row.genesis) {
+      const liveName = pool.find(item => item.mint && item.mint.length >= 32 && item.last > 0);
+      if (!liveName) {
+        lines.push({ text: "Genesis runtime held: no accessible live Solana market." });
+      } else {
+        try {
+          const print = await getPrint({data:{mint:liveName.mint,tf:"1H"}});
+          // Revalidate against the public on-chain ownership registry on every run.
+          // Local storage bindings cannot grant a premium capability.
+          let owned: string[] = [];
+          const bound = row.genesis;
+          if (bound.owner) {
+            const verified = await readGenesisOwnership({data:{owner:bound.owner}});
+            if (verified.state === "verified" && verified.ownedIds.includes(bound.characterId)) {
+              owned = [bound.characterId,
+                ...(bound.gear && verified.ownedIds.includes(bound.gear) ? [bound.gear] : []),
+                ...(bound.code && verified.ownedIds.includes(bound.code) ? [bound.code] : []),
+              ];
+            }
+          }
+          const report = runGenesisResearch({
+            characterId:bound.characterId,symbol:liveName.symbol,bars:print.bars,
+            source:print.note.startsWith("Pool OHLCV")?"gecko-pool":"price-only",
+            verifiedAssetIds:owned,
+          });
+          lines.push({text:`Genesis ${report.characterId.toUpperCase()} / ${report.runtime} · ${liveName.symbol}: ${report.lines.join(" | ")}`,kind:"action"});
+          lines.push({text:`Proof: ${report.data.barCount} candles · volume ${report.data.sourceVerified?"pool-verified":"unverified"} · gear ${report.enabled.gear?"on":"off"} · code ${report.enabled.code?"on":"off"} · no execution.`,kind:"info"});
+        } catch(error) {
+          lines.push({text:`Genesis research unavailable: ${error instanceof Error?error.message:"market error"}. No action queued.`,kind:"info"});
+        }
+      }
+    }
     if (!lines.length) lines.push({ text: "No enabled tool produced work on this run." });
     for (const line of lines) logWorker(row.id, line.text, line.kind);
     patchWorker(row.id, {
@@ -338,7 +373,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
       const key = row.trigger === "daily" ? row.id + ":" + new Date().toISOString().slice(0, 10) : row.id;
       if (automated.current.has(key) || !isWorkerDue(row)) continue;
       automated.current.add(key);
-      run(row, true);
+      void run(row, true);
     }
   }, [book]);
 
@@ -448,7 +483,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
           {pane !== "build" && selected ? (
             <AgentDetail
               row={selected}
-              onRun={() => run(selected)}
+              onRun={() => void run(selected)}
               onToggle={() => {
                 patchWorker(selected.id, { status: selected.status === "active" ? "paused" : "active" });
                 refresh(selected.id);
@@ -505,7 +540,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
                 </p>
                 <button
                   type="button"
-                  onClick={() => run(selected)}
+                  onClick={() => void run(selected)}
                   disabled={selected.status === "paused"}
                   className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-black disabled:opacity-35"
                 >
