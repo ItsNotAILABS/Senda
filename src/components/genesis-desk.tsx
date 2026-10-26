@@ -181,6 +181,13 @@ export function GenesisDesk() {
         <div className="flex flex-wrap justify-between gap-2"><span className="font-mono text-xs text-cyan-300">{out.runtime.toUpperCase()} / {out.symbol}</span><span className="font-mono text-[11px] text-white/50">{out.data.barCount} candles · {out.data.sourceVerified?"Verified pool volume":"Volume not verified"}</span></div>
         <div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-white/5 p-2"><p className="text-[10px] text-white/45">Close</p><p className="font-mono text-sm">{money(out.data.close)}</p></div><div className="rounded-lg bg-white/5 p-2"><p className="text-[10px] text-white/45">Volume / 20</p><p className="font-mono text-sm">{out.data.relativeVolume==null?"—":out.data.relativeVolume.toFixed(2)+"×"}</p></div><div className="rounded-lg bg-white/5 p-2"><p className="text-[10px] text-white/45">Trend</p><p className="font-mono text-sm uppercase">{out.data.trend}</p></div></div>
         <ul className="mt-3 space-y-2">{out.lines.map((line,i)=><li key={i} className="text-xs leading-relaxed text-white/75">• {line}</li>)}{out.checks.map((check,i)=><li key={i} className="text-xs leading-relaxed text-amber-200/80">• {check}</li>)}</ul>
+        {out.moduleOutputs.length > 0 ? <div className="mt-3 space-y-2 border-t border-cyan-300/15 pt-3">
+          <p className="font-mono text-[10px] tracking-[.15em] text-cyan-300">VERIFIED EQUIPMENT OUTPUTS</p>
+          {out.moduleOutputs.map(item=><div key={item.asset} className="rounded-lg border border-white/10 bg-white/[0.03] p-2 text-xs">
+            <p className="font-semibold text-cyan-200">{findAsset(item.asset)?.name} · {item.type}</p>
+            <p className="mt-1 break-words font-mono text-[11px] text-white/50">{JSON.stringify(item.value)}</p>
+          </div>)}
+        </div>:null}
         <p className="mt-3 border-t border-white/10 pt-2 font-mono text-[10px] text-white/40">Receipt: no order, no wallet signature, no simulated fill.</p>
        </div>:<p className="mt-3 text-xs text-white/45">Runtime executes on sourced market candles; missing data remains missing. Gear unlocks only after ownership verification.</p>}
       </div>
