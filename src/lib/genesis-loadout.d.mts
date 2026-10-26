@@ -1,0 +1,2 @@
+export declare function loadGenesisLoadout(storage:Pick<Storage,"getItem">,owner:string,characterId:string,verifiedIds:readonly string[]):{gear:string|null;code:string|null};
+export declare function equipGenesisLoadout(storage:Pick<Storage,"getItem"|"setItem">,data:{owner:string;characterId:string;gear:string|null;code:string|null;verifiedIds:readonly string[]}):{gear:string|null;code:string|null};
