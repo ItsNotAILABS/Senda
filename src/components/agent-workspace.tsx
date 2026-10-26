@@ -24,6 +24,9 @@ import { think } from "@/lib/agent-shift";
 import { remember } from "@/lib/agent-memory";
 import { getPrint } from "@/lib/print";
 import { evaluateMatrix } from "@/lib/matrix-engine.mjs";
+import { authorizeWorkerTrade } from "@/lib/worker-trade-authorization.mjs";
+import { spendCap } from "@/lib/spend-cap";
+import { guardRoute } from "@/lib/route-guard";
 import {
   TOOLS,
   createWorker,
@@ -157,6 +160,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
   const [symbols, setSymbols] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const automated = useRef(new Set<string>());
+  const signing = useRef(false);
   const selected = rows.find((row) => row.id === id) ?? null;
   const visibleRows = rows.filter((row) => {
     const needle = query.trim().toLowerCase();
@@ -405,35 +409,58 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
   }, [book]);
 
   async function sign(row: Worker) {
-    if (!row.queue) return toast.error("Nothing is queued.");
-    const listing = book.find((item) => item.symbol === row.queue?.symbol);
-    if (!listing) return toast.error("That name is not on the live book.");
+    if (signing.current) return;
+    signing.current = true;
     setBusy(true);
     try {
+      // Reload mutable user permissions and queue before ANY wallet prompt.
+      const current = listWorkers().find((worker) => worker.id === row.id);
+      if (!current) throw new Error("This worker no longer exists.");
+      const requestedSymbol = current.queue?.symbol || "";
+      const intent = authorizeWorkerTrade(current, spendCap(), requestedSymbol);
+      const listing = book.find((item) => item.symbol === intent.symbol && item.mint && item.last > 0);
+      if (!listing) throw new Error("The exact queued token is not available on the current live book.");
+      if (current.tools.includes("matrix")) {
+        const print = await getPrint({ data: { mint: listing.mint, tf: "1H" } });
+        const matrix = evaluateMatrix({
+          bars: print.bars,
+          source: print.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
+        });
+        const wanted = intent.side === "buy" ? "bullish-watch" : "bearish-watch";
+        if (matrix.market !== wanted || (matrix.volumeRatio ?? 0) < 1.1 ||
+            (matrix.atrPct ?? Infinity) > 8 || matrix.confidence < 45) {
+          throw new Error("The matrix no longer validates this queued strategy. Re-run the agent before signing.");
+        }
+      }
+      await guardRoute({mint: listing.mint, side: intent.side, usd: intent.usd,
+        price: listing.last, symbol: listing.symbol});
       const existing = wallet.w.links.find((link) => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
       const owner = existing || (await connectPhantom());
       if (!existing) {
         const linked = wallet.linkChain(owner, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the wallet address.");
       }
+      const latest = listWorkers().find((worker) => worker.id === row.id);
+      if (!latest) throw new Error("Worker was removed while the wallet connected.");
+      const again = authorizeWorkerTrade(latest, spendCap(), intent.symbol);
+      if (again.side !== intent.side || again.usd !== intent.usd)
+        throw new Error("Worker mandate changed during approval. Re-run it before signing.");
       const done = await runPrestock({
-        owner,
-        mint: listing.mint,
-        side: row.queue.side,
-        usd: row.queue.usd,
-        price: listing.last,
+        owner, mint: listing.mint, side: again.side, usd: again.usd, price: listing.last,
       });
       logWorker(
         row.id,
-        "Wallet signed " + row.queue.side + " " + listing.symbol + " for $" + row.queue.usd + ". " + done.signature.slice(0, 8) + ".",
+        "Wallet submitted " + again.side + " " + listing.symbol +
+        " for $" + again.usd + ". Signature " + done.signature + ". Verify settlement on-chain.",
         "success",
       );
       patchWorker(row.id, { queue: null });
       refresh(row.id);
-      toast.success("Signed. " + done.signature.slice(0, 8) + "…");
+      toast.success("Submitted. Verify " + done.signature.slice(0, 8) + "… on-chain.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The wallet did not sign.");
     } finally {
+      signing.current = false;
       setBusy(false);
     }
   }
