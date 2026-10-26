@@ -121,8 +121,8 @@ export function MarketsPage() {
     .sort((a, b) => {
       if (sort === "name") return a.symbol.localeCompare(b.symbol);
       if (sort === "price") return (b.price ?? 0) - (a.price ?? 0);
-      const av = a.change == null ? -1e9 : Math.abs(a.change) <= 2 ? a.change * 100 : a.change;
-      const bv = b.change == null ? -1e9 : Math.abs(b.change) <= 2 ? b.change * 100 : b.change;
+      const av = a.changePct ?? -1e9;
+      const bv = b.changePct ?? -1e9;
       return sort === "loss" ? av - bv : bv - av;
     });
   const names = house.filter((h) => (!query || `${h.symbol} ${h.name}`.toLowerCase().includes(query)) && netMatches(net, h.symbol));
@@ -307,7 +307,7 @@ export function MarketsPage() {
         shape === "cards" ? (
           <ul className="mt-3 grid grid-cols-2 gap-3">
             {coinsOnNet.slice(0, cap).map((r) => {
-              const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
+              const chg = r.changePct ?? null;
               return (
                 <li key={r.id} className="flex min-h-[168px] flex-col rounded-[22px] border border-white/10 bg-[#10131c] p-3">
                   <button type="button" onClick={() => setOpen(r)} className="text-left">
@@ -334,7 +334,7 @@ export function MarketsPage() {
         ) : (
           <ul className="mt-2">
             {coinsOnNet.slice(0, cap).map((r) => {
-              const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
+              const chg = r.changePct ?? null;
               return (
                 <li key={r.id}>
                   <button type="button" onClick={() => setOpen(r)} className="flex w-full items-center gap-3 py-3 text-left">
