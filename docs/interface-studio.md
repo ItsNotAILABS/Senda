@@ -32,4 +32,6 @@ npm run typecheck
 npm run build:dev
 ```
 
+The permanent shared planning index is [GitHub issue #8](https://github.com/ItsNotAILABS/Senda/issues/8). Team members update that issue or use implementation pull requests; the per-browser Kanban state is an offline working copy that must be deliberately exported/imported to move devices. Existing implementation references include market matrix PR #6, Genesis PR #7, wallet signing PR #5 and agent permissions PR #4; the board links to them but never makes claims about their current merge/check status.
+
 The seeded board and its checks are meant to be a truthful review workflow, not a record of shipped interface work.
