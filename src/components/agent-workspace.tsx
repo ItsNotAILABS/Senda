@@ -334,7 +334,8 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
           // Local storage bindings cannot grant a premium capability.
           let owned: string[] = [];
           const bound = row.genesis;
-          if (bound.owner) {
+          const connectedOwner = wallet.w.links.find(link => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
+          if (bound.owner && bound.owner === connectedOwner) {
             const verified = await readGenesisOwnership({data:{owner:bound.owner}});
             if (verified.state === "verified" && verified.ownedIds.includes(bound.characterId)) {
               owned = [bound.characterId,
