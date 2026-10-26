@@ -235,19 +235,19 @@ function ChartBook({
   for (const r of tape) {
     if (!r.id || seen.has(r.id)) continue;
     seen.add(r.id);
-    rows.push({ id: r.id, symbol: r.symbol, name: r.name, price: r.price ?? 0, change: r.change });
+    rows.push({ id: r.id, symbol: r.symbol, name: r.name, price: r.price ?? 0, change: r.changePct ?? null });
   }
   for (const h of house) {
     if (!h.mint || seen.has(h.mint) || !(h.last > 0)) continue;
     seen.add(h.mint);
-    rows.push({ id: h.mint, symbol: h.symbol, name: h.name, price: h.last, change: h.change24h });
+    rows.push({ id: h.mint, symbol: h.symbol, name: h.name, price: h.last, change: h.change24h == null ? null : h.change24h * 100 });
   }
   const book = rows.filter((r) => !query || `${r.symbol} ${r.name}`.toLowerCase().includes(query));
   book.sort((a, b) => {
     if (sort === "name") return a.symbol.localeCompare(b.symbol);
     if (sort === "price") return b.price - a.price;
-    const av = a.change == null ? -1e9 : Math.abs(a.change) <= 2 ? a.change * 100 : a.change;
-    const bv = b.change == null ? -1e9 : Math.abs(b.change) <= 2 ? b.change * 100 : b.change;
+    const av = a.change ?? -1e9;
+    const bv = b.change ?? -1e9;
     return sort === "loss" ? av - bv : bv - av;
   });
   const pick = book.find((r) => r.id === chartId) ?? book[0] ?? null;
