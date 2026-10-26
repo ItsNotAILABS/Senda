@@ -58,49 +58,98 @@ export function runGenesisResearch(input){
  const symbol=String(input.symbol||"MARKET").replace(/[^A-Z0-9_.-]/gi,"").slice(0,22)||"MARKET";
  const lines=[];
  const checks=[];
+ const moduleOutputs=[];
+ const observed=validateCandles(input.bars);
+ const recent=observed.slice(-21,-1);
+ const priorHigh=recent.length===20?Math.max(...recent.map(x=>x.h)):null;
+ const priorLow=recent.length===20?Math.min(...recent.map(x=>x.l)):null;
  if(m.barCount<22) checks.push("Less than 22 valid bars: trend evidence is limited.");
  if(!m.sourceVerified)checks.push("Volume-based strategy strength is unavailable; no order should be inferred.");
  switch(character.runtime){
   case "signals":
    lines.push(m.trend==="unknown"?"Trend is not ready.":`Fast/slow structure: ${m.trend}. ${symbol} last ${m.close?.toFixed(4)??"unknown"}.`);
    lines.push(m.relativeVolume==null?"Volume confirmation unavailable.":`Pool relative volume: ${m.relativeVolume.toFixed(2)}x the prior 20 candles.`);
-   if(configuredGear)lines.push("Raven Wing lens: "+(m.relativeVolume==null?"data held":m.relativeVolume>=1.5?"unusual pool-volume acceleration":"no unusual pool-volume acceleration"));
-   if(configuredCode)lines.push("Signal Matrix pack: indicators are descriptive; no forecast or order has been generated.");
+   if(configuredGear) {
+     const active=m.sourceVerified&&m.relativeVolume!=null&&m.relativeVolume>=1.5;
+     moduleOutputs.push({asset:character.gear,type:"volume-lens",value:{ratio:m.relativeVolume,active}});
+     lines.push("Raven Wing: "+(m.relativeVolume==null?"insufficient verified volume":active?"measured volume spike >=1.5x":"no measured volume spike"));
+   }
+   if(configuredCode) {
+     const aligned=m.sourceVerified&&m.relativeVolume!=null&&m.relativeVolume>=1.1&&m.trend!=="unknown";
+     moduleOutputs.push({asset:character.pack,type:"signal-audit",value:{trend:m.trend,volumeAligned:aligned,tradeAuthorization:false}});
+     lines.push("Signal Matrix: "+(aligned?"trend and volume evidence present":"insufficient alignment")+". Research only.");
+   }
    break;
   case "strategies":
    lines.push(m.trend==="unknown"?"No rule comparison without enough bars.":`Research hypotheses: trend-following ${m.trend==="up"?"aligned":"not aligned"} and mean-reversion ${m.changePct!=null&&m.changePct<0?"candidate":"not triggered"}.`);
    lines.push("A backtest with costs, held-out samples and execution quotes is required before deploying a strategy.");
-   if(configuredGear)lines.push("Fox Mask: second rule comparison lens active.");
-   if(configuredCode)lines.push("Strategy Lab: review checklist includes look-ahead bias, fees, spread and drawdown.");
+   if(configuredGear) {
+     const breakout=priorHigh!=null&&m.close!=null?m.close>priorHigh:null;
+     const underMean=m.maSlow!=null&&m.close!=null?m.close<m.maSlow:null;
+     moduleOutputs.push({asset:character.gear,type:"rule-comparison",value:{breakout,underMean}});
+     lines.push("Fox Mask: 20-bar breakout "+(breakout==null?"unknown":breakout?"observed":"not observed")+
+       "; below 21-bar mean "+(underMean==null?"unknown":underMean?"yes":"no")+".");
+   }
+   if(configuredCode){
+     moduleOutputs.push({asset:character.pack,type:"validation-gates",value:{lookaheadGuard:true,feeModelRequired:true,outOfSampleRequired:true}});
+     lines.push("Strategy Lab: no performance claims without a costed, held-out backtest.");
+   }
    break;
   case "risk":
    lines.push(m.rangePct==null?"ATR volatility is unavailable.":`ATR as fraction of last price: ${m.rangePct.toFixed(2)}%.`);
    lines.push(m.rangePct!=null&&m.rangePct>8?"Elevated observed candle range; reduce proposed size before user approval.":"No risk approval can be inferred from volatility alone.");
-   if(configuredGear)lines.push("Owl Eye: volume reliability and volatility warnings active.");
-   if(configuredCode)lines.push("Risk Sentinel: check spending caps and wallet authorization before every submission.");
+   if(configuredGear){
+     const elevated=m.rangePct!=null&&m.rangePct>8;
+     moduleOutputs.push({asset:character.gear,type:"risk-overlay",value:{atrPct:m.rangePct,highVolatility:elevated,volumeVerified:m.sourceVerified}});
+     lines.push("Owl Eye: "+(elevated?"high observed volatility":"volatility not above 8% threshold")+"; volume "+(m.sourceVerified?"verified":"not verified")+".");
+   }
+   if(configuredCode){
+     moduleOutputs.push({asset:character.pack,type:"risk-policy",value:{riskHold:m.rangePct==null||m.rangePct>8||!m.sourceVerified,spendAuthority:false}});
+     lines.push("Risk Sentinel: block trade proposals if market data or risk budgets are insufficient.");
+   }
    break;
   case "macro":
    lines.push(`Single-asset candle trend: ${m.trend}.`);
    lines.push("Macro correlation and cross-market analysis require independently sourced comparative instruments; none were fabricated.");
-   if(configuredGear)lines.push("Dragon Core: regime lens active, restricted to observed price history.");
-   if(configuredCode)lines.push("Macro Atlas: evidence checklist for broader market regime comparisons.");
+   if(configuredGear){
+     const observedReturn=observed.length>=21?pct(observed.at(-21).c,observed.at(-1).c):null;
+     moduleOutputs.push({asset:character.gear,type:"observed-regime",value:{return20Pct:observedReturn,trend:m.trend}});
+     lines.push("Dragon Core: observed 20-bar return "+(observedReturn==null?"unavailable":observedReturn.toFixed(2)+"%")+".");
+   }
+   if(configuredCode){
+     moduleOutputs.push({asset:character.pack,type:"macro-evidence",value:{assetsCompared:1,correlationMeasured:false}});
+     lines.push("Macro Atlas: cross-market correlations held until independent feeds exist.");
+   }
    break;
   case "orchestrator":
    lines.push("Mission: read data → validate provenance → compare hypotheses → record evidence → request human review.");
    lines.push("No delegated signing, shell access or network side effects were granted by this collectible.");
-   if(configuredGear)lines.push("Orbi Core: plan includes an additional stop-on-error checkpoint.");
-   if(configuredCode)lines.push("Agent Workflows: append review receipt before proposing action.");
+   if(configuredGear){
+     moduleOutputs.push({asset:character.gear,type:"workflow-checkpoints",value:{steps:["validate-feed","stop-on-error","review"]}});
+     lines.push("Orbi Core: stop-on-error and human-review checkpoints added.");
+   }
+   if(configuredCode){
+     moduleOutputs.push({asset:character.pack,type:"mission-receipt",value:{inputSource:m.source,barCount:m.barCount,humanApprovalRequired:true}});
+     lines.push("Agent Workflows: generated a source-aware mission receipt.");
+   }
    break;
   case "creator":
    lines.push(`Editorial brief: explain ${symbol} with data source, observed trend and uncertainty.`);
    lines.push("Generated content must distinguish observable facts from speculation.");
-   if(configuredGear)lines.push("Lyra Crystal: community narrative layout unlocked.");
-   if(configuredCode)lines.push("Creator Studio: evidence and disclosure checklist unlocked.");
+   if(configuredGear){
+     const sections=["Observed "+symbol+" trend","Source provenance","Uncertainties","Community questions"];
+     moduleOutputs.push({asset:character.gear,type:"brief-layout",value:{sections}});
+     lines.push("Lyra Crystal: "+sections.join(" → ")+".");
+   }
+   if(configuredCode){
+     moduleOutputs.push({asset:character.pack,type:"factuality-check",value:{realVolume:m.sourceVerified,hasExternalMacroData:false,needsHumanReview:true}});
+     lines.push("Creator Studio: disclosures and source evidence required before publishing.");
+   }
    break;
  }
  return {
   schema:"senda.genesis.runtime.v1",characterId:character.id,runtime:character.runtime,symbol,
-  mode:"read-only",data:m,lines,checks,
+  mode:"read-only",data:m,lines,checks,moduleOutputs,
   entitlements:owned,enabled:{gear:configuredGear,code:configuredCode},
   receipt:{source:m.source,barCount:m.barCount,confirmedVolume:m.sourceVerified,
     walletSignatureRequiredForTrade:true,orderSubmitted:false,noSimulatedFill:true}
