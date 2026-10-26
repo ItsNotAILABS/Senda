@@ -5,3 +5,16 @@ test("SEN runs real verified pool-volume research",()=>{const a=runGenesisResear
 test("price-only history does not invent volume",()=>{const a=analyzeMarket({bars,source:"price-only"});assert.equal(a.relativeVolume,null);assert.equal(a.sourceVerified,false);});
 test("equipment only unlocks for matching verified IDs",()=>{const no=runGenesisResearch({characterId:"sen",symbol:"SOL",bars,source:"gecko-pool",verifiedAssetIds:["fox-mask"]});assert.equal(no.enabled.gear,false);const yes=runGenesisResearch({characterId:"sen",symbol:"SOL",bars,source:"gecko-pool",verifiedAssetIds:["raven-wing","signal-matrix"]});assert.equal(yes.enabled.gear,true);assert.equal(yes.enabled.code,true);assert.deepEqual(resolveEntitlements(["owl-eye"],"sen"),[]);});
 test("all six runtime lanes refuse to execute",()=>{for(const id of ["sen","nex","kai","zeno","orbi","lyra"]){const a=runGenesisResearch({characterId:id,symbol:"SOL",bars,source:"gecko-pool",verifiedAssetIds:[]});assert.equal(a.mode,"read-only");assert.equal(a.receipt.walletSignatureRequiredForTrade,true);assert.ok(a.lines.length);}});
+
+test("all six verified code packs produce real bounded module receipts",()=>{
+ for(const [characterId,gear,code] of [["sen","raven-wing","signal-matrix"],["nex","fox-mask","strategy-lab"],["kai","owl-eye","risk-sentinel"],["zeno","dragon-core","macro-atlas"],["orbi","orbi-core","agent-workflows"],["lyra","lyra-crystal","creator-studio"]]){
+  const a=runGenesisResearch({characterId,symbol:"SOL",bars,source:"gecko-pool",verifiedAssetIds:[gear,code]});
+  assert.equal(a.moduleOutputs.length,2);
+  assert.deepEqual(a.moduleOutputs.map(x=>x.asset),[gear,code]);
+  assert.equal(a.receipt.orderSubmitted,false);
+ }
+});
+test("unowned modules cannot emit premium code outputs",()=>{
+ const a=runGenesisResearch({characterId:"sen",symbol:"SOL",bars,source:"gecko-pool",verifiedAssetIds:["fox-mask"]});
+ assert.deepEqual(a.moduleOutputs,[]);
+});
