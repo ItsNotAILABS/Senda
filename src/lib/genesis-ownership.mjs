@@ -6,7 +6,7 @@ export function verifiedGenesisOwnership({asset,owner,collection,expectedMint}) 
  if(asset.id!==expectedMint||asset.burnt===true||asset.ownership?.owner!==owner)return false;
  const grouping=Array.isArray(asset.grouping)?asset.grouping:[];
  return grouping.some(g=>(g.group_key==="collection"||g.groupKey==="collection")&&
-   (g.group_value===collection||g.groupValue===collection)&&g.verified!==false);
+   (g.group_value===collection||g.groupValue===collection)&&g.verified===true);
 }
 export function resolveOwnedGenesisAssets(owner,collection,registry,assetResponses){
  if(!isSolanaAddress(owner)||!isSolanaAddress(collection))throw Error("A valid wallet and collection are required.");
