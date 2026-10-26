@@ -38,7 +38,7 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
    .map(h=>({mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",price:h.last,changePct:normalizedPercent(h.change24h),
     liquidityUsd:null,volume24hUsd:null,organicScore:null,verified:false,updatedAt:null}));
   const coins:Market[]=tape.filter(t=>t.id&&t.price!=null&&t.price>0)
-   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:normalizedPercent(t.change),
+   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:t.changePct??null,
     liquidityUsd:t.liquidityUsd??null,volume24hUsd:t.volume24hUsd??null,
     organicScore:t.organicScore??null,verified:t.verified===true,updatedAt:t.updatedAt??null}));
   return shortlistMarkets([...pre,...coins],"",250);
