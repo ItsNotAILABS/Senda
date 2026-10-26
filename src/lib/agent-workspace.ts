@@ -6,6 +6,7 @@ export const TOOLS = [
   { id: "planner", label: "Plan work", line: "Turns the goal into a clear, saved checklist." },
   { id: "notes", label: "Write a brief", line: "Writes a concise brief into the run log." },
   { id: "book", label: "Read the book", line: "Reads live PreStock prices for the names it watches." },
+  { id: "matrix", label: "Market matrix", line: "Checks real pool volume, momentum, VWAP, breakout and ATR. Research only." },
   { id: "memory", label: "Remember context", line: "Keeps the latest market observation for the next run." },
   { id: "trade", label: "Queue a trade", line: "Prepares one bounded buy or sell. The wallet still signs." },
 ] as const;
