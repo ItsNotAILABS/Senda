@@ -1,0 +1,5 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {CHARACTERS,DIGITAL_ASSETS,GEAR,CODE_PACKS,findCharacter,blueprintMetadata} from "../src/lib/genesis-catalog.mjs";
+test("six unique characters with one matching gear and pack each",()=>{assert.equal(CHARACTERS.length,6);assert.equal(GEAR.length,6);assert.equal(CODE_PACKS.length,6);assert.equal(DIGITAL_ASSETS.length,18);assert.equal(new Set(DIGITAL_ASSETS.map(x=>x.id)).size,18);for(const c of CHARACTERS){assert.equal(GEAR.find(g=>g.id===c.gear).character,c.id);assert.equal(CODE_PACKS.find(g=>g.id===c.pack).character,c.id);}});
+test("Raven has its own flagship identity",()=>{assert.equal(findCharacter("sen").title,"The Market Raven");assert.equal(findCharacter("sen").runtime,"signals");});
+test("metadata is a blueprint, not a fake mint",()=>{const m=blueprintMetadata("sen","https://senda.pocketnova.app");assert.match(m.image,/sen.svg$/);assert.equal(m.mint,undefined);assert.throws(()=>blueprintMetadata("sen","http://example.com"));});
