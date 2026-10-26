@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: "22"
       - name: Verify deterministic market and learning engines
-        run: node --test scripts/matrix-engine.test.mjs scripts/agent-learning-loop.test.mjs 2>&1 | tee agent-tests.log
+        run: node --test scripts/matrix-engine.test.mjs scripts/worker-trade-authorization.test.mjs scripts/agent-learning-loop.test.mjs 2>&1 | tee agent-tests.log
       - name: Analyze previously exported agent logs (if any)
         run: node scripts/agent-learning-loop.mjs
       - uses: actions/upload-artifact@v4
