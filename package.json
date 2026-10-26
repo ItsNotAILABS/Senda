@@ -16,7 +16,9 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test 'scripts/**/*.test.mjs'",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "genesis:test": "node --test scripts/genesis-catalog.test.mjs scripts/genesis-runtime.test.mjs scripts/genesis-ownership.test.mjs scripts/genesis-loadout.test.mjs scripts/genesis-build-metadata.test.mjs",
+    "genesis:metadata": "node scripts/genesis-build-metadata.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
