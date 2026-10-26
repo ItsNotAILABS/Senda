@@ -117,6 +117,8 @@ export function GenesisDesk() {
     category:agent.id==="lyra"?"content":agent.id==="orbi"?"operations":"markets",
     tools:agent.tools as ("planner"|"notes"|"book"|"memory"|"trade")[],
     trigger:"manual",autonomy:"draft",symbols:[],maxUsd:25,side:"buy",
+    genesis:{characterId:agent.id,owner:owns?owner:"",
+      gear:owns&&ownGear?loadout.gear:null,code:owns&&ownCode?loadout.code:null},
    });
    toast.success(worker.name+" created in your agent studio.");
    void nav({href:"/agents"});
@@ -188,9 +190,9 @@ export function GenesisDesk() {
     <section className="mt-5 rounded-[24px] border border-white/10 bg-[#09101d] p-5">
      <div className="flex items-center gap-2"><Layers3 className="size-5 text-cyan-300"/><h2 className="text-xl font-semibold">More than collectible artwork</h2></div>
      <div className="mt-3 grid gap-3 text-xs leading-relaxed text-white/55 md:grid-cols-3">
-      <p><Eye className="mb-2 size-5 text-cyan-300"/>**Collect:** six character identities plus twelve standalone gear/code NFTs, each with distinct metadata and a verified wallet owner.</p>
-      <p><Code2 className="mb-2 size-5 text-cyan-300"/>**Equip:** verified modules activate deterministic read-only research abilities; owners can swap equipment when holding the corresponding NFTs.</p>
-      <p><LockKeyhole className="mb-2 size-5 text-cyan-300"/>**Govern:** NFT ownership never grants payment permission or unattended signing; minting and paid utilities require an explicitly authorized release.</p>
+      <p><Eye className="mb-2 size-5 text-cyan-300"/><strong className="text-white">Collect:</strong> six character identities plus twelve standalone gear/code NFTs, each with distinct metadata and a verified wallet owner.</p>
+      <p><Code2 className="mb-2 size-5 text-cyan-300"/><strong className="text-white">Equip:</strong> verified modules activate deterministic read-only research abilities; owners can swap equipment when holding the corresponding NFTs.</p>
+      <p><LockKeyhole className="mb-2 size-5 text-cyan-300"/><strong className="text-white">Govern:</strong> NFT ownership never grants payment permission or unattended signing; minting and paid utilities require an explicitly authorized release.</p>
      </div>
      <p className="mt-3 text-[11px] text-white/40">Current state: artwork, metadata blueprints, runtime code, workspace creation and optional read-only chain verification. No Genesis collection or NFTs have been minted by this change.</p>
     </section>
