@@ -1,0 +1,27 @@
+name: Senda overnight agent evidence loop
+on:
+  schedule:
+    - cron: "35 8 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analyze-agent-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify deterministic market and learning engines
+        run: node --test scripts/matrix-engine.test.mjs scripts/agent-learning-loop.test.mjs
+      - name: Analyze previously exported agent logs (if any)
+        run: node scripts/agent-learning-loop.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: senda-agent-learning-receipts
+          path: artifacts/skill-proposals/
+          if-no-files-found: warn
+          retention-days: 30
