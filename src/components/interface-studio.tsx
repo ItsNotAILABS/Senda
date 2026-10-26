@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import {
-  ArrowDownToLine, ArrowUpRight, Check, CheckCircle2, ChevronDown, CircleDot, Clipboard,
-  Columns3, Copy, ExternalLink, FileJson2, LayoutDashboard, Monitor, Palette, Plus,
-  RotateCcw, Search, ShieldAlert, Smartphone, SlidersHorizontal, Sparkles, Trash2, X
+  ArrowDownToLine, ArrowUpRight, Columns3, Copy, ExternalLink, FileJson2,
+  LayoutDashboard, Monitor, Palette, Plus, RotateCcw, Search, Smartphone,
+  SlidersHorizontal, Trash2, X
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  BOARD_KEY, QA_KEYS, QA_LABELS, SCREENS, STATUSES, canMarkReady, createSeedBoard,
+  QA_KEYS, QA_LABELS, SCREENS, STATUSES, canMarkReady, createSeedBoard,
   makeAgentBrief, moveBoardItem, parseBoard, readBoard, removeBoardItem, upsertBoardItem,
   writeBoard, type BoardItem, type BoardPriority, type BoardStatus, type SendaBoard
 } from "@/lib/interface-board.mjs";
@@ -91,7 +90,6 @@ export function InterfaceStudio() {
  const [device,setDevice]=useState<"desktop"|"mobile">("desktop");
  const [themeDirty,setThemeDirty]=useState(false);
  const fileRef=useRef<HTMLInputElement|null>(null);
- const navigate=useNavigate();
  useEffect(()=>{
    try{setBoard(readBoard(window.localStorage));setTheme(readTheme(window.localStorage));}
    catch(e){setLoadError(e instanceof Error?e.message:"Could not read saved interface tasks.");}
@@ -157,12 +155,14 @@ export function InterfaceStudio() {
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/60">A permanent design-review board for the Senda trading ecosystem. Work through each screen, test responsive layouts and record what can actually ship.</p>
      </div>
      <div className="flex flex-wrap gap-2">
+      <a href="https://github.com/ItsNotAILABS/Senda/issues/8" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-3 text-xs font-semibold text-cyan-200"><ExternalLink className="size-4"/>Shared GitHub backlog</a>
       <button onClick={exportBoard} type="button" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-semibold"><ArrowDownToLine className="size-4"/>Export JSON</button>
       <input ref={fileRef} type="file" accept=".json,application/json" className="hidden" onChange={e=>void importBoard(e.currentTarget.files?.[0])}/>
       <button type="button" onClick={()=>fileRef.current?.click()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-3 text-xs font-semibold"><FileJson2 className="size-4"/>Import</button>
       <button type="button" onClick={()=>{setEditing(blank(screenFilter==="all"?"home":screenFilter));setTab("board");}} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-xs font-bold text-[#071320]"><Plus className="size-4"/>New task</button>
      </div>
     </div>
+    <p className="mt-3 text-[11px] text-cyan-100/55">The canonical shared backlog is GitHub issue #8. Changes in this browser do not update GitHub automatically; export JSON or edit the issue separately.</p>
     <div className="mt-6 grid grid-cols-2 gap-2 md:grid-cols-4">
      {[["PRODUCT SCREENS",SCREENS.length,"Indexed from current route map"],["REVIEW TASKS",board.items.length,"Browser-local, exportable"],["READY FOR MERGE",audited,"Requires five QA gates + PR"],["OPEN BACKLOG",board.items.length-audited,"Not deployed"]].map(([head,n,detail])=>
       <div key={head} className="rounded-xl border border-white/10 bg-black/20 p-3"><p className="font-mono text-[10px] tracking-[.12em] text-white/45">{head}</p><p className="mt-1 text-2xl font-semibold">{n}</p><p className="mt-1 text-[11px] text-white/45">{detail}</p></div>)}
