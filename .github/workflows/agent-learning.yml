@@ -1,0 +1,58 @@
+name: Senda overnight agent evidence loop
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/matrix-trading-agent-reliability-20261024
+  schedule:
+    - cron: "35 8 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci 2>&1 | tee install.log
+      - name: TypeScript checks
+        run: npm run typecheck 2>&1 | tee typescript.log
+      - name: Development build
+        run: npm run build:dev 2>&1 | tee build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: senda-app-ci-logs
+          path: |
+            install.log
+            typescript.log
+            build.log
+          if-no-files-found: warn
+          retention-days: 7
+  analyze-agent-receipts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify deterministic market and learning engines
+        run: node --test scripts/matrix-engine.test.mjs scripts/worker-trade-authorization.test.mjs scripts/agent-learning-loop.test.mjs 2>&1 | tee agent-tests.log
+      - name: Analyze previously exported agent logs (if any)
+        run: node scripts/agent-learning-loop.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: senda-agent-learning-receipts
+          path: |
+            artifacts/skill-proposals/
+            agent-tests.log
+          if-no-files-found: warn
+          retention-days: 30
