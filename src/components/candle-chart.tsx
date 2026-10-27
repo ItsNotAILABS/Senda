@@ -18,7 +18,11 @@ const DOWN = "#f23645";
 
 export type ChartLine = { id: string; color: string; points: { time: number; value: number }[] };
 
-export type ChartHandle = { png: () => string | null };
+export type ChartHandle = {
+  png: () => string | null;
+  locate: (time: number, price: number) => { x: number; y: number } | null;
+  read: (x: number, y: number) => { time: number; price: number } | null;
+};
 
 /** Candles in the TradingView dark palette. The bars are the pool. The colors are not a feed. */
 export const CandleChart = forwardRef<ChartHandle, {
@@ -28,6 +32,8 @@ export const CandleChart = forwardRef<ChartHandle, {
   band?: { low: number; high: number } | null;
   overlays?: ChartLine[];
   kind?: "candles" | "line" | "volume";
+  dayOpen?: number;
+  onFrame?: () => void;
   className?: string;
   onHover?: (bar: DerivBar | null) => void;
 }>(function CandleChart({
@@ -37,6 +43,8 @@ export const CandleChart = forwardRef<ChartHandle, {
   band = null,
   overlays = [],
   kind = "candles",
+  dayOpen = 0,
+  onFrame,
   className = "h-[560px]",
   onHover,
 }, ref) {
@@ -50,11 +58,27 @@ export const CandleChart = forwardRef<ChartHandle, {
   const hover = useRef(onHover);
   const seen = useRef("");
   const barsRef = useRef(bars);
+  const frame = useRef(onFrame);
   hover.current = onHover;
   barsRef.current = bars;
+  frame.current = onFrame;
 
   useImperativeHandle(ref, () => ({
     png: () => chart.current?.takeScreenshot().toDataURL("image/png") ?? null,
+    locate: (time: number, price: number) => {
+      const x = chart.current?.timeScale().timeToCoordinate(time as UTCTimestamp);
+      const scale = series.current as { priceToCoordinate?: (n: number) => number | null } | null;
+      const y = scale?.priceToCoordinate?.(price);
+      if (x == null || y == null) return null;
+      return { x, y };
+    },
+    read: (x: number, y: number) => {
+      const time = chart.current?.timeScale().coordinateToTime(x);
+      const scale = series.current as { coordinateToPrice?: (n: number) => number | null } | null;
+      const price = scale?.coordinateToPrice?.(y);
+      if (time == null || price == null) return null;
+      return { time: Number(time), price };
+    },
   }), []);
 
   useEffect(() => {
@@ -105,6 +129,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       const bar = barsRef.current.find((item) => item.time === time);
       hover.current?.(bar ?? null);
     });
+    next.timeScale().subscribeVisibleLogicalRangeChange(() => frame.current?.());
     chart.current = next;
     series.current = price ?? hist;
     volume.current = hist;
@@ -179,6 +204,9 @@ export const CandleChart = forwardRef<ChartHandle, {
           price.createPriceLine({ price: band.low, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "" }),
         );
       }
+      if (dayOpen > 0) {
+        lines.current.push(price.createPriceLine({ price: dayOpen, color: "#f7d060", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "Day" }));
+      }
     }
     const chartApi = chart.current;
     if (!chartApi) return;
@@ -197,7 +225,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       }
       study.setData(row.points.filter((p) => p.value > 0).map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
     }
-  }, [bars, levels, band, overlays, kind]);
+  }, [bars, levels, band, overlays, kind, dayOpen]);
 
   return <div ref={box} className={`w-full ${className}`} />;
 });

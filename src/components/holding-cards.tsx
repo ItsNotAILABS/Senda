@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import type { HoldMove } from "@/lib/hold-tape";
 import type { TokenMark } from "@/lib/token-mark";
@@ -28,21 +29,34 @@ function pct(n: number | null): string {
   return `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-export function LineGlance({ points, down }: { points: number[]; down: boolean }) {
+const KNOWN: Record<string, string> = {
+  So11111111111111111111111111111111111111112: "Solana",
+  EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USD Coin",
+  Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "Tether",
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: "Jupiter",
+  "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": "Jupiter LP",
+  "3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh": "Bitcoin",
+  "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs": "Ether",
+};
+
+export function LineGlance({ points }: { points: number[]; down?: boolean }) {
   if (points.length < 2) return null;
+  const open = points[0];
   const min = Math.min(...points);
   const max = Math.max(...points);
   const span = max - min || 1;
-  const d = points
-    .map((p, i) => {
-      const x = (i / (points.length - 1)) * 100;
-      const y = 30 - ((p - min) / span) * 26;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
+  const y = (p: number) => 30 - ((p - min) / span) * 26;
+  const base = y(open);
   return (
     <svg viewBox="0 0 100 32" className="mt-3 h-8 w-full" aria-hidden>
-      <path d={d} fill="none" stroke={down ? "var(--color-down)" : "var(--color-accent)"} strokeWidth="1.75" strokeLinejoin="round" strokeLinecap="round" />
+      <line x1="0" x2="100" y1={base} y2={base} stroke="rgba(255,255,255,0.45)" strokeDasharray="2 2" strokeWidth="1" />
+      {points.slice(1).map((p, i) => {
+        const a = points[i];
+        const x1 = (i / (points.length - 1)) * 100;
+        const x2 = ((i + 1) / (points.length - 1)) * 100;
+        const above = p >= open;
+        return <line key={i} x1={x1} y1={y(a)} x2={x2} y2={y(p)} stroke={above ? "var(--color-up)" : "var(--color-down)"} strokeWidth="1.75" strokeLinecap="round" />;
+      })}
     </svg>
   );
 }
@@ -66,11 +80,13 @@ function money(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
-export function MarkFace({ icon, symbol }: { icon?: string; symbol: string }) {
-  if (icon) {
-    return <img src={icon} alt="" className="size-9 rounded-full bg-white object-cover" />;
+export function MarkFace({ icon, symbol, mint }: { icon?: string; symbol: string; mint?: string }) {
+  const [broken, setBroken] = useState(false);
+  const src = broken ? "" : icon || (mint ? `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/assets/${mint}/logo.png` : "");
+  if (src) {
+    return <img src={src} alt="" onError={() => setBroken(true)} className="size-9 rounded-full bg-white object-cover" />;
   }
-  return <span className="grid size-9 place-items-center rounded-full bg-white text-[10px] font-bold text-black">{symbol.slice(0, 2)}</span>;
+  return <span className="grid size-9 place-items-center rounded-full bg-white text-[10px] font-bold text-black">{(symbol || "?").slice(0, 2)}</span>;
 }
 
 export function HoldingCards({
@@ -97,14 +113,16 @@ export function HoldingCards({
         const day = move?.day ?? null;
         const mark = marks[row.mint];
         const on = activeMint === row.mint;
+        const symbol = mark?.symbol || row.symbol;
+        const title = mark?.name || KNOWN[row.mint] || symbol;
         const body = (
           <>
             <span className="flex items-start justify-between gap-3">
-              <span className="flex items-center gap-2">
-                <MarkFace icon={mark?.icon} symbol={row.symbol} />
-                <span>
-                  <span className="block text-[10px] tracking-[0.14em] text-white/40 uppercase">{row.name}</span>
-                  <span className="mt-0.5 block text-lg font-semibold tracking-tight">{row.symbol}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <MarkFace icon={mark?.icon} symbol={symbol} mint={row.mint} />
+                <span className="min-w-0">
+                  <span className="block truncate text-lg font-semibold tracking-tight">{symbol}</span>
+                  <span className="block truncate text-[11px] text-white/45">{title}</span>
                 </span>
               </span>
               <span className={cn("rounded-full px-2 py-1 font-mono text-[11px] tabular-nums", (day ?? 0) < 0 ? "bg-down/15 text-down" : "bg-accent/15 text-accent")}>
@@ -114,7 +132,7 @@ export function HoldingCards({
             <span className="mt-3 block font-mono text-2xl tabular-nums tracking-tight">{move?.price ? usd(move.price) : "—"}</span>
             <span className="mt-1 block font-mono text-[11px] text-white/40">{qty(row.qty)} · {usd(value)}</span>
             {mark?.line && mark.line.length > 1 ? (
-              <LineGlance points={mark.line} down={(day ?? mark.line[mark.line.length - 1] - mark.line[0]) < 0} />
+              <LineGlance points={mark.line} />
             ) : (
               <span className="mt-3 block h-8 text-[10px] text-white/30">No hourly print</span>
             )}

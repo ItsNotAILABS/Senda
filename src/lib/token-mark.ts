@@ -4,13 +4,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { cachedJson } from "@/lib/net-cache";
 
-export type TokenMark = { mint: string; icon: string; line: number[]; volume: number[]; vol24: number; poolVol: number; poolDex: string };
+export type TokenMark = { mint: string; icon: string; name: string; symbol: string; line: number[]; volume: number[]; vol24: number; poolVol: number; poolDex: string };
 
-async function iconOf(mint: string): Promise<string> {
+async function faceOf(mint: string): Promise<{ icon: string; name: string; symbol: string }> {
   const r = await cachedJson(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`, 300_000);
-  if (!r.ok || !Array.isArray(r.body)) return "";
-  const hit = (r.body as Array<{ id?: string; icon?: string }>).find((row) => row.id === mint);
-  return hit?.icon || "";
+  if (!r.ok || !Array.isArray(r.body)) return { icon: "", name: "", symbol: "" };
+  const hit = (r.body as Array<{ id?: string; icon?: string; name?: string; symbol?: string }>).find((row) => row.id === mint);
+  return { icon: hit?.icon || "", name: hit?.name || "", symbol: hit?.symbol || "" };
 }
 
 /** Last 24 hourly closes and their USD volume. Empty when Jupiter has no chart. */
@@ -52,12 +52,12 @@ export const loadMarks = createServerFn({ method: "POST" })
     const mints = [...new Set(data.mints)].slice(0, 40);
     const rows = await Promise.all(
       mints.map(async (mint) => {
-        const [icon, line, pool] = await Promise.all([
-          iconOf(mint).catch(() => ""),
+        const [face, line, pool] = await Promise.all([
+          faceOf(mint).catch(() => ({ icon: "", name: "", symbol: "" })),
           data.lines === false ? Promise.resolve({ line: [] as number[], volume: [] as number[], vol24: 0 }) : shortLine(mint).catch(() => ({ line: [] as number[], volume: [] as number[], vol24: 0 })),
           data.lines === false ? Promise.resolve({ poolVol: 0, poolDex: "" }) : poolPrint(mint).catch(() => ({ poolVol: 0, poolDex: "" })),
         ]);
-        return { mint, icon, line: line.line, volume: line.volume, vol24: line.vol24, poolVol: pool.poolVol, poolDex: pool.poolDex };
+        return { mint, icon: face.icon, name: face.name, symbol: face.symbol, line: line.line, volume: line.volume, vol24: line.vol24, poolVol: pool.poolVol, poolDex: pool.poolDex };
       }),
     );
     return rows;

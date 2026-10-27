@@ -389,7 +389,20 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         if (!live) return;
         setMarks((cur) => {
           const next = { ...cur };
-          for (const row of list) next[row.mint] = row;
+          for (const row of list) {
+            const prev = next[row.mint];
+            next[row.mint] = {
+              mint: row.mint,
+              icon: row.icon || prev?.icon || "",
+              name: row.name || prev?.name || "",
+              symbol: row.symbol || prev?.symbol || "",
+              line: row.line?.length ? row.line : prev?.line || [],
+              volume: row.volume?.length ? row.volume : prev?.volume || [],
+              vol24: row.vol24 || prev?.vol24 || 0,
+              poolVol: row.poolVol || prev?.poolVol || 0,
+              poolDex: row.poolDex || prev?.poolDex || "",
+            };
+          }
           return next;
         });
       })
@@ -413,7 +426,9 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
             next[row.mint] = {
               mint: row.mint,
               icon: row.icon || prev?.icon || "",
-              line: prev?.line?.length ? prev.line : row.line,
+              name: row.name || prev?.name || "",
+              symbol: row.symbol || prev?.symbol || "",
+              line: prev?.line?.length ? prev.line : row.line || [],
               volume: prev?.volume?.length ? prev.volume : row.volume || [],
               vol24: prev?.vol24 || row.vol24 || 0,
               poolVol: prev?.poolVol || row.poolVol || 0,
@@ -553,7 +568,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="flex min-w-0 items-center gap-2">
-                    <MarkFace icon={marks[row.mint]?.icon} symbol={row.symbol} />
+                    <MarkFace icon={marks[row.mint]?.icon} symbol={row.symbol} mint={row.mint} />
                     <span className="truncate text-sm font-semibold">{row.symbol}</span>
                   </span>
                   <span className={cn("font-mono text-[11px] tabular-nums", row.change < 0 ? "text-down" : "text-accent")}>{row.change >= 0 ? "+" : ""}{row.change.toFixed(1)}%</span>
