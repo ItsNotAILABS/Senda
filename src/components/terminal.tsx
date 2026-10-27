@@ -20,6 +20,7 @@ import { DeskBots } from "@/components/desk-bots";
 import { MarketBrief } from "@/components/market-brief";
 import { PackDesk } from "@/components/pack-desk";
 import { PrintChart } from "@/components/print-chart";
+import { PrintTape } from "@/components/print-tape";
 import { TradeTools } from "@/components/trade-tools";
 import { SessionLine, VolumeBook } from "@/components/volume-book";
 import { WeekCalendar } from "@/components/week-calendar";
@@ -474,17 +475,18 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
               />
               <div className="mt-3 flex gap-1">
                 {(["chart", "book", "session"] as const).map((id) => (
-                  <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", view === id ? "bg-white text-black" : "bg-white/10")}>{id === "chart" ? "Chart" : id === "book" ? "Volume" : "Session"}</button>
+                  <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", view === id ? "bg-white text-black" : "bg-white/10")}>{id === "chart" ? "Chart" : id === "book" ? "Book" : "Session"}</button>
                 ))}
               </div>
               <div className="mt-3">
                 {view === "chart" ? (
                   <>
                     {stage ? <button type="button" onClick={() => setStage(false)} className="mb-2 text-xs font-semibold text-white/50">Shorter chart</button> : null}
-                    {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[70dvh] lg:h-[640px]" : "h-[280px] w-full lg:h-[420px]"} /> : <p className="text-xs text-white/45">No Solana pool. The bid and the ask are under Volume.</p>}
+                    {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[70dvh] lg:h-[640px]" : "h-[220px] w-full lg:h-[320px]"} /> : <p className="text-xs text-white/45">No Solana pool for this name.</p>}
                   </>
                 ) : null}
-                {view === "book" ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}
+                {view !== "session" && leg.mint ? <PrintTape mint={leg.mint} symbol={leg.symbol} /> : null}
+                {view === "book" && !leg.mint ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}
                 {view === "session" ? <SessionLine mint={leg.mint} /> : null}
               </div>
               <label className="mt-3 block">

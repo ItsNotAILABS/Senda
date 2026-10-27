@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { chainRpc } from "@/lib/phantom";
 import { cachedJson } from "@/lib/net-cache";
+import { judgeBook, type BookCall } from "@/lib/book-engine";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SOL = "So11111111111111111111111111111111111111112";
@@ -32,6 +33,7 @@ export type PrintBook = {
   lastPrice: number;
   spread: number;
   ageSec: number | null;
+  call: BookCall;
   note: string;
 };
 
@@ -92,7 +94,20 @@ async function poolOf(mint: string): Promise<{ pool: string; dex: string; quote:
 }
 
 function empty(mint: string, note: string): PrintBook {
-  return { mint, pool: "", dex: "", prints: [], usd: 0, bids: [], asks: [], lastPrice: 0, spread: 0, ageSec: null, note };
+  return {
+    mint,
+    pool: "",
+    dex: "",
+    prints: [],
+    usd: 0,
+    bids: [],
+    asks: [],
+    lastPrice: 0,
+    spread: 0,
+    ageSec: null,
+    call: judgeBook({ bids: [], asks: [], lastPrice: 0, spread: 0, prints: [] }),
+    note,
+  };
 }
 
 function bucket(price: number): number {
@@ -126,6 +141,13 @@ function shape(mint: string, slot: { prints: ChainPrint[]; pool: string; dex: st
   const bestBid = bids[0]?.price || 0;
   const bestAsk = asks[0]?.price || 0;
   const newest = prints.reduce((n, row) => (row.time && row.time > n ? row.time : n), 0);
+  const draft = {
+    bids,
+    asks,
+    lastPrice: prints.find((row) => row.price > 0)?.price || 0,
+    spread: bestBid > 0 && bestAsk > bestBid ? bestAsk - bestBid : 0,
+    prints,
+  };
   return {
     mint,
     pool: slot.pool,
@@ -134,9 +156,10 @@ function shape(mint: string, slot: { prints: ChainPrint[]; pool: string; dex: st
     usd: prints.reduce((s, row) => s + row.usd, 0),
     bids,
     asks,
-    lastPrice: prints.find((row) => row.price > 0)?.price || 0,
-    spread: bestBid > 0 && bestAsk > bestBid ? bestAsk - bestBid : 0,
+    lastPrice: draft.lastPrice,
+    spread: draft.spread,
     ageSec: newest ? Math.max(0, Math.round(Date.now() / 1000 - newest)) : null,
+    call: judgeBook(draft),
     note: prints.length ? `${slot.dex} fills` : "Waiting on the next swap.",
   };
 }
@@ -180,23 +203,21 @@ async function readSwap(
   };
 }
 
-export const loadPrints = createServerFn({ method: "POST" })
-  .validator(z.object({ mint: z.string().min(32).max(48) }))
-  .handler(async ({ data }): Promise<PrintBook> => {
-    let slot = memory.get(data.mint);
+export async function readBook(mint: string): Promise<PrintBook> {
+    let slot = memory.get(mint);
     if (!slot) {
       slot = { at: 0, busy: false, prints: [], pool: "", dex: "", quote: "", sol: 0 };
-      memory.set(data.mint, slot);
+      memory.set(mint, slot);
     }
     if (slot.busy || (slot.at > 0 && Date.now() - slot.at < 1_500)) {
-      return slot.prints.length ? shape(data.mint, slot) : empty(data.mint, slot.pool ? "Reading the next swaps." : "No Solana pool for this mint.");
+      return slot.prints.length ? shape(mint, slot) : empty(mint, slot.pool ? "Reading the next swaps." : "No Solana pool for this mint.");
     }
 
     slot.busy = true;
     try {
       if (!slot.pool) {
-        const found = await poolOf(data.mint).catch(() => null);
-        if (!found) return empty(data.mint, "No Solana pool for this mint.");
+        const found = await poolOf(mint).catch(() => null);
+        if (!found) return empty(mint, "No Solana pool for this mint.");
         slot.pool = found.pool;
         slot.dex = found.dex;
         slot.quote = found.quote === USDC || found.quote === SOL ? found.quote : USDC;
@@ -207,7 +228,7 @@ export const loadPrints = createServerFn({ method: "POST" })
         | null;
       const known = new Set(slot.prints.map((row) => row.signature));
       const next = (listed || []).filter((row) => row.signature && !row.err && !known.has(row.signature || "")).slice(0, slot.prints.length ? 4 : 12);
-      const parsed = await Promise.all(next.map((row) => readSwap(row.signature || "", row.blockTime ?? null, data.mint, slot!.quote, slot!.sol)));
+      const parsed = await Promise.all(next.map((row) => readSwap(row.signature || "", row.blockTime ?? null, mint, slot!.quote, slot!.sol)));
       const added = parsed.filter((row): row is ChainPrint => Boolean(row));
       if (added.length) slot.prints = [...added, ...slot.prints].slice(0, 48);
     } catch {
@@ -217,10 +238,14 @@ export const loadPrints = createServerFn({ method: "POST" })
       slot.busy = false;
     }
     if (!slot.prints.length) {
-      const book = empty(data.mint, "No decoded swaps on this pool yet.");
+      const book = empty(mint, "No decoded swaps on this pool yet.");
       book.pool = slot.pool;
       book.dex = slot.dex;
       return book;
     }
-    return shape(data.mint, slot);
-  });
+    return shape(mint, slot);
+}
+
+export const loadPrints = createServerFn({ method: "POST" })
+  .validator(z.object({ mint: z.string().min(32).max(48) }))
+  .handler(async ({ data }) => readBook(data.mint));

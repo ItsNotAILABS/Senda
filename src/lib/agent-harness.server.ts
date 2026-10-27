@@ -5,6 +5,7 @@ import { SEED_STRATEGIES, agentNames, clipLeft, parseRule, type StrategyCard } f
 import { readRoutes } from "@/lib/mesie-route";
 import { shortBook } from "@/lib/short-market";
 import { evaluateMatrix, matrixClears } from "@/lib/matrix-engine";
+import { readBook } from "@/lib/tx-tape";
 import { feeOn, launchScore, refuseLaunch, type Launch } from "@/lib/launch-gate";
 import { poolMatrixBars } from "@/lib/print-bars";
 import { receipt, scorePaths } from "@/lib/matdaemon";
@@ -622,7 +623,16 @@ export async function harnessCall(method: string, token: string, params: Record<
     if (!name?.mint) throw new HarnessError(404, "That name is not on the catalog.");
     const loaded = await poolMatrixBars(name.mint);
     const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.source });
-    return { symbol, mint: name.mint, matrix, signs: false, note: "The matrix does not sign and does not queue." };
+    const book = await readBook(name.mint).catch(() => null);
+    return {
+      symbol,
+      mint: name.mint,
+      matrix,
+      book: book?.call ?? null,
+      windowUsd: book?.usd ?? 0,
+      signs: false,
+      note: book?.call.block || "The matrix does not sign and does not queue.",
+    };
   }
 
   if (method === "queue_matrix") {
@@ -631,7 +641,9 @@ export async function harnessCall(method: string, token: string, params: Record<
     if (!name?.trade) throw new HarnessError(400, "That name cannot be queued from the matrix.");
     const loaded = await poolMatrixBars(name.mint);
     const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.source });
+    const book = await readBook(name.mint).catch(() => null);
     if (!matrixClears(matrix)) throw new HarnessError(400, matrix.reason || "The matrix does not clear. Nothing was queued.");
+    if (book?.call.block) throw new HarnessError(400, book.call.block);
     const usd = money(params.usd);
     const missionId = String(params.missionId || "");
     const missions = await sql.query<MissionRow>(
@@ -660,7 +672,7 @@ export async function harnessCall(method: string, token: string, params: Record<
     );
     if (!reserved[0]) throw new HarnessError(400, "The mission could not reserve that size.");
     const id = crypto.randomUUID();
-    const why = `matrix|${matrix.market} ${matrix.confidence}`.slice(0, 200);
+    const why = `matrix|${matrix.market} ${matrix.confidence} book:${book?.call.lean || "empty"}`.slice(0, 200);
     await sql.query(
       "INSERT INTO agent_intent (id, harness_id, mission_id, symbol, mint, side, usd, why, status) VALUES ($1, $2, $3, $4, $5, 'buy', $6, $7, 'queued')",
       [id, harness, missionId, symbol, name.mint, usd, why],

@@ -8,6 +8,13 @@ function px(n: number): string {
   return n.toPrecision(4);
 }
 
+function usd(n: number): string {
+  if (!(n > 0)) return "—";
+  if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toPrecision(3)}`;
+}
+
 function sz(n: number): string {
   if (!(n > 0)) return "—";
   if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -63,6 +70,25 @@ export function PrintTape({ mint, symbol }: { mint: string; symbol: string }) {
         <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">Book · {symbol}</p>
         <p className="font-mono text-[10px] text-white/35">{book?.ageSec != null ? `${book.ageSec}s` : "…"}{book?.dex ? ` · ${book.dex}` : ""}</p>
       </div>
+      <div className="grid grid-cols-3 gap-1 px-2 pb-2">
+        <div className="rounded-lg bg-white/[0.04] px-2 py-1.5">
+          <p className="text-[9px] tracking-wide text-white/35 uppercase">Window</p>
+          <p className="font-mono text-[12px] tabular-nums">{book ? usd(book.usd) : "—"}</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] px-2 py-1.5">
+          <p className="text-[9px] tracking-wide text-white/35 uppercase">Spread</p>
+          <p className="font-mono text-[12px] tabular-nums">{book?.call.spreadBps != null ? `${book.call.spreadBps.toFixed(0)} bp` : "—"}</p>
+        </div>
+        <div className="rounded-lg bg-white/[0.04] px-2 py-1.5">
+          <p className="text-[9px] tracking-wide text-white/35 uppercase">Lean</p>
+          <p className={`font-mono text-[12px] ${book?.call.lean === "ask" ? "text-down" : book?.call.lean === "bid" ? "text-up" : "text-white/70"}`}>{book?.call.lean || "…"}</p>
+        </div>
+      </div>
+      {book?.call.imbalance != null ? (
+        <div className="mx-2 mb-2 h-1.5 overflow-hidden rounded-full bg-down/40">
+          <div className="h-full bg-up" style={{ width: `${Math.max(0, Math.min(100, ((book.call.imbalance + 1) / 2) * 100))}%` }} />
+        </div>
+      ) : null}
       <div className="grid grid-cols-[1.1fr_1fr_1fr] px-2 pb-1 font-mono text-[10px] tracking-wide text-white/30 uppercase">
         <span>Price</span>
         <span className="text-right">Size</span>

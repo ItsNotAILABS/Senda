@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { PrintChart } from "@/components/print-chart";
+import { PrintTape } from "@/components/print-tape";
 import {
   dropPaperAgent,
   hirePaperAgent,
@@ -129,7 +130,9 @@ export function TradeAgents({ names }: { names: HouseListing[] }) {
           </div>
           {note ? <p className="mt-2 text-xs text-white/50">{note}</p> : null}
         </div>
-        <aside className="border-l border-white/10 p-3">
+        <aside className="border-l border-white/10">
+          {focus?.mint ? <PrintTape mint={focus.mint} symbol={focus.symbol} /> : null}
+          <div className="p-3">
           <p className="font-mono text-[10px] tracking-[0.16em] text-white/35 uppercase">Hire</p>
           <form
             className="mt-3 space-y-2"
@@ -168,6 +171,7 @@ export function TradeAgents({ names }: { names: HouseListing[] }) {
               <button type="button" onClick={() => { dropPaperAgent(selected.id); load(null); }} className="text-xs text-white/35">Remove</button>
             </div>
           ) : null}
+          </div>
         </aside>
       </div>
       <div className="max-h-52 overflow-auto border-t border-white/10">

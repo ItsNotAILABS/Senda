@@ -30,6 +30,7 @@ import { JumpStrip } from "@/components/jump-strip";
 import { PackShelf } from "@/components/pack-shelf";
 import { TradeTools } from "@/components/trade-tools";
 import { PrintChart } from "@/components/print-chart";
+import { PrintTape } from "@/components/print-tape";
 import { BuyingPower } from "@/components/buying-power";
 import { bumpClears, ClearStrip } from "@/components/clear-strip";
 import { rememberClear } from "@/lib/clear-tape";
@@ -620,7 +621,12 @@ export function MarketsFloor({
         </div>
       </section>
 
-      {mint ? <div className="px-3 pt-3"><PrintChart mint={mint} symbol={symbol} className="h-[420px]" /></div> : null}
+      {mint ? (
+        <div className="grid border-b border-white/10 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="px-3 pt-3"><PrintChart mint={mint} symbol={symbol} className="h-[420px]" /></div>
+          <PrintTape mint={mint} symbol={symbol} />
+        </div>
+      ) : null}
 
       <section className="border-b border-white/10 px-4 py-4">
         <p className="max-w-xl text-[13px] leading-relaxed text-muted">
