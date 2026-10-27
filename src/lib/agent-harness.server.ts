@@ -1,7 +1,7 @@
 /** Harness store. An agent can reserve a budget. It cannot sign. */
 
 import { getSql } from "@/lib/db";
-import { SEED_STRATEGIES, agentNames, clipLeft, parseRule, type StrategyCard } from "@/lib/agent-catalog";
+import { SEED_STRATEGIES, agentNames, clipLeft, parseRule, type StrategyCard, type StrategyRule } from "@/lib/agent-catalog";
 import { readRoutes } from "@/lib/mesie-route";
 import { shortBook } from "@/lib/short-market";
 import { evaluateMatrix, matrixClears } from "@/lib/matrix-engine";
@@ -154,6 +154,19 @@ async function dayMove(mint: string): Promise<{ price: number; change: number | 
   const next = { at: Date.now(), price: Number(row?.usdPrice) || 0, change: Number.isFinite(change) ? change : null };
   moveCache.set(mint, next);
   return next;
+}
+
+async function matchStep(rule: StrategyRule, symbol: string, mint: string) {
+  for (const step of rule.steps || []) {
+    if (step.symbols.length && !step.symbols.includes(symbol)) continue;
+    if (step.kind === "clip" || step.kind === "coherence") return step;
+    const live = await dayMove(mint);
+    const change = live.change;
+    if (change == null) continue;
+    if (step.kind === "dip" && change <= -2) return step;
+    if (step.kind === "momentum" && change >= 2 && change <= 12) return step;
+  }
+  return null;
 }
 
 async function discoverRows(limit: number) {
@@ -313,9 +326,10 @@ export async function harnessCall(method: string, token: string, params: Record<
     const thesis = String(params.thesis || "").trim().slice(0, 800);
     const category = String(params.category || "custom").trim().slice(0, 32) || "custom";
     const rule = parseRule(params.rule);
-    if (!name || !thesis || !rule) throw new HarnessError(400, "A strategy needs a name, a thesis, and a rule of kind clip, coherence, dip, momentum, or note.");
+    if (!name || !thesis || !rule) throw new HarnessError(400, "A strategy needs a name, a thesis, and a rule of kind clip, coherence, dip, momentum, plan, or note.");
     const known = new Set(agentNames().map((row) => row.symbol));
-    if (rule.symbols.some((symbol) => !known.has(symbol))) throw new HarnessError(400, "A symbol on that rule is not on the catalog.");
+    const named = [...rule.symbols, ...(rule.steps || []).flatMap((step) => step.symbols)];
+    if (named.some((symbol) => !known.has(symbol))) throw new HarnessError(400, "A symbol on that rule is not on the catalog.");
     const count = await sql.query<{ n: number }>("SELECT count(*)::int AS n FROM agent_strategy WHERE harness_id = $1", [harness]);
     if (Number(count[0]?.n || 0) >= 40) throw new HarnessError(400, "This harness already has 40 strategies.");
     const id = crypto.randomUUID();
@@ -392,25 +406,31 @@ export async function harnessCall(method: string, token: string, params: Record<
     const mission = missions[0];
     if (!mission || mission.status !== "open") throw new HarnessError(404, "That mission is not open.");
     const strategy = await strategyOf(mission.strategy_id, harness);
+    const step = strategy.rule.kind === "plan" ? await matchStep(strategy.rule, symbol, name.mint) : null;
+    if (strategy.rule.kind === "plan" && !step) {
+      throw new HarnessError(400, `${symbol} matched no step. A dip buys at -2% or worse. Momentum sells between +2% and +12%. A flat day waits.`);
+    }
     if (strategy.rule.symbols.length && !strategy.rule.symbols.includes(symbol)) throw new HarnessError(400, "That strategy does not include this name.");
+    const side = step?.side || strategy.rule.side;
+    const gate = step ? "clip" : strategy.rule.kind;
     const left = clipLeft(
       { bankrollUsd: money(mission.bankroll_usd), aimUsd: money(mission.aim_usd), spentUsd: money(mission.spent_usd), day: mission.day, daySpent: money(mission.day_spent) },
       today(),
     );
     if (usd < 0.5 || usd > left) throw new HarnessError(400, left < 0.5 ? "Nothing left in today's aim." : `Today can still queue $${left.toFixed(2)}.`);
-    if (strategy.rule.kind === "dip" || strategy.rule.kind === "momentum") {
+    if (gate === "dip" || gate === "momentum") {
       const live = await dayMove(name.mint);
       const change = live.change;
       if (change == null) throw new HarnessError(502, "No 24h change. Nothing was queued.");
-      if (strategy.rule.kind === "dip" && !(change <= -2)) {
+      if (gate === "dip" && !(change <= -2)) {
         throw new HarnessError(400, `${symbol} is ${change.toFixed(1)}% today. A dip strategy waits for -2% or worse.`);
       }
-      if (strategy.rule.kind === "momentum" && !(change >= 2 && change <= 12)) {
+      if (gate === "momentum" && !(change >= 2 && change <= 12)) {
         throw new HarnessError(400, `${symbol} is ${change.toFixed(1)}% today. Momentum waits for +2% to +12%.`);
       }
     }
-    if (strategy.rule.kind !== "note") {
-      const quote = await quotePair(name.mint, usd, name.decimals, strategy.rule.side);
+    if (gate !== "note") {
+      const quote = await quotePair(name.mint, usd, name.decimals, side);
       const liquidity = await poolUsd(name.mint);
       if (liquidity > 0 && usd > liquidity * 0.05) {
         throw new HarnessError(400, `${symbol} pool is about $${Math.round(liquidity).toLocaleString("en-US")}. $${usd.toFixed(2)} is over 5% of it. Nothing was queued.`);
@@ -434,9 +454,9 @@ export async function harnessCall(method: string, token: string, params: Record<
     const why = String(params.why || strategy.thesis).slice(0, 240);
     await sql.query(
       "INSERT INTO agent_intent (id, harness_id, mission_id, symbol, mint, side, usd, why) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-      [id, harness, missionId, symbol, name.mint, strategy.rule.side, usd, why],
+      [id, harness, missionId, symbol, name.mint, side, usd, why],
     );
-    return { id, symbol, mint: name.mint, side: strategy.rule.side, usd, status: "queued", signs: false, note: "Queued. The wallet has not signed. This is not a fill." };
+    return { id, symbol, mint: name.mint, side, usd, status: "queued", signs: false, note: step ? `Queued the ${step.kind} step. The wallet has not signed. This is not a fill.` : "Queued. The wallet has not signed. This is not a fill." };
   }
 
   if (method === "discover") {
@@ -731,7 +751,7 @@ export async function harnessCall(method: string, token: string, params: Record<
 export const MCP_TOOLS = [
   { name: "list_names", description: "Every name the desk will show an agent, including ones that cannot be traded.", inputSchema: { type: "object", properties: {} } },
   { name: "list_strategies", description: "Seed strategies plus strategies this harness added.", inputSchema: { type: "object", properties: {} } },
-  { name: "add_strategy", description: "Add a strategy. kind is clip, coherence, dip, momentum, or note. A note is research and does not trade. Dip buys only after a -2% day. Momentum buys only between +2% and +12%.", inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string" }, thesis: { type: "string" }, rule: { type: "object" } }, required: ["name", "thesis", "rule"] } },
+  { name: "add_strategy", description: "Add a strategy. kind is clip, coherence, dip, momentum, plan, or note. A plan has 2 to 6 steps, each clip, coherence, dip, or momentum, and the first step the day satisfies is the one that queues. A note does not trade. Dip buys only after a -2% day. Momentum acts only between +2% and +12%.", inputSchema: { type: "object", properties: { name: { type: "string" }, category: { type: "string" }, thesis: { type: "string" }, rule: { type: "object" } }, required: ["name", "thesis", "rule"] } },
   { name: "screen", description: "Backpack Securities the catalog will trade. Filter with q. Does not sign.", inputSchema: { type: "object", properties: { q: { type: "string" }, limit: { type: "number" } } } },
   { name: "short_book", description: "Whether a name has a real short market. A token sale is not a short.", inputSchema: { type: "object", properties: { symbol: { type: "string" } }, required: ["symbol"] } },
   { name: "track", description: "Put a catalog name on this harness tracker with a short thesis.", inputSchema: { type: "object", properties: { symbol: { type: "string" }, thesis: { type: "string" } }, required: ["symbol"] } },

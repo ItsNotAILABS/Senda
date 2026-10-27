@@ -27,7 +27,8 @@ import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { loadWide, type WideRow } from "@/lib/coin-tape";
 import { loadHeadlines, type Headline } from "@/lib/wire";
 import { loadPulse, type BoardGroup, type TapeRow } from "@/lib/universe";
-import { onTrades } from "@/lib/trade-log";
+import { listTrades, onTrades } from "@/lib/trade-log";
+import { realizedDays, unrealizedToday } from "@/lib/day-pnl";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -88,6 +89,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
   const [buying, setBuying] = useState(false);
   const [arm, setArm] = useState<"" | "yes" | "no" | "buy">("");
   const [pane, setPane] = useState<"book" | "depth">("book");
+  const [fills, setFills] = useState<ReturnType<typeof listTrades>>([]);
   const board = tape.filter((n) => n.group === group);
   const wideHit = wide.find((w) => w.mint === pick);
   const chosen: TapeRow | undefined =
@@ -97,6 +99,11 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
     tape[0];
 
   useEffect(() => setCap(spendCap()), []);
+  useEffect(() => {
+    const pull = () => setFills(listTrades());
+    pull();
+    return onTrades(pull);
+  }, []);
   useEffect(() => {
     let live = true;
     const pull = () => {
@@ -302,11 +309,10 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
       where: line.group === "company" ? "pre" as const : line.group === "listed" ? "share" as const : "coin" as const,
     })),
   ];
-  const dayUsd = rows.reduce((sum, row) => {
-    const day = moves[row.mint]?.day;
-    if (day == null || !(row.value > 0)) return sum;
-    return sum + (row.value * day) / 100;
-  }, 0);
+  const closed = realizedDays(fills);
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const closedToday = closed.find((row) => row.day === todayKey)?.realized ?? 0;
+  const marksToday = unrealizedToday(rows.map((row) => ({ value: row.value, day: moves[row.mint]?.day ?? null })));
   const holdKey = rows.map((row) => row.mint).join(",");
   useEffect(() => {
     const mints = holdKey.split(",").filter((mint) => mint.length >= 32).slice(0, 30);
@@ -461,8 +467,11 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               <p className="text-[11px] text-white/40">Portfolio</p>
               <p className="font-mono text-3xl leading-none tabular-nums">{pic ? `$${pic.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : owner ? "…" : "$0.00"}</p>
             </div>
-            <p className={cn("pb-1 font-mono text-sm tabular-nums", dayUsd < 0 ? "text-down" : "text-accent")}>
-              {held.length === 0 ? "No holdings yet" : `${dayUsd >= 0 ? "+" : "−"}$${Math.abs(dayUsd).toFixed(2)} today`}
+            <p className={cn("pb-1 font-mono text-sm tabular-nums", marksToday < 0 ? "text-down" : "text-accent")}>
+              {held.length === 0 ? "No holdings yet" : `${marksToday >= 0 ? "+" : "−"}$${Math.abs(marksToday).toFixed(2)} marks today`}
+            </p>
+            <p className={cn("pb-1 font-mono text-sm tabular-nums", closedToday < 0 ? "text-down" : "text-white/70")}>
+              {closedToday >= 0 ? "+" : "−"}${Math.abs(closedToday).toFixed(2)} closed today
             </p>
             {pic ? <p className="pb-1 font-mono text-[11px] text-white/40">USDC ${pic.usdc.toFixed(2)} · {pic.sol.toFixed(3)} SOL</p> : null}
           </div>
@@ -481,8 +490,20 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         <div className="border-b border-white/10 px-4 py-3">
           <div className="flex items-baseline justify-between">
             <p className="text-sm font-semibold">Holdings</p>
-            <p className="text-[11px] text-white/40">{rows.length ? "Tap one. The chart stays on this page." : owner ? "Reading this address." : "Connect Phantom to see this address."}</p>
+            <p className="text-[11px] text-white/40">{rows.length ? "Tap a holding. It opens on this page, then in the terminal." : owner ? "Reading this address." : "Connect Phantom to see this address."}</p>
           </div>
+          {closed.length > 0 ? (
+            <ul className="mt-2 flex gap-1.5 overflow-x-auto">
+              {closed.map((row) => (
+                <li key={row.day} className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 font-mono text-[11px] tabular-nums">
+                  <span className="text-white/40">{row.day.slice(5)} </span>
+                  <span className={row.realized < 0 ? "text-down" : "text-accent"}>{row.realized >= 0 ? "+" : "−"}${Math.abs(row.realized).toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-[11px] text-white/35">Closed days show up after a sell this browser signed. Marks are the open positions.</p>
+          )}
           {rows.length === 0 ? (
             <p className="mt-3 text-sm text-white/40">Nothing priced here yet.</p>
           ) : (

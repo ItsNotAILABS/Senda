@@ -130,7 +130,14 @@ export function HoldingCards({
               </span>
             </span>
             <span className="mt-3 block font-mono text-2xl tabular-nums tracking-tight">{move?.price ? usd(move.price) : "—"}</span>
-            <span className="mt-1 block font-mono text-[11px] text-white/40">{qty(row.qty)} · {usd(value)}</span>
+            <span className="mt-1 block font-mono text-[11px] text-white/40">
+              {qty(row.qty)} · {usd(value)}
+              {day != null && value > 0 ? (
+                <span className={(value * day) / 100 < 0 ? "text-down" : "text-up"}>
+                  {" "}· {(value * day) / 100 >= 0 ? "+" : "−"}${Math.abs((value * day) / 100).toFixed(2)} today
+                </span>
+              ) : null}
+            </span>
             {mark?.line && mark.line.length > 1 ? (
               <LineGlance points={mark.line} />
             ) : (
