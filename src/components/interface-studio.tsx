@@ -262,7 +262,8 @@ export function InterfaceStudio() {
     <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-mono text-[10px] tracking-widest text-cyan-300">IMPLEMENTATION REFERENCES</p><h2 className="mt-1 text-lg font-semibold">Related Senda workstreams</h2></div><p className="text-[11px] text-white/40">Links only; PR status must be checked on GitHub</p></div>
     <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
      {[
-      {name:"Market Matrix / charts",href:"https://github.com/ItsNotAILABS/Senda/pull/6",hint:"Volumes, strategy gates, agent research"},
+      {name:"Market Intelligence Terminal",href:"https://github.com/ItsNotAILABS/Senda/pull/10",hint:"Real Jupiter volume, liquidity and live pool research"},
+      {name:"Market Matrix / agents",href:"https://github.com/ItsNotAILABS/Senda/pull/6",hint:"Strategy gates and agent research"},
       {name:"Genesis characters",href:"https://github.com/ItsNotAILABS/Senda/pull/7",hint:"Raven, runtimes, gear and code"},
       {name:"Wallet signing safety",href:"https://github.com/ItsNotAILABS/Senda/pull/5",hint:"Transaction confirmation and recovery"},
       {name:"Agent permissions",href:"https://github.com/ItsNotAILABS/Senda/pull/4",hint:"Bounded budgets and explicit approvals"},
