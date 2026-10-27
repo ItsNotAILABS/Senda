@@ -198,7 +198,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
-      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-[#07070f] transition-[width] duration-200 lg:flex", rail ? "w-56" : "w-[68px]")}>
+      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-[#050508] transition-[width] duration-200 lg:flex", rail ? "w-56" : "w-[68px]")}>
         <div className={cn("flex items-center pt-4 pb-3", rail ? "gap-2 px-3" : "justify-center px-2")}>
           <Link to="/" className="grid size-8 shrink-0 place-items-center rounded-xl bg-accent text-accent-fg" title="Senda">
             <Zap className="size-4" />
@@ -295,7 +295,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="sticky top-0 z-30">
         <CoinTicker />
         <ChainChip owner={owner} cash={w.balances.USD || 0} />
-        <header className={cn("bg-[#07070f]/90 px-4 py-3 backdrop-blur", home && "pointer-events-none")}>
+        <header className={cn("bg-[#050508]/90 px-4 py-3 backdrop-blur", home && "pointer-events-none")}>
           <div className="flex items-center gap-3">
             <form
               className={cn("relative min-w-0 w-full flex-1", home && "pointer-events-auto")}
@@ -612,7 +612,7 @@ function ChainChip({ owner, cash }: { owner: string; cash: number }) {
   const sol = pic?.sol ?? 0;
   const book = pic?.cash ?? 0;
   return (
-    <Link to="/vault" className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#07070f] px-4 py-1.5">
+    <Link to="/vault" className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#050508] px-4 py-1.5">
       <p className="font-mono text-sm tabular-nums">{owner ? (pic ? `$${chain.toFixed(2)}` : "…") : "Your money"}</p>
       <p className="truncate font-mono text-[11px] text-subtle">
         {owner

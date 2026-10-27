@@ -71,7 +71,7 @@ export function AgentComputer({ names, envelopeId }: { names: HouseListing[]; en
   }
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-border bg-[#07070f]">
+    <div className="mb-6 overflow-hidden rounded-2xl border border-border bg-[#050508]">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
         <p className="font-mono text-[11px] tracking-widest text-accent uppercase">Computer</p>
         <p className="text-[11px] text-subtle">{envelopeId ? "This agent" : "Desk"}</p>

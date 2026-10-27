@@ -309,7 +309,7 @@ export function DocsDesk() {
 
   return (
     <main className="grid min-h-[calc(100dvh-88px)] lg:grid-cols-[272px_minmax(0,1fr)]">
-      <aside className="max-h-[40dvh] overflow-y-auto border-b border-white/10 bg-[#07070f] lg:sticky lg:top-0 lg:max-h-[calc(100dvh-88px)] lg:border-r lg:border-b-0">
+      <aside className="max-h-[40dvh] overflow-y-auto border-b border-white/10 bg-[#050508] lg:sticky lg:top-0 lg:max-h-[calc(100dvh-88px)] lg:border-r lg:border-b-0">
         <div className="px-4 pt-4 pb-2">
           <p className="text-[11px] tracking-[0.16em] text-white/35 uppercase">Docs</p>
           <div className="mt-3"><DeskAudit live="These pages describe the rails." hold="A sentence here does not move USDC." /></div>

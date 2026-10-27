@@ -461,7 +461,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <main className="px-3 py-3 lg:px-5">
-      <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0c0f16]">
+      <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#08080c]">
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="flex items-end gap-6">
             <div>
@@ -618,7 +618,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
           </div>
         </div>
       </section>
-      <section className="mt-3 overflow-hidden rounded-[22px] border border-white/10 bg-[#0c0f16]">
+      <section className="mt-3 overflow-hidden rounded-[22px] border border-white/10 bg-[#08080c]">
         <div className="flex items-baseline justify-between px-4 py-3">
           <p className="text-sm font-semibold">News</p>
           <Link to="/wire" className="text-[11px] text-accent">Wire</Link>

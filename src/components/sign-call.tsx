@@ -23,7 +23,7 @@ export function SignCall({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-3 sm:place-items-center" role="dialog" aria-modal="true" aria-labelledby="sign-call-title">
-      <div className="senda-call w-full max-w-md rounded-[28px] border border-white/15 bg-[#12141c] p-5 shadow-[0_24px_80px_rgb(0_0_0/0.55)]">
+      <div className="senda-call w-full max-w-md rounded-[28px] border border-white/15 bg-[#08080c] p-5 shadow-[0_24px_80px_rgb(0_0_0/0.55)]">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{wallet}</p>
           <span className={cn("inline-flex items-center gap-2 rounded-full px-2 py-1 text-[11px] font-semibold", waiting ? "bg-accent text-accent-fg" : "bg-white/10")}>

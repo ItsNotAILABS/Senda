@@ -2,9 +2,9 @@
 @import "tw-animate-css";
 
 @theme {
-  --color-bg: #07080d;
-  --color-surface: #10131c;
-  --color-elevated: #171b27;
+  --color-bg: #050508;
+  --color-surface: #0a0b10;
+  --color-elevated: #101218;
   --color-fg: #f5f7fb;
   --color-muted: #a7adbe;
   --color-subtle: #6f768a;
@@ -19,8 +19,8 @@
   --color-down-fg: #2a060c;
   --color-lime: #d6ff4a;
   --color-lime-fg: #10140a;
-  --color-border: #232838;
-  --color-felt: #0e0e16;
+  --color-border: #1a1c24;
+  --color-felt: #08080c;
   --color-felt-ink: #05050a;
   --color-chip: #d6ff4a;
   --color-chip-ink: #10140a;
@@ -38,7 +38,7 @@
 
 .senda-stage {
   background:
-    radial-gradient(900px 420px at 80% -10%, rgb(80 40 180 / 0.28), transparent 55%),
+    radial-gradient(900px 420px at 80% -10%, rgb(28 10 48 / 0.55), transparent 55%),
     radial-gradient(700px 320px at 10% 0%, rgb(214 255 74 / 0.06), transparent 50%),
     var(--color-bg);
 }
