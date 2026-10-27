@@ -77,7 +77,7 @@
       "name": "Solana Agent Kit",
       "lane": "agent-tools",
       "priority": "P1",
-      "url": "https://github.com/senda-labs/solana-agent-kit",
+      "url": "https://github.com/sendaifun/solana-agent-kit",
       "reason": "Tool discovery with bounded read-only agent scopes",
       "integration": "candidate",
       "approval": "read/execute separation and audits"
