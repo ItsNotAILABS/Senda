@@ -1,18 +1,17 @@
-/** Opens Robinhood Connect so buying power can land as USDC on a Solana address. */
+/** Robinhood Connect. Buying power is a payment method on their checkout. USDC is sent to the wallet address. */
 
-export function robinhoodBuyingPowerUrl(input: { wallet: string; usd: number; origin: string }): string {
+export function robinhoodBuyingPowerUrl(wallet: string, usd: number): string {
   const params = new URLSearchParams({
-    walletAddress: input.wallet,
+    walletAddress: wallet,
     supportedAssets: "USDC",
     supportedNetworks: "SOLANA",
     paymentMethod: "buying_power",
-    assetCode: "USDC",
     fiatCode: "USD",
-    fiatAmount: String(Math.max(1, Math.round(input.usd))),
+    fiatAmount: String(Math.max(1, Math.round(usd) || 25)),
     connectId: crypto.randomUUID(),
-    redirectUrl: `${input.origin}/wallets`,
+    redirectUrl: `${window.location.origin}/wallet`,
   });
-  const app = import.meta.env.VITE_ROBINHOOD_APP_ID;
+  const app = import.meta.env.VITE_ROBINHOOD_APP_ID as string | undefined;
   if (app) params.set("applicationId", app);
-  return `https://applink.robinhood.com/u/connect?${params}`;
+  return `https://applink.robinhood.com/u/connect?${params.toString()}`;
 }

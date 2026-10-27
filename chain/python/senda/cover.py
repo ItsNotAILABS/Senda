@@ -5,7 +5,7 @@ from senda.pay import usd_to_atoms
 
 class CoverTerms:
     def __init__(self, kind: str, symbol: str, strike_usd: float, cover_usd: float, premium_usd: float, until: int):
-        if kind not in ("drop", "life"):
+        if kind not in ("drop", "drop5", "life"):
             raise ValueError("kind")
         symbol = symbol.strip().upper()
         if not symbol or len(symbol) > 12 or not symbol.isalnum():

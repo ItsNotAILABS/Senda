@@ -4,9 +4,12 @@ import type { Envelope } from "@/lib/agent-envelope";
 import { recall } from "@/lib/agent-memory";
 import { bookLevel, drawdown, pushLevel, review } from "@/lib/agent-risk";
 import { spendCap } from "@/lib/spend-cap";
+import { basisBps } from "@/lib/market-engine";
+import { loadTapes } from "@/lib/indicators";
+import { shortBook } from "@/lib/short-market";
 import type { HouseListing } from "@/lib/sol-house";
 
-export type Job = "scout" | "discount" | "rich" | "daily" | "cover" | "clerk";
+export type Job = "scout" | "discount" | "rich" | "daily" | "cover" | "clerk" | "basis" | "tape" | "signal";
 
 export const JOBS: { id: Job; title: string; line: string }[] = [
   { id: "scout", title: "Scout", line: "Reads the book and writes what moved." },
@@ -15,9 +18,12 @@ export const JOBS: { id: Job; title: string; line: string }[] = [
   { id: "daily", title: "Daily", line: "One buy a day. It waits if today already went." },
   { id: "cover", title: "Cover", line: "Flags a name down hard enough to cover." },
   { id: "clerk", title: "Clerk", line: "Writes a line on your sheet for each name it watches." },
+  { id: "basis", title: "Basis", line: "Queues a buy when last is cheap versus the mark, or a sell when it is rich. The gap is measured here. You still sign." },
+  { id: "tape", title: "Tape", line: "Names the print that moved the most. It writes. It does not queue." },
+  { id: "signal", title: "Signal", line: "Reads RSI, MACD, and the averages from a chart you opened. Queues a buy or a short. You still sign." },
 ];
 
-export type Queue = { symbol: string; side: "buy" | "sell"; usd: number; why: string };
+export type Queue = { symbol: string; side: "buy" | "sell" | "short"; usd: number; why: string };
 
 const SHEET = "senda.sheet.v1";
 
@@ -83,6 +89,36 @@ export function think(env: Envelope, book: HouseListing[]): { log: string; queue
       /* quota */
     }
     return { log: `Wrote ${Math.min(6, rows.length)} lines onto the sheet.` };
+  }
+  if (job === "basis") {
+    const scored = rows
+      .filter((n) => n.mark > 0 && n.last > 0)
+      .map((n) => ({ n, bps: basisBps(n.last, n.mark) ?? 0 }))
+      .sort((a, b) => a.bps - b.bps);
+    const cheap = scored[0];
+    if (cheap && cheap.bps <= -30) return gateQueue(env, cheap.n, "buy", rows);
+    const rich = scored[scored.length - 1];
+    if (rich && rich.bps >= 30) return gateQueue(env, rich.n, "sell", rows);
+    return { log: "Basis is inside 30 bps. Nothing queued." };
+  }
+  if (job === "tape") {
+    const moved = [...rows].sort((a, b) => Math.abs(b.change24h ?? 0) - Math.abs(a.change24h ?? 0))[0];
+    if (!moved) return { log: "No print to read." };
+    const pct = moved.change24h == null ? "—" : `${moved.change24h > 0 ? "+" : ""}${(moved.change24h * 100).toFixed(1)}%`;
+    return { log: `${moved.symbol} moved the most, ${pct}. Nothing queued.` };
+  }
+  if (job === "signal") {
+    const tapes = loadTapes();
+    const hit = rows
+      .map((n) => ({ n, tape: tapes[n.symbol.toUpperCase()] }))
+      .find((row) => row.tape && row.tape.bias !== "flat" && Date.now() - row.tape.at < 30 * 60_000);
+    if (!hit?.tape) return { log: "No fresh chart. Open a name so RSI and MACD are on the tape." };
+    if (hit.tape.bias === "long") return gateQueue(env, hit.n, "buy", rows);
+    const book = shortBook(hit.n.symbol);
+    if (!book) return { log: `${hit.n.symbol} reads short. ${hit.tape.why} There is no short market, so nothing was queued.` };
+    const sized = gateQueue(env, hit.n, "sell", rows);
+    if (!sized.queue) return sized;
+    return { log: `${hit.n.symbol} short via ${book.label}. ${hit.tape.why}`, queue: { ...sized.queue, side: "short", why: hit.tape.why } };
   }
   return { log: "Watching. Nothing to queue." };
 }

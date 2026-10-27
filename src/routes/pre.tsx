@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { PreDesk } from "@/components/pre-desk";
 import { getPreRoutes } from "@/lib/prestock";
-import { getHouse } from "@/lib/sol-house";
+import { getHouse, HOUSE_FALLBACK } from "@/lib/sol-house";
 
 export const Route = createFileRoute("/pre")({
   validateSearch: (search: Record<string, unknown>): { q?: string } => {
@@ -10,7 +10,10 @@ export const Route = createFileRoute("/pre")({
     return q ? { q } : {};
   },
   loader: async () => {
-    const [house, routes] = await Promise.all([getHouse(), getPreRoutes()]);
+    const [house, routes] = await Promise.all([
+      getHouse().catch(() => HOUSE_FALLBACK),
+      getPreRoutes().catch(() => []),
+    ]);
     return { house, routes };
   },
   component: PrePage,
@@ -27,11 +30,10 @@ function PrePage() {
   );
 }
 
-function PreError({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "The book did not load.";
+function PreError({ error }: { error: Error }) {
   return (
     <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{message}</p>
+      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
     </AppShell>
   );
 }

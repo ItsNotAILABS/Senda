@@ -1,69 +1,119 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { useCoins } from "@/components/coin-ticker";
 import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
+import { MarkChart } from "@/components/mark-chart";
 import { TabLead } from "@/components/tab-lead";
+import { PortfolioAnalytics } from "@/components/portfolio-analytics";
+import { PortfolioNav } from "@/components/portfolio-nav";
+import { PositionsBook } from "@/components/positions-book";
+import { SavingsYield } from "@/components/savings-yield";
+import { JumpStrip } from "@/components/jump-strip";
+import { HoldingCards, type HoldingRow } from "@/components/holding-cards";
+import { VaultAccounts } from "@/components/vault-accounts";
+import { VaultSleeves } from "@/components/vault-sleeves";
 import { WalletPicker } from "@/components/wallet-picker";
-import { readChain, type ChainWallet } from "@/lib/phantom";
+import { BACKPACK } from "@/lib/backpack";
+import { loadHoldTape, type HoldMove } from "@/lib/hold-tape";
+import { readChain, type ChainTx, type ChainWallet } from "@/lib/phantom";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
-import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { type HouseListing } from "@/lib/sol-house";
 import { unwrapUsdc, wrapUsdc, wrappedUsdc } from "@/lib/vault-wrap";
 import { CCYS, formatMoney, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { listTrades, onTrades, type TradeFill } from "@/lib/trade-log";
 import { cn } from "@/lib/utils";
 
-const LOGO_SYMBOLS = new Set(["SPACEX", "OPENAI", "ANTHROPIC", "ANDURIL", "NEURALINK", "FIGUREAI", "KALSHI", "POLYMARKET"]);
-
-type Position = {
-  mint: string;
+type Hold = {
+  key: string;
   symbol: string;
   name: string;
-  tokens: number;
-  last: number;
+  qty: number;
   value: number;
-  premium: number | null;
+  last: number;
+  change: number | null;
+  where: HoldingRow["where"];
 };
-
-function logoSrc(symbol: string): string | null {
-  const s = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!LOGO_SYMBOLS.has(s)) return null;
-  return `/logos/${s.toLowerCase()}.png`;
-}
 
 function bookUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
 }
 
-function tokenQty(n: number): string {
-  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
-  if (n >= 1) return n.toLocaleString("en-US", { maximumFractionDigits: 4 });
-  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
-}
-
-function positionsOf(names: HouseListing[], chain: ChainWallet | null): Position[] {
+function portfolioOf(
+  names: HouseListing[],
+  chain: ChainWallet | null,
+  coins: Array<{ id: string; symbol: string; name: string; price: number; change: number }>,
+): Hold[] {
   if (!chain) return [];
+  const rows: Hold[] = [];
+  const sol = coins.find((c) => c.symbol === "SOL");
+  if (chain.sol > 0) {
+    const last = sol?.price ?? 0;
+    rows.push({ key: "sol", symbol: "SOL", name: "Solana", qty: chain.sol, value: chain.sol * last, last, change: sol?.change ?? null, where: "coin" });
+  }
   const byMint = new Map<string, HouseListing>();
   for (const n of names) {
-    if (n.venue !== "prestocks" || byMint.has(n.mint)) continue;
-    byMint.set(n.mint, n);
+    if (n.venue === "prestocks" && !byMint.has(n.mint)) byMint.set(n.mint, n);
   }
-  const rows: Position[] = [];
+  const byCoin = new Map(coins.map((c) => [c.id, c]));
   for (const token of chain.tokens) {
+    if (!(token.ui > 0)) continue;
+    const share = BACKPACK.find((row) => row.mint === token.mint);
     const house = byMint.get(token.mint);
-    if (!house || !(token.ui > 0)) continue;
+    const coin = byCoin.get(token.mint);
+    const stable = token.symbol === "USDC" || token.symbol === "CASH";
+    const last = house?.last || coin?.price || (stable ? 1 : 0);
+    const change = house && house.change24h != null && house.change24h !== -1 ? house.change24h * 100 : coin?.change ?? null;
     rows.push({
-      mint: house.mint,
-      symbol: house.symbol,
-      name: house.name,
-      tokens: token.ui,
-      last: house.last,
-      value: token.ui * house.last,
-      premium: house.premium,
+      key: token.mint,
+      symbol: share?.symbol || house?.symbol || coin?.symbol || token.symbol,
+      name: share ? `${share.name} · Backpack Securities` : house?.name || coin?.name || token.symbol,
+      qty: token.ui,
+      value: token.ui * last,
+      last,
+      change,
+      where: share ? "share" : house ? "pre" : stable ? "cash" : "coin",
     });
   }
   rows.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
   return rows;
+}
+
+type BookRow = { symbol: string; now: number; bought: number; sold: number };
+
+function bookOf(fills: TradeFill[], holds: Hold[]): BookRow[] {
+  const map = new Map<string, BookRow>();
+  for (const h of holds) {
+    if (h.symbol === "SOL" || h.symbol === "USDC" || h.symbol === "CASH") continue;
+    map.set(h.symbol, { symbol: h.symbol, now: h.value, bought: 0, sold: 0 });
+  }
+  for (const f of fills) {
+    if (f.side === "send" || !(f.usd > 0)) continue;
+    const row = map.get(f.symbol) ?? { symbol: f.symbol, now: 0, bought: 0, sold: 0 };
+    if (f.side === "buy") row.bought += f.usd;
+    else row.sold += f.usd;
+    map.set(f.symbol, row);
+  }
+  return [...map.values()].filter((r) => r.now > 0 || r.bought > 0 || r.sold > 0).sort((a, b) => b.now - a.now || b.bought - a.bought);
+}
+
+function Activity({ fills, txs }: { fills: TradeFill[]; txs: ChainTx[] }) {
+  const rows = [
+    ...fills.slice(0, 6).map((f) => ({ id: f.signature || `${f.symbol}-${f.at}`, title: `${f.side} ${f.symbol}`, sub: bookUsd(f.usd) })),
+    ...txs.slice(0, 6).map((tx) => ({ id: tx.signature, title: tx.signature.slice(0, 8), sub: "On Solana" })),
+  ].slice(0, 8);
+  if (!rows.length) return <p className="mt-3 text-sm text-muted">Nothing signed from this account yet.</p>;
+  return (
+    <ul>
+      {rows.map((row) => (
+        <li key={row.id} className="flex items-baseline justify-between gap-3 border-t border-white/10 py-2">
+          <span className="text-sm font-semibold">{row.title}</span>
+          <span className="font-mono text-xs text-subtle">{row.sub}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 export function VaultDesk({ names }: { names: HouseListing[] }) {
@@ -75,16 +125,33 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
   const [tick, setTick] = useState(0);
   const [raw, setRaw] = useState("25");
   const [cap, setCap] = useState(100);
+  const [fills, setFills] = useState<TradeFill[]>([]);
+  const [moves, setMoves] = useState<Record<string, HoldMove>>({});
   const [name, setName] = useState("");
   const [ccy, setCcy] = useState<Ccy>("USD");
+  const coins = useCoins();
   const chain = snap && snap.owner === owner ? snap.chain : null;
   const usdc = chain?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
   const wrapped = owner ? wrappedUsdc(owner) : 0;
-  const rows = useMemo(() => positionsOf(names, chain), [names, chain]);
-  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const holds = useMemo(() => portfolioOf(names, chain, coins), [names, chain, coins]);
+  const marked = useMemo(() => holds.map((row) => {
+    const mv = moves[row.key];
+    if (!mv) return row;
+    const last = row.last > 0 ? row.last : mv.price;
+    return { ...row, last, value: last > 0 ? row.qty * last : row.value, change: row.change ?? mv.day };
+  }), [holds, moves]);
+  const book = useMemo(() => bookOf(fills, marked), [fills, marked]);
+  const net = marked.reduce((sum, row) => sum + row.value, 0);
+  const move = marked.reduce((sum, row) => sum + (row.change == null ? 0 : row.value * (row.change / 100)), 0);
+  const blended = net > 0 ? move / Math.max(net - move, 0.01) : 0;
   const waiting = !wallet.ready || (Boolean(owner) && reading && !chain);
 
-  useEffect(() => setCap(spendCap()), []);
+  useEffect(() => {
+    setCap(spendCap());
+    setFills(listTrades());
+    return onTrades(() => setFills(listTrades()));
+  }, []);
+
   useEffect(() => {
     if (!owner) {
       setSnap(null);
@@ -95,12 +162,10 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     setReading(true);
     readChain(owner)
       .then((s) => {
-        if (!live) return;
-        setSnap({ owner, chain: s });
+        if (live) setSnap({ owner, chain: s });
       })
       .catch(() => {
-        if (!live) return;
-        setSnap((cur) => (cur?.owner === owner ? cur : null));
+        if (live) setSnap((cur) => (cur?.owner === owner ? cur : null));
       })
       .finally(() => {
         if (live) setReading(false);
@@ -109,6 +174,23 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
       live = false;
     };
   }, [owner, tick]);
+
+  useEffect(() => {
+    const mints = holds.map((row) => row.key).filter((key) => key.length >= 32 && key.length <= 48).slice(0, 30);
+    if (!mints.length) return;
+    let live = true;
+    loadHoldTape({ data: { mints } })
+      .then((tape) => {
+        if (!live) return;
+        const next: Record<string, HoldMove> = {};
+        for (const row of tape) next[row.mint] = row;
+        setMoves(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [chain]);
 
   function wrap(amount?: number) {
     if (!owner) return;
@@ -145,7 +227,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
   function wrapHeld() {
     if (!owner) return toast.error("Connect Phantom first.");
     const open = Math.round((usdc - wrapped) * 100) / 100;
-    if (!(open > 0)) return toast.error("Nothing left in Phantom to wrap.");
+    if (!(open > 0)) return toast.error("Nothing left to wrap.");
     setRaw(open.toFixed(2));
     wrap(open);
   }
@@ -158,223 +240,141 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     push(n);
   }
 
+  const cards: HoldingRow[] = marked.map((row) => ({
+    mint: row.key,
+    symbol: row.symbol,
+    name: row.name,
+    qty: row.qty,
+    value: row.value,
+    where: row.where,
+  }));
+
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
+      <JumpStrip />
+      <PortfolioNav current="holdings" />
+      <section className="px-2 pt-1">
+        <p className="text-xs text-subtle">Portfolio</p>
+        <p className="mt-1 font-mono text-5xl leading-none tracking-tight tabular-nums">{waiting ? "—" : bookUsd(net)}</p>
+        <p className={cn("mt-2 font-mono text-sm tabular-nums", move < 0 ? "text-down" : "text-up")}>
+          {waiting ? "" : `${move < 0 ? "" : "+"}${bookUsd(move)} today`}
+        </p>
+        <p className="mt-1 text-xs text-subtle">{owner ? `Buying power $${usdc.toFixed(2)} USDC` : "Connect a wallet to mark this account."}</p>
+      </section>
+      <MarkChart symbol="Portfolio" last={net} change={Number.isFinite(blended) ? blended : 0} valueLabel={waiting ? "$0.00" : bookUsd(net)} />
+      <PositionsBook owner={owner} names={names} />
+      <SavingsYield owner={owner} />
       <TabLead
         kicker="Portfolio"
-        title="PreStocks you hold,"
+        title="What this wallet holds,"
         accent="marked live."
-        line="The total is tokens in this wallet times the last print. Nothing on the book is a paper share."
-        live={["Chain balance", "Value at the live last", "Wrap USDC and send it back"]}
-        coming={["A broker account", "Margin"]}
+        line="Each card is a token on this address. A Backpack Securities mint opens the share book. Hour, day, and week are the live prints. A blank week means the tape has no seven-day change."
+        live={["Chain balance", "Hour, day, and week", "Backpack shares you actually hold"]}
+        coming={["A broker account"]}
       />
-      <MoneyBar />
+      <VaultAccounts owner={owner} />
+      <VaultSleeves owner={owner} onChain={usdc} onChange={() => setTick((n) => n + 1)} />
+      <PortfolioAnalytics owner={owner} usdc={usdc} sol={chain?.sol ?? 0} heldUsd={net} dayMove={move} />
 
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-8">
-        <p className="font-mono text-5xl tabular-nums tracking-tight lg:text-6xl">{waiting ? "—" : bookUsd(total)}</p>
-        <p className="mt-2 font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">Tokens × last print</p>
-        <p className="mt-2 font-mono text-xs text-subtle">
-          {waiting
-            ? "Reading the wallet…"
-            : owner
-              ? `${owner.slice(0, 4)}…${owner.slice(-4)}${rows.length ? ` · ${rows.length} name${rows.length === 1 ? "" : "s"}` : ""}`
-              : "No wallet connected."}
-        </p>
-
-        {!waiting && rows.length === 0 ? (
-          <div className="mt-6">
-            <p className="text-sm text-muted">{owner ? "This wallet holds no PreStocks." : "Connect a wallet. The book stays empty until it does."}</p>
-            <Link to="/pre" className="mt-4 inline-flex min-h-11 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-              Open PreStocks
-            </Link>
-          </div>
-        ) : null}
-
-        {!waiting && rows.length > 0 ? (
-          <div className="mt-6 overflow-x-auto">
-            <table className="w-full min-w-[760px] text-left">
-              <thead>
-                <tr className="text-[11px] tracking-[0.14em] text-subtle uppercase">
-                  <th className="pb-2 font-normal">Symbol</th>
-                  <th className="pb-2 text-right font-normal">Tokens</th>
-                  <th className="pb-2 text-right font-normal">Last</th>
-                  <th className="pb-2 text-right font-normal">Value</th>
-                  <th className="pb-2 text-right font-normal">Premium</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const logo = logoSrc(row.symbol);
-                  return (
-                    <tr key={row.mint} className="border-t border-white/[0.06]">
-                      <td className="py-3 pr-3">
-                        <div className="flex items-center gap-3">
-                          {logo ? (
-                            <img src={logo} alt="" className="size-9 rounded-full bg-white object-contain p-1" />
-                          ) : (
-                            <span className="grid size-9 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{row.symbol.slice(0, 2)}</span>
-                          )}
-                          <span className="min-w-0">
-                            <span className="block text-sm font-semibold">{row.symbol}</span>
-                            <span className="block truncate text-[11px] text-subtle">{row.name}</span>
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 text-right font-mono text-sm tabular-nums">{tokenQty(row.tokens)}</td>
-                      <td className="py-3 text-right font-mono text-sm tabular-nums">{formatUsd(row.last)}</td>
-                      <td className="py-3 text-right font-mono text-sm tabular-nums">{row.value > 0 ? formatUsd(row.value) : "$0.00"}</td>
-                      <td className="py-3 text-right font-mono text-sm tabular-nums">
-                        <span
-                          className={cn(
-                            row.premium == null ? "text-muted" : row.premium < 0 ? "text-up" : "text-down",
-                          )}
-                        >
-                          {formatPremium(row.premium)}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
-      </section>
-
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-        <h2 className="text-2xl tracking-tight">Cash sleeve</h2>
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          A wrap is a claim on USDC that never leaves Phantom. Push sends the claim back. Agents can only send inside the cap.
-        </p>
-
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-2xl bg-black/30 px-4 py-4">
-            <p className="text-xs text-subtle">On-chain USDC</p>
-            <p className="mt-1 font-mono text-3xl">{owner ? `$${usdc.toFixed(2)}` : "—"}</p>
-            <p className="mt-2 text-xs text-muted">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "No wallet connected."}</p>
-          </div>
-          <div className="rounded-2xl bg-black/30 px-4 py-4">
-            <p className="text-xs text-subtle">Wrapped</p>
-            <p className="mt-1 font-mono text-3xl text-accent">${wrapped.toFixed(2)}</p>
-            <p className="mt-2 text-xs text-muted">Still sitting in the wallet. Counted once.</p>
-          </div>
-          <div className="rounded-2xl bg-black/30 px-4 py-4">
-            <p className="text-xs text-subtle">Send cap</p>
-            <p className="mt-1 font-mono text-3xl">${cap}</p>
-            <div className="mt-3 flex gap-1">
-              {[25, 100, 500].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setCap(setSpendCap(n))}
-                  className={cn("min-h-9 rounded-full px-3 font-mono text-xs", cap === n ? "bg-accent text-accent-fg" : "bg-black/40 text-muted")}
-                >
-                  ${n}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-4 border-t border-white/[0.06] pt-4">
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] px-3 py-4">
+        <div className="flex items-end justify-between gap-3 px-2">
           <div>
-            <p className="text-xs text-subtle">Wrapped in Phantom</p>
-            <p className="mt-1 font-mono text-4xl text-accent">${wrapped.toFixed(2)}</p>
-            <p className="mt-2 text-sm text-muted">
-              {owner ? `Phantom holds $${usdc.toFixed(2)} USDC. The wrap stays in that wallet.` : "Connect Phantom. The wrap never leaves it."}
-            </p>
+            <p className="font-mono text-4xl tabular-nums tracking-tight">{waiting ? "—" : bookUsd(net)}</p>
+            <p className="mt-1 text-xs text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)} · ${marked.length} held` : "No wallet connected."}</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={wrapHeld} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
-              Wrap what Phantom holds
-            </button>
-            <button type="button" onClick={sendBack} className="min-h-11 rounded-full border border-white/10 px-4 text-sm font-semibold">
-              Send back to Phantom
-            </button>
+          <p className={cn("font-mono text-sm tabular-nums", move < 0 ? "text-down" : "text-up")}>{waiting ? "" : bookUsd(move)}</p>
+        </div>
+        {!waiting && marked.length === 0 ? (
+          <div className="mt-4 px-2">
+            <p className="text-sm text-muted">{owner ? "Nothing in this wallet yet." : "Connect a wallet."}</p>
+            <Link to="/equities" className="mt-3 inline-flex min-h-12 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">Open the share book</Link>
           </div>
-        </div>
-
-        <div className="mt-4 max-w-xl">
-          {owner ? (
-            <>
-              <input
-                value={raw}
-                onChange={(e) => setRaw(e.target.value)}
-                inputMode="decimal"
-                className="min-h-12 w-full rounded-full border border-white/10 bg-black/40 px-4 font-mono text-lg outline-none"
-                aria-label="Amount"
-              />
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" onClick={() => wrap()} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
-                  Wrap
-                </button>
-                <button type="button" onClick={() => push()} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold">
-                  Push back
-                </button>
-                <Link to="/agents" className="inline-flex min-h-11 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
-                  Fund an agent inside the cap
-                </Link>
-              </div>
-            </>
-          ) : (
-            <WalletPicker />
-          )}
-        </div>
+        ) : null}
+        <HoldingCards rows={cards} moves={moves} />
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-2">
-        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          <h2 className="text-lg">How a PreStock swap is signed</h2>
-          <ul className="mt-3 space-y-2 text-sm text-muted">
-            <li>Jupiter builds it inside Senda. There is no trip out to the issuer.</li>
-            <li>Only SOL, USDC, and the PreStock mints are allowed. Anything else never reaches the wallet.</li>
-            <li>The chain simulates it first. If it would fail, Phantom is not asked.</li>
-            <li>Impact over 5%, or a size over the cap, is refused.</li>
-            <li>You sign. The key never comes here.</li>
-          </ul>
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] px-3 py-4">
+        <div className="flex items-end justify-between gap-3 px-2">
+          <p className="text-sm font-semibold">Bought and sold</p>
+          <p className={cn("font-mono text-sm tabular-nums", book.reduce((s, r) => s + r.now + r.sold - r.bought, 0) < 0 ? "text-down" : "text-up")}>
+            {bookUsd(book.reduce((s, r) => s + r.now + r.sold - r.bought, 0))}
+          </p>
         </div>
-        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          <h2 className="text-lg">Cash vaults</h2>
-          <p className="mt-1 text-sm text-muted">A named pocket of Senda cash. It is not a second wallet and it does not mint USDC.</p>
-          <ul className="mt-3 space-y-2">
-            {wallet.w.vaults.length === 0 ? <li className="rounded-[22px] bg-black/40 px-3 py-3 text-sm text-subtle">None yet.</li> : null}
-            {wallet.w.vaults.map((v) => (
-              <li key={v.id} className="flex items-baseline justify-between rounded-[22px] bg-black/40 px-3 py-3 text-sm">
-                <span>{v.name}</span>
-                <span className="font-mono tabular-nums">{formatMoney(v.balance, v.ccy)}</span>
+        <p className="mt-1 px-2 text-xs text-subtle">Marked value now, plus what you sold, minus what you paid. Only swaps signed in this browser.</p>
+        {book.length === 0 ? <p className="mt-3 px-2 text-sm text-muted">No name yet.</p> : null}
+        <ul>
+          {book.map((row) => {
+            const result = row.now + row.sold - row.bought;
+            return (
+              <li key={row.symbol} className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.06] px-2 py-3">
+                <span>
+                  <span className="block text-sm font-semibold">{row.symbol}</span>
+                  <span className="block font-mono text-[11px] text-subtle">In {bookUsd(row.bought)} · Out {bookUsd(row.sold)}</span>
+                </span>
+                <span className={cn("font-mono text-sm tabular-nums", result < 0 ? "text-down" : "text-up")}>{bookUsd(result)}</span>
               </li>
-            ))}
-          </ul>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name"
-              className="min-h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none"
-            />
-            <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} className="min-h-11 rounded-full border border-white/10 bg-black/40 px-3 text-sm">
-              {CCYS.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => {
-                const r = wallet.openVault(name, ccy);
-                if (!r.ok) toast.error(r.error);
-                else {
-                  setName("");
-                  toast.success("Vault opened.");
-                }
-              }}
-              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
-            >
-              Open
-            </button>
-          </div>
-        </div>
+            );
+          })}
+        </ul>
       </section>
 
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Transactions</p>
+        <Activity fills={fills} txs={chain?.txs ?? []} />
+      </section>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <p className="text-sm font-semibold">Cash sleeve</p>
+        <p className="mt-1 text-xs text-muted">A wrap is a claim on USDC that stays in the wallet. Push sends the claim back.</p>
+        <p className="mt-3 font-mono text-2xl tabular-nums">${wrapped.toFixed(2)} wrapped · ${usdc.toFixed(2)} USDC</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[25, 100, 500].map((n) => (
+            <button key={n} type="button" onClick={() => setCap(setSpendCap(n))} className={cn("min-h-9 rounded-full px-3 font-mono text-xs", cap === n ? "bg-accent text-accent-fg" : "bg-white/10")}>${n} cap</button>
+          ))}
+        </div>
+        {owner ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input value={raw} onChange={(e) => setRaw(e.target.value)} inputMode="decimal" className="min-h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/40 px-4 font-mono text-sm outline-none" />
+            <button type="button" onClick={wrapHeld} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">Wrap</button>
+            <button type="button" onClick={sendBack} className="min-h-11 rounded-full border border-white/15 px-4 text-sm font-semibold">Push back</button>
+          </div>
+        ) : (
+          <div className="mt-3"><WalletPicker /></div>
+        )}
+      </section>
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <p className="text-sm font-semibold">Named pockets</p>
+        <ul className="mt-2 space-y-2">
+          {wallet.w.vaults.length === 0 ? <li className="text-sm text-muted">None yet.</li> : null}
+          {wallet.w.vaults.map((v) => (
+            <li key={v.id} className="flex items-baseline justify-between text-sm">
+              <span>{v.name}</span>
+              <span className="font-mono tabular-nums">{formatMoney(v.balance, v.ccy)}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" className="min-h-11 min-w-0 flex-1 rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none" />
+          <select value={ccy} onChange={(e) => setCcy(e.target.value as Ccy)} className="min-h-11 rounded-full border border-white/10 bg-black/40 px-3 text-sm">
+            {CCYS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              const r = wallet.openVault(name, ccy);
+              if (!r.ok) toast.error(r.error);
+              else {
+                setName("");
+                toast.success("Pocket opened.");
+              }
+            }}
+            className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
+          >
+            Open
+          </button>
+        </div>
+      </section>
       <FilmBand poster="/images/orbit.jpg" label="The wallet stays the wallet." />
     </main>
   );

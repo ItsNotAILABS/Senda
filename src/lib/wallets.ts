@@ -1,6 +1,7 @@
-/** Injected wallets. We only connect what is actually in this browser. */
+/** Injected wallets. On a phone with no extension, Phantom, Solflare, or Backpack opens this page. */
 
 import { insideWalletApp, isPhoneBrowser, openInWallet, type MobileWallet } from "@/lib/mobile-wallet";
+import { unlockSeal } from "@/lib/seal";
 
 type SolProvider = {
   isPhantom?: boolean;
@@ -167,6 +168,7 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
     const address = res?.publicKey?.toString();
     if (!address) throw new Error(`${choice.name} returned no account.`);
     rememberWallet(id);
+    await unlockSeal(address);
     return { address, label: choice.name, chain: "solana" };
   }
   const spec = EVM.find((e) => e.id === id);

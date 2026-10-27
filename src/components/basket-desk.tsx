@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { EtfTicket } from "@/components/etf-ticket";
 import { PACKS } from "@/lib/basket";
 import { applyHouseDrop, loadHouseBook, saveHouseBook } from "@/lib/house-paper";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -48,7 +49,8 @@ export function BasketDesk({
   }
 
   return (
-    <div className="px-4 pb-8">
+    <div className="space-y-3 px-4 pb-8">
+      <EtfTicket owner="" />
       <p className="pt-3 text-sm text-muted">
         PRE8 is valuation-weighted across live PreStocks. Other packs are equal-weight SPL baskets. One ticket, several
         mints, same cash. Live size: Jupiter USDC pairs.

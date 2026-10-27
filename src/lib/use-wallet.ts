@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { liveSolAddress } from "@/lib/phantom";
 import { getFx, rate } from "@/lib/wallet-fx";
 import {
   FALLBACK_USD,
@@ -18,7 +19,9 @@ import {
   playStake,
   playWin,
   playRound,
+  postCardRail,
   claimNearby,
+  cancelNearby,
   convert,
   createSenda,
   investCredit,
@@ -31,6 +34,7 @@ import {
   linkChain,
   unlinkChain,
   loadWallet,
+  matchOut,
   openCurrency,
   openVault,
   receiveFrom,
@@ -55,6 +59,20 @@ import {
 } from "@/lib/wallet";
 import { decodeNote } from "@/lib/nearby";
 import "@/lib/seal";
+
+function shownWallet(w: Wallet): Wallet {
+  const live = typeof window === "undefined" ? "" : liveSolAddress();
+  const phantom = w.links.find((l) => l.kind === "phantom");
+  const sol = w.links.find((l) => l.kind === "solana");
+  const topAddr = live || phantom?.address || sol?.address || "";
+  if (!topAddr) return w;
+  const hit = w.links.find((l) => l.address === topAddr);
+  const top = hit
+    ? { ...hit, kind: live && hit.address === live ? ("phantom" as const) : hit.kind, label: hit.label || "Phantom" }
+    : { id: "live", label: "Phantom", address: live, kind: "phantom" as const };
+  if (w.links[0]?.address === top.address && w.links[0]?.kind === top.kind) return w;
+  return { ...w, links: [top, ...w.links.filter((l) => l.address !== top.address)] };
+}
 
 export function useWallet() {
   const blank: Wallet = {
@@ -102,6 +120,17 @@ export function useWallet() {
     return () => window.removeEventListener("senda-seal", open);
   }, []);
 
+  useEffect(() => {
+    if (!ready) return;
+    const live = liveSolAddress();
+    if (!live) return;
+    if (w.links[0]?.address === live && w.links[0]?.kind === "phantom") return;
+    const next = linkChain(w, live, "Phantom", "phantom");
+    if ("error" in next) return;
+    setW(next);
+    saveWallet(next);
+  }, [ready, w]);
+
   const commit = useCallback((next: Wallet | { error: string }): { ok: boolean; error?: string } => {
     if ("error" in next) return { ok: false, error: next.error };
     setW(next);
@@ -138,6 +167,7 @@ export function useWallet() {
         return { ok: true as const };
       },
       withdraw: (amount: number, ccy: Ccy = "USD") => commit(withdraw(w, amount, ccy)),
+      match: (amount: number, ccy: Ccy, where: string, signature: string) => commit(matchOut(w, amount, ccy, where, signature)),
       release: (amount: number, label: string) => commit(releaseToWallet(w, amount, label)),
       send: (amount: number, ccy: Ccy, contact: Contact, note: string) => {
         const { wallet } = upsertContact(w, contact.name, contact.tag);
@@ -163,6 +193,8 @@ export function useWallet() {
       },
       cardSpend: (amount: number, merchant: string, cardId?: string, mcc?: string) =>
         commit(spendCard(w, amount, merchant, cardId, mcc)),
+      cardRail: (cardId: string, amount: number, merchant: string, sig: string, mcc?: string) =>
+        commit(postCardRail(w, cardId, amount, merchant, sig, mcc)),
       freeze: (cardId: string) => {
         const next = toggleFreeze(w, cardId);
         setW(next);
@@ -206,8 +238,17 @@ export function useWallet() {
         return { ok: true as const };
       },
       createWallet: () => commit(createSenda(w)),
-      linkChain: (address: string, label: string, kind: "phantom" | "solana" | "evm") =>
-        commit(linkChain(w, address, label, kind)),
+      linkChain: (address: string, label: string, kind: "phantom" | "solana" | "evm") => {
+        const linked = commit(linkChain(w, address, label, kind));
+        if (linked.ok) {
+          void import("@/lib/account-address")
+            .then(({ saveAccountAddress }) =>
+              saveAccountAddress({ data: { address, kind: kind === "evm" ? "evm" : "solana" } }),
+            )
+            .catch(() => undefined);
+        }
+        return linked;
+      },
       unlink: (address: string) => {
         const next = unlinkChain(w, address);
         setW(next);
@@ -229,9 +270,10 @@ export function useWallet() {
         if ("error" in p) return { ok: false as const, error: p.error };
         return commit(claimNearby(w, p));
       },
+      nearbyCancel: (id: string) => commit(cancelNearby(w, id)),
     }),
     [commit, usdPer, w, weekend],
   );
 
-  return { w, usd, usdPer, weekend, ready, ...actions };
+  return { w: shownWallet(w), usd, usdPer, weekend, ready, ...actions };
 }

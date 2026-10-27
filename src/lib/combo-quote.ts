@@ -110,10 +110,11 @@ export function invNorm(p: number): number {
 }
 
 /** P(finish above open | now). Digital, remaining time of this minute. */
-export function pFinishUp(last: number, open: number, change24h: number | null, remainingMs: number): number {
+export function pFinishUp(last: number, open: number, change24h: number | null, remainingMs: number, volFloor = 0): number {
   if (!(last > 0) || !(open > 0)) return 0.5;
   const tau = Math.max(remainingMs / 60_000, 1 / 60);
-  const daily = Math.max(Math.abs(change24h ?? 0), 0.015);
+  const daily = Math.max(Math.abs(change24h ?? 0), volFloor);
+  if (!(daily > 0)) return 0.5;
   const sig = (daily / Math.sqrt(1440)) * Math.sqrt(tau) * last;
   const z = (last - open) / Math.max(sig, last * 1e-8);
   return Math.min(0.98, Math.max(0.02, normCdf(z)));

@@ -1,0 +1,185 @@
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import {
+  ColorType,
+  CrosshairMode,
+  LineStyle,
+  createChart,
+  type IChartApi,
+  type ISeriesApi,
+  type CandlestickData,
+  type HistogramData,
+  type UTCTimestamp,
+} from "lightweight-charts";
+import type { DerivBar } from "@/lib/deriv-book";
+
+const UP = "#089981";
+const DOWN = "#f23645";
+
+export type ChartLine = { id: string; color: string; points: { time: number; value: number }[] };
+
+export type ChartHandle = { png: () => string | null };
+
+/** Candles in the TradingView dark palette. The bars are the pool. The colors are not a feed. */
+export const CandleChart = forwardRef<ChartHandle, {
+  bars: DerivBar[];
+  precision: number;
+  levels?: number[];
+  band?: { low: number; high: number } | null;
+  overlays?: ChartLine[];
+  className?: string;
+  onHover?: (bar: DerivBar | null) => void;
+}>(function CandleChart({
+  bars,
+  precision,
+  levels = [],
+  band = null,
+  overlays = [],
+  className = "h-[560px]",
+  onHover,
+}, ref) {
+  const box = useRef<HTMLDivElement>(null);
+  const chart = useRef<IChartApi | null>(null);
+  const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const volume = useRef<ISeriesApi<"Histogram"> | null>(null);
+  const lines = useRef<ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]>[]>([]);
+  const studies = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
+  const fitted = useRef(0);
+  const hover = useRef(onHover);
+  const seen = useRef("");
+  hover.current = onHover;
+
+  useImperativeHandle(ref, () => ({
+    png: () => chart.current?.takeScreenshot().toDataURL("image/png") ?? null,
+  }), []);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const next = createChart(el, {
+      autoSize: true,
+      layout: { background: { type: ColorType.Solid, color: "#131722" }, textColor: "#787b86", fontFamily: "Trebuchet MS, Roboto, Ubuntu, sans-serif", fontSize: 12 },
+      grid: { vertLines: { color: "#1e222d" }, horzLines: { color: "#1e222d" } },
+      rightPriceScale: { borderColor: "#2a2e39", textColor: "#b2b5be", minimumWidth: 78, entireTextOnly: true },
+      timeScale: { borderColor: "#2a2e39", timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 8, minBarSpacing: 4 },
+      crosshair: {
+        mode: CrosshairMode.Normal,
+        vertLine: { color: "#758696", labelBackgroundColor: "#363a45", width: 1, style: LineStyle.Dashed },
+        horzLine: { color: "#758696", labelBackgroundColor: "#363a45", width: 1, style: LineStyle.Dashed },
+      },
+      handleScroll: { vertTouchDrag: false },
+    });
+    const candles = next.addCandlestickSeries({
+      upColor: UP,
+      downColor: DOWN,
+      borderUpColor: UP,
+      borderDownColor: DOWN,
+      wickUpColor: UP,
+      wickDownColor: DOWN,
+      priceLineVisible: true,
+      lastValueVisible: true,
+      priceLineWidth: 1,
+      priceLineStyle: LineStyle.Dashed,
+    });
+    candles.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.26 } });
+    const hist = next.addHistogramSeries({
+      priceScaleId: "volume",
+      priceFormat: { type: "volume" },
+    });
+    next.priceScale("volume").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+    next.subscribeCrosshairMove((param) => {
+      const row = param.seriesData.get(candles) as CandlestickData | undefined;
+      if (!row || typeof row.open !== "number") {
+        hover.current?.(null);
+        return;
+      }
+      hover.current?.({
+        time: Number(row.time),
+        open: row.open,
+        high: row.high,
+        low: row.low,
+        close: row.close,
+      });
+    });
+    chart.current = next;
+    series.current = candles;
+    volume.current = hist;
+    fitted.current = 0;
+    seen.current = "";
+    return () => {
+      lines.current = [];
+      next.remove();
+      chart.current = null;
+      series.current = null;
+      volume.current = null;
+    };
+  }, [precision]);
+
+  useEffect(() => {
+    const s = series.current;
+    if (!s) return;
+    const data: CandlestickData[] = [];
+    const vols: HistogramData[] = [];
+    let last = -1;
+    for (const bar of [...bars].sort((a, b) => a.time - b.time)) {
+      if (!(bar.time > last) || !(bar.close > 0)) continue;
+      last = bar.time;
+      const time = bar.time as UTCTimestamp;
+      data.push({ time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+      if (bar.volume && bar.volume > 0) {
+        vols.push({ time, value: bar.volume, color: bar.close >= bar.open ? "rgba(8,153,129,0.45)" : "rgba(242,54,69,0.45)" });
+      }
+    }
+    const key = data.map((row) => row.time).join(",");
+    const tip = data[data.length - 1];
+    const forming = key === seen.current && tip;
+    if (forming) {
+      s.update(tip);
+      const vol = vols[vols.length - 1];
+      if (vol && vol.time === tip.time) volume.current?.update(vol);
+    } else {
+      s.setData(data);
+      volume.current?.setData(vols);
+      seen.current = key;
+    }
+    const close = tip;
+    if (close) {
+      const rising = close.close >= close.open;
+      s.applyOptions({ priceLineColor: rising ? UP : DOWN });
+    }
+    const open = data[0]?.time ?? 0;
+    if (open && fitted.current !== open) {
+      fitted.current = open as number;
+      const from = Math.max(0, data.length - 90);
+      chart.current?.timeScale().setVisibleLogicalRange({ from, to: data.length + 6 });
+    }
+    for (const line of lines.current) s.removePriceLine(line);
+    lines.current = levels.filter((price) => price > 0).map((price) =>
+      s.createPriceLine({ price, color: "#2962ff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "" }),
+    );
+    if (band && band.high > band.low && band.low > 0) {
+      lines.current.push(
+        s.createPriceLine({ price: band.high, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "zone" }),
+        s.createPriceLine({ price: band.low, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "" }),
+      );
+    }
+    const chartApi = chart.current;
+    if (!chartApi) return;
+    const keep = new Set(overlays.map((row) => row.id));
+    for (const [id, study] of studies.current) {
+      if (!keep.has(id)) {
+        chartApi.removeSeries(study);
+        studies.current.delete(id);
+      }
+    }
+    for (const row of overlays) {
+      let study = studies.current.get(row.id);
+      if (!study) {
+        study = chartApi.addLineSeries({ color: row.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+        studies.current.set(row.id, study);
+      }
+      study.setData(row.points.filter((p) => p.value > 0).map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
+    }
+  }, [bars, levels, band, overlays]);
+
+  return <div ref={box} className={`w-full ${className}`} />;
+});

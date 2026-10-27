@@ -12,7 +12,7 @@ import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatChg, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
-const CHIPS = [10, 25, 100];
+const CHIPS = [1, 10, 25, 100];
 
 function Spark({ last, mark, chg }: { last: number; mark: number; chg: number }) {
   const d = useMemo(() => {

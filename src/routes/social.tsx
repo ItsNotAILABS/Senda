@@ -1,27 +1,25 @@
-import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PlayFloor } from "@/components/play-floor";
-import { getHouse, type HouseListing } from "@/lib/sol-house";
+import { PredictDesk } from "@/components/predict-desk";
+import { loadPerpBoard, loadPredEvents } from "@/lib/jup-venues";
 
 export const Route = createFileRoute("/social")({
-  loader: () => getHouse(),
+  loader: async () => {
+    const [sports, coins, perps] = await Promise.all([
+      loadPredEvents({ data: { category: "sports" } }).catch(() => []),
+      loadPredEvents({ data: { category: "crypto" } }).catch(() => []),
+      loadPerpBoard().catch(() => []),
+    ]);
+    return { sports, coins, perps };
+  },
   component: SocialPage,
 });
 
 function SocialPage() {
-  const seed = Route.useLoaderData();
-  const [house, setHouse] = useState<HouseListing[]>(seed);
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      getHouse().then(setHouse).catch(() => undefined);
-    }, 15_000);
-    return () => window.clearInterval(id);
-  }, []);
-  const names = house.filter((h) => h.venue === "prestocks");
+  const data = Route.useLoaderData();
   return (
     <AppShell>
-      <PlayFloor names={names} />
+      <PredictDesk initialEvents={data.sports} initialCoins={data.coins} initialPerps={data.perps} />
     </AppShell>
   );
 }

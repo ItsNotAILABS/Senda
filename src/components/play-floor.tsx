@@ -1,1 +1,2 @@
-export { PlayFloor } from "@/components/play-ten";
+export { PredictDesk as PlayFloor } from "@/components/predict-desk";
+

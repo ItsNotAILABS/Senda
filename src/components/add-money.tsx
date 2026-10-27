@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -102,14 +103,7 @@ export function AddMoneyScreen({ onClose }: { onClose: () => void }) {
           {step === "list" ? (
             <List
               methods={w.w.methods}
-              onPaper={() => {
-                const r = w.add(250, "USD", "cash");
-                if (!r.ok) toast.error(r.error);
-                else {
-                  toast.success("$250 paper cash in.");
-                  onClose();
-                }
-              }}
+              onPaper={() => onClose()}
               onSaved={(m) => {
                 if (m.kind === "masked" && m.token) setMaskedToken(m.token);
                 const src: FundSource =
@@ -224,14 +218,15 @@ function List({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <button
-        type="button"
+      <Link
+        to="/payments"
+        search={{ act: "add" }}
         onClick={onPaper}
         className="min-h-16 rounded-2xl bg-accent px-4 py-3 text-left text-accent-fg"
       >
-        <span className="block text-sm font-semibold">Paper $250</span>
-        <span className="block text-xs opacity-80">One tap. Not a bank. Use the book now.</span>
-      </button>
+        <span className="block text-sm font-semibold">Add USDC</span>
+        <span className="block text-xs opacity-80">Phantom holds it. Swap SOL or buy with a card. Nothing is invented here.</span>
+      </Link>
       {methods.length > 0 ? (
         <div>
           <p className="mb-2 px-1 text-xs font-medium tracking-wide text-subtle uppercase">Yours</p>

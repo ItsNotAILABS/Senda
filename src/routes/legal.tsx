@@ -32,6 +32,10 @@ function LegalPage() {
             PreStock marks come from the issuer’s public API. Routes come from Jupiter. Senda does not take the other side of your trade.
           </p>
           <p>
+            <span className="text-fg">Pro. </span>
+            Pro is off until you accept its terms on this device. While it is on, a queued buy that passes the trade cap, the impact cap, and the conflict check opens your wallet for a signature. New launches are included only after the mint authority, freeze authority, and serial-deployer checks pass. A 10 bps fee is shown on those tickets and is not collected. A sell is not signed. Senda still does not hold the key.
+          </p>
+          <p>
             <span className="text-fg">Account. </span>
             If you sign in, that account is for the session. It is not required to connect a wallet.
           </p>

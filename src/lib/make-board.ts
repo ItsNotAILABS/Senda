@@ -3,15 +3,35 @@
 const KEY = "senda.make.v1";
 
 export const KINDS = [
-  { id: "job", label: "Job", line: "Hire a person to do the work." },
-  { id: "software", label: "Software", line: "A tool someone will build or already has." },
-  { id: "service", label: "Service", line: "Work, not a thing on a shelf." },
-  { id: "hardware", label: "Hardware", line: "A physical product." },
-  { id: "robotics", label: "Robotics", line: "A machine, a part, or the labor to build one." },
-  { id: "teaching", label: "For a teacher", line: "What a class needs. Anyone can fund it." },
+  { id: "payroll", label: "Payroll", line: "USDC to a person. One signature." },
+  { id: "lend", label: "Lend", line: "USDC leaves now. It comes back only if they sign a repayment. Nothing here takes collateral." },
+  { id: "repay", label: "Repay", line: "USDC back to the address that lent it." },
+  { id: "invoice", label: "Invoice", line: "A bill. The whole amount goes to that address." },
+  { id: "settle", label: "Settle", line: "Close what you owe, or buy it back, in USDC." },
 ] as const;
 
+const OLD: Record<string, string> = {
+  job: "Payroll",
+  hours: "Payroll",
+  care: "Payroll",
+  video: "Payroll",
+  teaching: "Payroll",
+  service: "Invoice",
+  repair: "Invoice",
+  haul: "Invoice",
+  finance: "Lend",
+  software: "Invoice",
+  hardware: "Settle",
+  robotics: "Settle",
+  goods: "Settle",
+  repurchase: "Settle",
+};
+
 export type MakeKind = (typeof KINDS)[number]["id"];
+
+export function kindLabel(id: string): string {
+  return KINDS.find((k) => k.id === id)?.label || OLD[id] || id;
+}
 
 export type Listing = {
   id: string;
@@ -20,6 +40,7 @@ export type Listing = {
   detail: string;
   usd: number;
   payTo: string;
+  revtag?: string;
   at: number;
 };
 

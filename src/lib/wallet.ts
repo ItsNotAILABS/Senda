@@ -4,7 +4,6 @@
  */
 
 import { encodeNote, makeCode, type NearbyPayload } from "@/lib/nearby";
-import { issueSendaKey } from "@/lib/senda-keys";
 import { endToEndOf, pain001, uetrOf } from "@/lib/iso20022";
 import { authRequest, authResponse, reasonToRc } from "@/lib/iso8583";
 import {
@@ -151,7 +150,7 @@ export type NearbyNote = {
   ccy: Ccy;
   fromTag: string;
   payload: string;
-  status: "open" | "claimed";
+  status: "open" | "claimed" | "cancelled";
   createdAt: string;
 };
 
@@ -633,6 +632,26 @@ export function withdraw(w: Wallet, amount: number, ccy: Ccy = "USD"): Wallet | 
   });
 }
 
+/** Drop browser-book cash only after a Phantom signature already landed. */
+export function matchOut(w: Wallet, amount: number, ccy: Ccy, where: string, signature: string): Wallet | { error: string } {
+  const amt = roundCcy(amount, ccy);
+  if (!(amt > 0)) return { error: "Enter an amount." };
+  if ((w.balances[ccy] || 0) < amt) return { error: `Not enough ${ccy} in the browser book.` };
+  const next = {
+    ...w,
+    balances: { ...w.balances, [ccy]: roundCcy((w.balances[ccy] || 0) - amt, ccy) },
+  };
+  return pushTx(next, {
+    kind: "withdraw",
+    amount: amt,
+    ccy,
+    counterparty: where,
+    note: signature,
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
 export function releaseToWallet(w: Wallet, amount: number, label: string): Wallet | { error: string } {
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Enter an amount." };
@@ -802,6 +821,59 @@ export function spendCard(
     ccy: rail,
     counterparty: merchant,
     note: `ISO 8583 ${res.mti} · STAN ${res.f11_stan} · RC ${rc} · •••• ${card.last4}`,
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
+/** The USDC already moved. This row is the auth, not a second debit. */
+export function postCardRail(
+  w: Wallet,
+  cardId: string,
+  amount: number,
+  merchant: string,
+  sig: string,
+  mcc = "5999",
+): Wallet | { error: string } {
+  const card = w.cards.find((c) => c.id === cardId);
+  if (!card) return { error: "No card." };
+  const amt = roundCcy(amount, "USD");
+  if (!(amt > 0)) return { error: "Enter an amount." };
+  if (card.frozen || card.status === "terminated") return { error: "That card is not live." };
+  const req = authRequest({
+    pan: card.pan.replace(/\D/g, "").length >= 12 ? card.pan : `535512000000${card.last4}`,
+    amount: amt,
+    mcc,
+    merchant,
+  });
+  const res = authResponse(req, "00");
+  const auth: CardAuth = {
+    id: nid("au"),
+    cardId: card.id,
+    last4: card.last4,
+    merchant,
+    mcc,
+    amount: amt,
+    status: "approved",
+    reason: sig.slice(0, 12),
+    at: new Date().toISOString(),
+    mti: res.mti,
+    stan: res.f11_stan,
+    rrn: res.f37_rrn,
+    rc: res.f39_rc,
+    authCode: res.f38_auth,
+  };
+  const next = {
+    ...w,
+    cardAuths: [auth, ...(w.cardAuths ?? [])].slice(0, 80),
+    cards: w.cards.map((c) => (c.id === card.id ? applyAuth(c, amt) : c)),
+  };
+  return pushTx(next, {
+    kind: "card",
+    amount: amt,
+    ccy: "USDC",
+    counterparty: merchant,
+    note: `Signed ${sig.slice(0, 8)} · ISO 8583 ${res.mti} · •••• ${card.last4}`,
     auroFee: 0,
     revolutFee: 0,
   });
@@ -1071,18 +1143,19 @@ export function ensureOpened(w: Wallet, ccy: Ccy): Wallet {
 }
 
 export function createSenda(w: Wallet): Wallet | { error: string } {
-  if (w.senda) return { error: "You already have a Senda wallet." };
-  const k = issueSendaKey();
+  const link = w.links.find((l) => l.kind === "phantom") ?? w.links.find((l) => l.kind === "solana");
+  if (!link) return { error: "Connect Phantom. That address is the wallet." };
+  if (w.senda?.pubkey === link.address) return { error: "This wallet is already the account." };
   const next: Wallet = {
     ...ensureOpened(w, "SOL"),
-    senda: { pubkey: k.pubkey, secret: "", createdAt: new Date().toISOString() },
+    senda: { pubkey: link.address, secret: "", createdAt: new Date().toISOString() },
   };
   return pushTx(next, {
     kind: "move",
     amount: 0,
     ccy: "SOL",
-    counterparty: k.pubkey,
-    note: "Issued Senda Solana wallet",
+    counterparty: link.address,
+    note: "This Phantom address is the Senda account",
     auroFee: 0,
     revolutFee: 0,
   });
@@ -1104,7 +1177,16 @@ export function linkChain(
   } else if (addr.length < 32 || addr.length > 48) {
     return { error: "That doesn’t look like a Solana address." };
   }
-  if (w.links.some((l) => l.address.toLowerCase() === addr.toLowerCase())) return { error: "Already linked." };
+  const existing = w.links.find((l) => l.address === addr);
+  if (existing) {
+    return {
+      ...w,
+      links: [
+        { ...existing, label: label.trim() || existing.label, kind: kind === "phantom" ? "phantom" : existing.kind },
+        ...w.links.filter((l) => l.address !== addr),
+      ],
+    };
+  }
   return {
     ...w,
     links: [{ id: nid("ln"), label: label.trim() || kind, address: addr, kind }, ...w.links],
@@ -1232,6 +1314,7 @@ export function issueNearby(
 }
 
 export function claimNearby(w: Wallet, p: NearbyPayload): Wallet | { error: string } {
+  if (w.notes.some((n) => n.id === p.id && n.status === "cancelled")) return { error: "That note was cancelled. The cash went back." };
   if (w.notes.some((n) => n.id === p.id && n.status === "claimed")) return { error: "Already claimed here." };
   if (p.from === w.tag) return { error: "That’s your own note." };
   const ccy = CCYS.includes(p.ccy as Ccy) ? (p.ccy as Ccy) : "USD";
@@ -1259,6 +1342,29 @@ export function claimNearby(w: Wallet, p: NearbyPayload): Wallet | { error: stri
     ccy,
     counterparty: p.from,
     note: `Nearby from ${p.from} · ${p.code}`,
+    auroFee: 0,
+    revolutFee: 0,
+  });
+}
+
+/** The locked cash returns only while the note is still open on this book. A claim already taken cannot be pulled back. */
+export function cancelNearby(w: Wallet, id: string): Wallet | { error: string } {
+  const note = w.notes.find((n) => n.id === id);
+  if (!note) return { error: "That note is not on this book." };
+  if (note.fromTag !== w.tag) return { error: "Only the person who locked the cash can cancel it." };
+  if (note.status === "claimed") return { error: "Already claimed. The cash is not here to return." };
+  if (note.status === "cancelled") return { error: "Already cancelled." };
+  const next: Wallet = {
+    ...w,
+    balances: { ...w.balances, [note.ccy]: roundCcy(w.balances[note.ccy] + note.amount, note.ccy) },
+    notes: w.notes.map((n) => (n.id === id ? { ...n, status: "cancelled" as const } : n)),
+  };
+  return pushTx(next, {
+    kind: "nearby",
+    amount: note.amount,
+    ccy: note.ccy,
+    counterparty: note.code,
+    note: "Nearby cancelled · cash returned",
     auroFee: 0,
     revolutFee: 0,
   });

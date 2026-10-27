@@ -342,6 +342,21 @@ const SEEDS: Seed[] = [
   },
   {
     venue: "prestocks",
+    mint: "Pre9atBqkocK1QngFy7Q7zvyQictEFpXdLi6bZ2qnYy",
+    symbol: "OURA",
+    name: "Oura PreStocks",
+    mark: 69.56,
+    last: 69.56,
+    valuation: 0,
+    holders: 0,
+    liquidity: 0,
+    change24h: 0,
+    url: "https://www.prestocks.com/oura",
+    sector: "Consumer",
+    description: "SPV-backed PreStock tracking Oura. Economic exposure only — not a share.",
+  },
+  {
+    venue: "prestocks",
     mint: "PreZad18qfPtbxNpMtMuAuX2zVpvkEU8DnJx56faCWd",
     symbol: "FIGUREAI",
     name: "Figure AI PreStocks",
@@ -394,7 +409,8 @@ function rank(s: HouseListing): number {
   else if (blob.includes("SPACE")) name = 5;
   else if (blob.includes("NEURAL")) name = 6;
   else if (blob.includes("ANDURIL")) name = 7;
-  else if (blob.includes("FIGURE")) name = 8;
+  else if (blob.includes("OURA")) name = 8;
+  else if (blob.includes("FIGURE")) name = 9;
   return venueBoost + name;
 }
 

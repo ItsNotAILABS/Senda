@@ -85,7 +85,7 @@ export function NearbyDesk() {
           >
             Create note
           </button>
-          {note ? (
+          {note && note.status !== "cancelled" ? (
             <div className="rounded-2xl bg-elevated px-4 py-4">
               <p className="text-xs font-medium tracking-wide text-subtle uppercase">Show this</p>
               <p className="mt-2 text-4xl font-semibold tracking-widest tabular-nums">{note.code}</p>
@@ -116,6 +116,21 @@ export function NearbyDesk() {
                 <button
                   type="button"
                   onClick={() => {
+                    const r = w.nearbyCancel(note.id);
+                    if (!r.ok) {
+                      toast.error(r.error);
+                      return;
+                    }
+                    setNote(null);
+                    toast.success("Cancelled. The locked cash is back on this book.");
+                  }}
+                  className="min-h-12 rounded-full border border-white/15 text-sm font-semibold"
+                >
+                  Cancel the claim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     void navigator.clipboard?.writeText(note.payload);
                     toast.success("Payload copied.");
                   }}
@@ -124,7 +139,31 @@ export function NearbyDesk() {
                   Copy payload
                 </button>
               </div>
+              <p className="mt-3 text-xs text-subtle">Cancel returns the cash only while this note is still open here. If the other phone already claimed the code, this cannot pull it back.</p>
             </div>
+          ) : null}
+          {w.w.notes.filter((n) => n.status === "open" && n.fromTag === w.w.tag).length > 0 ? (
+            <ul className="mt-2 space-y-2">
+              {w.w.notes.filter((n) => n.status === "open" && n.fromTag === w.w.tag).map((n) => (
+                <li key={n.id} className="flex items-center justify-between gap-2 rounded-2xl bg-elevated px-3 py-2">
+                  <span className="font-mono text-xs">{n.code} · {formatMoney(n.amount, n.ccy)}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const r = w.nearbyCancel(n.id);
+                      if (!r.ok) toast.error(r.error);
+                      else {
+                        if (note?.id === n.id) setNote(null);
+                        toast.success("Cancelled. The locked cash is back.");
+                      }
+                    }}
+                    className="min-h-9 rounded-full border border-white/15 px-3 text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
       ) : (

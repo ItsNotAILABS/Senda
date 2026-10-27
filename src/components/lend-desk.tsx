@@ -68,7 +68,7 @@ export function LendDesk({
   return (
     <div className="px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        Half of what this wallet holds, as cash you can spend. The PreStock does not move. You owe the cash back. Listed shares that Kamino already lends against stay on that market. This draw is the loan on the name you just bought.
+        This draw is a note in the browser. It does not lock the token and it does not borrow from a market. A Kamino or Aave loan is on Portfolio, under Loans.
       </p>
       <p className="mt-3 text-xs leading-relaxed text-subtle">{LANE}</p>
       <ul className="mt-4 divide-y divide-border">

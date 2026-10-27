@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { PlayDesk } from "@/components/play-desk";
-import { MoneyBar } from "@/components/money-bar";
 import { loadHouseBook } from "@/lib/house-paper";
 import { formatMoney } from "@/lib/wallet";
 import { loadPlay } from "@/lib/play";
@@ -45,14 +44,11 @@ export function SocialDesk({ house }: { house: HouseListing[] }) {
   return (
     <main className="flex flex-1 flex-col">
       <header className="mx-3 mt-3 rounded-[28px] border border-white/10 bg-[#101018] px-6 py-5">
-        <h1 className="text-4xl">Play</h1>
+        <h1 className="text-4xl">Predict</h1>
         <p className="mt-1 text-sm text-muted">
-          Games, copy a name, tape of the book. Same cash. PreStocks only.
+          A stake is USDC into the pot, then the token. The score is the print.
         </p>
       </header>
-      <div className="mx-3 mb-3">
-        <MoneyBar />
-      </div>
       <div className="flex gap-1 overflow-x-auto px-4 pb-3">
         {(
           [

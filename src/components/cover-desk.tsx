@@ -1,78 +1,166 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Shield, TrendingDown } from "lucide-react";
-import { ClearStrip } from "@/components/clear-strip";
-import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
-import { rememberClear } from "@/lib/clearing";
-import { TabLead } from "@/components/tab-lead";
 import { WalletPicker } from "@/components/wallet-picker";
-import { COVERS, formatCover } from "@/lib/cover";
+import { DeskAudit } from "@/components/money-flow";
+import { TokenMark } from "@/components/token-mark";
+import { COVERS } from "@/lib/cover";
+import { connectPhantom } from "@/lib/phantom";
 import {
   cancelChainCover,
+  coverPremium,
   coverPubkey,
+  coverStrikeRatio,
   coverUsdc,
   listChainCovers,
   openChainCover,
+  payoutCover,
   settleChainCover,
   type ChainCover,
+  type CoverKind,
 } from "@/lib/cover-chain";
-import { connectPhantom, readChain } from "@/lib/phantom";
+import { bumpClears } from "@/components/clear-strip";
+import { rememberClear } from "@/lib/clear-tape";
+import { derivBook } from "@/lib/deriv-book";
+import { listHedges, type Hedge } from "@/lib/hedge-book";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-const LOGO: Record<string, string> = {
-  SPACEX: "/logos/spacex.png",
-  OPENAI: "/logos/openai.png",
-  ANTHROPIC: "/logos/anthropic.png",
-  ANDURIL: "/logos/anduril.png",
-  NEURALINK: "/logos/neuralink.png",
-  FIGUREAI: "/logos/figureai.png",
-  KALSHI: "/logos/kalshi.png",
-  XAI: "/logos/xai.png",
-};
+type Pool = { ui: number } | { error: string };
+
+function money(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  const cents = Math.round(n * 100) / 100;
+  return Number.isInteger(cents) ? `$${cents.toLocaleString("en-US")}` : `$${cents.toFixed(2)}`;
+}
+
+function poolLine(pool: Pool | null): string {
+  if (pool == null) return "Cover USDC · reading the account";
+  if ("error" in pool) return `Cover USDC · the read failed. ${pool.error}`;
+  const text = pool.ui.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+  return `Cover USDC · ${text}`;
+}
+
+function formatDistance(pct: number): string {
+  const sign = pct > 0 ? "+" : "";
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
+function termWord(kind: CoverKind): string {
+  switch (kind) {
+    case "drop":
+      return "10% drop";
+    case "drop5":
+      return "5% drop";
+    case "life":
+      return "Fixed USDC";
+  }
+}
 
 export function CoverDesk({ names }: { names: HouseListing[] }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const wallet = useWallet();
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const [mode, setMode] = useState<"drop" | "life">("drop");
+  const [mode, setMode] = useState<CoverKind>("drop");
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [lifeId, setLifeId] = useState(COVERS[0].id);
-  const [usd, setUsd] = useState(100);
-  const [usdc, setUsdc] = useState(0);
-  const [locked, setLocked] = useState(0);
+  const [usd, setUsd] = useState(1);
   const [rows, setRows] = useState<ChainCover[]>([]);
   const [busy, setBusy] = useState(false);
-  const [policy, setPolicy] = useState<ChainCover | null>(null);
+  const [arm, setArm] = useState(false);
+  const [pool, setPool] = useState<Pool | null>(null);
+  const [hedges, setHedges] = useState<Hedge[]>([]);
+  const [hedgeId, setHedgeId] = useState("");
+  const [hedgeUsd, setHedgeUsd] = useState(25);
+  const [prints, setPrints] = useState<Record<string, number>>({});
+  const [watch, setWatch] = useState(false);
   const name = book.find((n) => n.symbol === symbol) ?? book[0];
   const life = COVERS.find((c) => c.id === lifeId) ?? COVERS[0];
-  const premium = mode === "drop" ? Math.max(1, Math.round(usd * 0.04)) : life.premium;
-  const shown = policy ? (rows.find((r) => r.id === policy.id) ?? policy) : null;
+  const premium = coverPremium(mode, usd, life.premium);
+  const openRows = rows.filter((r) => r.status === "open");
+  const ratio = coverStrikeRatio(mode);
+  const trigger = name && ratio != null ? name.last * ratio : null;
 
   function refresh() {
     setRows(listChainCovers());
-    void coverUsdc().then(setLocked).catch(() => setLocked(0));
   }
 
   useEffect(() => {
     refresh();
+    setHedges(listHedges());
     const u = readUsing();
     if (u && names.some((n) => n.symbol === u.symbol)) setSymbol(u.symbol);
   }, [names]);
 
   useEffect(() => {
-    if (!owner) return;
     let live = true;
-    readChain(owner)
-      .then((s) => live && setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0))
-      .catch(() => live && setUsdc(0));
+    derivBook()
+      .then((rows) => {
+        if (!live) return;
+        const next: Record<string, number> = {};
+        for (const row of rows) {
+          const px = row.mid ?? row.spot;
+          if (px && px > 0) next[`${row.base}/${row.quote}`] = px;
+        }
+        setPrints(next);
+      })
+      .catch(() => undefined);
     return () => {
       live = false;
     };
-  }, [owner]);
+  }, []);
+
+  useEffect(() => {
+    if (!watch) return;
+    let running = false;
+    const id = window.setInterval(() => {
+      if (running) return;
+      const row = listChainCovers().find((cover) => {
+        if (cover.status !== "open" || !cover.symbol) return false;
+        const ratio = coverStrikeRatio(cover.kind);
+        const price = book.find((n) => n.symbol === cover.symbol)?.last || 0;
+        return ratio != null && price > 0 && (price <= cover.strike * ratio || Date.now() > cover.until);
+      });
+      if (!row) return;
+      running = true;
+      const price = book.find((n) => n.symbol === row.symbol)?.last || 0;
+      payoutCover(row, price)
+        .then((sig) => {
+          toast.success(`Cover paid from its own key. ${sig.slice(0, 8)}`);
+          refresh();
+        })
+        .catch((e) => toast.error(e instanceof Error ? e.message : "The payout did not send."))
+        .finally(() => {
+          running = false;
+        });
+    }, 30_000);
+    return () => window.clearInterval(id);
+  }, [watch, book]);
+
+  useEffect(() => {
+    setArm(false);
+  }, [mode, usd, symbol, lifeId]);
+
+  useEffect(() => {
+    let live = true;
+    coverUsdc()
+      .then((ui) => {
+        if (!live) return;
+        if (!Number.isFinite(ui)) {
+          setPool({ error: "The cover account did not return a USDC balance." });
+          return;
+        }
+        setPool({ ui });
+      })
+      .catch((e: unknown) => {
+        if (!live) return;
+        setPool({ error: e instanceof Error ? e.message : "The cover account could not be read." });
+      });
+    return () => {
+      live = false;
+    };
+  }, [rows]);
 
   async function payer(): Promise<string> {
     const who = owner || (await connectPhantom());
@@ -87,12 +175,25 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     setBusy(true);
     try {
       const who = await payer();
-      if (mode === "drop") {
-        if (!name) throw new Error("No PreStock to cover.");
+      if (mode === "life") {
         const row = await openChainCover({
           owner: who,
-          kind: "drop",
-          title: `${name.symbol} drop`,
+          kind: "life",
+          title: life.title,
+          cover: life.premium,
+          premium: life.premium,
+          days: 30,
+        });
+        rememberClear({ sig: row.sig, from: who, to: coverPubkey(), usd: row.premium, memo: row.title, kind: "cover", status: "pending" });
+        bumpClears();
+        toast.success(`${life.title} is a fixed USDC premium in the cover account.`);
+      } else {
+        if (!name) throw new Error("No PreStock to cover.");
+        const label = mode === "drop5" ? "5%" : "10%";
+        const row = await openChainCover({
+          owner: who,
+          kind: mode,
+          title: `${name.symbol} ${label} drop`,
           symbol: name.symbol,
           mint: name.mint,
           strike: name.last,
@@ -100,81 +201,17 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
           premium,
           days: 1,
         });
-        setPolicy(row);
-        rememberClear({
-          desk: "cover",
-          title: `${name.symbol} cover`,
-          legs: [{ side: "out", asset: "USDC", amount: premium, where: "cover account" }],
-          feeUsd: 0,
-          sig: row.sig,
-          status: "signed",
-        });
-        toast.success(`Premium left Phantom. If ${name.symbol} falls 10%, settle buys $${usd}.`);
-      } else {
-        const row = await openChainCover({
-          owner: who,
-          kind: "life",
-          title: life.title,
-          cover: life.cover,
-          premium: life.premium,
-          days: 30,
-        });
-        rememberClear({
-          desk: "cover",
-          title: `${life.title} cover`,
-          legs: [{ side: "out", asset: "USDC", amount: life.premium, where: "cover account" }],
-          feeUsd: 0,
-          sig: row.sig,
-          status: "signed",
-        });
-        toast.success(`${life.title} premium is on-chain. The payout is only what that account holds.`);
+        rememberClear({ sig: row.sig, from: who, to: coverPubkey(), usd: row.premium, memo: row.title, kind: "cover", status: "pending" });
+        bumpClears();
+        toast.success(`${name.symbol} premium signed. The token stays in the wallet.`);
       }
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The cover did not send.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function coverTen() {
-    const live = name ?? book[0];
-    if (!live) {
-      toast.error("No PreStock to cover.");
-      return;
-    }
-    setSymbol(live.symbol);
-    setMode("drop");
-    setBusy(true);
-    try {
-      const who = await payer();
-      const premiumNow = Math.max(1, Math.round(usd * 0.04));
-      const row = await openChainCover({
-        owner: who,
-        kind: "drop",
-        title: `${live.symbol} drop`,
-        symbol: live.symbol,
-        mint: live.mint,
-        strike: live.last,
-        cover: usd,
-        premium: premiumNow,
-        days: 1,
-      });
-      setPolicy(row);
-      rememberClear({
-        desk: "cover",
-        title: `${live.symbol} 10% cover`,
-        legs: [{ side: "out", asset: "USDC", amount: premiumNow, where: "cover account" }],
-        feeUsd: 0,
-        sig: row.sig,
-        status: "signed",
-      });
-      toast.success(`${row.symbol || live.symbol} is ${row.status}. Premium $${row.premium}. Strike ${formatUsd(row.strike)}.`);
       refresh();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The cover did not send.");
     } finally {
       setBusy(false);
+      setArm(false);
     }
   }
 
@@ -184,265 +221,366 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
     try {
       if (cancel) {
         const sig = await cancelChainCover(row, owner);
-        rememberClear({
-          desk: "cover",
-          title: `${row.symbol || row.title} returned`,
-          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
-          feeUsd: 0,
-          sig,
-          status: "signed",
-        });
+        rememberClear({ sig, from: owner, to: owner, usd: row.premium, memo: row.title, kind: "cover", status: "pending" });
+        bumpClears();
         toast.success(`USDC sent back. ${sig.slice(0, 8)}`);
       } else {
-        const price = book.find((n) => n.symbol === row.symbol)?.last ?? 0;
+        const price = prints[row.symbol] || book.find((n) => n.symbol === row.symbol)?.last || 0;
         const out = await settleChainCover(row, owner, price);
-        rememberClear({
-          desk: "cover",
-          title: `${row.symbol || row.title} settled`,
-          legs: [{ side: "in", asset: "USDC", amount: row.premium, where: owner }],
-          feeUsd: 0,
-          sig: out.sig,
-          status: "signed",
-        });
-        toast.success(out.bought ? "Premium returned. The buy is signed." : "Premium returned.");
+        rememberClear({ sig: out.sig, from: owner, to: owner, usd: row.premium, memo: row.title, kind: "cover", status: "pending" });
+        bumpClears();
+        toast.success(out.bought ? "USDC sent back. The buy is signed." : "USDC sent back.");
       }
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Settle did not send.");
+      refresh();
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-3 px-3 py-3 lg:px-4">
-      <TabLead
-        kicker="Cover"
-        title="If the print drops"
-        accent="the cover pays."
-        line="Name the size. Sign once. A ten percent drop is the cover you can buy on this desk."
-        live={[
-          "Buy a 10% drop cover on a live PreStock.",
-          "The premium leaves as USDC on the on-chain path this page already calls.",
-        ]}
-        coming={["A licensed insurer.", "A pooled premium."]}
+    <div className="w-full space-y-3 px-3 py-4 lg:px-5">
+      <DeskAudit live="The premium is USDC you sign into the cover account, after a review." hold="Settle pays it back only on the term you already see. It is not a licensed policy." />
+      <p className="font-mono text-sm tabular-nums text-fg">{poolLine(pool)}</p>
+      <p className="text-sm text-muted">
+        The premium leaves your wallet into a cover address this browser can move. The devnet program only stores terms. It does not pay. Send about 0.01 SOL to the cover address once, then Watch pays the USDC back when the live print is through the floor, without a second Phantom prompt. The token stays in your wallet. A buy on a hit is still a separate signature.
+      </p>
+      <button type="button" onClick={() => setWatch((v) => !v)} className="min-h-10 rounded-full border border-white/15 px-4 text-xs font-semibold">
+        {watch ? "Watching the floor" : "Watch the floor"}
+      </button>
+      <HedgeCover
+        hedges={hedges}
+        hedgeId={hedgeId}
+        onPick={setHedgeId}
+        usd={hedgeUsd}
+        onUsd={setHedgeUsd}
+        prints={prints}
+        busy={busy}
+        onSign={async (hedge, kind) => {
+          const strike = prints[hedge.pair];
+          if (!(strike > 0)) {
+            toast.error("That pair has no print yet. Cover needs a strike.");
+            return;
+          }
+          setBusy(true);
+          try {
+            const who = await payer();
+            const size = Math.max(1, hedgeUsd);
+            const cost = coverPremium(kind, size);
+            const label = kind === "drop5" ? "5%" : "10%";
+            const row = await openChainCover({
+              owner: who,
+              kind,
+              title: `${hedge.pair} ${label} on the hedge`,
+              symbol: hedge.pair,
+              strike,
+              cover: size,
+              premium: cost,
+              days: 1,
+            });
+            rememberClear({ sig: row.sig, from: who, to: coverPubkey(), usd: row.premium, memo: row.title, kind: "cover", status: "pending" });
+            bumpClears();
+            refresh();
+            toast.success(`${hedge.pair} cover signed. The hedge stays where it was signed.`);
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "The cover did not send.");
+          } finally {
+            setBusy(false);
+          }
+        }}
       />
-      <MoneyBar />
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">10% drop</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <h2 className="text-4xl tracking-tight lg:text-5xl">{name ? name.symbol : "No PreStock"}</h2>
-          <p className="font-mono text-sm text-muted">{name ? `${formatUsd(name.last)} last` : "Nothing priced."}</p>
-        </div>
-        <p className="mt-2 max-w-lg text-sm text-muted">
-          One signature on {name ? name.symbol : "the first name"}. The premium leaves Phantom. Strike, premium, and status come back from that cover. Nothing is paid out here.
-        </p>
-        {book.length > 0 ? (
-          <div className="mt-5 flex gap-2 overflow-x-auto">
-            {book.map((n) => (
-              <button
-                key={n.id}
-                type="button"
-                onClick={() => {
-                  setSymbol(n.symbol);
-                  setMode("drop");
-                }}
-                className={cn(
-                  "min-h-12 shrink-0 rounded-full px-4 text-sm font-semibold",
-                  n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
-                )}
+
+      <div className="grid w-full items-start gap-4 lg:grid-cols-2">
+        <section className="min-w-0 rounded-2xl border border-white/10 bg-[#10131c] p-3 lg:p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-lg tracking-tight">PreStocks</h1>
+              <p className="mt-1 text-xs text-subtle">Last is the print. Mark is the SPV. Pick a name, then sign.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  ["drop", "10%"],
+                  ["drop5", "5%"],
+                  ["life", "Fixed USDC"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setMode(id)}
+                  className={cn(
+                    "min-h-10 rounded-full px-3 text-sm font-semibold",
+                    mode === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-3 text-sm text-muted">
+            {mode === "life"
+              ? "A fixed USDC premium for that label. Not a death benefit."
+              : mode === "drop5"
+                ? "Premium is 2.5% of the size, at least $1. The line is 95% of the print you sign."
+                : "Premium is 4% of the size, at least $1. The line is 90% of the print you sign."}
+          </p>
+
+          {mode === "life" ? (
+            <label className="mt-3 block text-xs text-subtle">
+              Label
+              <select
+                value={lifeId}
+                onChange={(e) => setLifeId(e.target.value)}
+                className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 text-sm text-fg outline-none"
               >
-                {n.symbol}
+                {COVERS.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title} · ${c.premium}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-muted">{life.blurb}</span>
+            </label>
+          ) : (
+            <label className="mt-3 block text-xs text-subtle">
+              Size · {name?.symbol ?? "no name"}
+              <input
+                value={usd}
+                onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
+                inputMode="decimal"
+                className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-lg tabular-nums outline-none"
+              />
+            </label>
+          )}
+
+          <div className="mt-3 flex flex-wrap items-end justify-between gap-3 border-t border-white/10 pt-3">
+            <div>
+              <p className="text-[11px] uppercase tracking-wide text-subtle">Premium</p>
+              <p className="font-mono text-2xl tabular-nums text-fg">{money(premium)}</p>
+              {mode !== "life" && name && trigger != null ? (
+                <p className="mt-1 text-xs text-muted">
+                  {name.symbol} strike {formatUsd(name.last)} · trigger {formatUsd(trigger)}
+                </p>
+              ) : null}
+            </div>
+            {owner ? (
+              <button
+                type="button"
+                disabled={busy || (mode !== "life" && !name)}
+                onClick={() => {
+                  if (!arm) {
+                    setArm(true);
+                    return;
+                  }
+                  void open();
+                }}
+                className="min-h-12 min-w-36 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-50"
+              >
+                {busy ? "Waiting for Phantom…" : arm ? "Sign the premium" : "Review"}
+              </button>
+            ) : (
+              <div className="w-full max-w-xl">
+                <WalletPicker />
+              </div>
+            )}
+          </div>
+          {arm ? <p className="mt-2 text-xs text-muted">Review: {money(premium)} USDC leaves this wallet. The token stays. This is not an insurance policy.</p> : null}
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wide text-subtle">
+                  <th className="px-2 py-1.5 font-medium">Symbol</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Last</th>
+                  <th className="px-2 py-1.5 text-right font-medium">Mark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {book.map((n) => {
+                  const on = n.symbol === name?.symbol;
+                  return (
+                    <tr
+                      key={n.id}
+                      onClick={() => setSymbol(n.symbol)}
+                      className={cn("cursor-pointer border-b border-white/5", on ? "bg-white/10" : "hover:bg-white/[0.04]")}
+                    >
+                      <td className="px-2 py-2">
+                        <span className="flex items-center gap-2">
+                          <TokenMark stock={n} size={28} />
+                          <span>
+                            <span className="block font-semibold">{n.symbol}</span>
+                            <span className="block text-[11px] text-subtle">{n.name}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-2 py-2 text-right font-mono tabular-nums">{formatUsd(n.last)}</td>
+                      <td className="px-2 py-2 text-right font-mono tabular-nums">{formatUsd(n.mark)}</td>
+                    </tr>
+                  );
+                })}
+                {book.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="px-2 py-3 text-muted">
+                      No name priced.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="min-w-0 rounded-2xl border border-white/10 bg-[#10131c] p-3 lg:p-4">
+          <h2 className="text-lg tracking-tight">Open covers</h2>
+          <p className="mt-1 text-xs text-subtle">Distance is how far the live print sits above the trigger.</p>
+          {openRows.length === 0 ? <p className="mt-4 text-sm text-muted">None.</p> : null}
+          {openRows.length > 0 ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[36rem] border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-[11px] uppercase tracking-wide text-subtle">
+                    <th className="px-2 py-1.5 font-medium">Cover</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Strike</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Live</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Distance</th>
+                    <th className="px-2 py-1.5 text-right font-medium"> </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openRows.map((r) => {
+                    const listed = book.find((n) => n.symbol === r.symbol);
+                    const live = listed && listed.last > 0 ? listed.last : null;
+                    const line = coverStrikeRatio(r.kind);
+                    const hitAt = line != null && r.strike > 0 ? r.strike * line : null;
+                    const distance = live != null && hitAt != null ? ((live - hitAt) / live) * 100 : null;
+                    return (
+                      <tr key={r.id} className="border-b border-white/5 align-top">
+                        <td className="px-2 py-3">
+                          <span className="block font-semibold">{r.symbol || r.title}</span>
+                          <span className="mt-0.5 block text-[11px] text-subtle">
+                            {r.kind === "life" ? r.title : termWord(r.kind)} · {money(r.premium)}
+                          </span>
+                          <a
+                            href={`https://solscan.io/tx/${r.sig}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-0.5 block font-mono text-[11px] text-accent"
+                          >
+                            {r.sig.slice(0, 8)}
+                          </a>
+                        </td>
+                        <td className="px-2 py-3 text-right font-mono tabular-nums">{r.strike > 0 ? formatUsd(r.strike) : "—"}</td>
+                        <td className="px-2 py-3 text-right font-mono tabular-nums">{live != null ? formatUsd(live) : "—"}</td>
+                        <td
+                          className={cn(
+                            "px-2 py-3 text-right font-mono tabular-nums",
+                            distance != null && distance <= 0 ? "text-accent" : "text-muted",
+                          )}
+                        >
+                          {distance == null ? "—" : formatDistance(distance)}
+                        </td>
+                        <td className="px-2 py-3">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void settle(r, false)}
+                              className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40"
+                            >
+                              Settle
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void settle(r, true)}
+                              className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function HedgeCover({
+  hedges,
+  hedgeId,
+  onPick,
+  usd,
+  onUsd,
+  prints,
+  busy,
+  onSign,
+}: {
+  hedges: Hedge[];
+  hedgeId: string;
+  onPick: (id: string) => void;
+  usd: number;
+  onUsd: (n: number) => void;
+  prints: Record<string, number>;
+  busy: boolean;
+  onSign: (hedge: Hedge, kind: "drop" | "drop5") => void;
+}) {
+  const hedge = hedges.find((row) => row.id === hedgeId) ?? hedges[0];
+  const print = hedge ? prints[hedge.pair] : undefined;
+  return (
+    <section className="rounded-2xl border border-white/10 bg-[#10131c] p-4">
+      <p className="text-[11px] tracking-[0.16em] text-accent uppercase">On a hedge</p>
+      <h2 className="mt-1 text-lg">Cover the pair you already signed.</h2>
+      <p className="mt-2 max-w-2xl text-sm text-muted">
+        The premium is USDC into the same cover account. The long stays in Phantom and the short stays in MetaMask. If the print falls through the line, the USDC comes back. It does not buy the currency.
+      </p>
+      {hedges.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">No hedge yet. Open one on Trade, then cover it here.</p>
+      ) : (
+        <>
+          <div className="mt-3 flex gap-1 overflow-x-auto">
+            {hedges.map((row) => (
+              <button key={row.id} type="button" onClick={() => onPick(row.id)} className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-semibold", hedge?.id === row.id ? "bg-white text-black" : "bg-white/10")}>
+                {row.pair}
               </button>
             ))}
           </div>
-        ) : null}
-        <label className="mt-5 block">
-          <span className="text-xs text-subtle">Size</span>
-          <input
-            value={usd}
-            onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))}
-            inputMode="decimal"
-            className="mt-2 min-h-16 w-full rounded-[22px] border border-white/10 bg-black/40 px-5 font-mono text-3xl tabular-nums outline-none"
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || !name}
-          onClick={() => void coverTen()}
-          className="mt-4 flex min-h-16 w-full items-center justify-center rounded-full bg-accent px-6 text-base font-semibold text-accent-fg disabled:opacity-50"
-        >
-          {busy ? "Waiting for Phantom…" : "Cover 10%"}
-        </button>
-        <dl className="mt-5 grid gap-3 sm:grid-cols-3">
-          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
-            <dt className="text-[11px] text-subtle">Premium</dt>
-            <dd className="font-mono text-3xl tabular-nums">{shown ? `$${shown.premium}` : name ? `$${Math.max(1, Math.round(usd * 0.04))}` : "—"}</dd>
-          </div>
-          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
-            <dt className="text-[11px] text-subtle">Strike</dt>
-            <dd className="font-mono text-3xl tabular-nums">{shown ? formatUsd(shown.strike) : name ? formatUsd(name.last) : "—"}</dd>
-          </div>
-          <div className="rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
-            <dt className="text-[11px] text-subtle">Status</dt>
-            <dd className="font-mono text-3xl">{shown ? shown.status : "—"}</dd>
-          </div>
-        </dl>
-        {shown && shown.strike > 0 ? (
-          <p className="mt-3 text-xs text-muted">
-            Pays if the print is at or under {formatUsd(shown.strike * 0.9)}. Settle is a second signature.
-          </p>
-        ) : name ? (
-          <p className="mt-3 text-xs text-muted">
-            Pays if {name.symbol} prints at or under {formatUsd(name.last * 0.9)}. You are {((1 - 0.9) * 100).toFixed(0)}% above that line at the current print. Premium is 4% of the size, in USDC, when you sign.
-          </p>
-        ) : (
-          <p className="mt-4 font-mono text-xs text-subtle">No cover yet. Status stays blank until Phantom signs.</p>
-        )}
-        {name && mode === "drop" ? (
-          <div className="mt-4">
-            <div className="flex justify-between text-[11px] text-subtle">
-              <span>Pays at {formatUsd(name.last * 0.9)}</span>
-              <span>Now {formatUsd(name.last)}</span>
+          {hedge ? (
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <p className="font-mono text-2xl">{hedge.pair}</p>
+                <p className="mt-1 text-xs text-muted">
+                  {hedge.long ? `Long · ${hedge.long.where}` : "No long"}
+                  {hedge.short ? ` · Short · ${hedge.short.where}` : ""}
+                  {print ? ` · print ${print >= 20 ? print.toFixed(2) : print.toFixed(5)}` : " · print not loaded"}
+                </p>
+              </div>
+              <label className="text-xs text-subtle">
+                Size
+                <input value={usd} onChange={(e) => onUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-1 block w-28 rounded-xl border border-white/10 bg-black/40 px-3 py-2 font-mono text-lg" />
+              </label>
+              <button type="button" disabled={busy} onClick={() => onSign(hedge, "drop5")} className="min-h-10 rounded-full bg-white px-4 text-xs font-semibold text-black disabled:opacity-40">
+                5% · {money(coverPremium("drop5", usd))}
+              </button>
+              <button type="button" disabled={busy} onClick={() => onSign(hedge, "drop")} className="min-h-10 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">
+                10% · {money(coverPremium("drop", usd))}
+              </button>
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-[90%] bg-accent" />
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              The line is 10% under this print. Premium is ${Math.max(1, Math.round(usd * 0.04))} USDC when you sign.
-              {owner && usdc + 0.001 < Math.max(1, Math.round(usd * 0.04))
-                ? ` Wallet has ${usdc.toFixed(2)}. Convert SOL first if that is short.`
-                : ""}
-            </p>
-          </div>
-        ) : null}
-      </section>
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6 lg:p-8">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Cover</p>
-          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            The premium <span className="text-accent">leaves Phantom</span>.
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            One signature. USDC moves into a cover account, and the terms are written on the transaction. Senda does not invent the payout. If a PreStock falls 10%, settle sends the premium back and asks you to buy that size.
-          </p>
-          <div className="mt-6 flex gap-2">
-            <button type="button" onClick={() => setMode("drop")} className={cn("min-h-11 rounded-full px-5 text-sm font-semibold", mode === "drop" ? "bg-accent text-accent-fg" : "border border-white/15")}>
-              Drop
-            </button>
-            <button type="button" onClick={() => setMode("life")} className={cn("min-h-11 rounded-full px-5 text-sm font-semibold", mode === "life" ? "bg-accent text-accent-fg" : "border border-white/15")}>
-              Life
-            </button>
-          </div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-            <p className="text-xs text-subtle">Phantom USDC</p>
-            <p className="mt-2 font-mono text-4xl">{owner ? usdc.toFixed(2) : "—"}</p>
-            <p className="mt-1 text-xs text-muted">{owner ? "This is what can pay a premium." : "Connect Phantom. Nothing is covered until you sign."}</p>
-          </figure>
-          <figure className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5">
-            <p className="text-xs text-subtle">Cover account</p>
-            <p className="mt-2 font-mono text-4xl">{locked.toFixed(2)}</p>
-            <p className="mt-1 break-all font-mono text-[11px] text-subtle">{coverPubkey()}</p>
-          </figure>
-        </div>
-      </section>
-
-      <FilmBand poster="/images/hero.jpg" label="The premium leaves the wallet." />
-
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <button type="button" onClick={() => setMode("drop")} className="flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#ff5d73]/15 text-[#ff8fa3]"><TrendingDown className="size-4" /></span>
-          <span>
-            <span className="block text-sm font-semibold">Drop</span>
-            <span className="block text-[11px] text-muted">10% under this print</span>
-          </span>
-        </button>
-        <button type="button" onClick={() => setMode("life")} className="flex items-center gap-3 rounded-[22px] border border-white/[0.08] bg-[#10131c] px-3 py-3 text-left">
-          <span className="grid size-10 place-items-center rounded-xl bg-[#14f195]/15 text-accent"><Shield className="size-4" /></span>
-          <span>
-            <span className="block text-sm font-semibold">Life</span>
-            <span className="block text-[11px] text-muted">Phone, travel, rent, a haul</span>
-          </span>
-        </button>
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
-          <p className="text-[11px] text-subtle">Premium</p>
-          <p className="font-mono text-xl">${premium}</p>
-        </div>
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] px-4 py-3">
-          <p className="text-[11px] text-subtle">Open</p>
-          <p className="font-mono text-xl">{rows.filter((r) => r.status === "open").length}</p>
-        </div>
-      </section>
-
-      <section className="grid gap-3 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-2">
-          {mode === "drop"
-            ? book.map((n) => (
-                <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className={cn("flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left", n.symbol === name?.symbol ? "bg-white/10" : "")}>
-                  {LOGO[n.symbol] ? <img src={LOGO[n.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" /> : null}
-                  <span className="flex-1 text-sm font-semibold">{n.symbol}</span>
-                  <span className="font-mono text-[11px]">{formatUsd(n.last)}</span>
-                </button>
-              ))
-            : COVERS.map((c) => (
-                <button key={c.id} type="button" onClick={() => setLifeId(c.id)} className={cn("flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm", c.id === life.id ? "bg-white/10" : "")}>
-                  <span className="font-semibold">{c.title}</span>
-                  <span className="font-mono text-[11px] text-muted">${c.premium}</span>
-                </button>
-              ))}
-        </div>
-
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-6">
-          {mode === "drop" && name ? (
-            <>
-              <p className="text-xs text-subtle">Locks this print for a day</p>
-              <h2 className="mt-2 text-4xl">{name.symbol}</h2>
-              <p className="mt-2 text-sm text-muted">
-                Premium ${premium} USDC leaves now. Strike {formatUsd(name.last)}. If the token is at or under {formatUsd(name.last * 0.9)}, settle returns the premium and you sign a buy of ${usd}. If it does not fall, cancel returns the USDC. Nothing is paid from a local balance.
-              </p>
-              <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-4 min-h-12 w-full rounded-full border border-white/[0.08] bg-black/40 px-4 font-mono text-lg outline-none" />
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-subtle">{life.term} · not a licensed policy</p>
-              <h2 className="mt-2 text-4xl">{life.title}</h2>
-              <p className="mt-2 text-sm text-muted">
-                {life.blurb} The premium, ${life.premium} USDC, is what moves. A claim can only return what the cover account holds. It cannot pay {formatCover(life.cover)} out of nothing.
-              </p>
-            </>
-          )}
-          {owner ? (
-            <button type="button" disabled={busy} onClick={() => void open()} className="mt-5 min-h-12 rounded-full bg-accent px-6 text-sm font-semibold text-accent-fg disabled:opacity-60">
-              {busy ? "Waiting for Phantom…" : `Sign the premium · $${premium} USDC`}
-            </button>
-          ) : (
-            <div className="mt-5"><WalletPicker /></div>
-          )}
-        </div>
-
-        <div className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
-          <p className="text-sm font-semibold">Signed covers</p>
-          {rows.length === 0 ? <p className="mt-3 text-xs text-subtle">None. A cover does not exist until the USDC moves.</p> : null}
-          <ul className="mt-2 space-y-2">
-            {rows.map((r) => (
-              <li key={r.id} className="rounded-2xl bg-black/40 px-3 py-3">
-                <p className="text-sm font-semibold">{r.title}</p>
-                <p className="text-[11px] text-subtle">{r.status} · ${r.premium} USDC · {r.symbol || "life"}</p>
-                <a href={`https://solscan.io/tx/${r.sig}`} target="_blank" rel="noreferrer" className="mt-1 block truncate font-mono text-[11px] text-accent">{r.sig}</a>
-                {r.status === "open" ? (
-                  <div className="mt-3 flex gap-2">
-                    <button type="button" disabled={busy} onClick={() => void settle(r, false)} className="min-h-9 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg disabled:opacity-40">Settle</button>
-                    <button type="button" disabled={busy} onClick={() => void settle(r, true)} className="min-h-9 rounded-full border border-white/15 px-4 text-xs font-semibold text-muted disabled:opacity-40">Cancel</button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-      <ClearStrip desk="cover" />
-    </div>
+          ) : null}
+        </>
+      )}
+      <a href="/invest" className="mt-3 inline-flex text-xs font-semibold text-accent">Open a hedge on Trade</a>
+    </section>
   );
 }

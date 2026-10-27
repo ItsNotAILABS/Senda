@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, Binoculars, CalendarClock, Crosshair, Eye, FileText, Lock, Scale, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
-import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
+import { JumpStrip } from "@/components/jump-strip";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
 import { JOBS, think, type Job, type Queue } from "@/lib/agent-shift";
 import { createEnvelope, dropEnvelope, listEnvelopes, patchEnvelope, writeLog, type Envelope } from "@/lib/agent-envelope";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
-import { spendCap } from "@/lib/spend-cap";
+import { bookSignals, sized, type BookSignal } from "@/lib/book-strategies";
+import { setSpendCap, spendCap } from "@/lib/spend-cap";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
+import { shortBook, signMarketShort } from "@/lib/short-market";
+import { RouteProPanel } from "@/components/route-pro-panel";
+import { connectWallet } from "@/lib/wallets";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { readUsing } from "@/lib/using";
@@ -28,6 +32,9 @@ const JOB_ICON = {
   daily: CalendarClock,
   cover: Shield,
   clerk: FileText,
+  basis: Scale,
+  tape: Activity,
+  signal: Crosshair,
 } as const satisfies Record<Job, unknown>;
 
 const BUILT_ICON = {
@@ -211,6 +218,25 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     return who;
   }
 
+  async function signSignal(row: BookSignal) {
+    const amount = sized(usd, spendCap());
+    if (!(amount > 0)) {
+      toast.error("Set an amount under the cap.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const who = await owner();
+      const done = await runPrestock({ owner: who, mint: row.mint, side: row.side, usd: amount, price: row.last });
+      toast.success(`${row.side === "buy" ? "Bought" : "Sold"} ${row.symbol}. ${done.signature.slice(0, 8)}…`);
+      note(row.symbol, row.side, amount, book.find((n) => n.mint === row.mint));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The strategy did not sign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function run() {
     setBusy(true);
     try {
@@ -290,7 +316,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         queued ??
         [...pool].sort((a, b) => (row.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
       if (!pick) throw new Error("No name inside this envelope.");
-      const side = row.queue?.side ?? row.side;
+      const queuedSide = row.queue?.side ?? row.side;
+      const side = queuedSide === "short" ? "sell" : queuedSide;
       const g = review({
         symbol: pick.symbol,
         side,
@@ -301,6 +328,27 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         cap: Math.min(row.maxUsd, spendCap()),
       });
       if (g.blocked) throw new Error(g.blocked);
+      if (queuedSide === "short") {
+        const venue = shortBook(pick.symbol);
+        if (!venue) throw new Error("No short market on that name.");
+        let trader = "";
+        if (venue.kind === "base") {
+          const evm = wallet.w.links.find((l) => l.kind === "evm")?.address ?? "";
+          trader = evm || (await connectWallet("metamask")).address;
+          if (!evm) {
+            const linked = wallet.linkChain(trader, "MetaMask", "evm");
+            if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep MetaMask.");
+          }
+        }
+        const opened = await signMarketShort({ book: venue, usd: g.usd, owner: who, trader });
+        const line = `short ${pick.symbol} $${g.usd} · ${opened.id.slice(0, 8)} · ${g.tape}`;
+        writeLog(row.id, line);
+        patchEnvelope(row.id, { queue: null });
+        setEnvs(listEnvelopes());
+        note(pick.symbol, "sell", g.usd, pick);
+        toast.success(`${row.name} shorted ${pick.symbol}. ${opened.id.slice(0, 8)}…`);
+        return;
+      }
       const done = await runPrestock({ owner: who, mint: pick.mint, side, usd: g.usd, price: pick.last });
       const line = `${side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
       writeLog(row.id, line);
@@ -464,15 +512,46 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      <JumpStrip />
       <TabLead
         kicker="Agents"
         title="An agent that watches the book"
         accent="You still sign."
-        line="You name it, you bound it, it writes a queue. It cannot move money until you press sign."
+        line="You name it, you bound it, it writes a queue. Close the page and the queue stays on this phone. It does not run while the page is closed, and it cannot sign."
         live={["Create an envelope", "Arm a ready desk", "The computer log", "You sign the queue"]}
         coming={["An agent you host off this browser", "A key of its own"]}
+        audit={{
+          live: "The agent can queue a buy. It cannot sign.",
+          hold: "The signature is still yours, on the wallet this browser connected.",
+        }}
       />
-      <MoneyBar />
+
+      <section className="rounded-[24px] border border-white/10 bg-[#101114] p-4">
+        <p className="text-sm font-semibold">Daily cap. One tap revokes the queue.</p>
+        <p className="mt-1 text-xs text-white/45">An agent can prepare a trade inside this cap, around the clock, while this page is open. It never holds the money. Revoke drops every envelope and every armed job. Nothing stays signed.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[25, 100, 500, 2000].map((n) => (
+            <button key={n} type="button" onClick={() => toast.success(`Daily cap $${setSpendCap(n)}. A queued send above that does not go out.`)} className="min-h-10 rounded-full bg-white/10 px-3 font-mono text-xs">
+              ${n}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              for (const row of listEnvelopes()) dropEnvelope(row.id);
+              saveJobs({ cheap: null, rich: null, daily: null });
+              setEnvs([]);
+              setJobs({ cheap: null, rich: null, daily: null });
+              toast.success("Revoked. No envelope is armed. The agent never held the funds.");
+            }}
+            className="min-h-10 rounded-full bg-white px-4 text-xs font-semibold text-black"
+          >
+            Revoke everything
+          </button>
+        </div>
+      </section>
+
+      <RouteProPanel />
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="space-y-3">
@@ -822,6 +901,24 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Strategies</p>
+        <h3 className="mt-1 text-lg">Discount buys. Rich sells.</h3>
+        <p className="mt-1 text-sm text-muted">A name at least 2% under its mark is a buy. A name at least 2% over is a sell. The size is the amount under the cap. Phantom signs. The same cuts live in the Python book.</p>
+        <ul className="mt-3 space-y-2">
+          {bookSignals(book).map((row) => (
+            <li key={`${row.why}:${row.mint}`} className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 px-3 py-2">
+              <span>
+                <span className="block text-sm font-semibold">{row.side === "buy" ? "Buy" : "Sell"} {row.symbol}</span>
+                <span className="font-mono text-[11px] text-muted">{row.why} · {(row.premium * 100).toFixed(1)}% · ${sized(usd, spendCap())}</span>
+              </span>
+              <button type="button" disabled={busy} onClick={() => void signSignal(row)} className="min-h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">Sign</button>
+            </li>
+          ))}
+        </ul>
+        {bookSignals(book).length === 0 ? <p className="mt-3 text-sm text-muted">Nothing is 2% through its mark.</p> : null}
       </section>
 
       {!env ? (

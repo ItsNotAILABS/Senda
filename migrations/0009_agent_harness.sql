@@ -1,0 +1,44 @@
+CREATE TABLE IF NOT EXISTS agent_harness (
+  id TEXT PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  owner TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS agent_strategy (
+  id TEXT PRIMARY KEY,
+  harness_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  thesis TEXT NOT NULL,
+  rule_json TEXT NOT NULL,
+  executable BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS agent_mission (
+  id TEXT PRIMARY KEY,
+  harness_id TEXT NOT NULL,
+  strategy_id TEXT NOT NULL,
+  bankroll_usd DOUBLE PRECISION NOT NULL,
+  aim_usd DOUBLE PRECISION NOT NULL,
+  spent_usd DOUBLE PRECISION NOT NULL DEFAULT 0,
+  day TEXT NOT NULL DEFAULT '',
+  day_spent DOUBLE PRECISION NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS agent_intent (
+  id TEXT PRIMARY KEY,
+  harness_id TEXT NOT NULL,
+  mission_id TEXT NOT NULL,
+  symbol TEXT NOT NULL,
+  mint TEXT NOT NULL,
+  side TEXT NOT NULL,
+  usd DOUBLE PRECISION NOT NULL,
+  why TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'queued',
+  signature TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

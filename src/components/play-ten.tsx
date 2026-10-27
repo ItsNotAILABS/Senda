@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { TabLead } from "@/components/tab-lead";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
+import { bookDaily, crashAt, diceMultiple, fairMultiple, minesMultiple, pNextUp, slotMultiples, wheelMultiple } from "@/lib/market-math";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -25,21 +26,21 @@ function readPractice() {
     return 0;
   }
 }
-const STAKES = [5, 10, 25, 100] as const;
+const STAKES = [1, 5, 10, 25, 100] as const;
 
 type GameId = "wheel" | "slots" | "updown" | "race" | "closest" | "crash" | "hilo" | "parlay" | "dice" | "mines";
 
 const GAMES: { id: GameId; name: string; pay: string; line: string }[] = [
-  { id: "wheel", name: "Wheel", pay: "Field ×", line: "Pick a name. The print stops the wheel." },
-  { id: "slots", name: "Slots", pay: "2× / 12×", line: "Three faces from the book. A pair pays." },
-  { id: "updown", name: "Up / Down", pay: "2×", line: "Lock a print. Call the next move." },
-  { id: "race", name: "Furthest", pay: "5×", line: "Which name sits furthest from its mark." },
-  { id: "closest", name: "Closest", pay: "5×", line: "Which name sits tightest to its mark." },
-  { id: "crash", name: "Ride", pay: "You cash", line: "The print sets the bust. You choose when to get off." },
-  { id: "hilo", name: "Higher", pay: "1.9×", line: "The next name on the book. Higher or lower." },
-  { id: "parlay", name: "Parlay", pay: "3.4×", line: "Two names. Call each cheap or rich." },
-  { id: "dice", name: "Dice", pay: "2× / 5×", line: "Two faces from the cents. Over, under, or seven." },
-  { id: "mines", name: "Mines", pay: "4×", line: "Three safe tiles. The print hid three mines." },
+  { id: "wheel", name: "Wheel", pay: "Fair", line: "Pick a name. The print stops the wheel. Pay is the field." },
+  { id: "slots", name: "Slots", pay: "Fair", line: "Three faces. A pair and a triple pay from how many names are on the book." },
+  { id: "updown", name: "Up / Down", pay: "Fair", line: "Lock a print. The day's move sets the price of up and down." },
+  { id: "race", name: "Furthest", pay: "Fair", line: "Which name sits furthest from its mark. One winner out of the book." },
+  { id: "closest", name: "Closest", pay: "Fair", line: "Which name sits tightest to its mark. One winner out of the book." },
+  { id: "crash", name: "Ride", pay: "Print", line: "The cents of the print set the bust. You choose when to get off." },
+  { id: "hilo", name: "Higher", pay: "Fair", line: "The next name. The price is how many names sit above or below." },
+  { id: "parlay", name: "Parlay", pay: "Fair", line: "Two names. The price is how much of the book is cheap, and how much is rich." },
+  { id: "dice", name: "Dice", pay: "Fair", line: "Two faces from the cents. Over and under are 21 of 36. Seven is 6." },
+  { id: "mines", name: "Mines", pay: "Fair", line: "Three mines on nine tiles. Safe is 20 of 84." },
 ];
 
 type RoundBanner = { what: string; paid: number; practice: boolean };
@@ -115,6 +116,10 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         line="Every result comes from a PreStock print, not a hidden roll. Practice cash lets you learn the felt. Real cash is the balance you already hold. The two never mix."
         live={["Wheel, slots, up/down, furthest, closest, ride, higher, parlay, dice, and mines.", "Practice bankroll on this browser.", "Real stakes leave Senda cash and wins come back."]}
         coming={["A shared table with another wallet.", "A prize that leaves this browser."]}
+        audit={{
+          live: "Results follow the live print. Practice cash never leaves this browser.",
+          hold: "A USDC stake is a different signature, on Predict or Send, not a chip on this felt.",
+        }}
       />
 
       <Felt className="mt-3">
@@ -257,7 +262,7 @@ function WheelGame({ book, stake, cash, pay, banner, take, clear }: Common) {
   const [busy, setBusy] = useState(false);
   const [landed, setLanded] = useState("");
   const timer = useRef<number | null>(null);
-  const pays = Math.max(2, book.length - 1);
+  const pays = wheelMultiple(book.length);
   useEffect(() => () => {
     if (timer.current) window.clearInterval(timer.current);
   }, []);
@@ -326,7 +331,8 @@ function SlotsGame({ book, stake, cash, pay, banner, take, clear }: Common) {
         setReels(faces);
         const same = faces[0] === faces[1] && faces[1] === faces[2];
         const pair = faces[0] === faces[1] || faces[1] === faces[2] || faces[0] === faces[2];
-        take(same ? stake * 12 : pair ? stake * 2 : 0, `Slots ${faces.join(" ")}`);
+        const odds = slotMultiples(book.length);
+        take(same ? stake * odds.triple : pair ? stake * odds.pair : 0, `Slots ${faces.join(" ")}`);
       }
     }, 70);
     timer.current = id;
@@ -349,14 +355,17 @@ function SlotsGame({ book, stake, cash, pay, banner, take, clear }: Common) {
 function UpGame({ book, stake, cash, pay, banner, take, clear }: Common) {
   const [pick, setPick] = useState(book[0].symbol);
   const [dir, setDir] = useState<"up" | "down">("up");
-  const [locked, setLocked] = useState<{ symbol: string; start: number } | null>(null);
+  const [locked, setLocked] = useState<{ symbol: string; start: number; mult: number } | null>(null);
   const face = book.find((n) => n.symbol === (locked?.symbol || pick)) ?? book[0];
 
   function go() {
     if (!locked) {
       clear();
-      setLocked({ symbol: face.symbol, start: face.last });
-      toast.success(`${face.symbol} locked at ${formatUsd(face.last)}.`);
+      const daily = bookDaily(book.map((n) => n.change24h));
+      const pUp = pNextUp(face.change24h, 60_000, daily);
+      const p = dir === "up" ? pUp : 1 - pUp;
+      setLocked({ symbol: face.symbol, start: face.last, mult: fairMultiple(p) });
+      toast.success(`${face.symbol} locked at ${formatUsd(face.last)}. ${dir} pays ${fairMultiple(p).toFixed(2)}×.`);
       return;
     }
     if (!need(cash, stake)) return;
@@ -365,7 +374,7 @@ function UpGame({ book, stake, cash, pay, banner, take, clear }: Common) {
     if (!now) return;
     const won = dir === "up" ? now.last > locked.start : now.last < locked.start;
     const push = now.last === locked.start;
-    take(push ? stake : won ? stake * 2 : 0, `UpDown ${locked.symbol} ${dir}`);
+    take(push ? stake : won ? stake * locked.mult : 0, `UpDown ${locked.symbol} ${dir}`);
     setLocked(null);
   }
 
@@ -398,7 +407,7 @@ function GapGame({ book, stake, cash, pay, banner, take, clear, far }: Common & 
     setShown(true);
     const held = book.find((n) => n.symbol === pick);
     const hit = held && Math.abs(held.premium ?? 0) === Math.abs(winner.premium ?? 0);
-    take(hit ? stake * 5 : 0, `${far ? "Furthest" : "Closest"} ${winner.symbol}`);
+    take(hit ? stake * wheelMultiple(book.length) : 0, `${far ? "Furthest" : "Closest"} ${winner.symbol}`);
   }
 
   return (
@@ -466,7 +475,7 @@ function CrashGame({ book, stake, cash, pay, banner, take, clear }: Common) {
 
   function start() {
     if (liveRef.current || !need(cash, stake)) return;
-    bustRef.current = 1.15 + ((Math.round(book[0].last * 100) % 8) + 1) * 0.28;
+    bustRef.current = crashAt(book[0].last);
     ref.current.mult = 1;
     setMult(1);
     clear();
@@ -516,12 +525,17 @@ function HiLo({ book, stake, cash, pay, banner, take, clear }: Common) {
     if (!need(cash, stake)) return;
     clear();
     setOpen(true);
-    if (nxt.last === cur.last) {
+    const field = book.filter((n) => n.id !== cur.id);
+    const ups = field.filter((n) => n.last > cur.last).length;
+    const dns = field.filter((n) => n.last < cur.last).length;
+    const p = field.length ? (higher ? ups : dns) / field.length : 0;
+    const mult = fairMultiple(p);
+    if (nxt.last === cur.last || !(mult > 0)) {
       take(stake, `Higher ${nxt.symbol} push`);
       return;
     }
     const won = higher ? nxt.last > cur.last : nxt.last < cur.last;
-    take(won ? stake * 1.9 : 0, `Higher ${nxt.symbol}`);
+    take(won ? stake * mult : 0, `Higher ${nxt.symbol}`);
   }
 
   return (
@@ -554,7 +568,10 @@ function Parlay({ book, stake, cash, pay, banner, take, clear }: Common) {
     if (!need(cash, stake)) return;
     clear();
     const ok = names.every((n) => ((n.premium ?? 0) < 0 ? "cheap" : "rich") === side[n.symbol]);
-    take(ok && names.length === 2 ? stake * 3.4 : 0, `Parlay ${names.map((n) => n.symbol).join(" ")}`);
+    const cheap = book.filter((n) => (n.premium ?? 0) < 0).length / book.length;
+    const p = names.reduce((s, n) => s * Math.max(0.02, side[n.symbol] === "cheap" ? cheap || 0.02 : 1 - cheap || 0.02), 1);
+    const mult = fairMultiple(p);
+    take(ok && names.length === 2 ? stake * mult : 0, `Parlay ${names.map((n) => n.symbol).join(" ")}`);
   }
 
   return (
@@ -588,14 +605,14 @@ function Dice({ book, stake, cash, pay, banner, take, clear }: Common) {
     setFaces([a, b]);
     const sum = a + b;
     const won = call === "seven" ? sum === 7 : call === "over" ? sum > 7 : sum < 7;
-    const mult = call === "seven" ? 5 : 2;
+    const mult = diceMultiple(call);
     take(won ? stake * mult : 0, `Dice ${sum}`);
   }
 
   const calls = [
-    ["under", "Under", "2×"],
-    ["seven", "Seven", "5×"],
-    ["over", "Over", "2×"],
+    ["under", "Under", `${diceMultiple("under").toFixed(2)}×`],
+    ["seven", "Seven", `${diceMultiple("seven").toFixed(2)}×`],
+    ["over", "Over", `${diceMultiple("over").toFixed(2)}×`],
   ] as const;
 
   return (
@@ -634,7 +651,7 @@ function Mines({ book, stake, cash, pay, banner, take, clear }: Common) {
     clear();
     setOpen(true);
     const hit = picked.some((i) => mines.has(i));
-    take(hit ? 0 : stake * 4, "Mines");
+    take(hit ? 0 : stake * minesMultiple(), "Mines");
   }
 
   return (

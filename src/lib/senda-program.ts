@@ -1,56 +1,27 @@
 /**
- * Senda agency program (Solana).
- * CPI into Jupiter. We never take the other side — fee_bps only.
- * Instruction layout is real. Deploy needs a funded upgrade authority.
+ * The cover account program deployed on devnet. See chain/devnet.json.
+ * Mainnet payments do not call this. They are an SPL USDC transfer plus the memo in chain-codec.
+ * Instruction data is 45 bytes: kind, 12-byte symbol, four little-endian u64s.
  */
 
-export const PROGRAM_ID = "SendaAgency11111111111111111111111111112";
-export const FEE_BPS = 30;
+export const PROGRAM_ID = "4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta";
 
-export type RouteFill = {
-  mint: string;
-  amount: bigint;
-  side: 0 | 1;
-  feeBps: number;
-};
-
-function disc(name: string): Uint8Array {
-  const enc = new TextEncoder().encode(`global:${name}`);
-  return enc.slice(0, 8);
+export function encodeCover(input: {
+  kind: 0 | 1;
+  symbol: string;
+  strike: bigint;
+  cover: bigint;
+  premium: bigint;
+  until: bigint;
+}): Uint8Array {
+  const data = new Uint8Array(45);
+  data[0] = input.kind;
+  const symbol = new TextEncoder().encode(input.symbol.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 12));
+  data.set(symbol, 1);
+  const view = new DataView(data.buffer);
+  view.setBigUint64(13, input.strike, true);
+  view.setBigUint64(21, input.cover, true);
+  view.setBigUint64(29, input.premium, true);
+  view.setBigUint64(37, input.until, true);
+  return data;
 }
-
-export function encodeRouteFill(ix: RouteFill): Uint8Array {
-  const mint = new TextEncoder().encode(ix.mint);
-  const buf = new Uint8Array(8 + 4 + mint.length + 8 + 1 + 2);
-  buf.set(disc("route_fill"), 0);
-  const view = new DataView(buf.buffer);
-  view.setUint32(8, mint.length, true);
-  buf.set(mint, 12);
-  const o = 12 + mint.length;
-  view.setBigUint64(o, ix.amount, true);
-  buf[o + 8] = ix.side;
-  view.setUint16(o + 9, ix.feeBps, true);
-  return buf;
-}
-
-export const IDL = {
-  address: PROGRAM_ID,
-  metadata: { name: "senda_agency", version: "0.1.0", spec: "0.1.0" },
-  instructions: [
-    {
-      name: "route_fill",
-      docs: ["Swap USDC ↔ PreStock mint via Jupiter. Platform fee only. No inventory."],
-      accounts: [
-        { name: "taker", writable: true, signer: true },
-        { name: "mint", writable: false },
-        { name: "usdc", writable: false },
-        { name: "jup_program", writable: false },
-      ],
-      args: [
-        { name: "amount", type: "u64" },
-        { name: "side", type: "u8" },
-        { name: "fee_bps", type: "u16" },
-      ],
-    },
-  ],
-} as const;

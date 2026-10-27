@@ -69,13 +69,13 @@ export function AddAccountScreen({ onClose }: { onClose: () => void }) {
             onClick={() => {
               const r = w.createWallet();
               if (!r.ok) toast.error(r.error);
-              else toast.success("Senda Solana wallet issued on this device.");
+              else toast.success("This Phantom address is the account.");
             }}
             className="min-h-16 rounded-2xl bg-elevated px-4 text-left disabled:opacity-40"
           >
-            <span className="block text-sm font-semibold">Create a Senda wallet</span>
+            <span className="block text-sm font-semibold">Use this Phantom address</span>
             <span className="block text-xs text-muted">
-              {w.w.senda ? shortPk(w.w.senda.pubkey) : "Use Phantom. Senda does not keep a key."}
+              {w.w.senda ? shortPk(w.w.senda.pubkey) : "Connect Phantom first. Senda does not keep a key."}
             </span>
           </button>
 

@@ -30,6 +30,127 @@ export type Digest = {
   tied: boolean;
 };
 
+export type LedgerBookName = "chain" | "fill" | "pair" | "journal" | "card";
+
+export type LedgerLine = {
+  id: string;
+  at: number;
+  book: LedgerBookName;
+  side: "in" | "out" | "memo";
+  title: string;
+  detail: string;
+  amount: number | null;
+  unit: string;
+  href: string;
+  status: string;
+};
+
+type LedgerInput = {
+  sigs: Array<{ signature: string; err: boolean; time: number | null }>;
+  moves: Array<{ signature: string; delta: number; other: string; time: number | null; err: boolean }>;
+  fills: Array<{ at: number; symbol: string; side: "buy" | "sell" | "send"; usd: number; signature: string }>;
+  pairs: Array<{ id: string; pair: string; symbol: string; usd: number; got: number; signature: string; at: number; closed?: string }>;
+  journal: Array<{ id: string; kind: string; amount: number; ccy: string; counterparty: string; note: string; status: string; createdAt: string }>;
+  cards: Array<{ id: string; last4: string; merchant: string; amount: number; status: string; at: string; rc?: string }>;
+};
+
+/** One book. A chain fact stays a chain fact. A browser line stays a browser line. */
+export function assembleLedger(input: LedgerInput): LedgerLine[] {
+  const lines: LedgerLine[] = [];
+  const used = new Set<string>();
+  for (const fill of input.fills) {
+    used.add(fill.signature);
+    lines.push({
+      id: `fill:${fill.signature}`,
+      at: fill.at,
+      book: "fill",
+      side: fill.side === "sell" ? "in" : "out",
+      title: `${fill.side === "buy" ? "Bought" : fill.side === "sell" ? "Sold" : "Sent"} ${fill.symbol}`,
+      detail: "Signed in this browser. The signature is the record.",
+      amount: fill.usd,
+      unit: "USD",
+      href: `https://solscan.io/tx/${fill.signature}`,
+      status: "signed",
+    });
+  }
+  for (const pair of input.pairs) {
+    used.add(pair.signature);
+    lines.push({
+      id: `pair:${pair.id}`,
+      at: pair.at,
+      book: "pair",
+      side: pair.closed ? "memo" : "out",
+      title: `${pair.closed ? "Closed" : "Long"} ${pair.pair}`,
+      detail: pair.got > 0 ? `${pair.got} ${pair.symbol} in the wallet` : pair.symbol,
+      amount: pair.usd,
+      unit: "USDC",
+      href: `https://solscan.io/tx/${pair.closed || pair.signature}`,
+      status: pair.closed ? "closed" : "open",
+    });
+  }
+  for (const move of input.moves) {
+    if (used.has(move.signature)) continue;
+    used.add(move.signature);
+    lines.push({
+      id: `usdc:${move.signature}`,
+      at: (move.time || 0) * 1000,
+      book: "chain",
+      side: move.delta < 0 ? "out" : "in",
+      title: move.delta < 0 ? "USDC out" : "USDC in",
+      detail: move.other ? `Other ${move.other.slice(0, 4)}…${move.other.slice(-4)}` : "USDC on this address",
+      amount: Math.abs(move.delta),
+      unit: "USDC",
+      href: `https://solscan.io/tx/${move.signature}`,
+      status: move.err ? "failed" : "confirmed",
+    });
+  }
+  for (const sig of input.sigs) {
+    if (used.has(sig.signature)) continue;
+    lines.push({
+      id: `sig:${sig.signature}`,
+      at: (sig.time || 0) * 1000,
+      book: "chain",
+      side: "memo",
+      title: "Signature",
+      detail: "On this address. The amount is not in the USDC account.",
+      amount: null,
+      unit: "",
+      href: `https://solscan.io/tx/${sig.signature}`,
+      status: sig.err ? "failed" : "confirmed",
+    });
+  }
+  for (const tx of input.journal) {
+    const out = tx.kind === "withdraw" || tx.kind === "send" || tx.kind === "card" || tx.kind === "cover";
+    lines.push({
+      id: `journal:${tx.id}`,
+      at: Date.parse(tx.createdAt) || 0,
+      book: "journal",
+      side: out ? "out" : "in",
+      title: tx.counterparty || tx.kind,
+      detail: `${tx.kind}${tx.note ? ` · ${tx.note}` : ""} · this browser, not the chain`,
+      amount: tx.amount,
+      unit: tx.ccy,
+      href: "",
+      status: tx.status,
+    });
+  }
+  for (const card of input.cards) {
+    lines.push({
+      id: `card:${card.id}`,
+      at: Date.parse(card.at) || 0,
+      book: "card",
+      side: card.status === "approved" ? "out" : "memo",
+      title: `${card.merchant} ··${card.last4}`,
+      detail: "Browser auth. The card number was not charged.",
+      amount: card.amount,
+      unit: "USD",
+      href: "",
+      status: card.rc ? `${card.status} ${card.rc}` : card.status,
+    });
+  }
+  return lines.sort((a, b) => b.at - a.at);
+}
+
 const CCY: Ccy[] = ["USD", "EUR", "GBP", "MXN", "USDC", "SOL"];
 
 function usdOf(amount: number, ccy: Ccy, usdPer: Record<string, number>): number {

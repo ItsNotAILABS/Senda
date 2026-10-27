@@ -1,15 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { connectPhantom, mintDecimals, readChain, splHolding } from "@/lib/phantom";
+import { connectPhantom, mintDecimals, readChain, showInPhantom, splHolding, PRESTOCK_MINTS, type ChainToken } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
+import { loadClearing, postPred } from "@/lib/clearing";
+import { payUsdc } from "@/lib/solana-pay";
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
+import { MarkChart, MiniSpark } from "@/components/mark-chart";
 import { TabLead } from "@/components/tab-lead";
+import { JumpStrip } from "@/components/jump-strip";
 import { WalletPicker } from "@/components/wallet-picker";
 import { listChainCovers, openChainCover } from "@/lib/cover-chain";
+import { onTrades } from "@/lib/trade-log";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
+import { structureLine, vsMarkLine } from "@/lib/explain";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { writeUsing, readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
@@ -42,14 +47,19 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     const hit = fromSearch ?? (fromUse ? rows.find((r) => r.symbol === fromUse.symbol) : null);
     if (hit) setSymbol(hit.symbol);
   }, [query, rows]);
-  const [usd, setUsd] = useState(10);
+  const [usd, setUsd] = useState(1);
   const [quote, setQuote] = useState<JupQuote | { error: string } | null>(null);
   const [held, setHeld] = useState<{ ui: number; raw: string; decimals: number } | null>(null);
   const [decimals, setDecimals] = useState(9);
   const [sig, setSig] = useState<string | null>(null);
+  const [arm, setArm] = useState<"" | "buy" | "sell">("");
+  useEffect(() => {
+    setArm("");
+  }, [symbol, usd]);
   const [busy, setBusy] = useState(false);
+  const [clearing, setClearing] = useState("");
   const [mode, setMode] = useState<"buy" | "cover" | "spend" | "stand">("buy");
-  const [trioUsd, setTrioUsd] = useState(10);
+  const [trioUsd, setTrioUsd] = useState(1);
   const [trioPicks, setTrioPicks] = useState<string[]>([]);
   const [trioSlot, setTrioSlot] = useState(0);
   const [trioBusy, setTrioBusy] = useState(false);
@@ -60,7 +70,11 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
   const wallet = useWallet();
   const name = rows.find((r) => r.symbol === symbol) ?? rows[0];
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; value: number }>>([]);
+  const [usdc, setUsdc] = useState<number | null>(null);
+  const [chainErr, setChainErr] = useState("");
+  const [tradeErr, setTradeErr] = useState("");
+  const [others, setOthers] = useState<ChainToken[]>([]);
+  const [holds, setHolds] = useState<Array<{ symbol: string; mint: string; qty: number; value: number }>>([]);
   const three = useMemo(() => {
     const chosen = trioPicks
       .map((s) => rows.find((r) => r.symbol === s))
@@ -69,6 +83,41 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
     return [...chosen, ...rows.filter((r) => !have.has(r.symbol))].slice(0, 3);
   }, [rows, trioPicks]);
   const slot = three.length === 0 ? 0 : Math.min(trioSlot, three.length - 1);
+
+  useEffect(() => {
+    if (!owner) {
+      setUsdc(null);
+      setChainErr("");
+      return;
+    }
+    let live = true;
+    const pull = () => {
+      readChain(owner)
+        .then((s) => {
+          if (!live) return;
+          setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0);
+          setOthers(s.tokens.filter((t) => t.symbol !== "USDC").slice(0, 8));
+          setChainErr("");
+        })
+        .catch((e: unknown) => {
+          if (live) setChainErr(e instanceof Error ? e.message : "Could not read this wallet.");
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 12000);
+    const stop = onTrades(pull);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      stop();
+    };
+  }, [owner, sig]);
+
+  useEffect(() => {
+    loadClearing()
+      .then((h) => setClearing((h as { pubkey?: string }).pubkey || ""))
+      .catch(() => setClearing(""));
+  }, []);
 
   useEffect(() => {
     if (!name) return;
@@ -113,32 +162,41 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
       return;
     }
     let live = true;
-    readChain(owner)
-      .then((snap) => {
-        if (!live) return;
-        const byMint = new Map<string, HouseListing>();
-        for (const n of names) {
-          if (n.venue !== "prestocks" || byMint.has(n.mint)) continue;
-          byMint.set(n.mint, n);
-        }
-        const next: Array<{ symbol: string; mint: string; value: number }> = [];
-        for (const token of snap.tokens) {
-          const house = byMint.get(token.mint);
-          if (!house || !(token.ui > 0)) continue;
-          next.push({ symbol: house.symbol, mint: house.mint, value: token.ui * house.last });
-        }
-        next.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
-        setHolds(next);
-      })
-      .catch(() => live && setHolds([]));
+    const pull = () => {
+      readChain(owner)
+        .then((snap) => {
+          if (!live) return;
+          const byMint = new Map<string, HouseListing>();
+          for (const n of names) {
+            if (n.venue !== "prestocks" || byMint.has(n.mint)) continue;
+            byMint.set(n.mint, n);
+          }
+          const known = new Map<string, string>(PRESTOCK_MINTS.map(([symbol, mint]) => [mint, symbol]));
+          const next: Array<{ symbol: string; mint: string; qty: number; value: number }> = [];
+          for (const token of snap.tokens) {
+            const house = byMint.get(token.mint);
+            const symbol = house?.symbol || known.get(token.mint);
+            if (!symbol || !(token.ui > 0)) continue;
+            next.push({ symbol, mint: token.mint, qty: token.ui, value: token.ui * (house?.last || 0) });
+          }
+          next.sort((a, b) => b.value - a.value || a.symbol.localeCompare(b.symbol));
+          setHolds(next);
+          for (const row of next) void showInPhantom(row.mint);
+        })
+        .catch(() => live && setHolds([]));
+    };
+    pull();
+    const stop = onTrades(pull);
     return () => {
       live = false;
+      stop();
     };
   }, [owner, names, sig, trioOut]);
 
   async function swap(side: "buy" | "sell") {
     if (!name) return;
     setBusy(true);
+    setTradeErr("");
     try {
       const who = owner || (await connectPhantom());
       if (!owner) {
@@ -153,9 +211,43 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         price: name.last,
       });
       setSig(done.signature);
-      toast.success(`${side === "buy" ? "Bought" : "Sold"} ${done.outUi.toFixed(4)} on-chain.`);
+      if (side === "buy") void showInPhantom(name.mint);
+      toast.success(
+        side === "buy"
+          ? `Bought ${done.outUi.toLocaleString("en-US", { maximumFractionDigits: 6 })} ${name.symbol}. It is in this Phantom account.`
+          : `Sold ${done.outUi.toFixed(4)} ${name.symbol}.`,
+      );
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The swap did not send.");
+      const msg = e instanceof Error ? e.message : "The swap did not send.";
+      setTradeErr(msg);
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stakeAbove() {
+    if (!name || !clearing) return;
+    setBusy(true);
+    try {
+      const who = owner || (await connectPhantom());
+      if (!owner) {
+        const linked = wallet.linkChain(who, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const paid = await payUsdc({
+        owner: who,
+        to: clearing,
+        usd,
+        memo: `Senda clear pred ${name.symbol} 1h yes open`,
+      });
+      await postPred({
+        data: { owner: who, sig: paid.signature, symbol: name.symbol, mint: name.mint, tenor: "1h", side: "yes", usd, strike: 0 },
+      });
+      setSig(paid.signature);
+      toast.success(`${name.symbol} above the print is in the hour pot.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The stake did not land.");
     } finally {
       setBusy(false);
     }
@@ -207,6 +299,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             price: n.last,
           });
           results.push({ symbol: n.symbol, signature: done.signature });
+          void showInPhantom(n.mint);
         } catch (e) {
           results.push({
             symbol: n.symbol,
@@ -240,6 +333,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
 
   return (
     <div className="space-y-4 px-3 py-3 lg:px-4">
+      <JumpStrip />
       <TabLead
         kicker="PreStocks"
         title="The pre-IPO book"
@@ -247,12 +341,30 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
         line="These are tokenized names you buy with the wallet you already have."
         live={["Live prices", "Buy one", "Buy three", "Cover", "Spend a number"]}
         coming={["A broker account", "Margin"]}
+        audit={{
+          live: "A buy is a Jupiter quote, then a second tap signs it in the wallet.",
+          hold: "The token is price exposure. It is not a share, a vote, or a dividend.",
+        }}
       />
-      <MoneyBar />
+      <Depth names={names} />
+
+      {name ? <MarkChart symbol={name.symbol} last={name.last} change={name.change24h} /> : null}
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
-        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-subtle uppercase">Ticket</p>
+        <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(120%_80%_at_100%_-10%,rgb(214_255_74/0.18),transparent_46%),linear-gradient(165deg,#1a1f2e,#0b0d14)] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.16)]">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Buy now</p>
+          <p className="mt-1 text-sm text-muted">
+            {chainErr ? chainErr : owner ? `USDC in this wallet $${(usdc ?? 0).toFixed(2)}` : "Connect Phantom. The buy spends that USDC."}
+          </p>
+          {others.length ? (
+            <ul className="mt-2 flex gap-2 overflow-x-auto">
+              {others.map((t) => (
+                <li key={t.mint} className="rounded-full bg-black/30 px-2 py-1 font-mono text-[11px] text-muted">
+                  {t.ui < 1 ? t.ui.toFixed(4) : t.ui.toLocaleString("en-US", { maximumFractionDigits: 2 })} {t.symbol}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {name ? (
             <>
               <label className="mt-4 block">
@@ -289,13 +401,42 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
               </div>
               <Size usd={usd} setUsd={setUsd} />
               <QuoteLine quote={quote} usd={usd} decimals={decimals} />
+              {arm === "buy" ? (
+                <div className="mt-3 space-y-1 text-xs leading-relaxed text-muted">
+                  <p>{structureLine(name)} {vsMarkLine(name)}</p>
+                  <p>
+                    {name.liquidity > 0 && name.liquidity < 100_000
+                      ? `About $${Math.round(name.liquidity).toLocaleString("en-US")} sits in the pool. A buy this size can move the print.`
+                      : "The pool is the liquidity. The private mark is not a bid."}
+                  </p>
+                  <p>Most of these wrappers exclude U.S. persons. A signature does not make this wallet an allowed buyer. If the company lists, this token does not become the share.</p>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted">Review shows the quote and what this token is. The next tap asks the wallet to sign.</p>
+              )}
               <button
                 type="button"
                 disabled={busy || trioBusy}
-                onClick={() => void swap("buy")}
-                className="mt-4 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-60"
+                onClick={() => {
+                  if (arm !== "buy") {
+                    setArm("buy");
+                    return;
+                  }
+                  setArm("");
+                  void swap("buy");
+                }}
+                className="mt-4 flex min-h-16 w-full items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-60"
               >
-                {busy ? "Waiting for the wallet…" : `Buy $${usd} of ${name.symbol}`}
+                {busy ? "Waiting for the wallet…" : arm === "buy" ? `Sign $${usd} of ${name.symbol}` : `Review $${usd} of ${name.symbol}`}
+              </button>
+              {tradeErr ? <p className="mt-2 text-sm text-down">{tradeErr}</p> : null}
+              <button
+                type="button"
+                disabled={busy || trioBusy || !clearing}
+                onClick={() => void stakeAbove()}
+                className="mt-2 flex min-h-12 w-full items-center justify-center rounded-full border border-white/15 text-sm font-semibold disabled:opacity-60"
+              >
+                Stake ${usd} that it finishes above
               </button>
               {!owner ? (
                 <div className="mt-4">
@@ -313,10 +454,17 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                 <button
                   type="button"
                   disabled={busy || trioBusy}
-                  onClick={() => void swap("sell")}
+                  onClick={() => {
+                    if (arm !== "sell") {
+                      setArm("sell");
+                      return;
+                    }
+                    setArm("");
+                    void swap("sell");
+                  }}
                   className="mt-2 min-h-11 w-full rounded-full border border-white/10 text-sm font-semibold"
                 >
-                  Sell ${usd} · you can raise ${spendable(held.ui, name.last).toFixed(2)}
+                  {busy ? "Waiting for the wallet…" : arm === "sell" ? `Sign the sell of $${usd}` : `Review sell · raise $${spendable(held.ui, name.last).toFixed(2)}`}
                 </button>
               ) : owner ? (
                 <p className="mt-3 text-xs text-subtle">This wallet holds none of {name.symbol}.</p>
@@ -337,6 +485,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             <span className="size-8 shrink-0" />
             <span className="min-w-0 flex-1">Name</span>
             <span className="w-24 text-right">Last</span>
+            <span className="w-16 text-right">Move</span>
             <span className="w-16 text-right">Premium</span>
           </div>
           <ul className="mt-1">
@@ -360,6 +509,7 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
                     <span className="block truncate text-[11px] text-subtle">{r.name}</span>
                   </span>
                   <span className="w-24 text-right font-mono text-sm tabular-nums">{formatUsd(r.last)}</span>
+                  <MiniSpark symbol={r.symbol} last={r.last} change={r.change24h} />
                   <span className={cn("w-16 text-right font-mono text-xs tabular-nums", (r.premium ?? 0) < 0 ? "text-up" : "text-down")}>
                     {formatPremium(r.premium)}
                   </span>
@@ -385,7 +535,8 @@ export function PreDesk({ names, routes, query = "" }: { names: HouseListing[]; 
             {holds.map((h) => (
               <li key={h.mint} className="shrink-0 rounded-2xl border border-white/10 bg-black/30 px-3 py-2">
                 <p className="font-mono text-xs text-subtle">{h.symbol}</p>
-                <p className="font-mono text-sm tabular-nums">{h.value > 0 ? formatUsd(h.value) : "$0.00"}</p>
+                <p className="font-mono text-sm tabular-nums">{h.qty.toLocaleString("en-US", { maximumFractionDigits: 6 })}</p>
+                <p className="font-mono text-sm tabular-nums">{h.value > 0 ? formatUsd(h.value) : "On the account"}</p>
               </li>
             ))}
           </ul>
@@ -672,7 +823,7 @@ function Size({ usd, setUsd, label = "Size in dollars" }: { usd: number; setUsd:
         className="mt-2 min-h-11 w-full rounded-2xl border border-white/[0.08] bg-black/30 px-3 font-mono text-lg tabular-nums outline-none"
       />
       <div className="mt-2 flex gap-2">
-        {[10, 25, 100, 250].map((n) => (
+        {[1, 10, 25, 100, 250].map((n) => (
           <button
             key={n}
             type="button"
@@ -687,6 +838,46 @@ function Size({ usd, setUsd, label = "Size in dollars" }: { usd: number; setUsd:
         ))}
       </div>
     </div>
+  );
+}
+
+function Depth({ names }: { names: HouseListing[] }) {
+  const rows = [...names].filter((n) => n.venue === "prestocks" && n.last > 0).sort((a, b) => b.liquidity - a.liquidity);
+  if (!rows.length) return null;
+  return (
+    <section className="rounded-[24px] border border-white/10 bg-[#101114] p-4">
+      <p className="text-sm font-semibold">Listed by pool depth</p>
+      <p className="mt-1 text-xs text-white/45">Mark, last print, and the pool Jupiter can trade. This is not an options book and it is not a best ask.</p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead className="text-[11px] text-white/40">
+            <tr>
+              <th className="py-2 font-medium">Market</th>
+              <th className="py-2 text-right font-medium">Mark</th>
+              <th className="py-2 text-right font-medium">Change</th>
+              <th className="py-2 text-right font-medium">Last</th>
+              <th className="py-2 text-right font-medium">Pool</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.mint} className="border-t border-white/10">
+                <td className="py-2">
+                  <span className="font-semibold">{row.symbol}</span>
+                  <span className="block text-[11px] text-white/40">{row.name}</span>
+                </td>
+                <td className="py-2 text-right font-mono text-xs">{row.mark > 0 ? formatUsd(row.mark) : "—"}</td>
+                <td className={`py-2 text-right font-mono text-xs ${(row.change24h ?? 0) < 0 ? "text-down" : "text-up"}`}>
+                  {row.change24h == null ? "—" : `${row.change24h > 0 ? "+" : ""}${(row.change24h * 100).toFixed(2)}%`}
+                </td>
+                <td className="py-2 text-right font-mono text-xs">{formatUsd(row.last)}</td>
+                <td className="py-2 text-right font-mono text-xs">{row.liquidity > 0 ? `$${Math.round(row.liquidity).toLocaleString("en-US")}` : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

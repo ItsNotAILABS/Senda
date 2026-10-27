@@ -1,15 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AppShell } from "@/components/app-shell";
-import { MakeDesk } from "@/components/make-desk";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/make")({
   component: MakePage,
 });
 
 function MakePage() {
-  return (
-    <AppShell>
-      <MakeDesk />
-    </AppShell>
-  );
+  return <Navigate to="/work" />;
 }

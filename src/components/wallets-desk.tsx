@@ -1,143 +1,253 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { TabLead } from "@/components/tab-lead";
-import { MoneyBar } from "@/components/money-bar";
+import { JumpStrip } from "@/components/jump-strip";
+import { DeskAudit } from "@/components/money-flow";
+import { ClearStrip } from "@/components/clear-strip";
+import { connectPhantom, readChain } from "@/lib/phantom";
 import { humanWalletError, insideWalletApp, isPhoneBrowser } from "@/lib/mobile-wallet";
-import { robinhoodBuyingPowerUrl } from "@/lib/robinhood";
-import { connectWallet, detectWallets, type WalletChoice, type WalletId } from "@/lib/wallets";
+import { feeOf } from "@/lib/money-move";
+import { connectWallet, detectWallets, rememberWallet, type WalletChoice, type WalletId } from "@/lib/wallets";
+import { shortPk } from "@/lib/senda-keys";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-const JOB: { id: WalletId; does: string }[] = [
-  { id: "phantom", does: "PreStocks, USDC, cover, and work pay. This is the wallet that signs a buy." },
-  { id: "solflare", does: "Same Solana book as Phantom, if this is the wallet you already use." },
-  { id: "backpack", does: "Same Solana book. Swaps still sign here. Senda does not take the key." },
-  { id: "metamask", does: "Ethereum. Use it when a desk asks for a Base wallet. It does not buy a PreStock." },
-  { id: "rabby", does: "Ethereum, same job as MetaMask." },
-  { id: "coinbase", does: "Ethereum. Not the Solana buy path." },
-];
+const ORDER = [
+  { n: "1", title: "Phantom", line: "On a phone this page opens inside Phantom. You sign there." },
+  { n: "2", title: "USDC", line: "That is the buying power. If the wallet only has SOL, convert it first." },
+  { n: "3", title: "MetaMask", line: "An account wallet, same as Phantom. It stays signed in. It signs Base: gold, oil, FX, a short." },
+] as const;
 
-export function WalletsDesk() {
-  const w = useWallet();
-  const [choices, setChoices] = useState<WalletChoice[]>(() => detectWallets());
+/** The schedule, from feeOf. Not a second leg. */
+function clearSchedule(): string {
+  const above = feeOf(100);
+  const cap = feeOf(10_000);
+  const under = feeOf(0.5);
+  const pct = above.bps / 100;
+  const capUsd = Number.isInteger(cap.usd) ? cap.usd.toFixed(0) : cap.usd.toFixed(2);
+  const small = under.usd === 0 ? "Under $1 there is no fee." : `Under $1 the fee is $${under.usd.toFixed(2)}.`;
+  return `A clear above $1 keeps ${pct}% for the desk, capped at $${capUsd}. ${small}`;
+}
+
+export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
+  const wallet = useWallet();
+  const [choices, setChoices] = useState<WalletChoice[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
-  const [usd, setUsd] = useState(50);
   const [phone, setPhone] = useState(false);
   const [inApp, setInApp] = useState(false);
-  const sol = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
-
+  const [held, setHeld] = useState<{ sol: number; usdc: number } | null>(null);
+  const [chain, setChain] = useState<"all" | "solana" | "evm">("all");
+  const [readyOnly, setReadyOnly] = useState(false);
+  const [scanned, setScanned] = useState<Date | null>(null);
   useEffect(() => {
     setPhone(isPhoneBrowser());
     setInApp(insideWalletApp());
+    const read = () => {
+      setChoices(detectWallets());
+      setScanned(new Date());
+    };
+    read();
+    const id = window.setInterval(read, 400);
+    const stop = window.setTimeout(() => window.clearInterval(id), 4000);
+    const onReady = () => read();
+    window.addEventListener("phantom#initialized", onReady);
+    return () => {
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+      window.removeEventListener("phantom#initialized", onReady);
+    };
   }, []);
+  const sol = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
+  const evm = wallet.w.links.find((l) => l.kind === "evm");
 
-  async function go(c: WalletChoice) {
-    setBusy(c.id);
+  useEffect(() => {
+    if (!sol) {
+      setHeld(null);
+      return;
+    }
+    let live = true;
+    readChain(sol.address)
+      .then((chain) => {
+        if (!live) return;
+        const usdc = chain.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
+        setHeld({ sol: chain.sol, usdc });
+      })
+      .catch(() => live && setHeld(null));
+    return () => {
+      live = false;
+    };
+  }, [sol?.address]);
+
+  async function phantom() {
+    setBusy("phantom");
     try {
-      const got = await connectWallet(c.id);
-      const kind = got.chain === "evm" ? "evm" : c.id === "phantom" ? "phantom" : "solana";
-      const r = w.linkChain(got.address, got.label, kind);
-      if (!r.ok && r.error !== "Already linked.") toast.error(r.error);
-      else {
-        if (got.chain === "solana") w.openCurrency("SOL");
-        toast.success(`${got.label} is on the desk.`);
-        setChoices(detectWallets());
-      }
+      const addr = await connectPhantom();
+      rememberWallet("phantom");
+      const linked = wallet.linkChain(addr, "Phantom", "phantom");
+      if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
+      toast.success(`Phantom · ${shortPk(addr)}`);
+      setChoices(detectWallets());
     } catch (e) {
-      toast.error(humanWalletError(e instanceof Error ? e.message : "Could not connect."));
+      toast.error(humanWalletError(e instanceof Error ? e.message : "Phantom did not connect."));
     } finally {
       setBusy(null);
     }
   }
 
-  function robinhood() {
-    if (!sol) {
-      toast.error("Connect Phantom or another Solana wallet first. That address receives the USDC.");
-      return;
+  async function other(id: WalletId, name: string) {
+    setBusy(id);
+    try {
+      const got = await connectWallet(id);
+      const kind = got.chain === "evm" ? "evm" : id === "phantom" ? "phantom" : "solana";
+      const linked = wallet.linkChain(got.address, got.label, kind);
+      if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
+      toast.success(`${name} · ${shortPk(got.address)}`);
+      setChoices(detectWallets());
+    } catch (e) {
+      toast.error(humanWalletError(e instanceof Error ? e.message : "That wallet did not connect."));
+    } finally {
+      setBusy(null);
     }
-    const url = robinhoodBuyingPowerUrl({ wallet: sol.address, usd, origin: window.location.origin });
-    window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  const ready = choices.filter((c) => c.installed).length;
+  const scanRows = choices
+    .filter((c) => (chain === "all" ? true : c.chain === chain))
+    .filter((c) => (readyOnly ? c.installed : true))
+    .slice()
+    .sort((a, b) => Number(b.installed) - Number(a.installed));
+
   return (
-    <div className="space-y-3 px-3 py-3 lg:px-4">
-      <TabLead
-        kicker="Wallets"
-        title="Each wallet"
-        accent="has a job."
-        line="Connect what you already have. Buys and USDC sign on Solana. Ethereum is a different signature."
-        live={["Phantom, Solflare, Backpack", "MetaMask and other Ethereum wallets", "Robinhood buying power into USDC"]}
-        coming={["A wallet Senda custodies"]}
-      />
-      <MoneyBar />
-      <section className="grid gap-3 lg:grid-cols-3">
-        {[
-          ["1", "Connect Phantom", "That address is the account for PreStocks."],
-          ["2", "If you only hold SOL", "Convert it to USDC, then come back and buy."],
-          ["3", "Pay, cover, or send", "Each one asks that same wallet to sign."],
-        ].map(([n, t, d]) => (
-          <div key={n} className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-            <p className="font-mono text-[11px] text-accent">{n}</p>
-            <p className="mt-2 text-lg font-semibold">{t}</p>
-            <p className="mt-1 text-sm text-muted">{d}</p>
-          </div>
+      <div className="space-y-4">
+      {embedded ? null : <JumpStrip />}
+      {embedded ? (
+        <div>
+          <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Scan</p>
+          <h2 className="mt-1 text-2xl tracking-tight">Wallets in this browser.</h2>
+        </div>
+      ) : (
+      <header>
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Wallets</p>
+        <h1 className="mt-1 font-display text-3xl tracking-tight">Connect the wallet that matches the trade.</h1>
+      </header>
+      )}
+      <DeskAudit live="Phantom, Solflare, and Backpack sign here. On a phone the page opens inside the wallet." hold="MetaMask is Base only. It does not sign a Solana USDC transfer." />
+      <ol className="grid gap-2 lg:grid-cols-3">
+        {ORDER.map((step) => (
+          <li key={step.n} className="rounded-2xl border border-white/10 bg-[#10131c] px-4 py-3">
+            <p className="font-mono text-[11px] text-accent">{step.n}</p>
+            <p className="mt-1 text-sm font-semibold">{step.title}</p>
+            <p className="mt-1 text-sm text-muted">{step.line}</p>
+          </li>
         ))}
+      </ol>
+      <ClearStrip />
+      <p className="text-sm text-muted">{clearSchedule()}</p>
+
+      <section className="grid gap-3 lg:grid-cols-2">
+        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+          <p className="font-mono text-[11px] tracking-[0.14em] text-accent uppercase">Solana · Phantom</p>
+          <h2 className="mt-1 text-xl">This wallet buys and clears.</h2>
+          <p className="mt-2 text-sm text-muted">A name, a prediction, and a payment are USDC from this address. You sign. Senda does not hold it.</p>
+          <p className="mt-2 font-mono text-xs text-white/70">{sol ? `${sol.label} · ${shortPk(sol.address)}` : "Not connected."}</p>
+          {held ? <p className="mt-1 font-mono text-sm tabular-nums">{held.sol.toFixed(4)} SOL · {held.usdc.toFixed(2)} USDC</p> : null}
+          <button type="button" disabled={busy !== null} onClick={() => void phantom()} className="mt-3 min-h-10 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50">
+            {busy === "phantom" ? "Opening…" : sol ? "Phantom again" : phone && !inApp ? "Open Phantom" : "Connect Phantom"}
+          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to="/invest" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Buy a name</Link>
+            <Link to="/social" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Above or below</Link>
+            <Link to="/invest" search={{ lane: "solana" }} className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Buy on Solana</Link>
+            <Link to="/payments" search={{ act: "link" }} className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Send USDC</Link>
+            <Link to="/wallet" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Convert SOL</Link>
+          </div>
+        </article>
+
+        <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+          <p className="font-mono text-[11px] tracking-[0.14em] text-[#c4b5fd] uppercase">Base · MetaMask</p>
+          <h2 className="mt-1 text-xl">This wallet is only the other market.</h2>
+          <p className="mt-2 text-sm text-muted">Gold, oil, and FX ask MetaMask on Base. It does not buy a PreStock.</p>
+          <p className="mt-2 font-mono text-xs text-white/70">{evm ? `${evm.label} · ${shortPk(evm.address)}` : "Not connected."}</p>
+          <button type="button" disabled={busy !== null} onClick={() => void other("metamask", "MetaMask")} className="mt-3 min-h-10 rounded-full bg-white px-4 text-sm font-semibold text-black disabled:opacity-50">
+            {busy === "metamask" ? "Waiting…" : evm?.label === "MetaMask" ? "MetaMask again" : "Connect MetaMask"}
+          </button>
+          <div className="mt-3">
+            <Link to="/invest" search={{ desk: "world" }} className="inline-flex min-h-9 items-center rounded-full bg-white/10 px-3 text-xs font-semibold">Open gold, oil, FX</Link>
+          </div>
+        </article>
       </section>
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-        <h2 className="text-sm font-semibold">On this desk</h2>
-        {w.w.links.length === 0 ? <p className="mt-2 text-sm text-muted">Nothing connected yet.</p> : null}
-        <ul className="mt-2 divide-y divide-white/10">
-          {w.w.links.map((l) => (
-            <li key={l.address} className="flex items-center justify-between gap-3 py-3">
-              <div>
+
+      <section>
+        <h2 className="text-sm font-semibold">Already linked</h2>
+        {wallet.w.links.length === 0 ? <p className="mt-1 text-sm text-muted">None yet. Connecting one below keeps the address on this desk.</p> : (
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {wallet.w.links.map((l) => (
+              <li key={l.address} className="rounded-2xl border border-white/10 bg-[#10131c] px-4 py-3">
                 <p className="text-sm font-semibold">{l.label}</p>
-                <p className="font-mono text-[11px] text-subtle">{l.address}</p>
-              </div>
-              <button type="button" onClick={() => w.unlink(l.address)} className="text-xs text-muted">
-                Remove
-              </button>
-            </li>
+                <p className="mt-1 truncate font-mono text-[11px] text-subtle">{l.address}</p>
+                <p className="mt-1 text-xs text-muted">{l.kind === "evm" ? "Base" : "Solana"} · linked</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#0c0e14]">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10 px-5 py-4">
+          <div>
+            <p className="text-[11px] tracking-[0.18em] text-accent uppercase">Scan</p>
+            <h2 className="mt-1 text-2xl tracking-tight">Wallets this browser can sign with</h2>
+            <p className="mt-1 text-sm text-muted">{scanned ? `Scanned ${scanned.toLocaleTimeString()}` : "Scanning"} · {ready} ready · {choices.length - ready} not installed</p>
+          </div>
+          <button type="button" onClick={() => { setChoices(detectWallets()); setScanned(new Date()); }} className="min-h-10 rounded-full bg-white px-4 text-sm font-semibold text-black">
+            Scan again
+          </button>
+        </div>
+        <div className="grid grid-cols-3 divide-x divide-white/10 border-b border-white/10">
+          {[
+            ["Ready", String(ready)],
+            ["Linked", String(wallet.w.links.length)],
+            ["Not here", String(choices.length - ready)],
+          ].map(([label, value]) => (
+            <div key={label} className="px-4 py-3">
+              <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">{label}</p>
+              <p className="mt-1 font-mono text-2xl tabular-nums">{value}</p>
+            </div>
           ))}
+        </div>
+        <div className="flex gap-1 overflow-x-auto px-4 py-3">
+          {([
+            ["all", "All"],
+            ["solana", "Solana"],
+            ["evm", "Base"],
+          ] as const).map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setChain(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", chain === id ? "bg-white text-black" : "border border-white/10 text-muted")}>{label}</button>
+          ))}
+          <button type="button" onClick={() => setReadyOnly((v) => !v)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", readyOnly ? "bg-accent text-accent-fg" : "border border-white/10 text-muted")}>Ready only</button>
+        </div>
+        <ul className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          {scanRows.map((c) => {
+            const linked = wallet.w.links.some((l) => l.label === c.name || (c.id === "phantom" && l.kind === "phantom") || (c.id === "metamask" && l.kind === "evm" && l.label === "MetaMask"));
+            const opens = phone && !inApp && !c.installed && (c.id === "solflare" || c.id === "backpack" || c.id === "phantom");
+            const status = busy === c.id ? "Opening" : linked ? "Linked" : opens ? "Open app" : c.installed ? "Ready" : "Not here";
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  disabled={busy !== null || (!c.installed && !opens)}
+                  onClick={() => void (c.id === "phantom" ? phantom() : other(c.id, c.name))}
+                  className={cn("flex min-h-[72px] w-full items-center justify-between rounded-2xl border px-3 text-left transition", c.installed ? "border-white/15 bg-black/20 hover:border-white/40" : "border-white/10 opacity-60", linked && "border-accent/50")}
+                >
+                  <span>
+                    <span className="block text-sm font-semibold">{c.name}</span>
+                    <span className="block text-xs text-muted">{c.chain === "solana" ? "Solana" : "Base"}</span>
+                  </span>
+                  <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", c.installed ? "bg-accent text-accent-fg" : "bg-white/10 text-subtle")}>{status}</span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
-      </section>
-      <section className="grid gap-2 md:grid-cols-2">
-        {choices.map((c) => {
-          const job = JOB.find((j) => j.id === c.id);
-          const opens = phone && !inApp && !c.installed && (c.id === "phantom" || c.id === "solflare" || c.id === "backpack");
-          return (
-            <button
-              key={c.id}
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void go(c)}
-              className={cn(
-                "rounded-[22px] border border-white/10 bg-[#10131c] p-4 text-left",
-                !c.installed && !opens && "opacity-60",
-              )}
-            >
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="text-base font-semibold">{c.name}</p>
-                <p className="font-mono text-[11px] text-subtle">{c.installed ? "In this browser" : opens ? "Open app" : inApp && !c.installed ? "Tap again" : "Not installed"}</p>
-              </div>
-              <p className="mt-1 text-xs text-accent">{c.chain === "solana" ? "Solana" : "Ethereum"}</p>
-              <p className="mt-2 text-sm text-muted">{job?.does ?? "Connect it if this is the wallet you use."}</p>
-            </button>
-          );
-        })}
-      </section>
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Robinhood</p>
-        <h2 className="mt-2 text-3xl tracking-tight">Buying power into USDC.</h2>
-        <p className="mt-2 max-w-xl text-sm text-muted">
-          Robinhood opens. You confirm there. USDC is aimed at {sol ? `${sol.address.slice(0, 4)}…${sol.address.slice(-4)}` : "the Solana wallet you connect"}. It does not sit in a Senda balance.
-        </p>
-        <label className="mt-4 block text-xs text-subtle">
-          Dollars
-          <input value={usd} onChange={(e) => setUsd(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-1 min-h-12 w-40 rounded-2xl border border-white/10 bg-black/40 px-4 font-mono text-sm outline-none" />
-        </label>
-        <button type="button" onClick={robinhood} className="mt-4 min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">
-          Open Robinhood
-        </button>
       </section>
     </div>
   );

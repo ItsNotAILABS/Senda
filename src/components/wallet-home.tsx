@@ -8,6 +8,8 @@ import { TokenMark } from "@/components/token-mark";
 import { VaultRow } from "@/components/vault-row";
 import { loadHouseBook, markHouse } from "@/lib/house-paper";
 import { shortPk } from "@/lib/senda-keys";
+import { connectPhantom, invalidateChain, readChain, type ChainWallet } from "@/lib/phantom";
+import { humanWalletError } from "@/lib/mobile-wallet";
 import { getHouse, formatChg, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { CCY_META, formatMoney, sendaDeposit, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -28,12 +30,17 @@ const PRODUCTS = [
 ] as const;
 
 export function WalletHome() {
-  const { w, usd, ready, setTag, add } = useWallet();
+  const { w, ready, setTag, linkChain } = useWallet();
   const [addOpen, setAddOpen] = useState(false);
   const [acctOpen, setAcctOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [movers, setMovers] = useState<HouseListing[]>([]);
   const [house, setHouse] = useState<HouseListing[]>([]);
+  const [chain, setChain] = useState<ChainWallet | null>(null);
+  const [chainErr, setChainErr] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [tick, setTick] = useState(0);
+  const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
 
   useEffect(() => {
     getHouse()
@@ -47,8 +54,48 @@ export function WalletHome() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!owner) {
+      setChain(null);
+      return;
+    }
+    let live = true;
+    const pull = () => {
+      void readChain(owner)
+        .then((row) => {
+          if (!live) return;
+          setChain(row);
+          setChainErr("");
+        })
+        .catch((e: unknown) => {
+          if (live) setChainErr(e instanceof Error ? e.message : "Could not read this wallet.");
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 15000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [owner, tick]);
+
   const book = typeof window === "undefined" ? {} : loadHouseBook();
   const held = house.filter((h) => (book[h.id]?.shares ?? 0) !== 0);
+  const usdc = chain?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
+
+  async function connect() {
+    setConnecting(true);
+    try {
+      const addr = await connectPhantom();
+      const linked = linkChain(addr, "Phantom", "phantom");
+      if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "The wallet did not stay.");
+      toast.success("This address is the account.");
+    } catch (e) {
+      toast.error(humanWalletError(e instanceof Error ? e.message : "Phantom did not connect."));
+    } finally {
+      setConnecting(false);
+    }
+  }
 
   return (
     <main className="flex flex-1 flex-col">
@@ -58,11 +105,27 @@ export function WalletHome() {
         <img src="/images/markets-desk.jpg" alt="" className="h-52 w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/55 to-bg/15" />
         <div className="absolute inset-x-0 bottom-0 px-5 pb-4">
-          <p className="text-sm text-muted">Total · USD</p>
+          <p className="text-sm text-muted">{owner ? "USDC in this wallet" : "Connect Phantom"}</p>
           <p className="mt-1 font-display text-5xl leading-none tracking-tight tabular-nums" suppressHydrationWarning>
-            {ready ? formatMoney(usd, "USD") : "—"}
+            {owner ? (chain ? usdc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—") : "—"}
           </p>
-          {ready && w.tag !== "@you" ? <p className="mt-1 text-sm text-subtle">{w.tag}</p> : null}
+          {owner ? (
+            <p className="mt-1 font-mono text-sm text-subtle">
+              {chainErr ? chainErr : chain ? `${chain.sol.toLocaleString("en-US", { maximumFractionDigits: 4 })} SOL` : "Reading the chain…"} · {shortPk(owner)}
+              <button
+                type="button"
+                onClick={() => {
+                  invalidateChain(owner);
+                  setTick((n) => n + 1);
+                }}
+                className="ml-2 text-accent"
+              >
+                Refresh
+              </button>
+            </p>
+          ) : ready && w.tag !== "@you" ? (
+            <p className="mt-1 text-sm text-subtle">{w.tag}</p>
+          ) : null}
         </div>
       </section>
       <section className="px-5 pt-4 pb-3">
@@ -86,23 +149,10 @@ export function WalletHome() {
             </button>
           </form>
         ) : null}
-        {usd < 1 ? (
-          <div className="mt-3 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const r = add(250, "USD", "cash");
-                if (!r.ok) toast.error(r.error);
-                else toast.success("$250 paper cash in.");
-              }}
-              className="min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-fg"
-            >
-              Paper $250
-            </button>
-            <button type="button" onClick={() => setAddOpen(true)} className="min-h-11 text-sm text-muted">
-              Card, bank, or crypto
-            </button>
-          </div>
+        {!owner ? (
+          <button type="button" disabled={connecting} onClick={() => void connect()} className="mt-3 min-h-12 w-full rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-50">
+            {connecting ? "Opening Phantom…" : "Connect Phantom"}
+          </button>
         ) : null}
       </section>
 
@@ -255,32 +305,46 @@ export function WalletHome() {
         </div>
         <div className="divide-y divide-border">
           {(w.opened ?? ["USD"])
-            .filter((c) => CCY_META[c]?.kind === "fiat")
+            .filter((c) => CCY_META[c]?.kind === "fiat" && (w.balances[c] ?? 0) > 0)
             .map((c) => (
               <AccountRow key={c} ccy={c} bal={w.balances[c] ?? 0} />
             ))}
         </div>
-        {(w.opened ?? []).some((c) => CCY_META[c]?.kind === "crypto") ? (
+        {(w.opened ?? []).some((c) => CCY_META[c]?.kind === "crypto" && (w.balances[c] ?? 0) > 0) ? (
           <>
             <h2 className="mt-6 px-5 pb-2 text-sm font-medium text-muted">Crypto</h2>
             <div className="divide-y divide-border">
               {(w.opened ?? [])
-                .filter((c) => CCY_META[c]?.kind === "crypto")
+                .filter((c) => CCY_META[c]?.kind === "crypto" && (w.balances[c] ?? 0) > 0)
                 .map((c) => (
                   <AccountRow key={c} ccy={c} bal={w.balances[c] ?? 0} />
                 ))}
             </div>
           </>
         ) : null}
-        {w.senda ? (
-          <div className="flex items-center gap-3 px-5 py-3.5">
-            <div className="grid size-10 place-items-center rounded-full bg-elevated text-xs font-semibold">SOL</div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium">Senda wallet</p>
-              <p className="truncate font-mono text-xs text-subtle">{shortPk(w.senda.pubkey)}</p>
+        {owner && chain ? (
+          <div className="divide-y divide-border">
+            <div className="flex items-center justify-between px-5 py-3.5">
+              <div>
+                <p className="text-sm font-medium">SOL</p>
+                <p className="truncate font-mono text-[11px] text-subtle">{shortPk(owner)}</p>
+              </div>
+              <p className="font-mono text-sm tabular-nums">{chain.sol.toLocaleString("en-US", { maximumFractionDigits: 4 })}</p>
             </div>
-            <p className="text-sm font-semibold tabular-nums">{formatMoney(w.balances.SOL, "SOL")}</p>
+            {chain.tokens.map((t) => (
+              <div key={t.mint} className="flex items-center justify-between px-5 py-3.5">
+                <div>
+                  <p className="text-sm font-medium">{t.symbol}</p>
+                  <p className="font-mono text-[11px] text-subtle">{t.mint.slice(0, 4)}…{t.mint.slice(-4)}</p>
+                </div>
+                <p className="font-mono text-sm tabular-nums">
+                  {t.ui < 1 ? t.ui.toFixed(4) : t.ui.toLocaleString("en-US", { maximumFractionDigits: t.symbol === "USDC" || t.symbol === "USDT" ? 2 : 4 })}
+                </p>
+              </div>
+            ))}
           </div>
+        ) : owner ? (
+          <p className="px-5 py-3 text-sm text-subtle">{chainErr || "Reading this wallet…"}</p>
         ) : null}
         {w.links.map((l) => (
           <div key={l.id} className="flex items-center gap-3 px-5 py-3.5">

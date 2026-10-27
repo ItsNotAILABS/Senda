@@ -4,6 +4,7 @@ use crate::pay::usd_to_atoms;
 pub enum CoverKind {
     Drop = 0,
     Life = 1,
+    Drop5 = 2,
 }
 
 /// Terms that ride in the memo of the premium transfer.
@@ -51,6 +52,7 @@ impl CoverTerms {
             match self.kind {
                 CoverKind::Drop => "drop",
                 CoverKind::Life => "life",
+                CoverKind::Drop5 => "drop5",
             },
             self.symbol,
             self.strike_atoms,

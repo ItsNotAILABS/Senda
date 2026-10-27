@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { AgentWorkspace } from "@/components/agent-workspace";
+import { AgentFloor } from "@/components/agent-floor";
 import { AppShell } from "@/components/app-shell";
 import { getHouse, type HouseListing } from "@/lib/sol-house";
 
@@ -21,16 +21,15 @@ function AgentsPage() {
   }, []);
   return (
     <AppShell>
-      <AgentWorkspace names={house} />
+      <AgentFloor names={house} />
     </AppShell>
   );
 }
 
-function AgentsError({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "Agents did not load.";
+function AgentsError({ error }: { error: Error }) {
   return (
     <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{message}</p>
+      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
     </AppShell>
   );
 }

@@ -1,12 +1,30 @@
 import { useEffect, useState } from "react";
-import { FilmBand } from "@/components/film-band";
-import { MoneyBar } from "@/components/money-bar";
-import { TabLead } from "@/components/tab-lead";
-import { WorkJobs } from "@/components/work-jobs";
+import { toast } from "sonner";
+import { JumpStrip } from "@/components/jump-strip";
+import { DeskAudit } from "@/components/money-flow";
+import { bumpClears } from "@/components/clear-strip";
+import { rememberClear } from "@/lib/clear-tape";
+import { connectPhantom } from "@/lib/phantom";
+import { payBatch, payUsdc } from "@/lib/solana-pay";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
-import { readUsing } from "@/lib/using";
+import { useWalletCtx } from "@/lib/wallet-context";
+import { cancelJob, fundJob, listJobs, releaseJob, workUsdc, type WorkJob } from "@/lib/work-escrow";
+import { MakeDesk } from "@/components/make-desk";
 
+const BOOK = "senda.paybook.v1";
 const SHEET = "senda.sheet.v1";
+
+type Payee = { id: string; name: string; role: string; address: string };
+
+function loadPayees(): Payee[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const rows = JSON.parse(window.localStorage.getItem(BOOK) || "[]") as Payee[];
+    return Array.isArray(rows) ? rows.filter((row) => row && row.address) : [];
+  } catch {
+    return [];
+  }
+}
 const DOC = "senda.doc.v1";
 
 function notes(): Record<string, string> {
@@ -19,16 +37,310 @@ function notes(): Record<string, string> {
   }
 }
 
+function usdc(n: number): string {
+  return n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
+
+function JobBoard() {
+  const wallet = useWalletCtx();
+  const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const [title, setTitle] = useState("");
+  const [brief, setBrief] = useState("");
+  const [worker, setWorker] = useState("");
+  const [usd, setUsd] = useState("");
+  const [jobs, setJobs] = useState<WorkJob[]>([]);
+  const [held, setHeld] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [payees, setPayees] = useState<Payee[]>([]);
+  const [whoName, setWhoName] = useState("");
+  const [role, setRole] = useState("Contractor");
+  const [addr, setAddr] = useState("");
+  const open = jobs.filter((j) => j.status === "open");
+
+  function reload() {
+    setJobs(listJobs());
+    void workUsdc().then(setHeld).catch(() => setHeld(null));
+  }
+
+  useEffect(() => {
+    reload();
+    setPayees(loadPayees());
+  }, []);
+
+  async function payer(): Promise<string> {
+    const who = owner || (await connectPhantom());
+    if (!owner) {
+      const linked = wallet.linkChain(who, "Phantom", "phantom");
+      if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+    }
+    return who;
+  }
+
+  function savePayee() {
+    const address = addr.trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+      toast.error("A contact needs a Solana address.");
+      return;
+    }
+    const row: Payee = { id: address, name: whoName.trim() || address.slice(0, 4), role: role.trim() || "Payee", address };
+    const next = [row, ...payees.filter((p) => p.address !== address)];
+    setPayees(next);
+    try {
+      window.localStorage.setItem(BOOK, JSON.stringify(next));
+    } catch {
+      /* quota */
+    }
+    toast.success(`${row.name} can be paid.`);
+  }
+
+  async function payNow(row: Payee) {
+    const n = Number(usd);
+    if (!(n > 0)) {
+      toast.error("Set the USDC amount.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const who = await payer();
+      const done = await payUsdc({ owner: who, to: row.address, usd: n, memo: `${row.role}: ${row.name}` });
+      rememberClear({ sig: done.signature, from: who, to: row.address, usd: n, memo: row.name, kind: "work", status: "pending" });
+      bumpClears();
+      toast.success(`Paid ${row.name}. ${done.signature.slice(0, 8)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The payment did not sign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function payAll() {
+    const n = Number(usd);
+    if (!(n > 0)) {
+      toast.error("Set the USDC amount.");
+      return;
+    }
+    const rows = payees.slice(0, 6).map((row) => ({ to: row.address, usd: n, memo: row.name }));
+    if (rows.length < 2) {
+      toast.error("Save at least two contacts. One person is Pay now.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const who = await payer();
+      const sig = await payBatch({ owner: who, rows });
+      rememberClear({ sig, from: who, to: rows[0].to, usd: n * rows.length, memo: "batch", kind: "work", status: "pending" });
+      bumpClears();
+      toast.success(`Paid ${rows.length} in one signature. ${sig.slice(0, 8)}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The batch did not sign.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function fund() {
+    setBusy(true);
+    try {
+      const who = await payer();
+      const job = await fundJob({ owner: who, title, brief, usd: Number(usd), worker });
+      rememberClear({ sig: job.sig, from: who, to: worker.trim(), usd: job.usd, memo: job.title, kind: "work", status: "pending" });
+      bumpClears();
+      toast.success(`Held. ${job.sig.slice(0, 8)}`);
+      setTitle("");
+      setBrief("");
+      setWorker("");
+      setUsd("");
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The job did not fund.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function act(job: WorkJob, kind: "release" | "cancel") {
+    setBusy(true);
+    try {
+      const who = await payer();
+      const sig = kind === "release" ? await releaseJob(job, who) : await cancelJob(job, who);
+      rememberClear({
+        sig,
+        from: who,
+        to: kind === "release" ? job.worker : who,
+        usd: job.usd,
+        memo: job.title,
+        kind: "work",
+        status: "pending",
+      });
+      bumpClears();
+      toast.success(kind === "release" ? `Paid the worker. ${sig.slice(0, 8)}` : `Paid you back. ${sig.slice(0, 8)}`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The USDC did not move.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="w-full rounded-2xl border border-white/10 bg-[#10131c]">
+      <div className="flex items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
+        <div>
+          <h2 className="text-lg tracking-tight">Hold the pay</h2>
+          <p className="text-xs text-subtle">Pay a contact now, or hold the USDC until the work is done. Both move real USDC. Phantom signs.</p>
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] tracking-wide text-subtle uppercase">Work account</p>
+          <p className="font-mono text-sm tabular-nums">{held == null ? "—" : `${usdc(held)} USDC`}</p>
+        </div>
+      </div>
+      <div className="grid gap-2 border-b border-white/10 p-3 sm:grid-cols-[1fr_8rem_minmax(0,1.2fr)_auto]">
+        <input value={whoName} onChange={(e) => setWhoName(e.target.value)} placeholder="Contact name" className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none" />
+        <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none" />
+        <input value={addr} onChange={(e) => setAddr(e.target.value.trim())} placeholder="Their Solana address" spellCheck={false} className="h-10 rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs outline-none" />
+        <button type="button" onClick={savePayee} className="h-10 rounded-full border border-white/15 px-4 text-sm font-semibold">Save contact</button>
+      </div>
+      {payees.length > 0 ? (
+        <ul className="divide-y divide-white/10 border-b border-white/10">
+          {payees.map((row) => (
+            <li key={row.address} className="flex items-center gap-2 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setWorker(row.address);
+                  setAddr(row.address);
+                  setWhoName(row.name);
+                }}
+                className="min-w-0 flex-1 text-left"
+              >
+                <span className="block text-sm font-semibold">{row.name}</span>
+                <span className="block truncate font-mono text-[11px] text-muted">{row.role} · {row.address.slice(0, 4)}…{row.address.slice(-4)}</span>
+              </button>
+              <button type="button" disabled={busy} onClick={() => void payNow(row)} className="h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">Pay now</button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {payees.length >= 2 ? (
+        <div className="border-b border-white/10 px-3 py-2">
+          <button type="button" disabled={busy} onClick={() => void payAll()} className="h-10 rounded-full border border-white/15 px-4 text-xs font-semibold disabled:opacity-40">
+            Pay {Math.min(6, payees.length)} contacts ${Number(usd) || 0} in one signature
+          </button>
+        </div>
+      ) : null}
+      <form
+        className="grid gap-2 border-b border-white/10 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)_minmax(0,1.3fr)_7rem_auto] lg:items-end"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void fund();
+        }}
+      >
+        <label className="block text-xs text-subtle">
+          Title
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Title"
+            className="mt-1 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
+          />
+        </label>
+        <label className="block text-xs text-subtle">
+          What done looks like
+          <input
+            value={brief}
+            onChange={(e) => setBrief(e.target.value)}
+            placeholder="What done looks like"
+            className="mt-1 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
+          />
+        </label>
+        <label className="block text-xs text-subtle">
+          Worker address
+          <input
+            value={worker}
+            onChange={(e) => setWorker(e.target.value)}
+            placeholder="Worker address"
+            spellCheck={false}
+            className="mt-1 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-sm outline-none"
+          />
+        </label>
+        <label className="block text-xs text-subtle">
+          USDC
+          <input
+            value={usd}
+            onChange={(e) => setUsd(e.target.value)}
+            placeholder="1"
+            inputMode="decimal"
+            className="mt-1 h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-sm tabular-nums outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy}
+          className="h-10 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {busy ? "Waiting for Phantom…" : "Hold the pay"}
+        </button>
+      </form>
+      <div className="max-h-56 overflow-auto">
+        {open.length === 0 ? <p className="px-4 py-4 text-sm text-muted">No open jobs.</p> : null}
+        {open.length > 0 ? (
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 bg-[#10131c] text-[11px] tracking-wide text-subtle uppercase">
+              <tr>
+                <th className="px-4 py-2 font-medium">Job</th>
+                <th className="px-2 py-2 font-medium">Worker</th>
+                <th className="px-2 py-2 text-right font-medium">USDC</th>
+                <th className="px-3 py-2 text-right font-medium" />
+              </tr>
+            </thead>
+            <tbody>
+              {open.map((job) => (
+                <tr key={job.id} className="border-t border-white/5">
+                  <td className="px-4 py-2">
+                    <div className="font-semibold">{job.title}</div>
+                    <div className="max-w-xl truncate text-xs text-muted" title={job.brief}>{job.brief}</div>
+                    <a href={`https://solscan.io/tx/${job.sig}`} target="_blank" rel="noreferrer" className="font-mono text-[11px] text-accent">
+                      {job.sig.slice(0, 8)}
+                    </a>
+                  </td>
+                  <td className="px-2 py-2 font-mono text-xs" title={job.worker}>
+                    {job.worker.slice(0, 4)}…{job.worker.slice(-4)}
+                  </td>
+                  <td className="px-2 py-2 text-right font-mono tabular-nums">{usdc(job.usd)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act(job, "release")}
+                        className="h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40"
+                      >
+                        Release
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void act(job, "cancel")}
+                        className="h-9 rounded-full border border-white/15 px-3 text-xs font-semibold disabled:opacity-40"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export function WorkDesk({ names }: { names: HouseListing[] }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const [sheet, setSheet] = useState<Record<string, string>>({});
   const [doc, setDoc] = useState("");
-  const [symbol, setSymbol] = useState(readUsing()?.symbol || book[0]?.symbol || "");
-  const [size, setSize] = useState(100);
-  const [other, setOther] = useState("");
-  const [mode, setMode] = useState<"desk" | "sheet" | "page">("sheet");
-  const peer = book.find((n) => n.symbol === other);
-  const name = book.find((n) => n.symbol === symbol) ?? book[0];
 
   useEffect(() => {
     setSheet(notes());
@@ -54,241 +366,80 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
     }
   }
 
-  function pullBrief() {
-    if (!name) return;
-    const tokens = name.last > 0 ? size / name.last : 0;
-    const gap = (name.last - name.mark) * tokens;
-    const line = `${name.symbol} — ${formatUsd(name.last)} token, ${formatUsd(name.mark)} mark, ${formatPremium(name.premium)}. $${size} is about ${tokens.toFixed(4)} tokens, ${gap >= 0 ? "+" : ""}$${gap.toFixed(2)} versus the mark. ${sheet[name.symbol] || ""}`.trim();
-    writeDoc(doc ? `${doc}\n\n${line}` : line);
+  function ontoPage(row: HouseListing) {
+    const line = `${row.symbol} — ${formatUsd(row.last)} last, ${formatUsd(row.mark)} mark, ${formatPremium(row.premium)}. ${sheet[row.symbol] || ""}`.trim();
+    writeDoc(doc ? `${doc}\n${line}` : line);
   }
 
+  function copyPage() {
+    void navigator.clipboard.writeText(doc);
+  }
+
+  const words = doc.trim() ? doc.trim().split(/\s+/).length : 0;
+
   return (
-    <div className="space-y-3 px-3 py-3 lg:px-4">
-      <TabLead
-        kicker="Work"
-        title="Your sheet"
-        accent="next to the book."
-        line="Post a job and pay it in USDC. The sheet stays next to the live print."
-        live={["Pay a job in USDC. You sign.", "The live sheet, a note on every name."]}
-        coming={["A shared sheet on someone else's computer."]}
-      />
-      <MoneyBar />
-      <WorkJobs symbol={name?.symbol ?? ""} />
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
-        {name ? (
-          <>
-            <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
-            <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="text-4xl tracking-tight lg:text-5xl">{name.symbol}</h2>
-                <p className="mt-1 text-sm text-muted">{name.name}</p>
-              </div>
-              <p className="font-mono text-4xl tabular-nums">{formatUsd(name.last)}</p>
-            </div>
-            <p className="mt-2 font-mono text-sm tabular-nums text-muted">
-              Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
-            </p>
-            <label className="mt-5 block text-xs text-subtle">
-              Note
-              <textarea
-                value={sheet[name.symbol] || ""}
-                onChange={(e) => note(name.symbol, e.target.value)}
-                placeholder="Why you care"
-                className="mt-2 min-h-40 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-base outline-none"
-              />
-            </label>
-            <p className="mt-2 text-xs text-muted">Saved on this row. It stays in this browser.</p>
-          </>
-        ) : (
-          <p className="text-sm text-muted">PreStocks did not answer.</p>
-        )}
-        <div className="mt-5 flex gap-2 overflow-x-auto">
-          {book.map((n) => (
-            <button
-              key={n.id}
-              type="button"
-              onClick={() => setSymbol(n.symbol)}
-              className={`min-h-12 shrink-0 rounded-full px-4 text-sm font-semibold ${n.symbol === name?.symbol ? "bg-accent text-accent-fg" : "border border-white/10 text-muted"}`}
-            >
-              {n.symbol}
-            </button>
-          ))}
-        </div>
-        <div className="mt-5 overflow-x-auto rounded-[22px] border border-white/10">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="text-xs text-subtle">
+    <div className="space-y-3 px-3 py-3">
+      <JumpStrip />
+      <DeskAudit live="A listing and a job both pay USDC when Phantom signs." hold="The notes under the market stay in this browser." />
+      <MakeDesk embedded />
+      <JobBoard />
+      <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)] lg:grid-rows-1">
+        <section className="min-h-0 overflow-auto border-white/10 lg:border-r">
+          <table className="w-full text-left text-sm">
+            <thead className="sticky top-0 z-10 bg-[#0c0e14] text-[11px] tracking-wide text-subtle uppercase">
               <tr>
-                <th className="px-4 py-3 font-medium">Name</th>
-                <th className="px-2 py-3 text-right font-medium">Token</th>
-                <th className="px-2 py-3 text-right font-medium">Mark</th>
-                <th className="px-2 py-3 text-right font-medium">Vs mark</th>
-                <th className="px-4 py-3 font-medium">Note</th>
+                <th className="px-4 py-2 font-medium">Symbol</th>
+                <th className="px-2 py-2 text-right font-medium">Last</th>
+                <th className="px-2 py-2 text-right font-medium">Vs mark</th>
+                <th className="px-3 py-2 font-medium">Note</th>
+                <th className="px-3 py-2 font-medium" />
               </tr>
             </thead>
             <tbody>
-              {book.map((n) => (
-                <tr key={n.id} className={`border-t border-white/10 ${n.symbol === name?.symbol ? "bg-white/5" : ""}`}>
-                  <td className="px-4 py-3">
-                    <button type="button" onClick={() => setSymbol(n.symbol)} className="font-semibold">
-                      {n.symbol}
-                    </button>
+              {book.map((row) => (
+                <tr key={row.id} className="border-t border-white/5">
+                  <td className="px-4 py-2 font-semibold">{row.symbol}</td>
+                  <td className="px-2 py-2 text-right font-mono tabular-nums">{formatUsd(row.last)}</td>
+                  <td className={`px-2 py-2 text-right font-mono tabular-nums ${(row.premium ?? 0) > 0 ? "text-down" : (row.premium ?? 0) < 0 ? "text-accent" : "text-muted"}`}>
+                    {formatPremium(row.premium)}
                   </td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatUsd(n.last)}</td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums text-muted">{formatUsd(n.mark)}</td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums">{formatPremium(n.premium)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <input
-                      value={sheet[n.symbol] || ""}
-                      onChange={(e) => note(n.symbol, e.target.value)}
-                      placeholder="Why you care"
-                      className="min-h-12 w-full bg-transparent text-base outline-none placeholder:text-subtle"
+                      value={sheet[row.symbol] || ""}
+                      onChange={(e) => note(row.symbol, e.target.value)}
+                      placeholder="Note"
+                      className="h-9 w-full min-w-[8rem] rounded-lg border border-white/10 bg-black/30 px-2 text-sm outline-none"
                     />
+                  </td>
+                  <td className="px-3 py-2">
+                    <button type="button" onClick={() => ontoPage(row)} className="h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg">
+                      Onto the page
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>
-          <h1 className="mt-3 max-w-lg text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            The book, <span className="text-accent">next to the note.</span>
-          </h1>
-          <p className="mt-4 max-w-md text-sm text-muted">
-            {book.length} names on the live print. Size a position, compare two, or keep the page. Notes stay in this browser. A clerk agent writes the sheet, not this page.
-          </p>
-          <div className="mt-6 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                const row = name ?? book[0];
-                if (row) setSymbol(row.symbol);
-                setMode("sheet");
-              }}
-              className="min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
-            >
-              Open {name?.symbol || "sheet"}
-            </button>
-            {(
-              [
-                ["desk", "Desk"],
-                ["sheet", "Sheet"],
-                ["page", "Page"],
-              ] as const
-            ).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setMode(id)} className={`min-h-11 rounded-full px-5 text-sm font-semibold ${mode === id ? "bg-accent text-accent-fg" : "border border-white/15"}`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {book.slice().sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0)).slice(0, 1).map((n) => (
-            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/10 bg-[#14f195]/10 p-5 text-left">
-              <p className="text-[11px] text-accent">Cheapest versus the mark</p>
-              <p className="mt-2 text-2xl font-semibold">{n.symbol}</p>
-              <p className="font-mono text-sm">{formatUsd(n.last)} · {formatPremium(n.premium)}</p>
-            </button>
-          ))}
-          {book.slice().sort((a, b) => (b.premium ?? 0) - (a.premium ?? 0)).slice(0, 1).map((n) => (
-            <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className="rounded-[22px] border border-white/10 bg-[#ff5d73]/10 p-5 text-left">
-              <p className="text-[11px] text-down">Richest versus the mark</p>
-              <p className="mt-2 text-2xl font-semibold">{n.symbol}</p>
-              <p className="font-mono text-sm">{formatUsd(n.last)} · {formatPremium(n.premium)}</p>
-            </button>
-          ))}
-        </div>
-      </section>
-      <FilmBand poster="/images/term-sheet.jpg" label="The book, next to the note." />
-
-      {mode === "page" ? (
-        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-          <h2 className="text-lg">Page</h2>
-          <p className="mt-1 text-xs text-muted">Yours. Stays in this browser.</p>
-          <textarea value={doc} onChange={(e) => writeDoc(e.target.value)} placeholder="The note for the desk." className="mt-3 min-h-[28rem] w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none" />
+          {book.length === 0 ? <p className="px-4 py-6 text-sm text-muted">PreStocks did not answer.</p> : null}
         </section>
-      ) : null}
-
-      {mode === "desk" ? (
-        <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)_300px]">
-          <aside className="rounded-[22px] border border-white/10 bg-[#10131c] p-2">
-            {book.map((n) => (
-              <button key={n.id} type="button" onClick={() => setSymbol(n.symbol)} className={`flex w-full items-center justify-between rounded-2xl px-3 py-2 text-left text-sm ${n.symbol === name?.symbol ? "bg-white/10" : "hover:bg-white/5"}`}>
-                <span className="font-semibold">{n.symbol}</span>
-                <span className="font-mono text-[11px] text-muted">{formatPremium(n.premium)}</span>
-              </button>
-            ))}
-          </aside>
-          <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-            {name ? (
-              <>
-                <h2 className="text-4xl">{name.symbol}</h2>
-                <p className="mt-1 text-sm text-muted">{name.name}</p>
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  <Tile k="Token" v={formatUsd(name.last)} />
-                  <Tile k="Mark" v={formatUsd(name.mark)} />
-                  <Tile k="24h" v={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} />
-                </div>
-                <label className="mt-5 block text-xs text-subtle">
-                  Size in dollars
-                  <input value={size} onChange={(e) => setSize(Math.max(1, Number(e.target.value) || 0))} inputMode="decimal" className="mt-1 min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 font-mono outline-none" />
-                </label>
-                <p className="mt-3 font-mono text-sm">
-                  {name.last > 0 ? (size / name.last).toFixed(4) : "—"} tokens · {((name.last - name.mark) * (name.last > 0 ? size / name.last : 0)).toFixed(2)} dollars versus the mark
-                </p>
-                <label className="mt-5 block text-xs text-subtle">
-                  Note
-                  <textarea value={sheet[name.symbol] || ""} onChange={(e) => note(name.symbol, e.target.value)} placeholder="Why this name" className="mt-1 min-h-24 w-full rounded-[22px] border border-white/10 bg-black/40 px-4 py-3 text-sm outline-none" />
-                </label>
-                <button type="button" onClick={pullBrief} className="mt-3 min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
-                  Put this on the page
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-muted">PreStocks did not answer.</p>
-            )}
-          </section>
-          <aside className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
-            <p className="text-sm font-semibold">Compare</p>
-            <select value={other} onChange={(e) => setOther(e.target.value)} className="mt-3 min-h-11 w-full rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none">
-              <option value="">Pick a second name</option>
-              {book.filter((n) => n.symbol !== name?.symbol).map((n) => (
-                <option key={n.id} value={n.symbol}>{n.symbol}</option>
-              ))}
-            </select>
-            {name && peer ? (
-              <dl className="mt-4 space-y-2 text-sm">
-                <Row k="Token" a={formatUsd(name.last)} b={formatUsd(peer.last)} />
-                <Row k="Vs mark" a={formatPremium(name.premium)} b={formatPremium(peer.premium)} />
-                <Row k="24h" a={name.change24h == null ? "—" : `${(name.change24h * 100).toFixed(1)}%`} b={peer.change24h == null ? "—" : `${(peer.change24h * 100).toFixed(1)}%`} />
-                <Row k={`$${size} buys`} a={name.last > 0 ? (size / name.last).toFixed(3) : "—"} b={peer.last > 0 ? (size / peer.last).toFixed(3) : "—"} />
-              </dl>
-            ) : (
-              <p className="mt-3 text-xs text-muted">{name?.symbol || "A name"} against another print. Same size.</p>
-            )}
-          </aside>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function Row({ k, a, b }: { k: string; a: string; b: string }) {
-  return (
-    <div className="grid grid-cols-3 gap-2">
-      <dt className="text-muted">{k}</dt>
-      <dd className="text-right font-mono text-xs">{a}</dd>
-      <dd className="text-right font-mono text-xs">{b}</dd>
-    </div>
-  );
-}
-function Tile({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="rounded-2xl bg-black/40 px-3 py-2">
-      <p className="text-[11px] text-subtle">{k}</p>
-      <p className="font-mono text-sm">{v}</p>
+        <section className="flex min-h-0 flex-col bg-[#10131c]">
+          <div className="flex shrink-0 items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
+            <div>
+              <h2 className="text-xl tracking-tight">Page</h2>
+              <p className="font-mono text-xs text-subtle">{words} {words === 1 ? "word" : "words"}</p>
+            </div>
+            <button type="button" onClick={copyPage} className="h-9 rounded-full border border-white/15 px-3 text-xs font-semibold">
+              Copy page
+            </button>
+          </div>
+          <textarea
+            value={doc}
+            onChange={(e) => writeDoc(e.target.value)}
+            placeholder="Write the page."
+            className="min-h-0 w-full flex-1 resize-none bg-transparent px-4 py-4 text-[15px] leading-relaxed outline-none"
+          />
+        </section>
+      </div>
     </div>
   );
 }

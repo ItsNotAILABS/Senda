@@ -96,11 +96,54 @@
   50% { opacity: 0.35; }
 }
 .senda-rise { animation: senda-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes senda-paint {
+  0% { opacity: 0; transform: translateY(28px) scale(0.92); }
+  70% { opacity: 1; transform: translateY(0) scale(1.02); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes senda-ink {
+  0% { transform: scale(0.2); opacity: 0.8; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+@keyframes senda-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes senda-sheet {
+  0% { opacity: 0; transform: translateY(48px) scale(0.96); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes senda-row {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.senda-sheet { animation: senda-sheet 0.45s cubic-bezier(0.16, 0.84, 0.24, 1) both; }
+.senda-row { animation: senda-row 0.4s ease both; }
+.senda-ink { animation: senda-ink 0.8s ease-out 0.05s both; }
+.senda-check { stroke-dasharray: 160; stroke-dashoffset: 160; animation: senda-draw 0.6s ease 0.2s forwards; }
+.senda-check-mark { stroke-dasharray: 48; animation-delay: 0.45s; }
+@keyframes senda-call {
+  from { opacity: 0; transform: translateY(32px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes senda-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+.senda-call { animation: senda-call 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.senda-shake { animation: senda-shake 0.4s ease; }
 .senda-stage a, .senda-stage button {
   transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
+@keyframes coin-tape {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.coin-tape { animation: coin-tape 80s linear infinite; }
 
 /* Content type only. The side column is outside this box, so it stays as it is.
    Phone and laptop use the same steps. A wider window does not jump back to poster size. */
@@ -131,33 +174,4 @@
 }
 @media (min-width: 80rem) {
   .senda-stage .xl\:text-6xl { font-size: 32px; line-height: 1.05; }
-}
-
-
-.agent-input {
-  min-height: 2.75rem;
-  width: 100%;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  border-radius: 0.75rem;
-  background: rgb(255 255 255 / 0.035);
-  padding-inline: 0.875rem;
-  color: var(--color-fg);
-  font-size: 0.8125rem;
-  outline: none;
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-}
-.agent-input::placeholder {
-  color: rgb(255 255 255 / 0.25);
-}
-.agent-input:focus {
-  border-color: rgb(214 255 74 / 0.42);
-  background: rgb(214 255 74 / 0.035);
-  box-shadow: 0 0 0 3px rgb(214 255 74 / 0.06);
-}
-textarea.agent-input {
-  resize: vertical;
-}
-select.agent-input option {
-  background: #11131b;
-  color: #f5f7fb;
 }

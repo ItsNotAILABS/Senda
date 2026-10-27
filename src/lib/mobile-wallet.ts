@@ -16,14 +16,34 @@ export function isPhoneBrowser(): boolean {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 }
 
+/** True when a Solana wallet has injected a signer into this page. */
+export function injectedWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as {
+    phantom?: { solana?: { connect?: unknown } };
+    solana?: { connect?: unknown; isPhantom?: boolean; isSolflare?: boolean; isBackpack?: boolean };
+    solflare?: { connect?: unknown };
+    backpack?: { connect?: unknown };
+  };
+  return Boolean(w.phantom?.solana?.connect || w.solflare?.connect || w.backpack?.connect || w.solana?.connect);
+}
+
 /** True when this page is already running inside Phantom, Solflare, or Backpack. */
 export function insideWalletApp(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /Phantom|Solflare|Backpack/i.test(navigator.userAgent);
+  if (/Phantom|Solflare|Backpack/i.test(navigator.userAgent)) return true;
+  return injectedWallet();
 }
 
 export function walletBrowseUrl(wallet: MobileWallet, page: string, origin: string): string {
   return `${HOST[wallet]}/${encodeURIComponent(page)}?ref=${encodeURIComponent(origin)}`;
+}
+
+function pageToOpen(): { page: string; origin: string } {
+  const host = location.hostname;
+  const preview = host.endsWith("grok-sandbox.com") || host.endsWith(".grok.me") || host === "grok.me";
+  const origin = preview ? "https://senda.pocketnova.app" : location.origin;
+  return { page: `${origin}${location.pathname}${location.search}`, origin };
 }
 
 /** Opens the wallet's browser on this exact page. Returns false if we are already inside one. */
@@ -35,8 +55,8 @@ export function openInWallet(wallet: MobileWallet): boolean {
   } catch {
     /* private mode */
   }
-  const page = `${location.origin}${location.pathname}${location.search}`;
-  window.location.assign(walletBrowseUrl(wallet, page, location.origin));
+  const { page, origin } = pageToOpen();
+  window.location.assign(walletBrowseUrl(wallet, page, origin));
   return true;
 }
 
@@ -59,6 +79,9 @@ export function humanWalletError(message: string): string {
     return insideWalletApp()
       ? "Phantom is already open. Tap Connect. This page signs here."
       : "That link was a wallet login page, not the signer. Open Phantom and buy on this page.";
+  }
+  if (/did not match the expected pattern/i.test(raw)) {
+    return "The wallet could not read that transfer. Sign the same amount again.";
   }
   return raw || "The wallet did not connect.";
 }

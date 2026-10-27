@@ -1,15 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { AppShell } from "@/components/app-shell";
-import { WalletsDesk } from "@/components/wallets-desk";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/wallets")({
   component: WalletsPage,
 });
 
 function WalletsPage() {
-  return (
-    <AppShell>
-      <WalletsDesk />
-    </AppShell>
-  );
+  return <Navigate to="/wallet" search={{ lane: "wallets" }} />;
 }

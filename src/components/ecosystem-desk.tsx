@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { VendorHub } from "@/components/vendor-hub";
 import { LEGAL } from "@/lib/ecosystem";
 import { pre8 } from "@/lib/pre8";
 import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
@@ -6,7 +7,9 @@ import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
 export function EcosystemDesk({ house }: { house: HouseListing[] }) {
   const idx = pre8(house);
   return (
-    <div className="px-4 pb-10 pt-4">
+    <div className="pb-10">
+      <VendorHub />
+      <div className="px-4">
       <h2 className="font-display text-3xl tracking-tight">PreStocks rails</h2>
       <p className="mt-2 text-sm text-muted">
         SPL tokens on Solana mainnet. 1:1 SPV-backed economic exposure. Spot on Jupiter. Liquidity on Meteora DLMM and
@@ -54,6 +57,7 @@ export function EcosystemDesk({ house }: { house: HouseListing[] }) {
         ))}
       </ul>
       <p className="mt-4 text-[11px] leading-relaxed text-subtle">{LEGAL}</p>
+      </div>
     </div>
   );
 }

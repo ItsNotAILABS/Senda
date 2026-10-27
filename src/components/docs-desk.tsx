@@ -1,9 +1,21 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { JumpStrip } from "@/components/jump-strip";
+import { DeskAudit } from "@/components/money-flow";
+
+import { paper } from "@/content/docs/paper";
+import { pay } from "@/content/docs/pay";
+import { research } from "@/content/docs/research";
+import { useBook } from "@/content/docs/use";
+import { infra } from "@/content/docs/infra";
+import { security } from "@/content/docs/security";
+import { build } from "@/content/docs/build";
+import { moreBooks } from "@/content/docs/more";
+import { outside } from "@/content/docs/outside";
 
 type Page = { id: string; title: string; body: { h: string; p: string[] }[] };
 
-const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
+const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
   {
     id: "start",
     label: "Start",
@@ -278,7 +290,7 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "Do not read these as done",
             p: [
-              "A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id.",
+              "A brokerage account. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id. Margin on a book this desk matches is not built. A Base perp uses Avantis margin, and the wallet signs their contract. The liquidation on that ticket is a preview.",
             ],
           },
         ],
@@ -287,69 +299,74 @@ const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
   },
 ];
 
+const BOOKS = [...CORE, paper, pay, research, outside, useBook, infra, security, build, ...moreBooks];
+
 export function DocsDesk() {
   const [bookId, setBookId] = useState(BOOKS[0].id);
   const book = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
   const [pageId, setPageId] = useState(book.pages[0].id);
   const page = book.pages.find((p) => p.id === pageId) ?? book.pages[0];
 
-  function openBook(id: string) {
-    const next = BOOKS.find((b) => b.id === id) ?? BOOKS[0];
-    setBookId(next.id);
-    setPageId(next.pages[0].id);
-  }
-
   return (
-    <main className="flex min-h-[calc(100dvh-88px)] flex-col">
-      <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-4">
-        {BOOKS.map((b) => (
-          <button
-            key={b.id}
-            type="button"
-            onClick={() => openBook(b.id)}
-            className={cn(
-              "shrink-0 border-b-2 px-3 py-3 text-sm",
-              b.id === book.id ? "border-accent text-white" : "border-transparent text-white/45 hover:text-white",
-            )}
-          >
-            {b.label}
-          </button>
-        ))}
-      </div>
-      <div className="grid flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <aside className="border-white/10 px-3 py-4 lg:border-r">
-          <p className="px-2 text-[11px] tracking-[0.16em] text-white/35 uppercase">{book.label}</p>
-          <nav className="mt-2">
-            {book.pages.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => setPageId(p.id)}
-                className={cn("block w-full rounded-xl px-3 py-2 text-left text-sm", p.id === page.id ? "bg-white/8 text-white" : "text-white/50 hover:text-white")}
-              >
-                {p.title}
-              </button>
-            ))}
-          </nav>
-        </aside>
-        <article className="px-6 py-8 lg:px-12 lg:py-10">
-          <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{book.label}</p>
-          <h1 className="mt-2 max-w-3xl font-display text-4xl tracking-tight lg:text-5xl">{page.title}</h1>
-          <p className="mt-3 max-w-2xl text-[15px] text-white/50">{book.lede}</p>
-          <div className="mt-8 max-w-3xl space-y-8">
-            {page.body.map((block) => (
-              <section key={block.h}>
-                <h2 className="text-lg font-medium">{block.h}</h2>
-                {block.p.map((para) => (
-                  <p key={para.slice(0, 32)} className="mt-2 text-[15px] leading-relaxed text-white/70">
-                    {para}
-                  </p>
-                ))}
-              </section>
-            ))}
+    <main className="grid min-h-[calc(100dvh-88px)] lg:grid-cols-[272px_minmax(0,1fr)]">
+      <aside className="max-h-[40dvh] overflow-y-auto border-b border-white/10 bg-[#07070f] lg:sticky lg:top-0 lg:max-h-[calc(100dvh-88px)] lg:border-r lg:border-b-0">
+        <div className="px-4 pt-4 pb-2">
+          <p className="text-[11px] tracking-[0.16em] text-white/35 uppercase">Docs</p>
+          <div className="mt-3"><DeskAudit live="These pages describe the rails." hold="A sentence here does not move USDC." /></div>
+          <div className="mt-3 flex flex-col gap-2">
+            <a href="/senda-submission.pdf" className="inline-flex min-h-9 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-fg">
+              Submission PDF
+            </a>
+            <a href="/senda-submission.md" className="inline-flex min-h-9 items-center rounded-full border border-white/15 px-4 text-[13px]">
+              Submission note
+            </a>
           </div>
-        </article>
-      </div>
+        </div>
+        <nav className="px-2 pb-6">
+          {BOOKS.map((b) => (
+            <div key={b.id} className="mt-4">
+              <p className="px-3 text-[11px] tracking-[0.14em] text-white/35 uppercase">{b.label}</p>
+              {b.pages.map((p) => {
+                const on = b.id === book.id && p.id === page.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setBookId(b.id);
+                      setPageId(p.id);
+                    }}
+                    className={cn(
+                      "mt-0.5 block w-full rounded-xl px-3 py-2 text-left text-[13px]",
+                      on ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white",
+                    )}
+                  >
+                    {p.title}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+      <article className="min-w-0 px-6 py-8 lg:px-14 lg:py-12">
+        <JumpStrip />
+        <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{book.label}</p>
+        <h1 className="mt-2 max-w-3xl font-display text-4xl tracking-tight lg:text-5xl">{page.title}</h1>
+        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-white/50">{book.lede}</p>
+        <div className="mt-10 max-w-3xl space-y-10">
+          {page.body.map((block) => (
+            <section key={block.h}>
+              <h2 className="text-xl font-medium tracking-tight">{block.h}</h2>
+              {block.p.map((para) => (
+                <p key={para.slice(0, 48)} className="mt-3 text-[15.5px] leading-[1.7] text-white/75">
+                  {para}
+                </p>
+              ))}
+            </section>
+          ))}
+        </div>
+      </article>
     </main>
   );
 }

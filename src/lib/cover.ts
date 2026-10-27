@@ -1,4 +1,4 @@
-/** Parametric life cover. Premium in USD, payout in USDC on Solana. Paper book. */
+/** A label and a fixed USDC premium. The USDC sits in the cover account. Not a death benefit. */
 
 export type CoverPlan = {
   id: string;
@@ -14,7 +14,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "phone",
     title: "Phone",
-    blurb: "Crack, theft, liquid. Payout to USDC in the wallet.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 9,
     cover: 1200,
     term: "30 days",
@@ -23,7 +23,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "travel",
     title: "Travel",
-    blurb: "Delay, bag, medical abroad. No weekend FX on the payout.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 18,
     cover: 10000,
     term: "Trip · 14 days",
@@ -32,7 +32,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "renters",
     title: "Renters",
-    blurb: "Theft and water in a Texas rental. Not a licensed carrier.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 14,
     cover: 15000,
     term: "30 days",
@@ -41,7 +41,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "accident",
     title: "Accident",
-    blurb: "ER and follow-up cash. Parametric — you file, it pays.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 22,
     cover: 25000,
     term: "30 days",
@@ -50,7 +50,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "pet",
     title: "Pet",
-    blurb: "Vet emergency. Same cash account as send.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 12,
     cover: 5000,
     term: "30 days",
@@ -59,7 +59,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "auto",
     title: "Auto glass",
-    blurb: "Windshield and roadside. Fleet-friendly.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 11,
     cover: 800,
     term: "30 days",
@@ -68,7 +68,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "load",
     title: "Load",
-    blurb: "Cargo on a DFW run. Pays if the load is a total loss.",
+    blurb: "Fixed USDC premium for this label. Settle sends back what the cover account holds.",
     premium: 45,
     cover: 50000,
     term: "One haul",
@@ -77,7 +77,7 @@ export const COVERS: CoverPlan[] = [
   {
     id: "life",
     title: "Life",
-    blurb: "Term cash for family. Paper policy, USDC beneficiary.",
+    blurb: "A label for a fixed USDC premium. Not a death benefit.",
     premium: 28,
     cover: 100000,
     term: "30 days",

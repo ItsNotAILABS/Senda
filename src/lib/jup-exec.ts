@@ -4,6 +4,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+/** Phantom Cash. A separate Solana account from the main wallet. Not USDC. */
+export const CASH = "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH";
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
 const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
 
@@ -27,8 +29,17 @@ function routeLabels(raw: unknown): string[] {
   return plan.map((p) => p.swapInfo?.label || "DEX").filter(Boolean);
 }
 
-export async function fetchQuote(mint: string, usd: number, side: "buy" | "sell"): Promise<JupQuote | { error: string }> {
-  const amount = Math.max(1, Math.round(usd * 1e6));
+export async function fetchQuote(
+  mint: string,
+  usd: number,
+  side: "buy" | "sell",
+  price = 0,
+  decimals = 6,
+): Promise<JupQuote | { error: string }> {
+  const amount =
+    side === "sell" && price > 0
+      ? Math.max(1, Math.round((usd / price) * 10 ** decimals))
+      : Math.max(1, Math.round(usd * 1e6));
   const inputMint = side === "buy" ? USDC : mint;
   const outputMint = side === "buy" ? mint : USDC;
   const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
@@ -72,10 +83,14 @@ export const quoteJup = createServerFn({ method: "POST" })
         mint: z.string().min(32).max(48),
         usd: z.number().positive().max(1_000_000),
         side: z.enum(["buy", "sell"]),
+        price: z.number().nonnegative().optional(),
+        decimals: z.number().int().min(0).max(12).optional(),
       })
       .parse(input),
   )
-  .handler(async ({ data }): Promise<JupQuote | { error: string }> => fetchQuote(data.mint, data.usd, data.side));
+  .handler(async ({ data }): Promise<JupQuote | { error: string }> =>
+    fetchQuote(data.mint, data.usd, data.side, data.price ?? 0, data.decimals ?? 6),
+  );
 
 export function outUi(q: JupQuote, decimals = 6): number {
   return Number(q.outAmount) / 10 ** decimals;

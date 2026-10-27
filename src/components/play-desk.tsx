@@ -2,8 +2,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { dropChallenge, loadPlay, settleCloser, settleDirection, type Challenge, type PlayKind } from "@/lib/play";
 import { formatMoney } from "@/lib/wallet";
+import { loadClearing, postPred } from "@/lib/clearing";
 import { connectPhantom } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
+import { payUsdc } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,17 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
         const linked = wallet.linkChain(owner, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
+      const clearing = await loadClearing();
+      const side = pick === "up" ? "yes" : "no";
+      const staked = await payUsdc({
+        owner,
+        to: clearing.pubkey,
+        usd: stake,
+        memo: `Senda clear pred ${stock.symbol} 1h ${side} open`,
+      });
+      await postPred({
+        data: { owner, sig: staked.signature, symbol: stock.symbol, mint: stock.mint, tenor: "1h", side, usd: stake, strike: 0 },
+      });
       const done = await runPrestock({ owner, mint: stock.mint, side: "buy", usd: stake, price: stock.last });
       const result = kind === "direction" ? settleDirection(stock, pick) : settleCloser(stock);
       const row: Challenge = {
@@ -53,7 +66,7 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
         createdAt: new Date().toISOString(),
       };
       setLog(dropChallenge(log, row));
-      toast.success(`${stock.symbol} bought. ${done.signature.slice(0, 8)}… Score is ${result}, the token is the stake.`);
+      toast.success(`${stock.symbol} is in the pot and in the wallet. ${done.signature.slice(0, 8)}…`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The swap did not send.");
     }
@@ -62,7 +75,7 @@ export function PlayDesk({ house }: { house: HouseListing[] }) {
   return (
     <div className="flex flex-col px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        Same cash. You pick a friend by @tag, a PreStock, a stake. Direction uses the 24h tape. Closer uses last vs mark.
+        Two signatures. The stake is USDC into the pot. The same amount then buys the token. The score is the print. The @tag is who you named.
       </p>
       <div className="mt-3 flex gap-1">
         {(
