@@ -27,18 +27,18 @@ function wall(rows: BookRow[]): BookRow | null {
   return rows.reduce<BookRow | null>((best, row) => (!best || row.usd > best.usd ? row : best), null);
 }
 
-function stairs(rows: BookRow[], side: "bid" | "ask", max: number): string {
-  if (!rows.length || !(max > 0)) return "";
-  const n = rows.length;
+function stairs(rows: BookRow[], side: "bid" | "ask", max: number, lo: number, hi: number): string {
+  if (!rows.length || !(max > 0) || !(hi > lo)) return "";
+  const xOf = (price: number) => 4 + ((price - lo) / (hi - lo)) * 192;
+  const ordered = [...rows].sort((a, b) => (side === "bid" ? b.price - a.price : a.price - b.price));
   let acc = 0;
-  let d = side === "bid" ? "M 100 78" : "M 100 78";
-  rows.forEach((row, i) => {
-    const x = side === "bid" ? 100 - ((i + 1) / n) * 96 : 100 + ((i + 1) / n) * 96;
+  let d = `M ${xOf(ordered[0].price).toFixed(2)} 78`;
+  for (const row of ordered) {
+    const x = xOf(row.price);
     d += ` H ${x.toFixed(2)}`;
     acc += row.usd;
-    const y = 78 - (acc / max) * 66;
-    d += ` V ${y.toFixed(2)}`;
-  });
+    d += ` V ${(78 - (acc / max) * 66).toFixed(2)}`;
+  }
   const edge = side === "bid" ? 4 : 196;
   d += ` H ${edge} V 78 Z`;
   return d;
@@ -99,9 +99,13 @@ export function DepthScreen({
   const total = bidUsd + askUsd;
   const bidPct = total > 0 ? (bidUsd / total) * 100 : 50;
   const mid = book && book.spread > 0 && bids[0] && asks[0] ? (bids[0].price + asks[0].price) / 2 : book?.lastPrice || 0;
+  const prices = [...bids, ...asks].map((row) => row.price).filter((n) => n > 0);
+  const lo = prices.length ? Math.min(...prices) : 0;
+  const hi = prices.length ? Math.max(...prices) : 0;
   const max = Math.max(bidUsd, askUsd, 1);
-  const bidPath = stairs(bids, "bid", max);
-  const askPath = stairs(asks, "ask", max);
+  const bidPath = stairs(bids, "bid", max, lo, hi);
+  const askPath = stairs(asks, "ask", max, lo, hi);
+  const midX = hi > lo && mid > 0 ? 4 + ((mid - lo) / (hi - lo)) * 192 : 100;
 
   return (
     <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#070b14]">
@@ -136,7 +140,7 @@ export function DepthScreen({
       <svg viewBox="0 0 200 86" className="h-44 w-full">
         {bidPath ? <path d={bidPath} fill="rgba(20,241,149,0.28)" stroke="#14f195" strokeWidth="1.2" /> : null}
         {askPath ? <path d={askPath} fill="rgba(251,113,133,0.28)" stroke="#fb7185" strokeWidth="1.2" /> : null}
-        <line x1="100" y1="6" x2="100" y2="78" stroke="#7dd3fc" strokeDasharray="2 2" />
+        <line x1={midX} y1="6" x2={midX} y2="78" stroke="#7dd3fc" strokeDasharray="2 2" />
         <text x="100" y="84" textAnchor="middle" fill="#94a3b8" fontSize="5">Mid {px(mid)}</text>
       </svg>
       <div className="flex items-center justify-between px-3 pb-2 font-mono text-[10px] text-white/35">

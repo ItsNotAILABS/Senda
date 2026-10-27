@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { printBars } from "@/lib/print-bars";
+import { loadPrints, type PrintBook } from "@/lib/tx-tape";
 import type { DerivBar } from "@/lib/deriv-book";
 import { loadVenues, type VenueBook } from "@/lib/venue-book";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export function VolumeBook({
   const [rows, setRows] = useState<Array<{ price: number; vol: number }>>([]);
   const [bare, setBare] = useState(false);
   const [venues, setVenues] = useState<VenueBook | null>(null);
+  const [book, setBook] = useState<PrintBook | null>(null);
 
   useEffect(() => {
     if (!mint) {
@@ -89,6 +91,24 @@ export function VolumeBook({
     };
   }, [mint]);
 
+  useEffect(() => {
+    if (!mint) return;
+    let live = true;
+    const pull = () => {
+      loadPrints({ data: { mint } })
+        .then((next) => {
+          if (live) setBook(next);
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 4_000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [mint]);
+
   const last = mid && mid > 0 ? mid : rows[Math.floor(rows.length / 2)]?.price || 0;
   const max = Math.max(1, ...rows.map((row) => row.vol));
 
@@ -113,6 +133,8 @@ export function VolumeBook({
       ) : (
         <p className="mt-1 text-[11px] text-white/35">No venue has printed this mint yet.</p>
       )}
+      <p className="mt-3 text-[10px] tracking-[0.14em] text-white/35 uppercase">At price</p>
+      <Profile book={book} last={last} />
       <p className="mt-3 text-[10px] tracking-[0.14em] text-white/35 uppercase">Prints</p>
       {bid && ask ? (
         <p className="mt-1 font-mono text-xs">
@@ -138,6 +160,25 @@ export function VolumeBook({
       </ul>
       {rows.length === 0 ? <p className="mt-2 text-xs text-white/40">{mint ? "No prints yet." : "This name has a bid and an ask. It has no Solana pool to chart."}</p> : null}
     </div>
+  );
+}
+
+function Profile({ book, last }: { book: PrintBook | null; last: number }) {
+  const rows = [...(book?.bids || []), ...(book?.asks || [])].sort((a, b) => b.price - a.price);
+  if (!rows.length) return <p className="mt-1 text-[11px] text-white/35">No filled size at a price yet.</p>;
+  const max = Math.max(1, ...rows.map((row) => row.usd));
+  return (
+    <ul className="mt-2 space-y-1">
+      {rows.map((row, i) => (
+        <li key={`${row.price}-${i}`} className="grid grid-cols-[4.5rem_1fr_3.2rem] items-center gap-2">
+          <span className={cn("font-mono text-[11px]", row.price >= last ? "text-down" : "text-up")}>{px(row.price)}</span>
+          <span className="h-2 overflow-hidden rounded-sm bg-white/5">
+            <span className={cn("block h-2", row.price >= last ? "bg-down/70" : "bg-up/70")} style={{ width: `${Math.max(4, (row.usd / max) * 100)}%` }} />
+          </span>
+          <span className="text-right font-mono text-[10px] text-white/55">{vol(row.usd)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

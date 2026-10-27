@@ -1,4 +1,4 @@
-/** Recent swaps on the deepest Solana pool, read from the chain the way an explorer does. Not a resting book. */
+/** Recent swaps on the deepest Solana pools, read from the chain. Not a resting book. */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -44,7 +44,9 @@ type Bal = {
   uiTokenAmount?: { uiAmount?: number | null; uiAmountString?: string };
 };
 
-const memory = new Map<string, { at: number; busy: boolean; prints: ChainPrint[]; pool: string; dex: string; quote: string; sol: number }>();
+type PoolHit = { pool: string; dex: string; quote: string };
+
+const memory = new Map<string, { at: number; busy: boolean; prints: ChainPrint[]; pool: string; dex: string; quote: string; sol: number; pools: PoolHit[] }>();
 
 function ui(row: Bal): number {
   const t = row.uiTokenAmount;
@@ -79,18 +81,25 @@ async function solUsd(): Promise<number> {
   return Number((r.body as Record<string, { usdPrice?: number }>)[SOL]?.usdPrice) || 0;
 }
 
-async function poolOf(mint: string): Promise<{ pool: string; dex: string; quote: string } | null> {
+async function poolsOf(mint: string): Promise<PoolHit[]> {
   const r = await cachedJson(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, 60_000, {
     headers: { accept: "application/json", "user-agent": "Senda" },
   });
-  if (!r.ok) return null;
+  if (!r.ok) return [];
   const pairs = ((r.body as { pairs?: Array<{ chainId?: string; pairAddress?: string; dexId?: string; baseToken?: { address?: string }; quoteToken?: { address?: string }; liquidity?: { usd?: number } }> }).pairs || [])
     .filter((p) => p.chainId === "solana" && p.pairAddress)
     .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
-  const top = pairs[0];
-  if (!top?.pairAddress) return null;
-  const quote = top.quoteToken?.address === mint ? top.baseToken?.address || "" : top.quoteToken?.address || "";
-  return { pool: top.pairAddress, dex: top.dexId || "pool", quote };
+  const out: PoolHit[] = [];
+  const seen = new Set<string>();
+  for (const top of pairs) {
+    const pool = top.pairAddress || "";
+    if (!pool || seen.has(pool)) continue;
+    seen.add(pool);
+    const raw = top.quoteToken?.address === mint ? top.baseToken?.address || "" : top.quoteToken?.address || "";
+    out.push({ pool, dex: top.dexId || "pool", quote: raw === USDC || raw === SOL ? raw : USDC });
+    if (out.length === 3) break;
+  }
+  return out;
 }
 
 function empty(mint: string, note: string): PrintBook {
@@ -128,7 +137,7 @@ function ladder(rows: ChainPrint[], side: "buy" | "sell"): BookRow[] {
   }
   const ordered = [...bags.entries()].sort((a, b) => (side === "buy" ? b[0] - a[0] : a[0] - b[0]));
   let total = 0;
-  return ordered.slice(0, 8).map(([price, row]) => {
+  return ordered.slice(0, 14).map(([price, row]) => {
     total += row.size;
     return { price, size: row.size, usd: row.usd, total };
   });
@@ -160,7 +169,7 @@ function shape(mint: string, slot: { prints: ChainPrint[]; pool: string; dex: st
     spread: draft.spread,
     ageSec: newest ? Math.max(0, Math.round(Date.now() / 1000 - newest)) : null,
     call: judgeBook(draft),
-    note: prints.length ? `${slot.dex} fills` : "Waiting on the next swap.",
+    note: prints.length ? `${slot.dex} · ${prints.length} fills` : "Waiting on the next swap.",
   };
 }
 
@@ -206,7 +215,7 @@ async function readSwap(
 export async function readBook(mint: string): Promise<PrintBook> {
     let slot = memory.get(mint);
     if (!slot) {
-      slot = { at: 0, busy: false, prints: [], pool: "", dex: "", quote: "", sol: 0 };
+      slot = { at: 0, busy: false, prints: [], pool: "", dex: "", quote: "", sol: 0, pools: [] };
       memory.set(mint, slot);
     }
     if (slot.busy || (slot.at > 0 && Date.now() - slot.at < 1_500)) {
@@ -215,22 +224,31 @@ export async function readBook(mint: string): Promise<PrintBook> {
 
     slot.busy = true;
     try {
-      if (!slot.pool) {
-        const found = await poolOf(mint).catch(() => null);
-        if (!found) return empty(mint, "No Solana pool for this mint.");
-        slot.pool = found.pool;
-        slot.dex = found.dex;
-        slot.quote = found.quote === USDC || found.quote === SOL ? found.quote : USDC;
+      if (!slot.pools.length) {
+        const found = await poolsOf(mint).catch(() => []);
+        if (!found.length) return empty(mint, "No Solana pool for this mint.");
+        slot.pools = found;
+        slot.pool = found[0].pool;
+        slot.dex = [...new Set(found.map((row) => row.dex))].join(" · ");
+        slot.quote = found[0].quote;
       }
-      if (slot.quote === SOL && !(slot.sol > 0)) slot.sol = await solUsd().catch(() => 0);
-      const listed = (await chainRpc("getSignaturesForAddress", [slot.pool, { limit: 16 }]).catch(() => null)) as
-        | Array<{ signature?: string; blockTime?: number | null; err?: unknown }>
-        | null;
+      if (slot.pools.some((row) => row.quote === SOL) && !(slot.sol > 0)) slot.sol = await solUsd().catch(() => 0);
       const known = new Set(slot.prints.map((row) => row.signature));
-      const next = (listed || []).filter((row) => row.signature && !row.err && !known.has(row.signature || "")).slice(0, slot.prints.length ? 4 : 12);
-      const parsed = await Promise.all(next.map((row) => readSwap(row.signature || "", row.blockTime ?? null, mint, slot!.quote, slot!.sol)));
+      const take = slot.prints.length ? 3 : 8;
+      const lists = await Promise.all(
+        slot.pools.map((pool) =>
+          chainRpc("getSignaturesForAddress", [pool.pool, { limit: 20 }]).catch(() => []) as Promise<Array<{ signature?: string; blockTime?: number | null; err?: unknown }>>,
+        ),
+      );
+      const jobs: Promise<ChainPrint | null>[] = [];
+      lists.forEach((listed, i) => {
+        const pool = slot!.pools[i];
+        const next = (Array.isArray(listed) ? listed : []).filter((row) => row.signature && !row.err && !known.has(row.signature || "")).slice(0, take);
+        for (const row of next) jobs.push(readSwap(row.signature || "", row.blockTime ?? null, mint, pool.quote, slot!.sol));
+      });
+      const parsed = await Promise.all(jobs);
       const added = parsed.filter((row): row is ChainPrint => Boolean(row));
-      if (added.length) slot.prints = [...added, ...slot.prints].slice(0, 48);
+      if (added.length) slot.prints = [...added, ...slot.prints].filter((row, i, all) => all.findIndex((other) => other.signature === row.signature) === i).slice(0, 96);
     } catch {
       /* keep the last book */
     } finally {

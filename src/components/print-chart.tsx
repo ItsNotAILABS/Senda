@@ -30,9 +30,20 @@ const CHARTS = "senda.chart.v1";
 const DRAW = "senda.draw.v1";
 type Pt = { time: number; price: number };
 type Plot =
-  | { id: string; tool: "level"; price: number }
-  | { id: string; tool: "trend" | "fib" | "measure"; a: Pt; b: Pt };
+  | { id: string; tool: "level" | "horizontal"; price: number }
+  | { id: string; tool: "vertical"; time: number }
+  | { id: string; tool: "hray" | "cross"; time: number; price: number }
+  | { id: string; tool: "trend" | "ray" | "extended" | "fib" | "measure"; a: Pt; b: Pt };
 const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+const LINES = [
+  ["horizontal", "Horizontal"],
+  ["hray", "Horizontal ray"],
+  ["vertical", "Vertical"],
+  ["trend", "Trend"],
+  ["ray", "Ray"],
+  ["extended", "Extended"],
+  ["cross", "Cross"],
+] as const;
 
 function readPlots(mint: string): Plot[] {
   if (typeof window === "undefined") return [];
@@ -53,6 +64,27 @@ function savePlots(mint: string, plots: Plot[]) {
   } catch {
     /* quota */
   }
+}
+
+function reach(a: { x: number; y: number }, b: { x: number; y: number }, w: number, h: number, mode: "ray" | "extended") {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (!dx && !dy) return { start: a, end: b };
+  const marks: number[] = [];
+  if (dx) marks.push(-a.x / dx, (w - a.x) / dx);
+  if (dy) marks.push(-a.y / dy, (h - a.y) / dy);
+  const inside = (t: number) => {
+    const x = a.x + t * dx;
+    const y = a.y + t * dy;
+    return x >= -2 && x <= w + 2 && y >= -2 && y <= h + 2;
+  };
+  const ok = marks.filter(inside);
+  const forward = ok.filter((t) => t >= 1).sort((p, q) => p - q)[0] ?? 1;
+  const back = ok.filter((t) => t <= 0).sort((p, q) => q - p)[0] ?? 0;
+  return {
+    start: mode === "extended" ? { x: a.x + back * dx, y: a.y + back * dy } : a,
+    end: { x: a.x + forward * dx, y: a.y + forward * dy },
+  };
 }
 
 function readBars(mint: string, span: Tf): DerivBar[] {
@@ -108,7 +140,8 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
   const [studies, setStudies] = useState<Set<string>>(() => new Set(["sma", "ema20"]));
   const [zone, setZone] = useState<{ low: number; high: number } | null>(null);
   const [shot, setShot] = useState<string | null>(null);
-  const [tool, setTool] = useState<"" | "level" | "trend" | "fib" | "measure">("");
+  const [tool, setTool] = useState<"" | "horizontal" | "hray" | "vertical" | "trend" | "ray" | "extended" | "cross" | "fib" | "measure">("");
+  const [menu, setMenu] = useState(false);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [draft, setDraft] = useState<Pt | null>(null);
   const [frame, setFrame] = useState(0);
@@ -116,6 +149,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
   const [feed, setFeed] = useState<"gecko-pool" | "jup-chart" | "none">("none");
   const [fresh, setFresh] = useState(false);
   const chartRef = useRef<ChartHandle>(null);
+  const skin = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setPlots(readPlots(mint));
@@ -254,8 +288,19 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
     const rect = event.currentTarget.getBoundingClientRect();
     const hit = chartRef.current?.read(event.clientX - rect.left, event.clientY - rect.top);
     if (!hit || !(hit.price > 0)) return;
-    if (tool === "level") {
-      keep([...plots, { id: crypto.randomUUID(), tool: "level", price: hit.price }]);
+    const id = crypto.randomUUID();
+    if (tool === "horizontal") {
+      keep([...plots, { id, tool: "horizontal", price: hit.price }]);
+      setTool("");
+      return;
+    }
+    if (tool === "vertical") {
+      keep([...plots, { id, tool: "vertical", time: hit.time }]);
+      setTool("");
+      return;
+    }
+    if (tool === "hray" || tool === "cross") {
+      keep([...plots, { id, tool, time: hit.time, price: hit.price }]);
       setTool("");
       return;
     }
@@ -301,8 +346,6 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
             ["ema20", "EMA 20"],
             ["ema50", "EMA 50"],
             ["bb", "Bollinger"],
-            ["level", "Line"],
-            ["trend", "Trend"],
             ["fib", "Fib"],
             ["measure", "Measure"],
           ] as const
@@ -311,9 +354,10 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
             key={id}
             type="button"
             onClick={() => {
-              if (id === "level" || id === "trend" || id === "fib" || id === "measure") {
+              if (id === "fib" || id === "measure") {
                 setTool((cur) => (cur === id ? "" : id));
                 setDraft(null);
+                setMenu(false);
                 return;
               }
               setStudies((cur) => {
@@ -328,6 +372,20 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
             {label}
           </button>
         ))}
+        <div className="relative shrink-0">
+          <button type="button" onClick={() => setMenu((open) => !open)} className={`h-7 rounded-full px-2.5 text-[11px] ${LINES.some(([id]) => id === tool) ? "bg-[#d1d4dc] text-[#131722]" : "text-[#787b86]"}`}>
+            {LINES.find(([id]) => id === tool)?.[1] || "Lines"}
+          </button>
+          {menu ? (
+            <div className="absolute left-0 top-8 z-30 min-w-[148px] rounded-lg border border-[#2a2e39] bg-[#1e222d] py-1 shadow-lg">
+              {LINES.map(([id, label]) => (
+                <button key={id} type="button" onClick={() => { setTool(id); setDraft(null); setMenu(false); }} className="block w-full px-3 py-1.5 text-left text-[12px] text-[#d1d4dc] hover:bg-white/10">
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
         <button type="button" disabled={!plots.length} onClick={() => keep(plots.slice(0, -1))} className="h-7 shrink-0 px-2 text-[11px] text-[#787b86] disabled:opacity-40">Undo</button>
         <button type="button" disabled={!plots.length} onClick={() => keep([])} className="h-7 shrink-0 px-2 text-[11px] text-[#787b86] disabled:opacity-40">Clear</button>
       </div>
@@ -379,27 +437,49 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         </div>
       ) : null}
       {state === "ready" ? (
-        <div className="relative">
+        <div className="relative" ref={skin}>
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[42px] font-semibold tracking-[0.18em] text-white/[0.045]">{symbol}</span>
           <CandleChart ref={chartRef} bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} kind={kind} dayOpen={dayOpen} onFrame={() => setFrame((n) => n + 1)} className={className} onHover={setHover} />
           <svg className="pointer-events-none absolute inset-0 h-full w-full" data-frame={frame}>
             {plots.map((plot) => {
-              if (plot.tool === "level") {
-                const y = chartRef.current?.locate(bars[0]?.time || 0, plot.price)?.y;
+              const w = skin.current?.clientWidth || 320;
+              const h = skin.current?.clientHeight || 240;
+              if (plot.tool === "level" || plot.tool === "horizontal") {
+                const y = chartRef.current?.locate(bars.at(-1)?.time || 0, plot.price)?.y;
                 if (y == null) return null;
-                return <line key={plot.id} x1="0" x2="100%" y1={y} y2={y} stroke="#2962ff" strokeDasharray="4 3" />;
+                return <line key={plot.id} x1="0" x2={w} y1={y} y2={y} stroke="#2962ff" strokeDasharray="4 3" />;
+              }
+              if (plot.tool === "vertical") {
+                const x = chartRef.current?.locate(plot.time, livePx || last || 1)?.x;
+                if (x == null) return null;
+                return <line key={plot.id} x1={x} x2={x} y1="0" y2={h} stroke="#2962ff" strokeDasharray="4 3" />;
+              }
+              if (plot.tool === "hray" || plot.tool === "cross") {
+                const at = chartRef.current?.locate(plot.time, plot.price);
+                if (!at) return null;
+                return (
+                  <g key={plot.id}>
+                    {(plot.tool === "hray" || plot.tool === "cross") ? <line x1={at.x} x2={w} y1={at.y} y2={at.y} stroke="#2962ff" /> : null}
+                    {plot.tool === "cross" ? <line x1={at.x} x2={at.x} y1="0" y2={h} stroke="#2962ff" /> : null}
+                  </g>
+                );
               }
               if (plot.tool === "fib") {
                 return FIB.map((ratio) => {
                   const price = plot.a.price + (plot.b.price - plot.a.price) * ratio;
                   const y = chartRef.current?.locate(plot.a.time, price)?.y;
                   if (y == null) return null;
-                  return <line key={`${plot.id}-${ratio}`} x1="0" x2="100%" y1={y} y2={y} stroke="#c58bff" strokeDasharray="3 3" />;
+                  return <line key={`${plot.id}-${ratio}`} x1="0" x2={w} y1={y} y2={y} stroke="#c58bff" strokeDasharray="3 3" />;
                 });
               }
+              if (!("a" in plot) || !("b" in plot)) return null;
               const a = chartRef.current?.locate(plot.a.time, plot.a.price);
               const b = chartRef.current?.locate(plot.b.time, plot.b.price);
               if (!a || !b) return null;
+              if (plot.tool === "ray" || plot.tool === "extended") {
+                const line = reach(a, b, w, h, plot.tool);
+                return <line key={plot.id} x1={line.start.x} y1={line.start.y} x2={line.end.x} y2={line.end.y} stroke="#d1d4dc" />;
+              }
               const up = plot.b.price >= plot.a.price;
               return <line key={plot.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={plot.tool === "measure" ? (up ? "#089981" : "#f23645") : "#d1d4dc"} />;
             })}
