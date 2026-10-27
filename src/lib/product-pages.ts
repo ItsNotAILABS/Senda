@@ -131,5 +131,6 @@ export const DOCS_PAGES: ProductPage[] = [
 
 export const AGENT_PAGES: ProductPage[] = [
   { href: "/agents", label: "Studio", hint: "Agents on this browser" },
+  { href: "/agents/genesis", label: "Genesis", hint: "Verified characters and market runtimes" },
   { href: "/agents/build", label: "Build", hint: "Make one" },
 ];
