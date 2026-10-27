@@ -21,6 +21,7 @@ import {
 } from "@/lib/jup-venues";
 import { IssuerBoard } from "@/components/issuer-board";
 import { NativeBoard } from "@/components/native-board";
+import { GapsBoard } from "@/components/gaps-board";
 import { RayBoard } from "@/components/ray-board";
 import { UsBoard } from "@/components/us-board";
 import { SOL, CASH, signRoute } from "@/lib/jup-sign";
@@ -134,7 +135,7 @@ export function MarketsFloor({
   const [liveLev, setLiveLev] = useState(2);
   const [listed, setListed] = useState<PerpPosition[]>([]);
   const [cat, setCat] = useState<"crypto" | "sports" | "politics">("sports");
-  const [view, setView] = useState<"packs" | "print" | "metals" | "sports" | "coins" | "perps" | "mix" | "us" | "pools" | "issuers" | "marks">("print");
+  const [view, setView] = useState<"packs" | "print" | "metals" | "sports" | "coins" | "perps" | "mix" | "us" | "pools" | "issuers" | "marks" | "gaps">("print");
   const [metal, setMetal] = useState("xau");
   const [events, setEvents] = useState<PredEvent[]>(initialEvents);
   const [coins, setCoins] = useState<PredEvent[]>(initialCoins);
@@ -561,6 +562,7 @@ export function MarketsFloor({
             ["pools", "Pools"],
             ["issuers", "Issuers"],
             ["marks", "Marks"],
+            ["gaps", "Gaps"],
             ["sports", "Sports"],
             ["coins", "Coins"],
             ["mix", "Mix"],
@@ -578,6 +580,7 @@ export function MarketsFloor({
       {view === "pools" ? <RayBoard /> : null}
       {view === "issuers" ? <IssuerBoard /> : null}
       {view === "marks" ? <NativeBoard /> : null}
+      {view === "gaps" ? <GapsBoard /> : null}
       {view === "sports" ? (
         <SportsBook cat={cat} setCat={setCat} events={events} err={err} usd={eventUsd} setUsd={setEventUsd} busy={busy} owner={owner} onBuy={buyEvent} />
       ) : null}
