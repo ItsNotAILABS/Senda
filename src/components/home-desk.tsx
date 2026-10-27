@@ -465,10 +465,11 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
           <div className="flex items-end gap-6">
             <div>
-              <p className="text-[11px] text-white/40">Portfolio</p>
+              <p className="text-[10px] tracking-[0.18em] text-white/45 uppercase">Markets in higher clarity</p>
+              <p className="mt-1 text-[11px] text-white/40">Portfolio</p>
               <p className="font-mono text-3xl leading-none tabular-nums">{pic ? `$${pic.total.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : owner ? "…" : "$0.00"}</p>
             </div>
-            <p className={cn("pb-1 font-mono text-sm tabular-nums", marksToday < 0 ? "text-down" : "text-accent")}>
+            <p className={cn("pb-1 font-mono text-sm tabular-nums", marksToday < 0 ? "text-down" : "text-up")}>
               {held.length === 0 ? "No holdings yet" : `${marksToday >= 0 ? "+" : "−"}$${Math.abs(marksToday).toFixed(2)} marks today`}
             </p>
             <p className={cn("pb-1 font-mono text-sm tabular-nums", closedToday < 0 ? "text-down" : "text-white/70")}>
@@ -498,7 +499,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               {closed.map((row) => (
                 <li key={row.day} className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 font-mono text-[11px] tabular-nums">
                   <span className="text-white/40">{row.day.slice(5)} </span>
-                  <span className={row.realized < 0 ? "text-down" : "text-accent"}>{row.realized >= 0 ? "+" : "−"}${Math.abs(row.realized).toFixed(2)}</span>
+                  <span className={row.realized < 0 ? "text-down" : "text-up"}>{row.realized >= 0 ? "+" : "−"}${Math.abs(row.realized).toFixed(2)}</span>
                 </li>
               ))}
             </ul>
@@ -539,7 +540,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               </div>
               <div className="text-right">
                 <p className="font-mono text-3xl tabular-nums">{chosen ? formatUsd(chosen.price) : "—"}</p>
-                <p className={cn("font-mono text-sm tabular-nums", (chosen?.change ?? 0) < 0 ? "text-down" : "text-accent")}>
+                <p className={cn("font-mono text-sm tabular-nums", (chosen?.change ?? 0) < 0 ? "text-down" : "text-up")}>
                   {chosen ? `${chosen.change >= 0 ? "+" : ""}${chosen.change.toFixed(2)}%` : ""}
                 </p>
               </div>
@@ -607,7 +608,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
                     <MarkFace icon={marks[row.mint]?.icon} symbol={row.symbol} mint={row.mint} />
                     <span className="truncate text-sm font-semibold">{row.symbol}</span>
                   </span>
-                  <span className={cn("font-mono text-[11px] tabular-nums", row.change < 0 ? "text-down" : "text-accent")}>{row.change >= 0 ? "+" : ""}{row.change.toFixed(1)}%</span>
+                  <span className={cn("font-mono text-[11px] tabular-nums", row.change < 0 ? "text-down" : "text-up")}>{row.change >= 0 ? "+" : ""}{row.change.toFixed(1)}%</span>
                 </span>
                 <span className="mt-1 flex items-center justify-between gap-2 font-mono text-[10px] text-white/40">
                   <span>{formatUsd(row.price)}</span>

@@ -10,10 +10,10 @@
   --color-subtle: #6f768a;
   --color-paper: #f4f4f8;
   --color-ink: #07070c;
-  --color-accent: #d6ff4a;
-  --color-accent-fg: #10140a;
+  --color-accent: #3ad7ff;
+  --color-accent-fg: #04121a;
   --color-sol: #9945ff;
-  --color-up: #d6ff4a;
+  --color-up: #3dd68c;
   --color-up-fg: #04140c;
   --color-down: #ff5d73;
   --color-down-fg: #2a060c;
@@ -22,8 +22,8 @@
   --color-border: #232838;
   --color-felt: #0e0e16;
   --color-felt-ink: #05050a;
-  --color-chip: #d6ff4a;
-  --color-chip-ink: #10140a;
+  --color-chip: #3ad7ff;
+  --color-chip-ink: #04121a;
   --font-display: "Space Grotesk", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
@@ -38,8 +38,8 @@
 
 .senda-stage {
   background:
-    radial-gradient(900px 420px at 80% -10%, rgb(80 40 180 / 0.28), transparent 55%),
-    radial-gradient(700px 320px at 10% 0%, rgb(214 255 74 / 0.06), transparent 50%),
+    radial-gradient(720px 280px at 70% -8%, rgb(58 215 255 / 0.16), transparent 58%),
+    radial-gradient(520px 240px at 8% 0%, rgb(58 215 255 / 0.05), transparent 50%),
     var(--color-bg);
 }
 
