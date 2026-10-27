@@ -68,6 +68,13 @@ export function fileFill(row: Omit<TradeFill, "at"> & { owner?: string }) {
   if (row.side === "buy" && row.mint && !SKIP_WATCH.has(row.mint)) void showInPhantom(row.mint);
 }
 
+/** Dollars this browser has signed. Another device, and another person, are not in this number. */
+export function deskVolume(): { usd: number; n: number } {
+  const rows = listTrades().filter((r) => r.side === "buy" || r.side === "sell");
+  const usd = rows.reduce((sum, row) => sum + (Number(row.usd) || 0), 0);
+  return { usd: Math.round(usd * 100) / 100, n: rows.length };
+}
+
 export function onTrades(fn: () => void) {
   window.addEventListener(EVENT, fn);
   return () => window.removeEventListener(EVENT, fn);
