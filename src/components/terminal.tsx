@@ -402,7 +402,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
 
   function open(key: string) {
     setPick(key);
-    setStage(true);
+    setStage(false);
     setReview("");
   }
 
@@ -431,20 +431,20 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
         <ul className="order-2 divide-y divide-white/8 lg:order-1">
           {legs.map((row) => (
             <li key={`${row.book}:${row.key}`}>
-              <button type="button" onClick={() => open(row.key)} className={cn("grid w-full grid-cols-[1fr_auto_auto_auto_auto] items-center gap-3 px-3 py-3 text-left", leg?.key === row.key && "bg-white/[0.04]")}>
-                <span>
+              <button type="button" onClick={() => open(row.key)} className={cn("grid w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-3 py-3 text-left sm:grid-cols-[1fr_auto_auto_auto_auto]", leg?.key === row.key && "bg-white/[0.04]")}>
+                <span className="min-w-0">
                   <span className="block text-sm font-semibold">{row.symbol}</span>
                   <span className="block truncate text-xs text-subtle">{row.book} · {row.name}</span>
                 </span>
                 <span className="font-mono text-sm tabular-nums">{row.price != null ? coinPx(row.price) : "—"}</span>
-                <span className="font-mono text-[11px] text-white/55">{vol(row.volume)}</span>
+                <span className="hidden font-mono text-[11px] text-white/55 sm:block">{vol(row.volume)}</span>
                 <span className={cn("font-mono text-xs", (row.change ?? 0) < 0 ? "text-down" : "text-accent")}>{pct(row.change)}</span>
                 <span
                   role="button"
                   tabIndex={0}
                   onClick={(e) => { e.stopPropagation(); star(row.key); }}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); star(row.key); } }}
-                  className={cn("text-xs", watch.includes(row.key) ? "text-accent" : "text-subtle")}
+                  className={cn("hidden text-xs sm:block", watch.includes(row.key) ? "text-accent" : "text-subtle")}
                 >
                   {watch.includes(row.key) ? "★" : "☆"}
                 </span>
@@ -481,7 +481,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
                 {view === "chart" ? (
                   <>
                     {stage ? <button type="button" onClick={() => setStage(false)} className="mb-2 text-xs font-semibold text-white/50">Shorter chart</button> : null}
-                    {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[640px]" : "h-[220px] lg:h-[420px]"} /> : <p className="text-xs text-white/45">No Solana pool. The bid and the ask are under Volume.</p>}
+                    {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[70dvh] lg:h-[640px]" : "h-[280px] w-full lg:h-[420px]"} /> : <p className="text-xs text-white/45">No Solana pool. The bid and the ask are under Volume.</p>}
                   </>
                 ) : null}
                 {view === "book" ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}

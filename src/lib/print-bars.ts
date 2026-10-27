@@ -50,6 +50,12 @@ async function geckoBars(mint: string, span: string): Promise<DerivBar[]> {
   return out;
 }
 
+/** Daily closes for a small line. Empty when the pool did not print. */
+export async function dayLine(mint: string): Promise<number[]> {
+  const bars = await geckoBars(mint, "1D");
+  return bars.map((bar) => bar.close).filter((n) => n > 0).slice(-32);
+}
+
 export const printBars = createServerFn({ method: "GET" })
   .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "5", "15", "60", "240", "1D"]).optional() }))
   .handler(async ({ data }): Promise<DerivBar[]> => geckoBars(data.mint, data.span || "1"));

@@ -195,6 +195,7 @@ function walletProvider(): {
 
 export async function unlockSeal(owner: string): Promise<void> {
   install();
+  if (who === owner && aes) return;
   who = owner;
   grant = "";
   aes = await aesFrom(await signVault(owner));

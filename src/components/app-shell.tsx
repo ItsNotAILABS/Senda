@@ -170,20 +170,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         const res = await injected.connect({ onlyIfTrusted: true });
         const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
         if (!addr || !live) return;
-        const { unlockSeal } = await import("@/lib/seal");
-        await unlockSeal(addr);
-        if (!live) return;
         const linked = linkChain(addr, "Phantom", "phantom");
         if (!linked.ok && linked.error !== "Already linked.") return;
         invalidateChain(addr);
       } catch {
-        /* Already trusted reconnects with no sheet. A first connect still needs a tap. */
+        /* A trusted wallet reconnects quietly. A first connect still needs a tap. No signature here. */
       }
     })();
     return () => {
       live = false;
     };
-  }, [linkChain]);
+    // Once per open. linkChain changes identity every render, and a signature must not follow it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (window.localStorage.getItem("rail.open") === "0") setRail(false);
