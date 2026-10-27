@@ -38,3 +38,9 @@ App-side server adapter: configure `SENDA_LIQUIFY_ORIGIN=http://127.0.0.1:8787` 
 - Durable observability for latency, 429 rates, no-route responses, route availability at each size and quote-to-fill comparisons.
 - Multivenue support only from legitimate direct RFQ, maker or venue interfaces with signed integration agreements. Jupiter V2 already competes Metis, JupiterZ, Dflow and OKX where available. Don't double-count a Jupiter quote as four independent pools.
 - Wallet-owned transaction signing and official Jupiter V2 `/order` + `/execute` flow require a separate reviewed execution integration and confirmation reconciliation. The service intentionally does **not** mint, swap, deposit, fund pools, operate margin, or sign transactions.
+
+## Solscan Native Volume (new)
+
+`GET /v1/volume?mint=<SolanaMint>&tf=1H` uses the Solscan Pro token DeFi activity API. Configure `SENDA_SOLSCAN_PRO_API_KEY` **on the Go service only**, and `SENDA_ROUTER_INTERNAL_KEY` for non-loopback access. The server returns separate direct USDC-notional (approximately USD) and wrapped-SOL-native bar series; it does **not** price SOL swaps using a current market mark or combine them with GeckoTerminal pool candles. Invalid, unpriced or uncategorized routes remain gaps. Partial API windows cannot report fabricated zero volume.
+
+See `docs/native-solscan-volume.md` for data provenance, overlapping-pool volume restrictions, unit tests and release certification.
