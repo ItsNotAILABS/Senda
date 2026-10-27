@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { ContractsDesk } from "@/components/contracts-desk";
+import { ContractsPage as DealWriter } from "@/components/contracts-page";
 import { TabLead } from "@/components/tab-lead";
 import { getHouse } from "@/lib/sol-house";
 
@@ -22,6 +22,7 @@ function ContractsPage() {
           live={["An option posts a USDC debit you can close.", "A payment and a gift hold tokens, then send them.", "A work order uses the work account. Invest buys through Jupiter and keeps the share."]}
           coming={["A date that releases a hold without another tap."]}
         />
+        <DealWriter />
         <ContractsDesk names={names} />
       </div>
     </AppShell>
