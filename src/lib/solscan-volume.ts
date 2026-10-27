@@ -12,16 +12,40 @@ const PAGE_SIZE=100;
 const PAGE_CAP=5; // 500 activities maximum, never claim full coverage beyond this cap.
 const cache=new Map<string,{until:number;value:FeedResult}>();
 const ongoing=new Map<string,Promise<FeedResult>>();
+async function fromGoVolume(mint:string,tf:keyof typeof TF_SECONDS):Promise<FeedResult|null>{
+ const configured=process.env.SENDA_LIQUIFY_ORIGIN;
+ if(!configured)return null;
+ const origin=new URL(configured);
+ const loopback=["localhost","127.0.0.1","::1"].includes(origin.hostname);
+ if(origin.protocol!=="https:"&&!(origin.protocol==="http:"&&loopback))throw Error("Liquify origin must be HTTPS or loopback.");
+ if(origin.username||origin.password||origin.search||origin.hash)throw Error("Invalid Liquify origin.");
+ const url=new URL("/v1/volume",origin);
+ url.searchParams.set("mint",mint);url.searchParams.set("tf",tf);
+ const resp=await fetch(url,{
+  headers:{accept:"application/json",...(process.env.SENDA_ROUTER_INTERNAL_KEY?{"X-Senda-Router-Key":process.env.SENDA_ROUTER_INTERNAL_KEY}:{})},
+  signal:AbortSignal.timeout(22000),
+ });
+ if(!resp.ok)throw Error("Go Liquify Solscan index unavailable ("+resp.status+").");
+ const value=await resp.json() as FeedResult;
+ if(value?.state!=="ready"||value.snapshot?.schema!=="senda.volume.solscan.v1"||
+    value.snapshot?.mint!==mint||value.snapshot?.interval!==tf||
+    !Array.isArray(value.snapshot?.bars)||value.snapshot.bars.length>120)
+    throw Error("Go Liquify returned invalid or mismatched volume output.");
+ return value;
+}
 async function fetchVolume(mint:string,tf:keyof typeof TF_SECONDS):Promise<FeedResult>{
+ try {const go=await fromGoVolume(mint,tf);if(go)return go;}
+ catch(error){if(!process.env.SENDA_SOLSCAN_PRO_API_KEY)throw error;}
  const key=process.env.SENDA_SOLSCAN_PRO_API_KEY;
  if(!key)return {state:"unconfigured",snapshot:null,pages:0,reason:"Solscan Pro API key is not configured on the Senda server."};
- const step=TF_SECONDS[tf],end=Math.floor(Date.now()/step)*step;
+ const step=TF_SECONDS[tf],now=Math.floor(Date.now()/1000);
+ const end=(Math.floor(now/step)+1)*step;
  const start=Math.max(0,end-Math.min(86400,step*48));
  const events:unknown[]=[];
  let completed=false,pages=0;
  for(let page=1;page<=PAGE_CAP;page++){
   const q=new URLSearchParams({
-   address:mint,from_time:String(start),to_time:String(end-1),
+   address:mint,from_time:String(start),to_time:String(now),
    page:String(page),page_size:String(PAGE_SIZE),
    sort_by:"block_time",sort_order:"desc",
   });
@@ -37,7 +61,7 @@ async function fetchVolume(mint:string,tf:keyof typeof TF_SECONDS):Promise<FeedR
   if(data.data.length<PAGE_SIZE){completed=true;break;}
  }
  const snapshot=aggregateSolscanVolume({mint,events,start,end,tf,complete:completed,
-  observedAt:new Date().toISOString()});
+  observedAt:new Date().toISOString(),observedThrough:now});
  return {state:"ready",snapshot,pages,reason:completed?
   "Solscan API pages exhausted for the queried window; indexing may lag chain activity.":
   "Solscan request capped at 500 records: values are lower-bound samples, not total volume."};
