@@ -21,6 +21,7 @@ import { MarketBrief } from "@/components/market-brief";
 import { PackDesk } from "@/components/pack-desk";
 import { PrintChart } from "@/components/print-chart";
 import { PrintTape } from "@/components/print-tape";
+import { DepthScreen } from "@/components/depth-screen";
 import { TradeTools } from "@/components/trade-tools";
 import { SessionLine, VolumeBook } from "@/components/volume-book";
 import { WeekCalendar } from "@/components/week-calendar";
@@ -105,7 +106,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
   const [shares, setShares] = useState<Leg[]>([]);
   const [world, setWorld] = useState<Leg[]>([]);
   const [book, setBook] = useState<Book | "All" | "Watch" | "Packs" | "Shorts">("All");
-  const [view, setView] = useState<"chart" | "book" | "session">("chart");
+  const [view, setView] = useState<"chart" | "book" | "depth" | "volume" | "session">("chart");
   const [q, setQ] = useState("");
   const [pick, setPick] = useState("");
   const [raw, setRaw] = useState("25");
@@ -474,8 +475,8 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
                 premium={names.find((n) => n.mint === leg.mint)?.premium}
               />
               <div className="mt-3 flex gap-1">
-                {(["chart", "book", "session"] as const).map((id) => (
-                  <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", view === id ? "bg-white text-black" : "bg-white/10")}>{id === "chart" ? "Chart" : id === "book" ? "Book" : "Session"}</button>
+                {(["chart", "book", "depth", "volume", "session"] as const).map((id) => (
+                  <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold capitalize", view === id ? "bg-white text-black" : "bg-white/10")}>{id}</button>
                 ))}
               </div>
               <div className="mt-3">
@@ -485,8 +486,9 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
                     {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[70dvh] lg:h-[640px]" : "h-[220px] w-full lg:h-[320px]"} /> : <p className="text-xs text-white/45">No Solana pool for this name.</p>}
                   </>
                 ) : null}
-                {view !== "session" && leg.mint ? <PrintTape mint={leg.mint} symbol={leg.symbol} /> : null}
-                {view === "book" && !leg.mint ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}
+                {view === "book" && leg.mint ? <PrintTape mint={leg.mint} symbol={leg.symbol} /> : null}
+                {view === "depth" && leg.mint ? <DepthScreen mint={leg.mint} symbol={leg.symbol} onBuy={() => setReview("buy")} onSell={() => setReview("sell")} /> : null}
+                {view === "volume" ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}
                 {view === "session" ? <SessionLine mint={leg.mint} /> : null}
               </div>
               <label className="mt-3 block">

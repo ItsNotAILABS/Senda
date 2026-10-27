@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { printBars } from "@/lib/print-bars";
 import type { DerivBar } from "@/lib/deriv-book";
+import { loadVenues, type VenueBook } from "@/lib/venue-book";
 import { cn } from "@/lib/utils";
 
 function vol(n: number): string {
@@ -34,6 +35,7 @@ export function VolumeBook({
 }) {
   const [rows, setRows] = useState<Array<{ price: number; vol: number }>>([]);
   const [bare, setBare] = useState(false);
+  const [venues, setVenues] = useState<VenueBook | null>(null);
 
   useEffect(() => {
     if (!mint) {
@@ -69,6 +71,24 @@ export function VolumeBook({
     };
   }, [mint]);
 
+  useEffect(() => {
+    if (!mint) {
+      setVenues(null);
+      return;
+    }
+    let live = true;
+    loadVenues({ data: { mint } })
+      .then((next) => {
+        if (live) setVenues(next);
+      })
+      .catch(() => {
+        if (live) setVenues(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [mint]);
+
   const last = mid && mid > 0 ? mid : rows[Math.floor(rows.length / 2)]?.price || 0;
   const max = Math.max(1, ...rows.map((row) => row.vol));
 
@@ -76,8 +96,24 @@ export function VolumeBook({
     <div className="mt-3 rounded-2xl border border-white/10 bg-black/30 p-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">Volume</p>
-        <p className="font-mono text-[11px] text-white/50">{volume && volume > 0 ? vol(volume) : "—"}</p>
+        <p className="font-mono text-[11px] text-white/50">{venues && venues.vol > 0 ? vol(venues.vol) : volume && volume > 0 ? vol(volume) : "—"}</p>
       </div>
+      {venues && venues.venues.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {venues.venues.map((row) => (
+            <li key={row.dex} className="grid grid-cols-[5.5rem_1fr_3.2rem] items-center gap-2">
+              <span className="truncate text-[11px] text-white/70">{row.dex}</span>
+              <span className="h-2 overflow-hidden rounded-sm bg-white/5">
+                <span className="block h-2 bg-white/50" style={{ width: `${Math.max(4, (row.vol / Math.max(venues.vol, 1)) * 100)}%` }} />
+              </span>
+              <span className="text-right font-mono text-[10px] text-white/55">{vol(row.vol)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-[11px] text-white/35">No venue has printed this mint yet.</p>
+      )}
+      <p className="mt-3 text-[10px] tracking-[0.14em] text-white/35 uppercase">Prints</p>
       {bid && ask ? (
         <p className="mt-1 font-mono text-xs">
           <span className="text-down">{px(ask)}</span>

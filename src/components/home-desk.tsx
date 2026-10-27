@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
 import { PrintChart } from "@/components/print-chart";
 import { PrintTape } from "@/components/print-tape";
+import { DepthScreen } from "@/components/depth-screen";
 import { HoldingCards, type HoldingRow, MarkFace } from "@/components/holding-cards";
 import { WalletPicker } from "@/components/wallet-picker";
 import { CompanyAccount } from "@/components/company-account";
@@ -86,6 +87,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
   const [buyUsd, setBuyUsd] = useState(1);
   const [buying, setBuying] = useState(false);
   const [arm, setArm] = useState<"" | "yes" | "no" | "buy">("");
+  const [pane, setPane] = useState<"book" | "depth">("book");
   const board = tape.filter((n) => n.group === group);
   const wideHit = wide.find((w) => w.mint === pick);
   const chosen: TapeRow | undefined =
@@ -550,7 +552,15 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               </button>
               {!owner ? <div className="mt-3"><WalletPicker /></div> : null}
             </div>
-            {chosen?.mint ? <PrintTape mint={chosen.mint} symbol={chosen.symbol} /> : null}
+            {chosen?.mint ? (
+              <div>
+                <div className="flex gap-1 px-2 pt-2">
+                  <button type="button" onClick={() => setPane("book")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "book" ? "bg-white text-black" : "bg-white/10")}>Book</button>
+                  <button type="button" onClick={() => setPane("depth")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "depth" ? "bg-white text-black" : "bg-white/10")}>Depth</button>
+                </div>
+                {pane === "depth" ? <DepthScreen mint={chosen.mint} symbol={chosen.symbol} onBuy={() => setArm("buy")} /> : <PrintTape mint={chosen.mint} symbol={chosen.symbol} />}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="border-t border-white/10">

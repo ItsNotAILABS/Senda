@@ -3,14 +3,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { cachedJson } from "@/lib/net-cache";
+import { facesOf } from "@/lib/venue-book";
 
 export type TokenMark = { mint: string; icon: string; name: string; symbol: string; line: number[]; volume: number[]; vol24: number; poolVol: number; poolDex: string };
 
 async function faceOf(mint: string): Promise<{ icon: string; name: string; symbol: string }> {
-  const r = await cachedJson(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mint)}`, 300_000);
-  if (!r.ok || !Array.isArray(r.body)) return { icon: "", name: "", symbol: "" };
-  const hit = (r.body as Array<{ id?: string; icon?: string; name?: string; symbol?: string }>).find((row) => row.id === mint);
-  return { icon: hit?.icon || "", name: hit?.name || "", symbol: hit?.symbol || "" };
+  const faces = await facesOf([mint]);
+  return faces.get(mint) || { icon: "", name: "", symbol: "" };
 }
 
 /** Last 24 hourly closes and their USD volume. Empty when Jupiter has no chart. */
@@ -50,10 +49,12 @@ export const loadMarks = createServerFn({ method: "POST" })
   .validator(z.object({ mints: z.array(z.string().min(32).max(48)).max(40), lines: z.boolean().optional() }))
   .handler(async ({ data }): Promise<TokenMark[]> => {
     const mints = [...new Set(data.mints)].slice(0, 40);
+    const faces = await facesOf(mints).catch(() => new Map<string, { icon: string; name: string; symbol: string }>());
     const rows = await Promise.all(
       mints.map(async (mint) => {
+        const known = faces.get(mint);
         const [face, line, pool] = await Promise.all([
-          faceOf(mint).catch(() => ({ icon: "", name: "", symbol: "" })),
+          known ? Promise.resolve(known) : faceOf(mint).catch(() => ({ icon: "", name: "", symbol: "" })),
           data.lines === false ? Promise.resolve({ line: [] as number[], volume: [] as number[], vol24: 0 }) : shortLine(mint).catch(() => ({ line: [] as number[], volume: [] as number[], vol24: 0 })),
           data.lines === false ? Promise.resolve({ poolVol: 0, poolDex: "" }) : poolPrint(mint).catch(() => ({ poolVol: 0, poolDex: "" })),
         ]);
