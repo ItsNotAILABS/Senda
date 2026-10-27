@@ -94,3 +94,23 @@ export const getLiquifyLadder=createServerFn({method:"POST"})
   }
   return current;
  });
+
+/** Read the token's actual decimals from the mint account. Never assume nine decimals. */
+export const getLiquifyDecimals=createServerFn({method:"POST"})
+ .validator((input:unknown)=>z.object({mint:z.string().regex(mintPattern)}).parse(input))
+ .handler(async({data}):Promise<number|null>=>{
+  try{
+   const rpc=process.env.SENDA_SOLANA_RPC_URL||"https://api.mainnet-beta.solana.com";
+   const response=await fetch(rpc,{
+     method:"POST",headers:{"content-type":"application/json"},
+     body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getAccountInfo",
+       params:[data.mint,{encoding:"jsonParsed",commitment:"confirmed"}]}),
+     signal:AbortSignal.timeout(6500),
+   });
+   if(!response.ok)return null;
+   const json=await response.json() as {result?:{value?:{data?:{parsed?:{type?:string;info?:{decimals?:unknown}}}}}};
+   const parsed=json.result?.value?.data?.parsed;
+   const n=parsed?.type==="mint"?parsed.info?.decimals:null;
+   return typeof n==="number"&&Number.isInteger(n)&&n>=0&&n<=18?n:null;
+  }catch{return null;}
+ });
