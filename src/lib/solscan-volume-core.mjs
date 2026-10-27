@@ -38,7 +38,7 @@ function parseActivity(row,mint,start,end) {
  }
  return {t,sig:row.trans_id,priced:false,why:"non-USDC-pair",kind:row.activity_type};
 }
-export function aggregateSolscanVolume({mint,events,start,end,tf="1H",complete=false,observedAt}){
+export function aggregateSolscanVolume({mint,events,start,end,tf="1H",complete=false,observedAt,observedThrough=end}){
  if(typeof mint!=="string"||!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)||mint===USDC_MINT)throw Error("Invalid volume mint.");
  const step=STEPS[tf];if(!step)throw Error("Invalid volume interval.");
  if(!Number.isInteger(start)||!Number.isInteger(end)||end<=start||end-start>86400||end-start<step)throw Error("Invalid volume time range.");
@@ -67,8 +67,10 @@ export function aggregateSolscanVolume({mint,events,start,end,tf="1H",complete=f
  for(let t=Math.floor(start/step)*step;t<end;t+=step){
   const x=buckets.get(t);
   if(!x) {
-   bars.push({t:t*1000,buyUsd:complete?0:null,sellUsd:complete?0:null,totalUsd:complete?0:null,
-    netUsd:complete?0:null,trades:complete?0:null,observed:false});
+   // Even a fully paginated index cannot certify the still-open interval is empty.
+   const knownEmpty=complete && t+step<=observedThrough;
+   bars.push({t:t*1000,buyUsd:knownEmpty?0:null,sellUsd:knownEmpty?0:null,totalUsd:knownEmpty?0:null,
+    netUsd:knownEmpty?0:null,trades:knownEmpty?0:null,observed:false});
    continue;
   }
   const buy=+x.buy.toFixed(6),sell=+x.sell.toFixed(6);
