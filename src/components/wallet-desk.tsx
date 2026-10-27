@@ -313,7 +313,7 @@ export function WalletDesk({ buy, lane: laneSeed }: { buy?: string; lane?: Lane 
         const linked = wallet.linkChain(who, "Phantom", "phantom");
         if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "The wallet did not stay.");
       }
-      const sig = moveAsset === "USDC" ? (await payUsdc({ owner: who, to: moveTo, usd: n, memo: "between wallets" })).signature : await paySol({ owner: who, to: moveTo, sol: n });
+      const sig = moveAsset === "USDC" ? (await payUsdc({ owner: who, to: moveTo, usd: n, memo: "between wallets", deskFee: true })).signature : await paySol({ owner: who, to: moveTo, sol: n });
       toast.success(`Sent ${n} ${moveAsset}. ${sig.slice(0, 8)}…`);
       readChain(who).then((s) => setSnap(s)).catch(() => undefined);
     } catch (e) {

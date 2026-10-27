@@ -6,7 +6,7 @@ import { DeskAudit } from "@/components/money-flow";
 import { ClearStrip } from "@/components/clear-strip";
 import { connectPhantom, readChain } from "@/lib/phantom";
 import { humanWalletError, insideWalletApp, isPhoneBrowser } from "@/lib/mobile-wallet";
-import { feeOf } from "@/lib/money-move";
+import { sendCut } from "@/lib/desk-fee";
 import { connectWallet, detectWallets, rememberWallet, type WalletChoice, type WalletId } from "@/lib/wallets";
 import { shortPk } from "@/lib/senda-keys";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -18,15 +18,9 @@ const ORDER = [
   { n: "3", title: "MetaMask", line: "An account wallet, same as Phantom. It stays signed in. It signs Base: gold, oil, FX, a short." },
 ] as const;
 
-/** The schedule, from feeOf. Not a second leg. */
+/** What a person-to-person USDC send costs. Stakes and covers do not use this. */
 function clearSchedule(): string {
-  const above = feeOf(100);
-  const cap = feeOf(10_000);
-  const under = feeOf(0.5);
-  const pct = above.bps / 100;
-  const capUsd = Number.isInteger(cap.usd) ? cap.usd.toFixed(0) : cap.usd.toFixed(2);
-  const small = under.usd === 0 ? "Under $1 there is no fee." : `Under $1 the fee is $${under.usd.toFixed(2)}.`;
-  return `A clear above $1 keeps ${pct}% for the desk, capped at $${capUsd}. ${small}`;
+  return `${sendCut(100).why} Under $5 it is free. A stake, a cover, and a borrow do not pay this.`;
 }
 
 export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {

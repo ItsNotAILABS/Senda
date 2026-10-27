@@ -75,7 +75,7 @@ export function PhantomDesk() {
     setSig("");
     try {
       const signature = asset === "USDC"
-        ? (await payUsdc({ owner, to, usd: n, memo: "Phantom desk" })).signature
+        ? (await payUsdc({ owner, to, usd: n, memo: "Phantom desk", deskFee: true })).signature
         : await paySol({ owner, to, sol: n });
       setSig(signature);
       setCall(false);

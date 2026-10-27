@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
+import { DEEP_FEE_BPS, DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
 
 const METHODS = new Set([
   "getBalance",
@@ -138,7 +138,8 @@ function routePrefs(raw?: string): { slippageBps: number; onlyDirect: boolean; m
     const parsed = JSON.parse(raw) as { slippageBps?: number; onlyDirect?: boolean; maxImpact?: number; feeBps?: number };
     const slippageBps = [30, 50, 80, 100].includes(Number(parsed.slippageBps)) ? Number(parsed.slippageBps) : 100;
     const maxImpact = [0.5, 1, 3, 5].includes(Number(parsed.maxImpact)) ? Number(parsed.maxImpact) : 5;
-    const feeBps = deskFeeAccount() && Number(parsed.feeBps) === DESK_FEE_BPS ? DESK_FEE_BPS : 0;
+    const asked = Number(parsed.feeBps);
+    const feeBps = deskFeeAccount() && (asked === DESK_FEE_BPS || asked === DEEP_FEE_BPS) ? asked : 0;
     return { slippageBps, onlyDirect: parsed.onlyDirect === true, maxImpact, feeBps };
   } catch {
     return base;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { sendCut } from "@/lib/desk-fee";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
 import { AttachedAccounts, CousinPesos } from "@/components/attached-accounts";
 import { BatchPay } from "@/components/batch-pay";
@@ -277,7 +278,7 @@ function ChainPay({ owner, onPick }: { owner: string; onPick: (id: PayAct | "usd
     setBusy(true);
     setSig("");
     try {
-      const r = await payUsdc({ owner, to: dest, usd: amount });
+      const r = await payUsdc({ owner, to: dest, usd: amount, deskFee: true });
       setSig(r.signature);
       setPhase("done");
       rememberClear({
@@ -325,7 +326,7 @@ function ChainPay({ owner, onPick }: { owner: string; onPick: (id: PayAct | "usd
           <dl className="mt-3 rounded-2xl border border-white/10 bg-black/30 px-3 py-2 text-sm">
             <div className="flex justify-between gap-3 py-1"><dt className="text-muted">To</dt><dd className="truncate font-mono text-xs">{dest}</dd></div>
             <div className="flex justify-between gap-3 py-1"><dt className="text-muted">You sign</dt><dd className="font-mono">{amount} USDC</dd></div>
-            <div className="flex justify-between gap-3 py-1"><dt className="text-muted">Fee</dt><dd>Senda $0 · SOL network fee</dd></div>
+            <div className="flex justify-between gap-3 py-1"><dt className="text-muted">Fee</dt><dd className="text-right">{sendCut(amount).why}</dd></div>
           </dl>
         ) : null}
         {phase === "done" && sig ? <div className="mt-3"><SignedReceipt title="Signed" amount={`${amount} USDC`} detail="Left your wallet. They have the token when the network confirms." sig={sig} /></div> : null}
@@ -517,7 +518,7 @@ function SendTicket({ owner }: { owner: string }) {
     try {
       let signature = "";
       if (asset.kind === "sol") signature = await paySol({ owner, to: who, sol: amount });
-      else if (asset.kind === "usdc") signature = (await payUsdc({ owner, to: who, usd: amount })).signature;
+      else if (asset.kind === "usdc") signature = (await payUsdc({ owner, to: who, usd: amount, deskFee: true })).signature;
       else signature = (await payToken({ owner, to: who, mint: asset.mint, symbol: asset.symbol, amount })).signature;
       setSig(signature);
       setSigned(`${raw.trim()} ${asset.symbol}`);
@@ -735,7 +736,7 @@ function LinkForm({ owner, askTo, askUsd, askMemo }: { owner: string; askTo?: st
         const paid = await payToken({ owner: who, to: dest, mint, symbol: unit, amount });
         setSig(paid.signature);
       } else {
-        const r = await payUsdc({ owner: who, to: dest, usd: amount, memo: memo.trim() || undefined });
+        const r = await payUsdc({ owner: who, to: dest, usd: amount, memo: memo.trim() || undefined, deskFee: true });
         setSig(r.signature);
         rememberClear({
           sig: r.signature,

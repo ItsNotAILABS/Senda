@@ -102,7 +102,7 @@ function JobBoard() {
     setBusy(true);
     try {
       const who = await payer();
-      const done = await payUsdc({ owner: who, to: row.address, usd: n, memo: `${row.role}: ${row.name}` });
+      const done = await payUsdc({ owner: who, to: row.address, usd: n, memo: `${row.role}: ${row.name}`, deskFee: true });
       rememberClear({ sig: done.signature, from: who, to: row.address, usd: n, memo: row.name, kind: "work", status: "pending" });
       bumpClears();
       toast.success(`Paid ${row.name}. ${done.signature.slice(0, 8)}`);

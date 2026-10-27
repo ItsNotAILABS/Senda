@@ -190,7 +190,7 @@ export async function raceRoute(input: {
   const read = readRoutes(ok.map((row) => ({ out: Number(row.quote.outAmount), impact: Math.abs(row.quote.impact), ms: row.ms })));
   const alive = ok.filter((_, i) => read.keep[i]);
   const best = Math.max(...alive.map((row) => Number(row.quote.outAmount)));
-  const pool = pro.aim === "price" ? alive : alive.filter((row) => Number(row.quote.outAmount) >= best * (1 - 0.0008));
+  const pool = pro.aim === "price" ? alive : alive.filter((row) => Number(row.quote.outAmount) >= best * (1 - 0.0003));
   const pick = pro.aim === "price"
     ? [...pool].sort((a, b) => Number(b.quote.outAmount) - Number(a.quote.outAmount))[0]
     : [...pool].sort((a, b) => a.ms - b.ms)[0];
@@ -201,7 +201,7 @@ export async function raceRoute(input: {
   const math = `coherence ${read.coherence.toFixed(2)} · cosine ${read.cosine.toFixed(2)} · log distance ${read.logDistance.toFixed(2)} · resonance ${read.resonance[index].toFixed(2)}`;
   const why = pro.aim === "price"
     ? `Best output · ${shape} · ${ms}ms to quote · ${math}${dropped}`
-    : `Fast · ${shape} · within 0.08% of the best output · ${ms}ms to quote · ${math}${dropped}`;
+    : `Fast · ${shape} · within 0.03% of the best output · ${ms}ms to quote · ${math}${dropped}`;
   const plainOut = Math.min(...ok.map((row) => Number(row.quote.outAmount)));
   return { ...pick.quote, ms, direct: pick.direct, why, coherence: read.coherence, cosine: read.cosine, logDistance: read.logDistance, resonance: read.resonance[index], plainOut };
 }

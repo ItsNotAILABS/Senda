@@ -9,6 +9,7 @@ import { transferData } from "@/lib/chain-codec";
 import { broadcastSigned, chainRpc as rpc, requirePhantom, symbolFor } from "@/lib/phantom";
 import { assertSpend } from "@/lib/spend-cap";
 import { fileFill } from "@/lib/trade-log";
+import { deskFeeAccount, sendCut } from "@/lib/desk-fee";
 
 const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -47,7 +48,7 @@ async function signLegacy(owner: PublicKey, instructions: TransactionInstruction
 }
 
 /** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
-export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string }): Promise<{ signature: string; reference: string }> {
+export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string; deskFee?: boolean }): Promise<{ signature: string; reference: string; feeUsd: number }> {
   const usd = Math.round(input.usd * 1_000_000) / 1_000_000;
   if (!(usd >= 0.001)) throw new Error("The smallest stake is a tenth of a cent.");
   assertSpend(usd);
@@ -92,9 +93,33 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
       data: Buffer.from(transferData(raw)),
     }),
   );
+  let feeUsd = 0;
+  if (input.deskFee) {
+    const cut = sendCut(usd);
+    const acct = deskFeeAccount();
+    if (cut.usd > 0 && acct) {
+      const feeDest = new PublicKey(acct);
+      if (!feeDest.equals(dest) && (await accountExists(feeDest))) {
+        feeUsd = cut.usd;
+        ix.push(
+          new TransactionInstruction({
+            programId: TOKEN,
+            keys: [
+              { pubkey: source, isSigner: false, isWritable: true },
+              { pubkey: feeDest, isSigner: false, isWritable: true },
+              { pubkey: owner, isSigner: true, isWritable: false },
+            ],
+            data: Buffer.from(transferData(BigInt(Math.round(feeUsd * 1_000_000)))),
+          }),
+        );
+      } else {
+        feeUsd = 0;
+      }
+    }
+  }
   const signature = await signLegacy(owner, ix);
-  fileFill({ owner: input.owner, symbol: "USDC", side: "send", usd, mint: USDC_MINT.toBase58(), signature });
-  return { signature, reference: signature };
+  fileFill({ owner: input.owner, symbol: "USDC", side: "send", usd, mint: USDC_MINT.toBase58(), signature, platformFeeBps: feeUsd > 0 ? 4 : 0 });
+  return { signature, reference: signature, feeUsd };
 }
 
 /** Any 6-decimal stable the wallet holds. Same signature path as USDC. Senda does not hold the token. */

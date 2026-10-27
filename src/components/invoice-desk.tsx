@@ -55,7 +55,7 @@ export function InvoiceDesk({ owner }: { owner: string }) {
     setFail("");
     try {
       const who = owner || (await connectPhantom());
-      const paid = await payUsdc({ owner: who, to: to.trim(), usd: n, memo: title.trim().slice(0, 32) });
+      const paid = await payUsdc({ owner: who, to: to.trim(), usd: n, memo: title.trim().slice(0, 32), deskFee: true });
       const bill: Bill = { id: paid.signature.slice(0, 12), title: title.trim(), usd: n, to: to.trim(), sig: paid.signature, at: Date.now() };
       const next = [bill, ...load()].slice(0, 40);
       localStorage.setItem(KEY, JSON.stringify(next));

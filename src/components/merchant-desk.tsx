@@ -47,7 +47,7 @@ export function MerchantDesk({ owner }: { owner: string }) {
       }
       if (!(amount >= 0.01)) throw new Error("Enter what the bill is for.");
       const who = owner || (await connectPhantom());
-      const paid = await payUsdc({ owner: who, to, usd: amount, memo: memo || "merchant" });
+      const paid = await payUsdc({ owner: who, to, usd: amount, memo: memo || "merchant", deskFee: true });
       rememberTrade({ symbol: "USDC", side: "send", usd: amount, mint: USDC, signature: paid.signature });
       toast.success(`Paid. ${paid.signature.slice(0, 8)}…`);
     } catch (e) {

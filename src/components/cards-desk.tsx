@@ -477,7 +477,7 @@ function PayOnChain({ owner, usdSeed, focus }: { owner: string; usdSeed: string;
     setSig("");
     try {
       const signature = asset === "USDC"
-        ? (await payUsdc({ owner, to: dest, usd: amount, memo: ref.trim() || "wire" })).signature
+        ? (await payUsdc({ owner, to: dest, usd: amount, memo: ref.trim() || "wire", deskFee: true })).signature
         : await paySol({ owner, to: dest, sol: amount });
       setSig(signature);
       setCall(false);

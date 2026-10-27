@@ -107,7 +107,7 @@ export function BackpackWallet() {
     setSig("");
     try {
       const signature = asset === "USDC"
-        ? (await payUsdc({ owner, to, usd: n, memo: "Backpack wallet" })).signature
+        ? (await payUsdc({ owner, to, usd: n, memo: "Backpack wallet", deskFee: true })).signature
         : await paySol({ owner, to, sol: n });
       setSig(signature);
       setCall(false);

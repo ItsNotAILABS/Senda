@@ -41,7 +41,7 @@ export function TillDesk({ owner }: { owner: string }) {
     setBusy(row.id);
     try {
       const who = owner || (await connectPhantom());
-      const paid = await payUsdc({ owner: who, to: row.address, usd, memo: row.reason });
+      const paid = await payUsdc({ owner: who, to: row.address, usd, memo: row.reason, deskFee: true });
       toast.success(`Funded. ${paid.signature.slice(0, 8)}…`);
       reload();
     } catch (e) {

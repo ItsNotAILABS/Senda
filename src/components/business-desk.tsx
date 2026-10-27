@@ -93,7 +93,7 @@ export function BusinessDesk({ owner }: { owner: string }) {
     setFail("");
     try {
       const addr = await who();
-      const paid = await payUsdc({ owner: addr, to: to.trim(), usd: n, memo: memo.trim() || "home" });
+      const paid = await payUsdc({ owner: addr, to: to.trim(), usd: n, memo: memo.trim() || "home", deskFee: true });
       rememberTrade({ symbol: "USDC", side: "send", usd: n, mint: USDC, signature: paid.signature });
       const note = pesos > 0
         ? `I sent $${n.toFixed(2)} USDC. About ${Math.round(pesos)} pesos if you sell them. ${paid.signature}`
@@ -114,7 +114,7 @@ export function BusinessDesk({ owner }: { owner: string }) {
     setFail("");
     try {
       const addr = await who();
-      const paid = await payUsdc({ owner: addr, to: to.trim(), usd: n, memo: memo.trim() || "senda" });
+      const paid = await payUsdc({ owner: addr, to: to.trim(), usd: n, memo: memo.trim() || "senda", deskFee: true });
       rememberTrade({ symbol: "USDC", side: "send", usd: n, mint: USDC, signature: paid.signature });
       toast.success(`Paid. ${paid.signature.slice(0, 8)}…`);
     } catch (e) {

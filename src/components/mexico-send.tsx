@@ -3,6 +3,7 @@ import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import { getMxnDesk, type MxnDesk } from "@/lib/mxn-rate";
 import { loadPayees, savePayee, type MxPayee } from "@/lib/mx-payees";
+import { sendCut } from "@/lib/desk-fee";
 import { payUsdc } from "@/lib/solana-pay";
 import { connectPhantom } from "@/lib/phantom";
 import { rememberClear } from "@/lib/clear-tape";
@@ -107,7 +108,7 @@ export function MexicoSend({ owner }: { owner: string }) {
     try {
       const from = owner || (await connectPhantom());
       const memo = note.trim() || `USDC to ${name.trim()}`;
-      const done = await payUsdc({ owner: from, to: who, usd: sendUsdc, memo });
+      const done = await payUsdc({ owner: from, to: who, usd: sendUsdc, memo, deskFee: true });
       setSig(done.signature);
       setPayees(savePayee({ name, address: who }));
       rememberClear({
@@ -227,7 +228,7 @@ export function MexicoSend({ owner }: { owner: string }) {
             </div>
             <div className="flex justify-between gap-3 py-1">
               <dt className="text-muted">Fee</dt>
-              <dd>Senda $0 · SOL network fee</dd>
+              <dd className="text-right">{sendCut(sendUsdc).why}</dd>
             </div>
             <div className="flex justify-between gap-3 py-1">
               <dt className="text-muted">Note</dt>
