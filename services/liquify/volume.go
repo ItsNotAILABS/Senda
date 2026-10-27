@@ -1,6 +1,6 @@
 package main
 
-// Solscan Pro indexed on-chain swap bars. USDC raw notional is the only priced lane.
+// Solscan Pro indexed on-chain swap bars. USDC and SOL raw-notional lanes are separate.
 // It is a read-only lower-bound index, never an order book or trade execution signal.
 import (
  "context"
