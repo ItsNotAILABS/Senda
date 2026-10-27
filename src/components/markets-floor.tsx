@@ -19,6 +19,8 @@ import {
   type PredEvent,
   type PredPosition,
 } from "@/lib/jup-venues";
+import { RayBoard } from "@/components/ray-board";
+import { UsBoard } from "@/components/us-board";
 import { SOL, CASH, signRoute } from "@/lib/jup-sign";
 import { connectPhantom, sendVersioned, signSerializedTx, splHolding } from "@/lib/phantom";
 import { payUsdc } from "@/lib/solana-pay";
@@ -130,7 +132,7 @@ export function MarketsFloor({
   const [liveLev, setLiveLev] = useState(2);
   const [listed, setListed] = useState<PerpPosition[]>([]);
   const [cat, setCat] = useState<"crypto" | "sports" | "politics">("sports");
-  const [view, setView] = useState<"packs" | "print" | "metals" | "sports" | "coins" | "perps" | "mix">("print");
+  const [view, setView] = useState<"packs" | "print" | "metals" | "sports" | "coins" | "perps" | "mix" | "us" | "pools">("print");
   const [metal, setMetal] = useState("xau");
   const [events, setEvents] = useState<PredEvent[]>(initialEvents);
   const [coins, setCoins] = useState<PredEvent[]>(initialCoins);
@@ -553,6 +555,8 @@ export function MarketsFloor({
             ["packs", "Packs"],
             ["print", "Print"],
             ["metals", "Metals"],
+            ["us", "US"],
+            ["pools", "Pools"],
             ["sports", "Sports"],
             ["coins", "Coins"],
             ["mix", "Mix"],
@@ -566,6 +570,8 @@ export function MarketsFloor({
       </div>
       <CommodityStrip onPick={(id) => { setMetal(id); setView("metals"); }} />
       {view === "packs" ? <PackShelf /> : null}
+      {view === "us" ? <UsBoard /> : null}
+      {view === "pools" ? <RayBoard /> : null}
       {view === "sports" ? (
         <SportsBook cat={cat} setCat={setCat} events={events} err={err} usd={eventUsd} setUsd={setEventUsd} busy={busy} owner={owner} onBuy={buyEvent} />
       ) : null}

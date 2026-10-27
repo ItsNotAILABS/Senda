@@ -11,9 +11,26 @@ import { fetchHouse } from "@/lib/sol-house";
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-const DIR = "/workspace/data";
-const KEY_FILE = `${DIR}/clearing-key.json`;
-const BOOK_FILE = `${DIR}/clearing-book.json`;
+function dataDir(): string {
+  const fromEnv = typeof process !== "undefined" ? process.env.SENDA_DATA_DIR || "" : "";
+  const candidates = [fromEnv, "/workspace/data", "/tmp/senda-data"].filter(Boolean);
+  for (const dir of candidates) {
+    try {
+      mkdirSync(dir, { recursive: true });
+      return dir;
+    } catch {
+      /* this host has no writable directory here */
+    }
+  }
+  return "";
+}
+
+let DIR = "";
+function files(): { dir: string; key: string; book: string } {
+  if (!DIR) DIR = dataDir();
+  if (!DIR) throw new Error("This host has no book to store. Nothing was asked of the wallet.");
+  return { dir: DIR, key: `${DIR}/clearing-key.json`, book: `${DIR}/clearing-book.json` };
+}
 
 const TENOR_MS = { "15m": 900_000, "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000 } as const;
 type Tenor = keyof typeof TENOR_MS;
@@ -103,19 +120,19 @@ function lock<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function house(): Keypair {
-  mkdirSync(DIR, { recursive: true });
-  if (existsSync(KEY_FILE)) {
-    const secret = JSON.parse(readFileSync(KEY_FILE, "utf8")) as number[];
+  const { key } = files();
+  if (existsSync(key)) {
+    const secret = JSON.parse(readFileSync(key, "utf8")) as number[];
     return Keypair.fromSecretKey(Uint8Array.from(secret));
   }
   const kp = Keypair.generate();
-  writeFileSync(KEY_FILE, JSON.stringify(Array.from(kp.secretKey)));
+  writeFileSync(key, JSON.stringify(Array.from(kp.secretKey)));
   return kp;
 }
 
 function readBook(): Book {
   try {
-    const raw = JSON.parse(readFileSync(BOOK_FILE, "utf8")) as Book;
+    const raw = JSON.parse(readFileSync(files().book, "utf8")) as Book;
     return {
       perps: Array.isArray(raw.perps) ? raw.perps : [],
       preds: Array.isArray(raw.preds) ? raw.preds : [],
@@ -131,8 +148,7 @@ function readBook(): Book {
 }
 
 function writeBook(book: Book) {
-  mkdirSync(DIR, { recursive: true });
-  writeFileSync(BOOK_FILE, JSON.stringify(book));
+  writeFileSync(files().book, JSON.stringify(book));
 }
 
 function ata(owner: PublicKey): PublicKey {
@@ -438,11 +454,16 @@ function pubView(book: Book, clearing: string, usdc: number) {
 
 export const loadClearing = createServerFn({ method: "GET" }).handler(async () => {
   return lock(async () => {
-    const kp = house();
-    const id = kp.publicKey.toBase58();
-    let book = await expireFlight(readBook(), id);
-    writeBook(book);
-    return pubView(book, id, await usdcOf(id));
+    try {
+      const kp = house();
+      const id = kp.publicKey.toBase58();
+      const book = await expireFlight(readBook(), id);
+      writeBook(book);
+      return pubView(book, id, await usdcOf(id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "The book did not load.";
+      return { pubkey: "", usdc: 0, perps: [], preds: [], races: [], fees: 0, purses: [], note: message };
+    }
   });
 });
 

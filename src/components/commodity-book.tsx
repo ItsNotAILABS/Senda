@@ -96,6 +96,7 @@ export function CommodityBook({ mode = "full", focus, onFocus }: { mode?: "full"
       const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address;
       if (!owner) throw new Error("Connect Phantom. The stake is USDC.");
       const house = await loadClearing();
+      if (!house.pubkey) throw new Error("note" in house && house.note ? String(house.note) : "This host has no book. The stake was not asked for.");
       const mint = row.hold?.mint || USDC;
       const tag = strike > 0 ? String(strike) : "open";
       const paid = await payUsdc({ owner, to: house.pubkey, usd: stake, memo: `Senda clear pred ${row.base} ${tenor} ${side} ${tag}` });
