@@ -85,7 +85,7 @@ type Desk = (typeof DESKS)[number][0];
 export function TradePit() {
   const house = useHouse();
   const pre = useMemo(() => house.filter((h) => h.venue === "prestocks" && h.last > 0), [house]);
-  const [desk, setDesk] = useState<Desk>("quotes");
+  const [desk, setDesk] = useState<Desk>("matrix");
   const [underId, setUnderId] = useState<string | null>(null);
   const [armed, setArmed] = useState(1);
   const [side, setSide] = useState<"buy" | "sell">("buy");
