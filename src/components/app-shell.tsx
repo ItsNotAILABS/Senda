@@ -14,6 +14,7 @@ import {
   Lock,
   Menu,
   PanelLeft,
+  Palette,
   Radar,
   Shield,
   Sparkles,
@@ -37,6 +38,7 @@ import { jupTape, type TapeRow } from "@/lib/world-book";
 import { sealOpen } from "@/lib/seal";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
+import { applyTheme, readTheme, THEME_EVENT, defaultTheme } from "@/lib/interface-theme.mjs";
 
 const PRIMARY = [
   { to: "/", label: "Home", icon: LayoutGrid },
@@ -67,6 +69,7 @@ const MORE = [
   { to: "/accounts", label: "Accounts", icon: UserRound },
   { to: "/books", label: "Books", icon: BookOpen },
   { to: "/docs", label: "Docs", icon: FileText },
+  { to: "/work/interface", label: "UI Studio", icon: Palette },
   { to: "/more", label: "Account", icon: UserRound },
 ] as const;
 
@@ -110,6 +113,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     sync();
     window.addEventListener("senda-seal", sync);
     return () => window.removeEventListener("senda-seal", sync);
+  }, []);
+
+  useEffect(() => {
+    const update = () => {
+      try { applyTheme(document, readTheme(window.localStorage)); }
+      catch { applyTheme(document, defaultTheme()); }
+    };
+    update();
+    window.addEventListener("storage", update);
+    window.addEventListener(THEME_EVENT, update);
+    return () => {
+      window.removeEventListener("storage", update);
+      window.removeEventListener(THEME_EVENT, update);
+    };
   }, []);
 
   useEffect(() => {
@@ -486,6 +503,7 @@ function PhoneMore({ onDone }: { onDone: () => void }) {
         { to: "/accounts", label: "Accounts", icon: UserRound },
         { to: "/books", label: "Books", icon: BookOpen },
         { to: "/docs", label: "Docs", icon: FileText },
+  { to: "/work/interface", label: "UI Studio", icon: Palette },
         { to: "/more", label: "Account", icon: UserRound },
       ],
     },
