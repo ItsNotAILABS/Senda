@@ -8,6 +8,7 @@ import { readSolSpend } from "@/lib/fill-cost";
 import { fileFill, listTrades, rememberTrade } from "@/lib/trade-log";
 import { routePro, type RoutePro } from "@/lib/route-pro";
 import { readRoutes } from "@/lib/mesie-route";
+import { DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
 const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
@@ -88,7 +89,7 @@ export async function quoteRoute(input: {
   const slip = input.slippageBps ?? 100;
   const cap = input.maxImpact ?? 5;
   const lane = input.onlyDirect ? "&onlyDirectRoutes=true" : "&restrictIntermediateTokens=true";
-  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}`;
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}${feeQuoteParam()}`;
   let last = "Jupiter did not quote.";
   for (const base of [QUOTE, QUOTE_LITE]) {
     const res = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
@@ -326,7 +327,7 @@ export async function signRoute(input: {
   const quoted = await quoteRoute({ ...input, slippageBps: slip, onlyDirect, maxImpact: cap });
   if (quoted.impact > cap) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
   const lane = onlyDirect ? "&onlyDirectRoutes=true" : "&restrictIntermediateTokens=true";
-  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}`;
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}${feeQuoteParam()}`;
   let quote: RawQuote | null = null;
   for (const base of [QUOTE, QUOTE_LITE]) {
     const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
@@ -356,6 +357,7 @@ export async function signRoute(input: {
         dynamicComputeUnitLimit: true,
         dynamicSlippage: true,
         prioritizationFeeLamports: "auto",
+        ...feeSwapBody(),
       }),
     });
     const text = await swapRes.text();
@@ -433,7 +435,7 @@ function filed(
     refPrice: input.refPrice,
     quotedUi: outUi,
     slippageBps: input.slippageBps ?? 100,
-    platformFeeBps: 0,
+    platformFeeBps: deskFeeAccount() ? DESK_FEE_BPS : 0,
     impact: input.impact,
     route: input.route,
   });
@@ -451,7 +453,7 @@ function filed(
       });
     })
     .catch(() => undefined);
-  return { signature, outUi, executed, quotedUi: outUi, route: input.route || "Jupiter", impact: input.impact || 0, slippageBps: input.slippageBps ?? 100, platformFeeBps: 0 };
+  return { signature, outUi, executed, quotedUi: outUi, route: input.route || "Jupiter", impact: input.impact || 0, slippageBps: input.slippageBps ?? 100, platformFeeBps: deskFeeAccount() ? DESK_FEE_BPS : 0 };
 }
 
 export async function signStockSwap(input: {

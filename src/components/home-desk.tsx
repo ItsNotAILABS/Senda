@@ -584,7 +584,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
                   <button type="button" onClick={() => setPane("book")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "book" ? "bg-white text-black" : "bg-white/10")}>Book</button>
                   <button type="button" onClick={() => setPane("depth")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "depth" ? "bg-white text-black" : "bg-white/10")}>Depth</button>
                 </div>
-                {pane === "depth" ? <DepthScreen mint={chosen.mint} symbol={chosen.symbol} /> : <PrintTape mint={chosen.mint} symbol={chosen.symbol} />}
+                {pane === "depth" ? <DepthScreen mint={chosen.mint} symbol={chosen.symbol} /> : <PrintTape mint={chosen.mint} symbol={chosen.symbol} size={buyUsd} />}
               </div>
             ) : null}
           </div>

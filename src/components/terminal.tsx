@@ -26,6 +26,7 @@ import { TradeTools } from "@/components/trade-tools";
 import { SessionLine, VolumeBook } from "@/components/volume-book";
 import { WeekCalendar } from "@/components/week-calendar";
 import { ShortActions } from "@/components/short-actions";
+import { RestTicket } from "@/components/rest-ticket";
 import { cn } from "@/lib/utils";
 
 type Book = "Spot" | "PreStocks" | "xStocks" | "Shares" | "World";
@@ -113,6 +114,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
   const [watch, setWatch] = useState<string[]>(loadWatch);
   const [busy, setBusy] = useState("");
   const [review, setReview] = useState<"" | "buy" | "sell" | "short">("");
+  const [rest, setRest] = useState(false);
   const [live, setLive] = useState<Record<string, { price: number; change: number; at: number }>>({});
   const [got, setGot] = useState("");
   const [stage, setStage] = useState(false);
@@ -486,7 +488,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
                     {leg.mint ? <PrintChart mint={leg.mint} symbol={leg.symbol} className={stage ? "h-[70dvh] lg:h-[640px]" : "h-[220px] w-full lg:h-[320px]"} /> : <p className="text-xs text-white/45">No Solana pool for this name.</p>}
                   </>
                 ) : null}
-                {view === "book" && leg.mint ? <PrintTape mint={leg.mint} symbol={leg.symbol} /> : null}
+                {view === "book" && leg.mint ? <PrintTape mint={leg.mint} symbol={leg.symbol} size={usd} /> : null}
                 {view === "depth" && leg.mint ? <DepthScreen mint={leg.mint} symbol={leg.symbol} onBuy={() => setReview("buy")} onSell={() => setReview("sell")} /> : null}
                 {view === "volume" ? <VolumeBook mint={leg.mint} bid={leg.bid} ask={leg.ask} mid={leg.price} volume={leg.volume} /> : null}
                 {view === "session" ? <SessionLine mint={leg.mint} /> : null}
@@ -533,6 +535,12 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
                   <button type="button" disabled={busy !== ""} onClick={() => setReview("short")} className="min-h-12 rounded-xl bg-[#e11d48] text-sm font-semibold text-white disabled:opacity-40">Short</button>
                 </div>
               )}
+              {!review && rest && leg.mint ? <RestTicket key={leg.mint} mint={leg.mint} symbol={leg.symbol} price={leg.price || 0} usd={usd} side="buy" /> : null}
+              {!review ? (
+                <button type="button" disabled={!leg.mint} onClick={() => setRest((on) => !on)} className="mt-2 min-h-10 w-full rounded-xl border border-white/15 text-xs font-semibold disabled:opacity-40">
+                  {leg.mint ? (rest ? "Hide the limit" : `Rest a limit on ${leg.symbol}`) : "No Solana mint to rest"}
+                </button>
+              ) : null}
               {review ? null : <ShortActions symbol={leg.symbol} usd={usd} indexOnly />}
               <details className="mt-4">
                 <summary className="cursor-pointer text-xs font-semibold text-subtle">Stats and news</summary>

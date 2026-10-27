@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
 
 const METHODS = new Set([
   "getBalance",
@@ -148,7 +149,7 @@ async function jupSwap(owner: string, inputMint: string, outputMint: string, amo
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter an amount.");
   const prefs = routePrefs(prefsRaw);
   const lane = prefs.onlyDirect ? "&onlyDirectRoutes=true" : "&restrictIntermediateTokens=true";
-  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${prefs.slippageBps}${lane}`;
+  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${prefs.slippageBps}${lane}${feeQuoteParam()}`;
   let quote: Record<string, unknown> | null = null;
   let last = "Jupiter did not quote.";
   for (const base of ["https://api.jup.ag/swap/v1/quote", "https://lite-api.jup.ag/swap/v1/quote"]) {
@@ -188,6 +189,7 @@ async function jupSwap(owner: string, inputMint: string, outputMint: string, amo
           dynamicComputeUnitLimit: true,
           dynamicSlippage: true,
           prioritizationFeeLamports: "auto",
+          ...feeSwapBody(),
         }),
       });
       const parsed = (await r.json()) as { swapTransaction?: string; error?: string };

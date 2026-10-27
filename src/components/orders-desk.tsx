@@ -12,6 +12,7 @@ export function OrdersDesk() {
   const [symbol, setSymbol] = useState("");
   const [px, setPx] = useState("");
   const [usd, setUsd] = useState("5");
+  const [side, setSide] = useState<"buy" | "sell">("buy");
   const [rows, setRows] = useState<RestingOrder[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -44,15 +45,13 @@ export function OrdersDesk() {
       const who = owner || (await connectPhantom());
       setOwner(who);
       const decimals = await mintDecimals(mint);
-      const taking = BigInt(Math.floor((size / price) * 10 ** decimals));
-      if (taking <= 0n) throw new Error("That price buys no tokens.");
-      const done = await placeLimit({
-        maker: who,
-        inputMint: USDC,
-        outputMint: mint,
-        makingAmount: String(Math.round(size * 1_000_000)),
-        takingAmount: taking.toString(),
-      });
+      const tokens = BigInt(Math.max(1, Math.floor((size / price) * 10 ** decimals)));
+      const usdc = String(Math.round(size * 1_000_000));
+      const done = await placeLimit(
+        side === "buy"
+          ? { maker: who, inputMint: USDC, outputMint: mint, makingAmount: usdc, takingAmount: tokens.toString() }
+          : { maker: who, inputMint: mint, outputMint: USDC, makingAmount: tokens.toString(), takingAmount: usdc },
+      );
       toast.success(`Limit resting. ${done.signature.slice(0, 8)}…`);
       await refresh(who);
     } catch (e) {
@@ -67,12 +66,16 @@ export function OrdersDesk() {
       <p className="font-mono text-[10px] tracking-[0.16em] text-white/40 uppercase">Orders</p>
       <h1 className="text-3xl tracking-tight">A limit, not a market.</h1>
       <p className="text-sm leading-relaxed text-white/50">
-        You pay USDC. Jupiter rests the order until the market offers at least the tokens this price implies. Phantom signs it. Senda does not match thin pre-IPO names on its own book, and it does not invent a fill.
+        A buy pays USDC. A sell pays the token. Jupiter rests it until the other side is there. Phantom signs. Senda does not match it, and it does not invent a fill.
       </p>
       <label className="block text-xs text-white/45">
         Token mint {symbol ? `· ${symbol}` : ""}
         <input value={mint} onChange={(e) => setMint(e.target.value.trim())} spellCheck={false} className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-xs outline-none" />
       </label>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => setSide("buy")} className={`min-h-11 rounded-full text-sm font-semibold ${side === "buy" ? "bg-accent text-accent-fg" : "border border-white/10"}`}>Buy limit</button>
+        <button type="button" onClick={() => setSide("sell")} className={`min-h-11 rounded-full text-sm font-semibold ${side === "sell" ? "bg-white text-black" : "border border-white/10"}`}>Sell limit</button>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-white/45">
           Limit price, USD

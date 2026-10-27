@@ -5,6 +5,7 @@ import { USDC } from "@/lib/jup-exec";
 import { SOL, quoteRoute, signRoute } from "@/lib/jup-sign";
 import { connectPhantom, phantomProvider } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { deskFeeLine } from "@/lib/desk-fee";
 import { cn } from "@/lib/utils";
 
 function SolPair() {
@@ -14,6 +15,7 @@ function SolPair() {
   const [got, setGot] = useState("");
   const [ms, setMs] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [landed, setLanded] = useState("");
   const n = Number(amount);
 
   useEffect(() => {
@@ -81,6 +83,7 @@ function SolPair() {
         usd: toSol ? n : quoted.outUi,
       });
       toast.success(toSol ? `${done.outUi.toFixed(6)} SOL is in this wallet.` : `$${done.outUi.toFixed(2)} USDC is in this wallet.`);
+      setLanded(toSol ? `${done.outUi.toFixed(4)} SOL` : `$${done.outUi.toFixed(2)}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The wallet did not sign.");
     } finally {
@@ -89,19 +92,37 @@ function SolPair() {
   }
 
   return (
-    <section className="rounded-[28px] bg-[#141824] p-4">
+    <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#10141c] p-4">
+      <div className="pointer-events-none absolute inset-x-8 top-[46%] h-8 overflow-hidden">
+        <span className="senda-flow absolute top-3 h-[2px] w-24 rounded-full bg-[#d7e36a] shadow-[0_0_12px_#d7e36a]" />
+      </div>
       <p className="text-[11px] font-semibold tracking-[0.16em] text-accent uppercase">On Solana</p>
-      <h2 className="mt-1 text-2xl">{toSol ? "USDC to SOL" : "SOL to USDC"}</h2>
-      <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" aria-label={toSol ? "USDC" : "SOL"} className="mt-3 w-full bg-transparent font-mono text-4xl outline-none" />
-      <p className="mt-1 min-h-5 font-mono text-sm text-accent">{ms ? `${ms}ms · ` : ""}{got}</p>
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" onClick={() => setToSol((v) => !v)} className="min-h-12 rounded-full border border-white/15 text-sm font-semibold">
-          Flip
-        </button>
-        <button type="button" disabled={busy} onClick={() => void sign()} className="min-h-12 rounded-full bg-[#d7e36a] text-sm font-semibold text-black disabled:opacity-40">
-          {busy ? "Waiting" : "Sign"}
+      <h2 className="mt-1 text-2xl">Swap</h2>
+      <div key={toSol ? "pay-usdc" : "pay-sol"} className="senda-swap mt-3 rounded-2xl border border-white/10 bg-black/40 p-3">
+        <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">You pay</p>
+        <div className="mt-1 flex items-end justify-between gap-3">
+          <input value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setLanded(""); }} inputMode="decimal" aria-label={toSol ? "USDC" : "SOL"} className="w-full bg-transparent font-mono text-4xl outline-none" />
+          <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">{toSol ? "USDC" : "SOL"}</span>
+        </div>
+      </div>
+      <div className="relative z-10 -my-3 flex justify-center">
+        <button type="button" onClick={() => { setToSol((v) => !v); setLanded(""); }} aria-label="Flip the pair" className={cn("grid h-11 w-11 place-items-center rounded-full bg-[#d7e36a] text-lg font-semibold text-black transition-transform duration-500", toSol ? "" : "rotate-180")}>
+          ↕
         </button>
       </div>
+      <div key={got || "wait"} className="senda-swap rounded-2xl border border-white/10 bg-black/30 p-3">
+        <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">You receive</p>
+        <p className="mt-1 min-h-10 font-mono text-3xl tabular-nums text-[#d7e36a]">{got || (n > 0 ? "Quoting…" : "—")}</p>
+        <p className="mt-1 font-mono text-[11px] text-white/40">{ms ? `${ms}ms · Jupiter` : busy ? "Signing" : "The route reprints as you type."}</p>
+      </div>
+      {landed ? (
+        <p className="senda-paint mt-3 text-center font-mono text-sm text-[#d7e36a]">{landed} landed in the wallet.</p>
+      ) : null}
+      <p className="mt-3 text-[11px] leading-snug text-white/40">{deskFeeLine(toSol ? n : 0)}</p>
+      <button type="button" disabled={busy} onClick={() => void sign()} className="relative mt-3 min-h-12 w-full overflow-hidden rounded-full bg-[#d7e36a] text-sm font-semibold text-black disabled:opacity-40">
+        {busy ? <span className="senda-flow absolute inset-y-0 w-16 bg-white/50" /> : null}
+        <span className="relative">{busy ? "Waiting on Phantom" : "Sign the swap"}</span>
+      </button>
     </section>
   );
 }
@@ -237,12 +258,17 @@ export function SwapDesk() {
         {busy && !quote ? "Quoting…" : "Quote"}
       </button>
       {quote ? (
-        <div className="rounded-2xl border border-white/10 bg-[#10131c] p-4">
-          <p className="text-sm">You send {quote.send} {tokenIn.symbol} on {src.name}.</p>
-          <p className="mt-1 font-mono text-2xl tabular-nums">≈ {quote.receive.toFixed(4)} {quote.receiveSymbol} on {dst.name}</p>
+        <div className="senda-sheet relative overflow-hidden rounded-2xl border border-white/10 bg-[#10131c] p-4">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-8 overflow-hidden">
+            <span className="senda-flow absolute top-3 h-[2px] w-20 bg-accent" />
+          </div>
+          <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">{src.name} → {dst.name}</p>
+          <p className="mt-2 text-sm">You send {quote.send} {tokenIn.symbol}.</p>
+          <p className="senda-paint mt-1 font-mono text-3xl tabular-nums text-accent">≈ {quote.receive.toFixed(4)} {quote.receiveSymbol}</p>
           <p className="mt-1 text-xs text-muted">{quoteMs ? `${quoteMs}ms to build this order. ` : ""}The other chain settles after you sign. The gap is the bridge fee, not a Senda fee.</p>
-          <button type="button" disabled={busy} onClick={() => void sign()} className={cn("mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40")}>
-            {busy ? "Waiting on the wallet" : "Sign"}
+          <button type="button" disabled={busy} onClick={() => void sign()} className="relative mt-3 min-h-11 w-full overflow-hidden rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
+            {busy ? <span className="senda-flow absolute inset-y-0 w-16 bg-white/40" /> : null}
+            <span className="relative">{busy ? "Waiting on the wallet" : "Sign"}</span>
           </button>
         </div>
       ) : null}

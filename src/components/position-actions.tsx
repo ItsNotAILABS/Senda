@@ -7,6 +7,7 @@ import { runPrestock } from "@/lib/prestock";
 import { shortBook, signMarketShort } from "@/lib/short-market";
 import { useWalletCtx } from "@/lib/wallet-context";
 import { connectWallet } from "@/lib/wallets";
+import { deskFeeLine } from "@/lib/desk-fee";
 import { cn } from "@/lib/utils";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -145,6 +146,7 @@ export function PositionActions({
         ))}
       </div>
       <p className="mt-2 text-[11px] leading-snug text-white/45">{note} {loan}</p>
+      <p className="mt-1 text-[10px] leading-snug text-white/35">{deskFeeLine(usd)}</p>
       {act ? (
         <button type="button" disabled={busy} onClick={() => void run(act === "post" ? "post" : act)} className="mt-2 min-h-11 w-full rounded-xl bg-white text-sm font-semibold text-black disabled:opacity-50">
           {busy ? "Waiting for the wallet…" : act === "post" ? `Sign posting $${usd} of ${symbol}` : act === "borrow" ? `Sign borrowing $${usd}` : `Sign ${act} $${usd} ${symbol}`}

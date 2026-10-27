@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadPrints, type BookRow, type PrintBook } from "@/lib/tx-tape";
+import { RestTicket } from "@/components/rest-ticket";
 
 function px(n: number): string {
   if (!(n > 0)) return "—";
@@ -22,23 +23,24 @@ function sz(n: number): string {
   return n.toPrecision(3);
 }
 
-function Row({ row, max, side }: { row: BookRow; max: number; side: "bid" | "ask" }) {
+function Row({ row, max, side, onPick }: { row: BookRow; max: number; side: "bid" | "ask"; onPick: (price: number) => void }) {
   const pct = Math.max(4, Math.min(100, (row.total / max) * 100));
   const tone = side === "ask" ? "text-down" : "text-up";
   const wash = side === "ask" ? "bg-down/15" : "bg-up/15";
   return (
-    <div className="relative grid grid-cols-[1.1fr_1fr_1fr] items-center px-2 font-mono text-[11px] leading-5 tabular-nums">
+    <button type="button" onClick={() => onPick(row.price)} className="relative grid w-full grid-cols-[1.1fr_1fr_1fr] items-center px-2 text-left font-mono text-[11px] leading-5 tabular-nums hover:bg-white/5">
       <span className={`absolute inset-y-0 right-0 ${wash}`} style={{ width: `${pct}%` }} />
       <span className={`relative ${tone}`}>{px(row.price)}</span>
       <span className="relative text-right text-white/80">{sz(row.size)}</span>
       <span className="relative text-right text-white/45">{sz(row.total)}</span>
-    </div>
+    </button>
   );
 }
 
 /** Bid/ask ladder from the pool's latest fills. Refreshes about every 1.5s. */
-export function PrintTape({ mint, symbol }: { mint: string; symbol: string }) {
+export function PrintTape({ mint, symbol, size = 5 }: { mint: string; symbol: string; size?: number }) {
   const [book, setBook] = useState<PrintBook | null>(null);
+  const [rest, setRest] = useState<{ side: "buy" | "sell"; price: number } | null>(null);
 
   useEffect(() => {
     if (!mint) return;
@@ -96,7 +98,7 @@ export function PrintTape({ mint, symbol }: { mint: string; symbol: string }) {
       </div>
       <div className="flex min-h-[132px] flex-col justify-end">
         {asks.map((row) => (
-          <Row key={`a${row.price}`} row={row} max={max} side="ask" />
+          <Row key={`a${row.price}`} row={row} max={max} side="ask" onPick={(price) => setRest({ side: "buy", price })} />
         ))}
       </div>
       <div className={`flex items-baseline justify-between border-y border-white/10 px-2 py-1 ${up ? "text-up" : "text-down"}`}>
@@ -105,9 +107,10 @@ export function PrintTape({ mint, symbol }: { mint: string; symbol: string }) {
       </div>
       <div>
         {bids.map((row) => (
-          <Row key={`b${row.price}`} row={row} max={max} side="bid" />
+          <Row key={`b${row.price}`} row={row} max={max} side="bid" onPick={(price) => setRest({ side: "sell", price })} />
         ))}
       </div>
+      {rest ? <RestTicket key={`${rest.side}:${rest.price}`} mint={mint} symbol={symbol} price={rest.price} usd={size} side={rest.side} /> : <p className="px-2 py-1.5 text-[10px] text-white/30">Tap a price to rest a limit. An ask rests a buy. A bid rests a sell.</p>}
     </div>
   );
 }
