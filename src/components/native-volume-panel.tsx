@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowUpRight, BarChart3, Database, RefreshCw, ShieldAlert } from "lucide-react";
+import { ArrowUpRight, BarChart3, Database, RefreshCw, ShieldAlert } from "lucide-react";
 import { getNativeVolume } from "@/lib/solscan-volume";
 import type { NativeVolume, VolumeBar } from "@/lib/solscan-volume-core.mjs";
 
@@ -12,12 +12,11 @@ const timeframes=["15m","1H","4H","1D"] as const;
 function VolumeBars({bars,complete,lane}:{bars:VolumeBar[];complete:boolean;lane:"USDC"|"SOL"}){
  const native=lane==="SOL";
  const val=(n:number)=>native?n.toFixed(n>=100?1:3)+" SOL":cash(n);
- const width=1000,height=240,top=22,bottom=210,baseY=187;
+ const width=1000,height=240,top=22,baseY=187;
  const max=Math.max(native?0.0001:1,...bars.map(b=>(native?b.solTotal:b.totalUsd)??0));
  const step=(width-56)/Math.max(1,bars.length),barWidth=Math.max(3,step*.66);
- const last=bars.length?bars.at(-1)?.t??0:0;
  const useLabelStep=Math.max(1,Math.ceil(bars.length/7));
- return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="On-chain USDC-paired swap buy and sell notional grouped by time. Gray cells are unavailable when indexing is incomplete." className="w-full overflow-visible">
+ return <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Indexed on-chain ${lane} pair swaps grouped by time. Gray bars indicate unverified coverage; not all-token dollar volume.`} className="w-full overflow-visible">
   {[0,.25,.5,.75,1].map(y=><g key={y}><line x1="30" y1={baseY-(baseY-top)*y} x2="990" y2={baseY-(baseY-top)*y} stroke="#294057" strokeDasharray="3 7" opacity=".6"/><text x="26" y={baseY-(baseY-top)*y+4} fill="#738aa3" fontSize="11" textAnchor="end">{y===0?"0":val(max*y)}</text></g>)}
   {bars.map((row,i)=>{
     const x=40+i*step+step/2,rx=x-barWidth/2;
