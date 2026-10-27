@@ -69,50 +69,47 @@ async function pullCandles(mint: string, tf: PrintTf): Promise<{ bars: PrintBar[
   const pending = inflight.get(key);
   if (pending) return pending;
   const job = (async () => {
+    // Real USD-denominated pool OHLCV first. A price-only provider cannot supply volume.
+    const pool = await topPool(mint).catch(() => "");
+    if (pool) {
+      const q = tfQuery(tf);
+      // Request OHLC for the exact selected mint, not the other token in its pool.
+      const endpoint = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd&token=${encodeURIComponent(mint)}`;
+      try {
+        let res = await fetch(endpoint, { headers: { accept: "application/json", "user-agent": "Senda" } });
+        if (res.status === 429) {
+          await sleep(900);
+          res = await fetch(endpoint, { headers: { accept: "application/json", "user-agent": "Senda" } });
+        }
+        if (res.ok) {
+          const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
+          const bars: PrintBar[] = (json.data?.attributes?.ohlcv_list ?? [])
+            .map((row) => ({
+              t: Number(row[0]) * 1000, o: Number(row[1]), h: Number(row[2]),
+              l: Number(row[3]), c: Number(row[4]), v: Number(row[5]),
+            }))
+            .filter((v) => Number.isFinite(v.t) && v.t > 0 && [v.o,v.h,v.l,v.c,v.v].every(Number.isFinite) &&
+              v.o > 0 && v.c > 0 && v.h >= Math.max(v.o,v.c) && v.l > 0 &&
+              v.l <= Math.min(v.o,v.c) && v.v >= 0)
+            .sort((a,b) => a.t-b.t);
+          if (bars.length >= 2) {
+            const out = { bars, note: "Pool OHLCV · GeckoTerminal · USD volume" };
+            candleCache.set(key, { at: Date.now(), ...out });
+            return out;
+          }
+        }
+      } catch { /* The fallback is explicitly price-only, never volume. */ }
+    }
     try {
       const fromLlama = await llamaCandles(mint, tf);
       if (fromLlama.length >= 2) {
-        const out = { bars: fromLlama, note: "Price history." };
+        const out = { bars: fromLlama, note: "Price-only proxy · DefiLlama · derived intervals · NO traded volume" };
         candleCache.set(key, { at: Date.now(), ...out });
         return out;
       }
-    } catch {
-      /* Pool candles are the next try. */
-    }
-    const pool = await topPool(mint);
-    if (!pool) return { bars: [], note: "Candle feed is busy. The last price is still live." };
-    const q = tfQuery(tf);
-    let res = await fetch(
-      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-      { headers: { accept: "application/json", "user-agent": "Senda" } },
-    );
-    if (res.status === 429) {
-      await sleep(900);
-      res = await fetch(
-        `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-        { headers: { accept: "application/json", "user-agent": "Senda" } },
-      );
-    }
-    if (!res.ok) return { bars: [], note: res.status === 429 ? "Candle feed is busy. The last price is still live." : `Print ${res.status}` };
-    const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
-    const raw = json.data?.attributes?.ohlcv_list ?? [];
-    const bars: PrintBar[] = raw
-      .map((row) => ({
-        t: Number(row[0]) * 1000,
-        o: Number(row[1]),
-        h: Number(row[2]),
-        l: Number(row[3]),
-        c: Number(row[4]),
-        v: Number(row[5]),
-      }))
-      .filter((b) => b.t > 0 && b.h > 0 && b.l > 0)
-      .sort((a, b) => a.t - b.t);
-    const out = { bars, note: bars.length ? "Pool candles." : "The pool returned no candles." };
-    if (bars.length) candleCache.set(key, { at: Date.now(), ...out });
-    return out;
-  })().finally(() => {
-    inflight.delete(key);
-  });
+    } catch { /* Nothing to show rather than synthetic candles. */ }
+    return { bars: [], note: "No verified historical OHLCV available. Volume strategies disabled." };
+  })().finally(() => inflight.delete(key));
   inflight.set(key, job);
   return job;
 }
