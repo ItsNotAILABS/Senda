@@ -4,6 +4,8 @@ import { placeLimit, restingOrders, type RestingOrder } from "@/lib/jup-limit";
 import { USDC } from "@/lib/jup-exec";
 import { connectPhantom, mintDecimals } from "@/lib/phantom";
 import { loadCoins } from "@/lib/coin-tape";
+import { fillRead } from "@/lib/fill-read";
+import { VENUE_CUTS, cutLine } from "@/lib/venue-cut";
 
 /** A resting Jupiter order. It does not fill in this tab. Jupiter fills it. */
 export function OrdersDesk() {
@@ -15,6 +17,7 @@ export function OrdersDesk() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [rows, setRows] = useState<RestingOrder[]>([]);
   const [busy, setBusy] = useState(false);
+  const [mark, setMark] = useState(0);
 
   useEffect(() => {
     loadCoins()
@@ -27,6 +30,22 @@ export function OrdersDesk() {
       })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!mint) return;
+    const timer = window.setInterval(() => {
+      fetch(`https://lite-api.jup.ag/price/v3?ids=${mint}`, { headers: { accept: "application/json" } })
+        .then((res) => res.json())
+        .then((body: { [k: string]: { usdPrice?: number } }) => {
+          const px = Number(body[mint]?.usdPrice || 0);
+          if (px > 0) setMark(px);
+        })
+        .catch(() => undefined);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [mint]);
+
+  const read = fillRead({ side, limit: Number(px), mark });
 
   async function refresh(who = owner) {
     if (!who) return;
@@ -66,8 +85,9 @@ export function OrdersDesk() {
       <p className="font-mono text-[10px] tracking-[0.16em] text-white/40 uppercase">Orders</p>
       <h1 className="text-3xl tracking-tight">A limit, not a market.</h1>
       <p className="text-sm leading-relaxed text-white/50">
-        A buy pays USDC. A sell pays the token. Jupiter rests it until the other side is there. Phantom signs. Senda does not match it, and it does not invent a fill.
+        Jupiter rests it until the market trades through. This page does not chase the price and it does not invent a fill.
       </p>
+      <p className={`text-sm ${read.state === "through" ? "text-accent" : "text-white/55"}`}>{read.line}</p>
       <label className="block text-xs text-white/45">
         Token mint {symbol ? `· ${symbol}` : ""}
         <input value={mint} onChange={(e) => setMint(e.target.value.trim())} spellCheck={false} className="mt-1 h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-xs outline-none" />
@@ -100,6 +120,16 @@ export function OrdersDesk() {
         ))}
       </ul>
       {!rows.length ? <p className="text-xs text-white/35">No active trigger orders came back for this wallet.</p> : null}
+      <div className="border-t border-white/10 pt-3">
+        <p className="text-[10px] tracking-[0.16em] text-white/40 uppercase">What a venue already charges</p>
+        <ul className="mt-2 space-y-2">
+          {VENUE_CUTS.map((row) => (
+            <li key={row.id} className="text-xs leading-relaxed text-white/55">
+              <span className="text-white/80">{row.what}.</span> {cutLine(row, 100)} {row.theirs}
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
   );
 }

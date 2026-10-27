@@ -364,9 +364,11 @@ export function CoverDesk({ names }: { names: HouseListing[] }) {
               <p className="font-mono text-2xl tabular-nums text-fg">{money(premium)}</p>
               {mode !== "life" && name && trigger != null ? (
                 <p className="mt-1 text-xs text-muted">
-                  {name.symbol} strike {formatUsd(name.last)} · trigger {formatUsd(trigger)}
+                  {name.symbol} strike {formatUsd(name.last)} · trigger {formatUsd(trigger)}. The floor is {Math.abs(((trigger - name.last) / name.last) * 10_000).toFixed(0)} bps under the mark. It pays when a print is through that floor. The premium is the whole price. There is no second desk fee.
                 </p>
-              ) : null}
+              ) : (
+                <p className="mt-1 text-xs text-muted">The premium is the whole price. There is no second desk fee on a cover.</p>
+              )}
             </div>
             {owner ? (
               <button

@@ -1,5 +1,6 @@
 /** deBridge builds the cross-chain order. The source wallet signs it. */
 
+import { bridgeAffiliate } from "@/lib/venue-cut";
 import { Buffer } from "buffer";
 import { VersionedTransaction } from "@solana/web3.js";
 import { sendVersioned } from "@/lib/phantom";
@@ -119,6 +120,7 @@ export type BridgeQuote = {
   impact: number;
   tx: { data: string; to?: string; value?: string };
   srcKind: "solana" | "evm";
+  cut: string;
 };
 
 type Raw = {
@@ -142,6 +144,7 @@ export async function quoteBridge(input: {
   }
   const atoms = BigInt(Math.round(input.amount * 10 ** input.tokenIn.decimals));
   if (atoms <= 0n) throw new Error("Enter an amount.");
+  const affiliate = bridgeAffiliate();
   const qs = new URLSearchParams({
     srcChainId: String(input.src.chainId),
     srcChainTokenIn: input.tokenIn.address,
@@ -152,12 +155,22 @@ export async function quoteBridge(input: {
     srcChainOrderAuthorityAddress: input.sender,
     dstChainOrderAuthorityAddress: input.recipient,
   });
-  const res = await fetch(`${CREATE}?${qs.toString()}`, { headers: { accept: "application/json" } });
-  const body = (await res.json()) as Raw;
-  if (!res.ok || !body.tx?.data) throw new Error(body.errorMessage || "deBridge did not quote that route.");
+  if (affiliate) {
+    qs.set("affiliateFeePercent", affiliate.percent);
+    qs.set("affiliateFeeRecipient", affiliate.wallet);
+  }
+  const first = await ask(qs);
+  const quoted = first.ok ? first : await ask(clean(qs));
+  const body = quoted.body;
+  if (!body.tx?.data) throw new Error(body.errorMessage || "deBridge did not quote that route.");
   const out = body.estimation?.dstChainTokenOut;
   const dec = out?.decimals ?? input.tokenOut.decimals;
   const receive = Number(out?.amount || "0") / 10 ** dec;
+  const cut = !affiliate
+    ? "No Senda fee on this bridge. The gap is deBridge."
+    : first.ok
+      ? "deBridge keeps 4 bps for this desk. The other 4 bps was not added."
+      : "The affiliate quote was refused, so this one has no desk fee.";
   return {
     send: input.amount,
     receive,
@@ -165,7 +178,21 @@ export async function quoteBridge(input: {
     impact: Number(body.usdPriceImpact) || 0,
     tx: { data: body.tx.data, to: body.tx.to, value: body.tx.value },
     srcKind: input.src.kind,
+    cut,
   };
+}
+
+function clean(qs: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(qs);
+  next.delete("affiliateFeePercent");
+  next.delete("affiliateFeeRecipient");
+  return next;
+}
+
+async function ask(qs: URLSearchParams): Promise<{ ok: boolean; body: Raw }> {
+  const res = await fetch(`${CREATE}?${qs.toString()}`, { headers: { accept: "application/json" } });
+  const body = (await res.json()) as Raw;
+  return { ok: res.ok && !!body.tx?.data, body };
 }
 
 function hexToBytes(hex: string): Uint8Array {

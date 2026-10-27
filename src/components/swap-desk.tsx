@@ -265,7 +265,7 @@ export function SwapDesk() {
           <p className="text-[10px] tracking-[0.14em] text-white/40 uppercase">{src.name} → {dst.name}</p>
           <p className="mt-2 text-sm">You send {quote.send} {tokenIn.symbol}.</p>
           <p className="senda-paint mt-1 font-mono text-3xl tabular-nums text-accent">≈ {quote.receive.toFixed(4)} {quote.receiveSymbol}</p>
-          <p className="mt-1 text-xs text-muted">{quoteMs ? `${quoteMs}ms to build this order. ` : ""}The other chain settles after you sign. The gap is the bridge fee, not a Senda fee.</p>
+          <p className="mt-1 text-xs text-muted">{quoteMs ? `${quoteMs}ms to build this order. ` : ""}{quote.cut} The other chain settles after you sign.</p>
           <button type="button" disabled={busy} onClick={() => void sign()} className="relative mt-3 min-h-11 w-full overflow-hidden rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
             {busy ? <span className="senda-flow absolute inset-y-0 w-16 bg-white/40" /> : null}
             <span className="relative">{busy ? "Waiting on the wallet" : "Sign"}</span>
