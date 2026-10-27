@@ -57,6 +57,7 @@ type Server struct {
  client *http.Client
  upstream string
  apiKey string
+ solscanKey string
  internalSecret string
  mu sync.Mutex
  next time.Time
@@ -177,6 +178,7 @@ func (s *Server) mux()*http.ServeMux{
  })
  m.HandleFunc("/v1/quote",s.routes)
  m.HandleFunc("/v1/ladder",s.ladder)
+ m.HandleFunc("/v1/volume",s.volume)
  return m
 }
 func main(){
@@ -190,6 +192,7 @@ func main(){
  }
  key:=os.Getenv("SENDA_JUPITER_API_KEY")
  srv:=NewServer("https://api.jup.ag",key,secret)
+ srv.solscanKey=os.Getenv("SENDA_SOLSCAN_PRO_API_KEY")
  server:=&http.Server{Addr:addr,Handler:srv.mux(),ReadHeaderTimeout:5*time.Second,
   ReadTimeout:8*time.Second,WriteTimeout:20*time.Second,IdleTimeout:30*time.Second}
  log.Printf("Senda Liquify read-only router listening on %s (key configured: %t)",addr,key!="")
