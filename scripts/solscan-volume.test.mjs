@@ -32,3 +32,10 @@ test("refuses malformed windows or mints",()=>{
  assert.throws(()=>aggregateSolscanVolume({mint:"bad",events:[],start,end,complete:true}));
  assert.throws(()=>aggregateSolscanVolume({mint,events:[],start,end:start+100,complete:true}));
 });
+
+test("current incomplete interval remains unknown despite fetched pages",()=>{
+ const out=aggregateSolscanVolume({mint,events:[],start,end,complete:true,
+  observedThrough:end-1800});
+ assert.equal(out.bars.at(-1).totalUsd,null);
+ assert.equal(out.bars[0].totalUsd,0);
+});
