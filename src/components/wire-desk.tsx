@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { DepthScreen } from "@/components/depth-screen";
 import { DeskBots } from "@/components/desk-bots";
 import { DeskStatus } from "@/components/desk-status";
+import { FillButton } from "@/components/fill-button";
 import { PrintChart } from "@/components/print-chart";
 import { SolBook } from "@/components/sol-book";
 import type { LiveCoin } from "@/lib/coin-tape";
@@ -26,6 +28,7 @@ function px(n: number): string {
 export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins: LiveCoin[]; news: Headline[] }) {
   const [lens, setLens] = useState<Lens>("trending");
   const [pick, setPick] = useState("");
+  const [q, setQ] = useState("");
   const [source, setSource] = useState("All");
   const [newsOpen, setNewsOpen] = useState(false);
 
@@ -45,6 +48,14 @@ export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins:
 
   const chartMint = lens === "names" ? (offName?.mint || nameMovers.find((row) => row.mint === pick)?.mint || names[0]?.mint || "") : (offCoin?.id || coinMovers.find((row) => row.id === pick)?.id || coins[0]?.id || "");
   const chartSymbol = lens === "names" ? (names.find((row) => row.mint === chartMint)?.symbol || "Market") : (coins.find((row) => row.id === chartMint)?.symbol || "Market");
+  const chartPrice = lens === "names" ? names.find((row) => row.mint === chartMint)?.last || 0 : coins.find((row) => row.id === chartMint)?.price || 0;
+  const needle = q.trim().toLowerCase();
+  const hits = needle
+    ? [
+        ...coins.filter((row) => `${row.symbol} ${row.name}`.toLowerCase().includes(needle)).slice(0, 4).map((row) => ({ id: row.id, symbol: row.symbol, lens: "trending" as const })),
+        ...names.filter((row) => `${row.symbol} ${row.name}`.toLowerCase().includes(needle)).slice(0, 4).map((row) => ({ id: row.mint, symbol: row.symbol, lens: "names" as const })),
+      ]
+    : [];
 
   return (
     <div className="space-y-4 bg-black px-4 py-4">
@@ -57,6 +68,25 @@ export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins:
         </div>
       </header>
       {chartMint ? <PrintChart mint={chartMint} symbol={chartSymbol} className="h-[280px]" /> : null}
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a market" className="min-h-11 w-full rounded-2xl border border-white/10 bg-black px-3 text-sm outline-none" />
+      {hits.length ? (
+        <div className="flex gap-1 overflow-x-auto">
+          {hits.map((row) => (
+            <button key={row.id} type="button" onClick={() => { setLens(row.lens); setPick(row.id); setQ(""); }} className="h-9 shrink-0 rounded-full bg-white/10 px-3 text-xs font-semibold">
+              {row.symbol}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {chartMint ? (
+        <div>
+          <div className="flex gap-2">
+            <FillButton mint={chartMint} usd={10} side="buy" price={chartPrice} symbol={chartSymbol} label="Buy $10" className="min-h-11 flex-1 rounded-full bg-accent text-sm font-semibold text-accent-fg" />
+            <FillButton mint={chartMint} usd={10} side="sell" price={chartPrice} symbol={chartSymbol} label="Sell $10" className="min-h-11 flex-1 rounded-full bg-white text-sm font-semibold text-black" />
+          </div>
+          <DepthScreen mint={chartMint} symbol={chartSymbol} />
+        </div>
+      ) : null}
 
       <DeskBots
         names={names}

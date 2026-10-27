@@ -124,11 +124,13 @@ export const derivBook = createServerFn({ method: "GET" }).handler(async () => {
     }
   }
   return DERIVS.map((pair): DerivRow => {
-    const px = pair.ostium ? ostium.get(pair.ostium) : undefined;
+    const ostKey = pair.ostium || `${pair.base}-${pair.quote}`;
+    const px = ostium.get(ostKey);
     const av = pair.avantis ? avantis.get(pair.avantis) : undefined;
     const fund = av?.fundingFeePerHourP;
     return {
       ...pair,
+      ostium: px ? ostKey : pair.ostium,
       mid: px?.mid && px.mid > 0 ? px.mid : null,
       bid: px?.bid && px.bid > 0 ? px.bid : null,
       ask: px?.ask && px.ask > 0 ? px.ask : null,

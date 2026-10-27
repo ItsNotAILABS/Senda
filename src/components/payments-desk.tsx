@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { sendCut } from "@/lib/desk-fee";
+import { previewSend, type SendPreview } from "@/lib/send-preview";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
 import { AttachedAccounts, CousinPesos } from "@/components/attached-accounts";
 import { BatchPay } from "@/components/batch-pay";
@@ -451,6 +452,7 @@ function SendTicket({ owner }: { owner: string }) {
   const [sig, setSig] = useState("");
   const [signed, setSigned] = useState("");
   const [tick, setTick] = useState(0);
+  const [cost, setCost] = useState<SendPreview | null>(null);
   const seen = useRef("");
 
   useEffect(() => {
@@ -486,6 +488,25 @@ function SendTicket({ owner }: { owner: string }) {
 
   const assets = useMemo(() => (chain ? heldOf(chain) : []), [chain]);
   const asset = assets.find((row) => row.key === pick) ?? assets[0] ?? null;
+  const amount = Number(raw);
+  const dest = solAddress(to.trim());
+
+  useEffect(() => {
+    if (!asset || !dest || !(amount > 0)) {
+      setCost(null);
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      void previewSend(dest, asset.kind === "sol" ? "sol" : asset.kind === "usdc" ? "usdc" : "token", amount, asset.mint)
+        .then((row) => live && setCost(row))
+        .catch(() => live && setCost(null));
+    }, 350);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [asset, dest, amount]);
 
   async function sign() {
     if (!owner || !asset) return;
@@ -601,9 +622,16 @@ function SendTicket({ owner }: { owner: string }) {
             aria-label="Destination"
             className={cn(field, "font-mono text-xs")}
           />
+          {cost ? (
+            <dl className="rounded-2xl border border-white/10 px-3 py-2 text-sm">
+              <div className="flex justify-between gap-3 py-1"><dt className="text-white/45">USDC cut</dt><dd className="text-right text-white/80">{cost.cut}</dd></div>
+              <div className="flex justify-between gap-3 py-1"><dt className="text-white/45">Network</dt><dd className="text-right text-white/80">{cost.network}</dd></div>
+              <div className="flex justify-between gap-3 py-1"><dt className="text-white/45">{cost.oneTime ? "Account, one-time" : "Account"}</dt><dd className="text-right text-white/80">{cost.account}</dd></div>
+            </dl>
+          ) : null}
           {payTokenBlocked(asset) ? <p className="text-sm text-down">payToken cannot send this mint.</p> : null}
           {fail ? <p className="text-sm text-down">{fail}</p> : null}
-          {sig ? <SignedReceipt title="Signed" amount={signed} detail="Left this wallet." sig={sig} /> : null}
+          {sig ? <SignedReceipt title="Signed" amount={signed} detail={cost ? `${cost.cut} ${cost.network} ${cost.account}` : "Left this wallet."} sig={sig} /> : null}
           <button
             type="button"
             disabled={busy || payTokenBlocked(asset)}
@@ -612,9 +640,73 @@ function SendTicket({ owner }: { owner: string }) {
           >
             {busy ? "Waiting on the wallet" : "Sign"}
           </button>
+          <AgentPays owner={owner} />
         </div>
       ) : null}
     </div>
+  );
+}
+
+function AgentPays({ owner }: { owner: string }) {
+  const [rows, setRows] = useState<Array<{ id: string; mint: string; usd: number; why: string }>>([]);
+  const [busy, setBusy] = useState("");
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+    setToken(window.localStorage.getItem("senda.harness.token") || "");
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let live = true;
+    void fetch("/api/agent", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ method: "list_intents", params: {} }),
+    })
+      .then((res) => res.json())
+      .then((body: { result?: { intents?: Array<{ id: string; mint: string; side: string; usd: number; why: string; status: string }> } }) => {
+        if (!live) return;
+        setRows((body.result?.intents || []).filter((row) => row.side === "pay" && row.status === "queued"));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [token, busy]);
+
+  async function sign(row: { id: string; mint: string; usd: number; why: string }) {
+    if (!owner) return;
+    setBusy(row.id);
+    try {
+      const done = await payUsdc({ owner, to: row.mint, usd: row.usd, deskFee: true, memo: row.why || undefined });
+      await fetch("/api/agent", {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+        body: JSON.stringify({ method: "mark_signed", params: { id: row.id, signature: done.signature } }),
+      });
+      toast.success(`Payment signed. ${done.signature.slice(0, 8)}…`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "The payment did not sign.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  if (!token) return <p className="text-xs text-white/40">An outside agent queues a USDC payment with queue_pay. It shows here, and you sign it. Nothing is sent until then.</p>;
+  if (!rows.length) return <p className="text-xs text-white/40">No agent payment waiting. A queued pay lands here.</p>;
+  return (
+    <ul className="space-y-2">
+      {rows.map((row) => (
+        <li key={row.id} className="rounded-2xl border border-white/10 px-3 py-2">
+          <p className="text-sm font-semibold">Pay ${row.usd.toFixed(2)} USDC</p>
+          <p className="mt-1 break-all font-mono text-[11px] text-white/45">{row.mint}</p>
+          <button type="button" disabled={busy === row.id || !owner} onClick={() => void sign(row)} className="mt-2 min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-black disabled:opacity-40">
+            {busy === row.id ? "Waiting on the wallet" : "Sign payment"}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 

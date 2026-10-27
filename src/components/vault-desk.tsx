@@ -10,7 +10,9 @@ import { PortfolioNav } from "@/components/portfolio-nav";
 import { PositionsBook } from "@/components/positions-book";
 import { SavingsYield } from "@/components/savings-yield";
 import { JumpStrip } from "@/components/jump-strip";
-import { HoldingCards, type HoldingRow } from "@/components/holding-cards";
+import { DepthScreen } from "@/components/depth-screen";
+import { HoldingCards, MarkFace, type HoldingRow } from "@/components/holding-cards";
+import { PrintChart } from "@/components/print-chart";
 import { PositionActions } from "@/components/position-actions";
 import { kaminoLoans, type KaminoLoan } from "@/lib/kamino-lend";
 import { VaultAccounts } from "@/components/vault-accounts";
@@ -321,11 +323,25 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
           onOpen={(row) => setPick(row.mint)}
         />
         {picked ? (
-          <div className="mt-3 rounded-2xl border border-white/10 bg-black/30 p-3">
-            <div className="flex items-baseline justify-between">
-              <p className="text-sm font-semibold">{picked.symbol}</p>
-              <p className="font-mono text-xs text-white/45">{picked.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} held</p>
+            <div className="mt-3 rounded-2xl border border-white/10 bg-black p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <MarkFace icon={coins.find((row) => row.id === picked.key)?.icon} symbol={picked.symbol} mint={picked.key === "sol" ? "So11111111111111111111111111111111111111112" : picked.key} />
+                <div>
+                  <p className="text-sm font-semibold">{picked.symbol}</p>
+                  <p className="text-[11px] text-white/45">{picked.name}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="font-mono text-sm tabular-nums">{picked.last > 0 ? bookUsd(picked.last) : "—"}</p>
+                <p className={cn("font-mono text-[11px] tabular-nums", (picked.change ?? 0) < 0 ? "text-down" : "text-up")}>{picked.change == null ? "" : `${picked.change >= 0 ? "+" : ""}${picked.change.toFixed(1)}% today`}</p>
+              </div>
             </div>
+            <p className="mt-1 font-mono text-xs text-white/45">{picked.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} held · {bookUsd(picked.value)}</p>
+            <div className="mt-3">
+              <PrintChart mint={picked.key === "sol" ? "So11111111111111111111111111111111111111112" : picked.key} symbol={picked.symbol} className="h-[220px]" />
+            </div>
+            <DepthScreen mint={picked.key === "sol" ? "So11111111111111111111111111111111111111112" : picked.key} symbol={picked.symbol} />
             <div className="mt-2 grid grid-cols-4 gap-1.5">
               {[5, 25, 100, 500].map((n) => (
                 <button key={n} type="button" onClick={() => setSize(n)} className={cn("min-h-9 rounded-xl font-mono text-xs", size === n ? "bg-white text-black" : "bg-white/10")}>${n}</button>

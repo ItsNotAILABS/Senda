@@ -700,6 +700,45 @@ export async function harnessCall(method: string, token: string, params: Record<
     return { id, symbol, usd, status: "queued", market: matrix.market, confidence: matrix.confidence, signs: false, note: "Queued for you to sign. Pro will not open the wallet for a matrix buy." };
   }
 
+  if (method === "queue_pay") {
+    const to = String(params.to || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(to)) throw new HarnessError(400, "That is not a Solana address. Nothing was queued.");
+    const usd = money(params.usd);
+    if (usd < 0.5 || usd > 5000) throw new HarnessError(400, "A payment is between $0.50 and $5,000. Nothing was queued.");
+    const missionId = String(params.missionId || "");
+    const missions = await sql.query<MissionRow>(
+      "SELECT id, bankroll_usd, aim_usd, spent_usd, day, day_spent, status FROM agent_mission WHERE id = $1 AND harness_id = $2",
+      [missionId, harness],
+    );
+    const mission = missions[0];
+    if (!mission || mission.status !== "open") throw new HarnessError(404, "Open a mission first. A payment spends today's aim.");
+    const left = clipLeft(
+      { bankrollUsd: money(mission.bankroll_usd), aimUsd: money(mission.aim_usd), spentUsd: money(mission.spent_usd), day: mission.day, daySpent: money(mission.day_spent) },
+      today(),
+    );
+    if (usd > left) throw new HarnessError(400, left < 0.5 ? "Nothing left in today's aim." : `Today can still queue $${left.toFixed(2)}.`);
+    const day = today();
+    const reserved = await sql.query<{ id: string }>(
+      `UPDATE agent_mission
+       SET spent_usd = spent_usd + $1,
+           day = $2,
+           day_spent = CASE WHEN day = $2 THEN day_spent + $1 ELSE $1 END
+       WHERE id = $3 AND harness_id = $4 AND status = 'open'
+         AND (bankroll_usd - spent_usd) >= $1
+         AND (CASE WHEN day = $2 THEN aim_usd - day_spent ELSE aim_usd END) >= $1
+       RETURNING id`,
+      [usd, day, missionId, harness],
+    );
+    if (!reserved[0]) throw new HarnessError(400, "The mission could not reserve that payment.");
+    const id = crypto.randomUUID();
+    const why = String(params.memo || params.why || "USDC payment").slice(0, 80);
+    await sql.query(
+      "INSERT INTO agent_intent (id, harness_id, mission_id, symbol, mint, side, usd, why) VALUES ($1, $2, $3, 'USDC', $4, 'pay', $5, $6)",
+      [id, harness, missionId, to, usd, why],
+    );
+    return { id, to, usd, status: "queued", signs: false, note: "Queued a USDC payment. The wallet has not signed. This is not a send." };
+  }
+
   if (method === "list_intents") {
     const rows = await sql.query<{ id: string; mission_id: string; symbol: string; mint: string; side: string; usd: number; why: string; status: string; signature: string; created_at: string | Date }>(
       "SELECT id, mission_id, symbol, mint, side, usd, why, status, signature, created_at FROM agent_intent WHERE harness_id = $1 ORDER BY created_at ASC LIMIT 30",
@@ -759,7 +798,7 @@ export const MCP_TOOLS = [
   { name: "list_trackers", description: "Tracked names with a live price, 24h change, and short venue.", inputSchema: { type: "object", properties: {} } },
   { name: "open_mission", description: "Open a bankroll and a daily aim on an executable strategy. The aim is risk for the day, not promised profit.", inputSchema: { type: "object", properties: { strategyId: { type: "string" }, bankrollUsd: { type: "number" }, aimUsd: { type: "number" } }, required: ["strategyId", "bankrollUsd", "aimUsd"] } },
   { name: "quote", description: "Quote a catalog name in USDC. Does not sign.", inputSchema: { type: "object", properties: { symbol: { type: "string" }, usd: { type: "number" } }, required: ["symbol", "usd"] } },
-  { name: "queue_trade", description: "Reserve today's aim and queue a trade. Does not sign and does not fill.", inputSchema: { type: "object", properties: { missionId: { type: "string" }, symbol: { type: "string" }, usd: { type: "number" }, why: { type: "string" } }, required: ["missionId", "symbol", "usd"] } },
+  { name: "queue_pay", description: "Queue a USDC payment to a Solana address. It spends today's mission aim. Does not sign. The person signs it in Senda.", inputSchema: { type: "object", properties: { missionId: { type: "string" }, to: { type: "string" }, usd: { type: "number" }, memo: { type: "string" } }, required: ["missionId", "to", "usd"] } },
   { name: "list_missions", description: "Open missions and what is left today.", inputSchema: { type: "object", properties: {} } },
   { name: "list_intents", description: "Queued, resting, signed, and released trades for this harness.", inputSchema: { type: "object", properties: {} } },
   { name: "check_coin", description: "Look up one Solana coin on Jupiter before anyone buys. Returns holders, liquidity, mint authority, freeze authority, and a rug refusal when one applies. Does not trade and does not create a wallet.", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },

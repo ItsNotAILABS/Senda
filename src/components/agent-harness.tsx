@@ -7,6 +7,7 @@ import { refuseLaunch, type Launch } from "@/lib/launch-gate";
 import { raceRoute, signRoute } from "@/lib/jup-sign";
 import { routePro } from "@/lib/route-pro";
 import { connectPhantom } from "@/lib/phantom";
+import { payUsdc } from "@/lib/solana-pay";
 import { runPrestock } from "@/lib/prestock";
 import { ProPanel } from "@/components/pro-panel";
 import { ProSnipe } from "@/components/pro-snipe";
@@ -128,6 +129,12 @@ export function AgentHarness() {
       if (!owner) {
         const linked = wallet.linkChain(addr, "Phantom", "phantom");
         if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "The wallet did not stay.");
+      }
+      if (row.side === "pay") {
+        const done = await payUsdc({ owner: addr, to: row.mint, usd: row.usd, deskFee: true, memo: row.why || undefined });
+        await call(token, "mark_signed", { id: row.id, signature: done.signature });
+        await refresh();
+        return;
       }
       const known = agentNames().find((n) => n.mint === row.mint);
       let name = known ? { ...known, lane: known.lane } : null;
@@ -286,10 +293,10 @@ export function AgentHarness() {
           <ul className="space-y-2">
             {intents.filter((row) => row.status === "queued").map((row) => (
               <li key={row.id} className="rounded-2xl bg-white/5 px-3 py-3 text-sm">
-                <p>{row.side} {row.symbol} · ${row.usd}</p>
-                <p className="mt-1 text-xs text-white/45">{row.why}</p>
+                <p>{row.side === "pay" ? `Pay $${row.usd} USDC` : `${row.side} ${row.symbol} · $${row.usd}`}</p>
+                <p className="mt-1 break-all text-xs text-white/45">{row.side === "pay" ? row.mint : row.why}</p>
                 <div className="mt-2 flex gap-2">
-                  <button type="button" disabled={busy !== ""} onClick={() => void sign(row).then(() => toast.success(`${row.symbol} signed.`)).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The wallet did not sign."))} className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-black disabled:opacity-40">{busy === row.id ? "Waiting on the wallet" : "Sign"}</button>
+                  <button type="button" disabled={busy !== ""} onClick={() => void sign(row).then(() => toast.success(row.side === "pay" ? "Payment signed." : `${row.symbol} signed.`)).catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The wallet did not sign."))} className="min-h-10 rounded-full bg-white px-3 text-xs font-semibold text-black disabled:opacity-40">{busy === row.id ? "Waiting on the wallet" : "Sign"}</button>
                   <button type="button" disabled={busy !== ""} onClick={() => void release(row)} className="min-h-10 rounded-full border border-white/15 px-3 text-xs disabled:opacity-40">Release</button>
                 </div>
               </li>

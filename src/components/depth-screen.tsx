@@ -108,7 +108,7 @@ export function DepthScreen({
   const midX = hi > lo && mid > 0 ? 4 + ((mid - lo) / (hi - lo)) * 192 : 100;
 
   return (
-    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#070b14]">
+    <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-black">
       <div className="grid gap-2 border-b border-white/10 p-3 sm:grid-cols-[1fr_auto]">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">

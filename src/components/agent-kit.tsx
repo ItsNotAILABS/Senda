@@ -73,7 +73,7 @@ export function AgentKit() {
         <p className="font-mono text-[10px] tracking-[0.16em] text-white/40 uppercase">Open kit</p>
         <h2 className="mt-1 text-lg font-semibold">Look, quote, queue. No key, and no Senda coin.</h2>
         <p className="mt-2 text-sm leading-relaxed text-white/55">
-          Grok, Claude, or another agent calls <span className="font-mono text-white/80">/api/agent</span> or MCP at <span className="font-mono text-white/80">/api/mcp</span> with the harness token. The tools are check_coin, quote, list_names, discover, track, market_matrix, queue_trade, and queue_launch. A buy still opens Phantom. Senda does not launch a token of its own. The assets are Jupiter markets, Kamino reserves, and the shares already on the desk.
+          Grok, Claude, or another agent calls <span className="font-mono text-white/80">/api/agent</span> or MCP at <span className="font-mono text-white/80">/api/mcp</span> with the harness token. The tools include quote, queue_trade, and queue_pay. A trade or a USDC payment still waits for your signature. Nothing leaves the wallet until you sign it in Senda.
         </p>
         <button type="button" onClick={() => void copyBrief()} className="mt-3 min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-black">
           Copy the brief for your agent
