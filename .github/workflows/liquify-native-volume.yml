@@ -1,0 +1,39 @@
+name: Liquify Go and Solscan native volume validation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/liquify-go-desk-20261026
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  go-volume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+      - name: Go quote and indexed volume checks
+        working-directory: services/liquify
+        run: go test ./... && go vet ./...
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Market and Solscan index tests
+        run: node --test scripts/solscan-volume.test.mjs scripts/liquify-math.test.mjs scripts/market-quality.test.mjs
+      - name: Install
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build frontend and server
+        run: npm run build:dev
