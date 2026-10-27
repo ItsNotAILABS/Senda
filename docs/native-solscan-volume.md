@@ -3,7 +3,7 @@
 The Market Matrix now has **two separate measured volume instruments**:
 
 1. **GeckoTerminal pool OHLCV** — price candles and USD volume for a single selected Solana pool. These are historical pool transactions, not all token-wide swaps.
-2. **Solscan Pro DeFi activity index** — time-bucketed on-chain swaps involving a selected mint. Only swaps with an **explicit USDC side and verified six-decimal raw USDC amount** contribute to buy/sell notional bars. This is USDC notional, **approximately USD**, not a guaranteed dollar price. SOL, USDT, unknown-route, malformed or ambiguously priced transactions are counted as *unpriced* rather than multiplied by spot prices.
+2. **Solscan Pro DeFi activity index** — time-bucketed swaps involving a selected mint, using two separate raw-unit lanes: **direct USDC pairs (6 decimals, USDC notional ≈ USD)** and **direct wrapped SOL pairs (9 decimals, native SOL notional)**. A switch on the chart changes its unit and scale. USDT and other unpriced, malformed or ambiguous routes are counted as gaps rather than multiplied by guessed spot prices. **Never add SOL to USDC.**
 
 **Never add the two volume series together**: they have overlapping underlying transactions and different coverage. Never describe either as an order book, executable liquidity, resting bid/ask depth, or market-maker inventory. No trading volumes, empty-market activity, swap fills, settlement or profit figures are fabricated.
 
@@ -21,9 +21,9 @@ Go prefers native index ingestion; if unavailable the app server may use the sep
 ## Safeguards
 
 - Strict mint allowlist format, 15m / 1H / 4H / 1D bars, up to 24h observation, five pages of at most 100 indexed swaps per request.
-- Deduplicates by transaction signature, preferring top-level aggregated swaps over child-like direct activities. This is conservative; multiple independent swaps in the same transaction can be **undercounted** unless instruction-level identifiers are later added. The current feed is a lower-bound estimate, not proof of exhaustive token-wide turnover.
-- Rejects unsafe or non-six-decimal USDC amounts. Uses integer-safe raw token units; refuses amounts beyond 2^53 - 1. Never guesses unsupported token prices.
-- Even if the API is paginated to exhaustion, the latest **still-open** interval remains unknown when unobserved. Earlier fully covered empty intervals show zero; truncated pagination shows unknown missing bars.
+- Deduplicates by transaction signature, preferring top-level aggregated swaps over child-like direct activities. This is conservative; multiple independent swaps in the same transaction can be **undercounted** unless instruction-level identifiers are later added. The current feed is a lower-bound estimate, not proof of exhaustive token-wide turnover. Wrapped SOL quantities are represented in SOL, not time-aligned dollars. Historical SOL/USD mark integration would require a separate timestamped feed, data-validation rules, and accounting tests.
+- Rejects unsafe decimal interpretations: a real USDC leg must have exactly six decimals; a wrapped SOL leg exactly nine. Uses integer-safe raw token units; refuses amounts beyond 2^53 - 1. Never guesses unsupported token prices.
+- Even if the API is paginated to exhaustion, the latest **still-open** interval remains unknown when unobserved. Earlier fully covered empty intervals show zero; truncated pagination shows unknown missing bars. Each currency lane has independent coverage — an observed SOL-only swap is not automatically a verified USDC-volume bar.
 - Solscan can lag and may omit other venues or trade classes. Display data freshness, completeness, priced and unpriced counts. API rate limits or provider failures fail closed.
 - 45-second short cache, single-flight per mint/timeframe, bounded Go index retrieval, private server-to-server key. Browser receives only public activity summaries.
 - Solscan `routers.token1/token2` ordering is used as a **buy/sell direction inference**, not an aggressor/maker-side label. The UI explicitly says "USDC→token" and "token→USDC."
