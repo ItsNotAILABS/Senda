@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CandleChart, type ChartHandle } from "@/components/candle-chart";
 import { MarketMatrix } from "@/components/market-matrix";
 import { lineOf, readTape, saveTape } from "@/lib/indicators";
-import { printBars } from "@/lib/print-bars";
+import { printBook } from "@/lib/print-bars";
 import type { DerivBar } from "@/lib/deriv-book";
 
 const TV: Record<string, string> = {
@@ -81,7 +81,8 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
   const [studies, setStudies] = useState<Set<string>>(() => new Set(["sma", "ema20"]));
   const [zone, setZone] = useState<{ low: number; high: number } | null>(null);
   const [shot, setShot] = useState<string | null>(null);
-  const [pool, setPool] = useState(false);
+  const [kind, setKind] = useState<"candles" | "line" | "volume">("candles");
+  const [feed, setFeed] = useState<"gecko-pool" | "jup-chart" | "none">("none");
   const [fresh, setFresh] = useState(false);
   const chartRef = useRef<ChartHandle>(null);
 
@@ -92,11 +93,12 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
     setLevels([]);
     setLivePx(0);
     setHover(null);
-    printBars({ data: { mint, span } })
-      .then((rows) => {
+    printBook({ data: { mint, span } })
+      .then((loaded) => {
         if (!live) return;
+        const rows = loaded.bars;
         setBars(rows);
-        setPool(rows.filter((row) => (row.volume || 0) > 0).length >= 21);
+        setFeed(loaded.source);
         setState(rows.length > 1 ? "ready" : "empty");
         setSaved(false);
         if (rows.length > 1) saveBars(mint, span, rows);
@@ -106,7 +108,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         const cached = readBars(mint, span);
         if (cached.length > 1) {
           setBars(cached);
-          setPool(cached.filter((row) => (row.volume || 0) > 0).length >= 21);
+          setFeed(cached.filter((row) => (row.volume || 0) > 0).length >= 8 ? "jup-chart" : "none");
           setState("ready");
           setSaved(true);
         } else {
@@ -155,12 +157,13 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
     let on = true;
     const bucket = TF_SEC[span];
     const refresh = () => {
-      printBars({ data: { mint, span } })
-        .then((rows) => {
-          if (!on || rows.length < 2) return;
+      printBook({ data: { mint, span } })
+        .then((loaded) => {
+          if (!on || loaded.bars.length < 2) return;
+          setFeed(loaded.source);
           setBars((cur) => {
             const price = cur.length ? cur[cur.length - 1].close : 0;
-            return price > 0 ? paintLive(rows, price, bucket) : rows;
+            return price > 0 ? paintLive(loaded.bars, price, bucket) : loaded.bars;
           });
           setState("ready");
           setFresh(true);
@@ -203,6 +206,10 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
   return (
     <div className="overflow-hidden border border-[#2a2e39] bg-[#131722]">
       <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#2a2e39] px-1">
+        {(["candles", "line", "volume"] as const).map((id) => (
+          <button key={id} type="button" onClick={() => setKind(id)} className={`h-9 shrink-0 border-b-2 px-2.5 text-[13px] capitalize ${kind === id ? "border-[#d1d4dc] text-[#d1d4dc]" : "border-transparent text-[#787b86]"}`}>{id}</button>
+        ))}
+        <span className="mx-1 h-4 w-px shrink-0 bg-[#2a2e39]" />
         {TF.map((id) => (
           <button
             key={id}
@@ -214,7 +221,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
           </button>
         ))}
         <span className="ml-auto flex shrink-0 items-center pr-1">
-          <button type="button" disabled={!(last > 0)} onClick={() => setLevels((cur) => [...cur, last])} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Line</button>
+          <button type="button" disabled={!(last > 0)} onClick={() => setLevels((cur) => [...cur, last])} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Level</button>
           <button type="button" disabled={levels.length === 0} onClick={() => setLevels((cur) => cur.slice(0, -1))} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Undo</button>
           <button type="button" disabled={!(last > 0)} onClick={() => setZone(last > 0 ? { low: last * 0.996, high: last * 1.004 } : null)} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Zone</button>
           <button type="button" disabled={!zone} onClick={() => setZone(null)} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Clear</button>
@@ -256,7 +263,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       ) : null}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 pb-1 pt-2 text-[12px]">
         <span className="text-[15px] font-semibold tracking-tight text-[#d1d4dc]">{symbol}</span>
-        {fresh && livePx > 0 ? <span className="text-[11px] text-[#089981]">Live</span> : null}
+        {fresh && livePx > 0 ? <span className="text-[11px] text-[#089981]">Quote 4s</span> : null}
         {saved ? <span className="text-[11px] text-[#787b86]">Saved chart</span> : null}
         <span className="font-mono text-[18px] tabular-nums text-[#d1d4dc]">{px(last || livePx)}</span>
         {move != null ? (
@@ -268,7 +275,14 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         <span className="text-[#787b86]">H <span className={up ? "text-[#089981]" : "text-[#f23645]"}>{shown ? px(shown.high) : "—"}</span></span>
         <span className="text-[#787b86]">L <span className={up ? "text-[#089981]" : "text-[#f23645]"}>{shown ? px(shown.low) : "—"}</span></span>
         <span className="text-[#787b86]">C <span className={up ? "text-[#089981]" : "text-[#f23645]"}>{shown ? px(shown.close) : "—"}</span></span>
+        <span className="text-[#787b86]">V <span className="text-[#d1d4dc]">{shown?.volume && shown.volume > 0 ? shown.volume.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "—"}</span></span>
       </div>
+      <p className="px-3 pb-1 text-[11px] text-[#787b86]">
+        {feed === "gecko-pool" ? "Volume is the Solana pool." : feed === "jup-chart" ? "Volume is Jupiter’s chart, in USD." : "No volume on this span."}
+        {" "}The quote refreshes every 4s. The bar is the {TF_LABEL[span]} bucket
+        {shown ? `, last opened ${Math.max(0, Math.round(Date.now() / 1000 - shown.time))}s ago` : ""}.
+        {" "}TradingView’s SOLUSDT is the Binance book. This is not that book.
+      </p>
       {zone ? (
         <div className="flex items-center gap-2 px-3 pb-1 font-mono text-[11px] text-[#089981]">
           <span>Zone {px(zone.low)} – {px(zone.high)}</span>
@@ -290,23 +304,23 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       {state === "ready" ? (
         <div className="relative">
           <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[42px] font-semibold tracking-[0.18em] text-white/[0.045]">{symbol}</span>
-          <CandleChart ref={chartRef} bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} className={className} onHover={setHover} />
+          <CandleChart ref={chartRef} bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} kind={kind} className={className} onHover={setHover} />
         </div>
       ) : (
         <div className={`flex items-center justify-center text-sm text-[#787b86] ${className}`}>
           {state === "ask" ? "Loading" : "No pool candles yet."}
         </div>
       )}
-      {state === "ready" ? <MarketMatrix bars={matrixBars} pool={pool} symbol={symbol} /> : null}
+      {state === "ready" ? <MarketMatrix bars={matrixBars} pool={feed !== "none"} source={feed === "none" ? "price-only" : feed} symbol={symbol} /> : null}
       {screen ? (
         <div className="fixed inset-0 z-[80] flex flex-col bg-[#131722]">
           <div className="flex items-center justify-between gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
             <p className="text-sm text-[#d1d4dc]">{symbol} · pool candles{fresh ? " · live" : ""}</p>
             <button type="button" onClick={() => setScreen(false)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>
           </div>
-          <CandleChart bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} className="min-h-0 flex-1" />
+          <CandleChart bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} kind={kind} className="min-h-0 flex-1" />
           <div className="max-h-[40dvh] overflow-y-auto">
-            <MarketMatrix bars={matrixBars} pool={pool} symbol={symbol} />
+            <MarketMatrix bars={matrixBars} pool={feed !== "none"} source={feed === "none" ? "price-only" : feed} symbol={symbol} />
           </div>
           {TV[symbol.toUpperCase()] ? (
             <button type="button" onClick={() => setShot("tv")} className="mx-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] min-h-10 text-left text-xs text-[#787b86]">

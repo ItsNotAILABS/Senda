@@ -50,19 +50,79 @@ async function geckoBars(mint: string, span: string): Promise<DerivBar[]> {
   return out;
 }
 
+const JUP_SPAN: Record<string, string> = {
+  "1": "1_MINUTE",
+  minute: "1_MINUTE",
+  "5": "5_MINUTE",
+  "15": "15_MINUTE",
+  "60": "1_HOUR",
+  hour: "1_HOUR",
+  "240": "4_HOUR",
+  "1D": "1_DAY",
+};
+
+/** Jupiter's own candles, including USD volume. Empty when that interval is not published. */
+export async function jupBars(mint: string, span: string): Promise<DerivBar[]> {
+  const interval = JUP_SPAN[span] || "15_MINUTE";
+  const to = Math.floor(Date.now() / 60_000) * 60_000;
+  const r = await cachedJson(
+    `https://datapi.jup.ag/v2/charts/${mint}?interval=${interval}&to=${to}&candles=160`,
+    60_000,
+  );
+  if (!r.ok) return [];
+  const candles = (r.body as { candles?: Array<{ time?: number; open?: number; high?: number; low?: number; close?: number; volume?: number }> }).candles || [];
+  const out: DerivBar[] = [];
+  let last = -1;
+  for (const row of candles) {
+    const time = Math.floor(Number(row.time) || 0);
+    const close = Number(row.close) || 0;
+    if (!(time > last) || !(close > 0)) continue;
+    last = time;
+    const volume = Number(row.volume) || 0;
+    out.push({
+      time,
+      open: Number(row.open) || close,
+      high: Number(row.high) || close,
+      low: Number(row.low) || close,
+      close,
+      ...(volume > 0 ? { volume } : {}),
+    });
+  }
+  return out;
+}
+
+function hasVolume(rows: DerivBar[]): boolean {
+  return rows.filter((row) => (row.volume || 0) > 0).length >= 8;
+}
+
+/** Pool bars when they carry volume. Jupiter's chart when the pool print does not. */
+export async function loadBars(mint: string, span: string): Promise<{ bars: DerivBar[]; source: "gecko-pool" | "jup-chart" | "none" }> {
+  const pool = await geckoBars(mint, span).catch(() => [] as DerivBar[]);
+  if (hasVolume(pool)) return { bars: pool, source: "gecko-pool" };
+  const jup = await jupBars(mint, span).catch(() => [] as DerivBar[]);
+  if (jup.length > 1 && hasVolume(jup)) return { bars: jup, source: "jup-chart" };
+  if (pool.length > 1) return { bars: pool, source: "none" };
+  if (jup.length > 1) return { bars: jup, source: "none" };
+  return { bars: [], source: "none" };
+}
+
 /** Daily closes for a small line. Empty when the pool did not print. */
 export async function dayLine(mint: string): Promise<number[]> {
   const bars = await geckoBars(mint, "1D");
   return bars.map((bar) => bar.close).filter((n) => n > 0).slice(-32);
 }
 
+export const printBook = createServerFn({ method: "GET" })
+  .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "5", "15", "60", "240", "1D"]).optional() }))
+  .handler(async ({ data }) => loadBars(data.mint, data.span || "1"));
+
 export const printBars = createServerFn({ method: "GET" })
   .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "5", "15", "60", "240", "1D"]).optional() }))
-  .handler(async ({ data }): Promise<DerivBar[]> => geckoBars(data.mint, data.span || "1"));
+  .handler(async ({ data }): Promise<DerivBar[]> => (await loadBars(data.mint, data.span || "1")).bars);
 
 export async function poolMatrixBars(mint: string) {
-  const rows = await geckoBars(mint, "15");
-  const bars = rows.map((row) => ({
+  const loaded = await loadBars(mint, "15");
+  const bars = loaded.bars.map((row) => ({
     t: row.time,
     o: row.open,
     h: row.high,
@@ -70,6 +130,6 @@ export async function poolMatrixBars(mint: string) {
     c: row.close,
     v: row.volume && row.volume > 0 ? row.volume : 0,
   }));
-  const pool = bars.length >= 30 && bars.slice(-21).every((row) => row.v > 0);
-  return { bars, pool };
+  const pool = loaded.source !== "none" && bars.length >= 30 && bars.slice(-21).every((row) => row.v > 0);
+  return { bars, pool, source: loaded.source === "none" ? "price-only" : loaded.source };
 }

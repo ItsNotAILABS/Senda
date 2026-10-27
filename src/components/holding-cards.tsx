@@ -47,6 +47,25 @@ export function LineGlance({ points, down }: { points: number[]; down: boolean }
   );
 }
 
+function VolumeBars({ points }: { points: number[] }) {
+  if (points.filter((n) => n > 0).length < 2) return null;
+  const max = Math.max(...points, 1);
+  return (
+    <span className="mt-2 flex h-8 items-end gap-px" aria-hidden>
+      {points.map((n, i) => (
+        <span key={i} className="min-w-0 flex-1 rounded-sm bg-white/35" style={{ height: `${Math.max(8, (n / max) * 100)}%` }} />
+      ))}
+    </span>
+  );
+}
+
+function money(n: number): string {
+  if (!(n > 0)) return "";
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}k`;
+  return `$${n.toFixed(0)}`;
+}
+
 export function MarkFace({ icon, symbol }: { icon?: string; symbol: string }) {
   if (icon) {
     return <img src={icon} alt="" className="size-9 rounded-full bg-white object-cover" />;
@@ -99,6 +118,10 @@ export function HoldingCards({
             ) : (
               <span className="mt-3 block h-8 text-[10px] text-white/30">No hourly print</span>
             )}
+            <VolumeBars points={mark?.volume || []} />
+            <span className="mt-1 block font-mono text-[10px] text-white/40">
+              {mark?.poolVol ? `24h ${mark.poolDex || "pool"} ${money(mark.poolVol)}` : mark?.vol24 ? `24h chart ${money(mark.vol24)}` : "No 24h volume"}
+            </span>
             <span className="mt-3 grid grid-cols-3 gap-2 border-t border-white/10 pt-2 font-mono text-[11px] tabular-nums">
               <span>
                 <span className="block text-white/35">Hour</span>

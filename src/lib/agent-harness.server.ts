@@ -621,7 +621,7 @@ export async function harnessCall(method: string, token: string, params: Record<
     const name = agentNames().find((row) => row.symbol === symbol);
     if (!name?.mint) throw new HarnessError(404, "That name is not on the catalog.");
     const loaded = await poolMatrixBars(name.mint);
-    const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.pool ? "gecko-pool" : "price-only" });
+    const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.source });
     return { symbol, mint: name.mint, matrix, signs: false, note: "The matrix does not sign and does not queue." };
   }
 
@@ -630,7 +630,7 @@ export async function harnessCall(method: string, token: string, params: Record<
     const name = agentNames().find((row) => row.symbol === symbol);
     if (!name?.trade) throw new HarnessError(400, "That name cannot be queued from the matrix.");
     const loaded = await poolMatrixBars(name.mint);
-    const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.pool ? "gecko-pool" : "price-only" });
+    const matrix = evaluateMatrix({ bars: loaded.bars, source: loaded.source });
     if (!matrixClears(matrix)) throw new HarnessError(400, matrix.reason || "The matrix does not clear. Nothing was queued.");
     const usd = money(params.usd);
     const missionId = String(params.missionId || "");

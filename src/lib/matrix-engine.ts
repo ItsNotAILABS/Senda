@@ -63,14 +63,14 @@ function cell(id: string, label: string, signal: string, explain: string, weight
 
 export function evaluateMatrix(input: { bars?: unknown; source?: string }) {
   const bars = normalizeBars(input?.bars);
-  const source = input?.source === "gecko-pool" ? "gecko-pool" : "price-only";
+  const source = input?.source === "gecko-pool" || input?.source === "jup-chart" ? input.source : "price-only";
   const last = bars.at(-1);
-  const volumeReliable = source === "gecko-pool" && bars.length >= 30 && bars.slice(-21).every((b) => b.v > 0);
+  const volumeReliable = source !== "price-only" && bars.length >= 30 && bars.slice(-21).every((b) => b.v > 0);
   const base = {
     source,
     bars: bars.length,
     volumeReliable,
-    volumeUnit: "USD pool volume",
+    volumeUnit: source === "jup-chart" ? "USD Jupiter chart volume" : "USD pool volume",
     close: last?.c ?? null,
     volumeUsd: volumeReliable && last ? last.v : null,
     volumeRatio: null as number | null,

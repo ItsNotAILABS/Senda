@@ -8,6 +8,7 @@ import {
   type ISeriesApi,
   type CandlestickData,
   type HistogramData,
+  type LineData,
   type UTCTimestamp,
 } from "lightweight-charts";
 import type { DerivBar } from "@/lib/deriv-book";
@@ -26,6 +27,7 @@ export const CandleChart = forwardRef<ChartHandle, {
   levels?: number[];
   band?: { low: number; high: number } | null;
   overlays?: ChartLine[];
+  kind?: "candles" | "line" | "volume";
   className?: string;
   onHover?: (bar: DerivBar | null) => void;
 }>(function CandleChart({
@@ -34,19 +36,22 @@ export const CandleChart = forwardRef<ChartHandle, {
   levels = [],
   band = null,
   overlays = [],
+  kind = "candles",
   className = "h-[560px]",
   onHover,
 }, ref) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
-  const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const series = useRef<ISeriesApi<"Candlestick"> | ISeriesApi<"Line"> | ISeriesApi<"Histogram"> | null>(null);
   const volume = useRef<ISeriesApi<"Histogram"> | null>(null);
   const lines = useRef<ReturnType<ISeriesApi<"Candlestick">["createPriceLine"]>[]>([]);
   const studies = useRef<Map<string, ISeriesApi<"Line">>>(new Map());
   const fitted = useRef(0);
   const hover = useRef(onHover);
   const seen = useRef("");
+  const barsRef = useRef(bars);
   hover.current = onHover;
+  barsRef.current = bars;
 
   useImperativeHandle(ref, () => ({
     png: () => chart.current?.takeScreenshot().toDataURL("image/png") ?? null,
@@ -68,40 +73,40 @@ export const CandleChart = forwardRef<ChartHandle, {
       },
       handleScroll: { vertTouchDrag: false },
     });
-    const candles = next.addCandlestickSeries({
-      upColor: UP,
-      downColor: DOWN,
-      borderUpColor: UP,
-      borderDownColor: DOWN,
-      wickUpColor: UP,
-      wickDownColor: DOWN,
-      priceLineVisible: true,
-      lastValueVisible: true,
-      priceLineWidth: 1,
-      priceLineStyle: LineStyle.Dashed,
-    });
-    candles.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.26 } });
+    const price = kind === "volume"
+      ? null
+      : kind === "line"
+        ? next.addLineSeries({ color: "#d1d4dc", lineWidth: 2, priceLineVisible: true, lastValueVisible: true })
+        : next.addCandlestickSeries({
+            upColor: UP,
+            downColor: DOWN,
+            borderUpColor: UP,
+            borderDownColor: DOWN,
+            wickUpColor: UP,
+            wickDownColor: DOWN,
+            priceLineVisible: true,
+            lastValueVisible: true,
+            priceLineWidth: 1,
+            priceLineStyle: LineStyle.Dashed,
+          });
+    if (price && kind !== "volume") price.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.26 } });
     const hist = next.addHistogramSeries({
-      priceScaleId: "volume",
+      priceScaleId: kind === "volume" ? "right" : "volume",
       priceFormat: { type: "volume" },
     });
-    next.priceScale("volume").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
+    if (kind !== "volume") next.priceScale("volume").applyOptions({ scaleMargins: { top: 0.78, bottom: 0 } });
     next.subscribeCrosshairMove((param) => {
-      const row = param.seriesData.get(candles) as CandlestickData | undefined;
-      if (!row || typeof row.open !== "number") {
+      const row = price ? param.seriesData.get(price) : param.seriesData.get(hist);
+      const time = row && "time" in row ? Number(row.time) : 0;
+      if (!time) {
         hover.current?.(null);
         return;
       }
-      hover.current?.({
-        time: Number(row.time),
-        open: row.open,
-        high: row.high,
-        low: row.low,
-        close: row.close,
-      });
+      const bar = barsRef.current.find((item) => item.time === time);
+      hover.current?.(bar ?? null);
     });
     chart.current = next;
-    series.current = candles;
+    series.current = price ?? hist;
     volume.current = hist;
     fitted.current = 0;
     seen.current = "";
@@ -112,39 +117,49 @@ export const CandleChart = forwardRef<ChartHandle, {
       series.current = null;
       volume.current = null;
     };
-  }, [precision]);
+  }, [precision, kind]);
 
   useEffect(() => {
     const s = series.current;
     if (!s) return;
+    const ordered = [...bars].sort((a, b) => a.time - b.time);
     const data: CandlestickData[] = [];
+    const closes: LineData[] = [];
     const vols: HistogramData[] = [];
     let last = -1;
-    for (const bar of [...bars].sort((a, b) => a.time - b.time)) {
+    for (const bar of ordered) {
       if (!(bar.time > last) || !(bar.close > 0)) continue;
       last = bar.time;
       const time = bar.time as UTCTimestamp;
       data.push({ time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
+      closes.push({ time, value: bar.close });
       if (bar.volume && bar.volume > 0) {
-        vols.push({ time, value: bar.volume, color: bar.close >= bar.open ? "rgba(8,153,129,0.45)" : "rgba(242,54,69,0.45)" });
+        vols.push({ time, value: bar.volume, color: bar.close >= bar.open ? "rgba(8,153,129,0.55)" : "rgba(242,54,69,0.55)" });
       }
     }
-    const key = data.map((row) => row.time).join(",");
+    const key = `${kind}:${data.map((row) => row.time).join(",")}`;
     const tip = data[data.length - 1];
     const forming = key === seen.current && tip;
-    if (forming) {
-      s.update(tip);
+    if (forming && kind === "candles") {
+      (s as ISeriesApi<"Candlestick">).update(tip);
       const vol = vols[vols.length - 1];
       if (vol && vol.time === tip.time) volume.current?.update(vol);
+    } else if (kind === "line") {
+      (s as ISeriesApi<"Line">).setData(closes);
+      volume.current?.setData(vols);
+      seen.current = key;
+    } else if (kind === "volume") {
+      (s as ISeriesApi<"Histogram">).setData(vols);
+      seen.current = key;
     } else {
-      s.setData(data);
+      (s as ISeriesApi<"Candlestick">).setData(data);
       volume.current?.setData(vols);
       seen.current = key;
     }
     const close = tip;
-    if (close) {
+    if (close && kind === "candles") {
       const rising = close.close >= close.open;
-      s.applyOptions({ priceLineColor: rising ? UP : DOWN });
+      (s as ISeriesApi<"Candlestick">).applyOptions({ priceLineColor: rising ? UP : DOWN });
     }
     const open = data[0]?.time ?? 0;
     if (open && fitted.current !== open) {
@@ -152,15 +167,18 @@ export const CandleChart = forwardRef<ChartHandle, {
       const from = Math.max(0, data.length - 90);
       chart.current?.timeScale().setVisibleLogicalRange({ from, to: data.length + 6 });
     }
-    for (const line of lines.current) s.removePriceLine(line);
-    lines.current = levels.filter((price) => price > 0).map((price) =>
-      s.createPriceLine({ price, color: "#2962ff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "" }),
-    );
-    if (band && band.high > band.low && band.low > 0) {
-      lines.current.push(
-        s.createPriceLine({ price: band.high, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "zone" }),
-        s.createPriceLine({ price: band.low, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "" }),
+    if (kind !== "volume") {
+      const price = s as ISeriesApi<"Candlestick">;
+      for (const line of lines.current) price.removePriceLine(line);
+      lines.current = levels.filter((n) => n > 0).map((n) =>
+        price.createPriceLine({ price: n, color: "#2962ff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "" }),
       );
+      if (band && band.high > band.low && band.low > 0) {
+        lines.current.push(
+          price.createPriceLine({ price: band.high, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "zone" }),
+          price.createPriceLine({ price: band.low, color: "#089981", lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: "" }),
+        );
+      }
     }
     const chartApi = chart.current;
     if (!chartApi) return;
@@ -179,7 +197,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       }
       study.setData(row.points.filter((p) => p.value > 0).map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
     }
-  }, [bars, levels, band, overlays]);
+  }, [bars, levels, band, overlays, kind]);
 
   return <div ref={box} className={`w-full ${className}`} />;
 });

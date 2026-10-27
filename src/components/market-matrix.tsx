@@ -24,9 +24,10 @@ function px(n: number | null) {
 }
 
 /** Five strategy cells from real pool volume. A blocked cell is not a signal. */
-export function MarketMatrix({ bars, pool, symbol }: { bars: MatrixBar[]; pool: boolean; symbol: string }) {
+export function MarketMatrix({ bars, pool, source, symbol }: { bars: MatrixBar[]; pool: boolean; source?: "gecko-pool" | "jup-chart" | "price-only"; symbol: string }) {
   const [expanded, setExpanded] = useState(false);
-  const matrix = useMemo(() => evaluateMatrix({ bars, source: pool ? "gecko-pool" : "price-only" }), [bars, pool]);
+  const from = source || (pool ? "gecko-pool" : "price-only");
+  const matrix = useMemo(() => evaluateMatrix({ bars, source: from }), [bars, from]);
   const recent = useMemo(() => normalizeBars(bars).slice(-30), [bars]);
   const volumePeak = Math.max(1, ...recent.map((b) => b.v));
   return (
@@ -34,7 +35,7 @@ export function MarketMatrix({ bars, pool, symbol }: { bars: MatrixBar[]; pool: 
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] tracking-[0.16em] text-[#c6f56a] uppercase">Matrix · {symbol}</p>
-          <p className="mt-1 text-[11px] text-white/40">{pool ? "Pool OHLCV in USD. Volume is the pool, not a guess." : "Price history only. Volume signals stay off."}</p>
+          <p className="mt-1 text-[11px] text-white/40">{from === "gecko-pool" ? "Pool OHLCV in USD. Volume is the pool, not a guess." : from === "jup-chart" ? "Jupiter chart volume in USD. Not a Binance print." : "Price history only. Volume signals stay off."}</p>
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-1 font-mono text-[10px] ${matrix.volumeReliable ? "border-[#c6f56a]/30 text-[#c6f56a]" : "border-amber-300/25 text-amber-300"}`}>
           {matrix.volumeReliable ? "Volume verified" : "Signals held"}

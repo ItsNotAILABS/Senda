@@ -366,7 +366,15 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
           const next = { ...cur };
           for (const row of list) {
             const prev = next[row.mint];
-            next[row.mint] = { mint: row.mint, icon: row.icon || prev?.icon || "", line: prev?.line?.length ? prev.line : row.line };
+            next[row.mint] = {
+              mint: row.mint,
+              icon: row.icon || prev?.icon || "",
+              line: prev?.line?.length ? prev.line : row.line,
+              volume: prev?.volume?.length ? prev.volume : row.volume || [],
+              vol24: prev?.vol24 || row.vol24 || 0,
+              poolVol: prev?.poolVol || row.poolVol || 0,
+              poolDex: prev?.poolDex || row.poolDex || "",
+            };
           }
           return next;
         });
