@@ -12,7 +12,6 @@ import (
  "net/url"
  "regexp"
  "strconv"
- "strings"
  "time"
 )
 const solscanEndpoint="https://pro-api.solscan.io/v2.0/token/defi/activities"
