@@ -9,7 +9,7 @@
       "priority": "P0",
       "url": "https://developers.jup.ag/docs/swap",
       "reason": "Meta-aggregator /order and /execute, venue selection and RFQ",
-      "integration": "reviewed",
+      "integration": "candidate",
       "approval": "wallet-signature and fill confirmation"
     },
     {
