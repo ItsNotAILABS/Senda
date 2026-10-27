@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
 import { PrintChart } from "@/components/print-chart";
+import { PrintTape } from "@/components/print-tape";
 import { HoldingCards, type HoldingRow, MarkFace } from "@/components/holding-cards";
 import { WalletPicker } from "@/components/wallet-picker";
 import { CompanyAccount } from "@/components/company-account";
@@ -491,6 +492,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               </button>
               {!owner ? <div className="mt-3"><WalletPicker /></div> : null}
             </div>
+            {chosen?.mint ? <PrintTape mint={chosen.mint} symbol={chosen.symbol} /> : null}
           </div>
         </div>
         <div className="border-t border-white/10">
