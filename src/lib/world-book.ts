@@ -409,7 +409,10 @@ async function loadTape(): Promise<TapeRow[]> {
         if (!metric) continue;
         rows.push({ id: row.id, symbol: row.symbol,
           name: typeof row.name === "string" && row.name ? row.name : row.symbol,
-          price: metric.priceUsd, change: metric.priceChangePct,
+          price: metric.priceUsd,
+          // Legacy Senda pages read 'change' as a decimal fraction (0.05 = 5%).
+          // Intelligence reads 'changePct' as Jupiter's exact percent points (5 = 5%).
+          change: metric.priceChangePct == null ? null : metric.priceChangePct / 100,
           changePct: metric.priceChangePct,
           icon: typeof row.icon === "string" ? row.icon : undefined,
           liquidityUsd: metric.liquidityUsd, volume24hUsd: metric.volume24hUsd,
