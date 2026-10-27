@@ -1,0 +1,11 @@
+export type ThemePreset={id:string;name:string;accent:string;background:string;surface:string;elevated:string;border:string;muted:string;description:string};
+export type InterfaceTheme={version:number;preset:string;accent:string;density:"comfortable"|"compact";fontSize:"standard"|"large";enabled:boolean};
+export declare const THEME_KEY:string;
+export declare const THEME_EVENT:string;
+export declare const PRESETS:readonly ThemePreset[];
+export declare function themeDraft(input:Partial<InterfaceTheme>):InterfaceTheme;
+export declare function defaultTheme():InterfaceTheme;
+export declare function readTheme(storage:Pick<Storage,"getItem">):InterfaceTheme;
+export declare function writeTheme(storage:Pick<Storage,"setItem">,theme:InterfaceTheme):InterfaceTheme;
+export declare function cssVars(theme:InterfaceTheme):Record<string,string>;
+export declare function applyTheme(doc:Document,theme:InterfaceTheme):void;
