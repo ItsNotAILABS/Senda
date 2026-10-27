@@ -9,6 +9,7 @@ import { connectPhantom } from "@/lib/phantom";
 import { setSpendCap } from "@/lib/spend-cap";
 import { payUsdc } from "@/lib/solana-pay";
 import { payUsdcEvm, type EvmPayChain } from "@/lib/usdc-evm";
+import { RailContracts } from "@/components/rail-contracts";
 import { listJobs } from "@/lib/work-jobs";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -172,6 +173,8 @@ export function ContractsPage() {
         <h1 className="mt-1 font-display text-4xl tracking-tight">Write one. Sign it.</h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-white/55">Ten kinds. Nine chains. A payment is USDC from your wallet to theirs. An agent mandate sets the desk cap and moves nothing.</p>
       </header>
+
+      <RailContracts />
 
       <div className="flex gap-1.5 overflow-x-auto">
         {DEAL_CHAINS.map((id) => (
