@@ -17,6 +17,7 @@ import (
 const solscanEndpoint="https://pro-api.solscan.io/v2.0/token/defi/activities"
 const solscanPageCap=5
 const solscanPageSize=100
+const wrappedSol="So11111111111111111111111111111111111111112"
 var solscanSignature=regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{32,100}$`)
 type solscanRoute struct {
  Token1 string `json:"token1"`
@@ -42,8 +43,13 @@ type volumeBar struct {
  SellUsd *float64 `json:"sellUsd"`
  TotalUsd *float64 `json:"totalUsd"`
  NetUsd *float64 `json:"netUsd"`
+ SolBuy *float64 `json:"solBuy"`
+ SolSell *float64 `json:"solSell"`
+ SolTotal *float64 `json:"solTotal"`
  Trades *int `json:"trades"`
  Observed bool `json:"observed"`
+ ObservedUsdc bool `json:"observedUsdc"`
+ ObservedSol bool `json:"observedSol"`
 }
 type volumeIndex struct {
  Schema string `json:"schema"`
@@ -59,22 +65,27 @@ type volumeIndex struct {
  Complete bool `json:"complete"`
  Coverage string `json:"coverage"`
  PricedSwaps int `json:"pricedSwaps"`
+ SolPairedSwaps int `json:"solPairedSwaps"`
  UnpricedSwaps int `json:"unpricedSwaps"`
  TotalSwapsObserved int `json:"totalSwapsObserved"`
  BuyUsd float64 `json:"buyUsd"`
  SellUsd float64 `json:"sellUsd"`
  ObservedUsd float64 `json:"observedUsd"`
+ SolBuy float64 `json:"solBuy"`
+ SolSell float64 `json:"solSell"`
+ ObservedSol float64 `json:"observedSol"`
  Bars []volumeBar `json:"bars"`
  Note string `json:"note"`
 }
-type indexedSwap struct{ signature,kind,side string; epoch int64; nominal float64; priced bool }
+type indexedSwap struct{ signature,kind,side,currency string; epoch int64; nominal float64; priced bool }
 func stableRaw(value json.Number,decimals int)(float64,bool){
- if decimals!=6{return 0,false}
+ if decimals!=6&&decimals!=9{return 0,false}
  raw:=value.String()
  if len(raw)==0||len(raw)>20{return 0,false}
  for _,c:=range raw {if c<'0'||c>'9'{return 0,false}}
  n,err:=strconv.ParseUint(raw,10,64)
  if err!=nil||n==0||n>9007199254740991{return 0,false}
+ if decimals==9{return float64(n)/1e9,true}
  return float64(n)/1e6,true
 }
 func parseSwap(input solscanActivity,mint string,from,to int64)(indexedSwap,bool){
@@ -83,9 +94,17 @@ func parseSwap(input solscanActivity,mint string,from,to int64)(indexedSwap,bool
  r:=input.Router
  v:=indexedSwap{signature:input.Signature,kind:input.Type,epoch:input.BlockTime}
  if r.Token1==usdc&&r.Token2==mint{
-  v.side="buy";v.nominal,v.priced=stableRaw(r.Amount1,r.Decimals1)
+  v.currency="USDC";v.side="buy"
+  if r.Decimals1==6{v.nominal,v.priced=stableRaw(r.Amount1,r.Decimals1)}
  }else if r.Token2==usdc&&r.Token1==mint{
-  v.side="sell";v.nominal,v.priced=stableRaw(r.Amount2,r.Decimals2)
+  v.currency="USDC";v.side="sell"
+  if r.Decimals2==6{v.nominal,v.priced=stableRaw(r.Amount2,r.Decimals2)}
+ }else if r.Token1==wrappedSol&&r.Token2==mint{
+  v.currency="SOL";v.side="buy"
+  if r.Decimals1==9{v.nominal,v.priced=stableRaw(r.Amount1,r.Decimals1)}
+ }else if r.Token2==wrappedSol&&r.Token1==mint{
+  v.currency="SOL";v.side="sell"
+  if r.Decimals2==9{v.nominal,v.priced=stableRaw(r.Amount2,r.Decimals2)}
  }
  return v,true
 }
@@ -95,7 +114,7 @@ func indexSolscan(mint,tf string,from,to,observedThrough int64,complete bool,row
  step:=int64(3600)
  switch tf{case "15m":step=900;case "4H":step=14400;case "1D":step=86400}
  var snap=volumeIndex{Schema:"senda.volume.solscan.v1",Mint:mint,Source:"Solscan Pro token DeFi swaps",
-  Unit:"USDC notional (~USD)",Basis:"direct/aggregate token↔USDC router only",
+  Unit:"USDC notional (~USD)",Basis:"separate direct token↔USDC and token↔SOL lanes; no FX conversion",
   Direction:"inferred from Solscan router token1→token2",Interval:tf,From:from,To:to,
   ObservedAt:time.Now().UTC().Format(time.RFC3339),Complete:complete,Coverage:"sampled-most-recent-only",
   Bars:[]volumeBar{}}
@@ -107,36 +126,51 @@ func indexSolscan(mint,tf string,from,to,observedThrough int64,complete bool,row
   if !exists||(v.kind=="ACTIVITY_AGG_TOKEN_SWAP"&&old.kind!="ACTIVITY_AGG_TOKEN_SWAP")||
     (v.priced&&!old.priced&&v.kind==old.kind){grouped[v.signature]=v}
  }
- type cell struct{buy,sell float64;trades int}
+ type cell struct{buy,sell,solBuy,solSell float64;usdTrades,solTrades int}
  buckets:=map[int64]cell{}
  for _,v:=range grouped{
   if !v.priced||v.nominal<=0{snap.UnpricedSwaps++;continue}
-  snap.PricedSwaps++
   key:=(v.epoch/step)*step
   x:=buckets[key]
-  if v.side=="buy"{x.buy+=v.nominal}else{x.sell+=v.nominal}
-  x.trades++;buckets[key]=x
+  if v.currency=="USDC"{
+   snap.PricedSwaps++;x.usdTrades++
+   if v.side=="buy"{x.buy+=v.nominal}else{x.sell+=v.nominal}
+  }else if v.currency=="SOL"{
+   snap.SolPairedSwaps++;x.solTrades++
+   if v.side=="buy"{x.solBuy+=v.nominal}else{x.solSell+=v.nominal}
+  }else{snap.UnpricedSwaps++;continue}
+  buckets[key]=x
  }
  snap.TotalSwapsObserved=len(grouped)
  for t:=(from/step)*step;t<to;t+=step{
   x,ok:=buckets[t]
+  knownEmpty:=complete&&t+step<=observedThrough
   cellBar:=volumeBar{T:t*1000}
   if ok{
+   cellBar.Trades=intPtr(x.usdTrades+x.solTrades)
+   cellBar.ObservedUsdc=x.usdTrades>0
+   cellBar.ObservedSol=x.solTrades>0
+   cellBar.Observed=cellBar.ObservedUsdc||cellBar.ObservedSol
+  }else if knownEmpty{cellBar.Trades=intPtr(0)}
+  if (ok&&x.usdTrades>0)||knownEmpty{
    buy,sell:=x.buy,x.sell
    total,net:=buy+sell,buy-sell
    cellBar.BuyUsd=floatPtr(buy);cellBar.SellUsd=floatPtr(sell)
    cellBar.TotalUsd=floatPtr(total);cellBar.NetUsd=floatPtr(net)
-   cellBar.Trades=intPtr(x.trades);cellBar.Observed=true
    snap.BuyUsd+=buy;snap.SellUsd+=sell
-  }else if complete&&t+step<=observedThrough{
-   cellBar.BuyUsd=floatPtr(0);cellBar.SellUsd=floatPtr(0)
-   cellBar.TotalUsd=floatPtr(0);cellBar.NetUsd=floatPtr(0)
-   cellBar.Trades=intPtr(0)
+  }
+  if (ok&&x.solTrades>0)||knownEmpty{
+   buy,sell:=x.solBuy,x.solSell
+   total:=buy+sell
+   cellBar.SolBuy=floatPtr(buy);cellBar.SolSell=floatPtr(sell)
+   cellBar.SolTotal=floatPtr(total)
+   snap.SolBuy+=buy;snap.SolSell+=sell
   }
   snap.Bars=append(snap.Bars,cellBar)
  }
  snap.ObservedUsd=snap.BuyUsd+snap.SellUsd
- if complete{snap.Note="Indexed swaps in the requested time range; Solscan ingestion lag is possible. Direct USDC pairs only."}else{
+ snap.ObservedSol=snap.SolBuy+snap.SolSell
+ if complete{snap.Note="Indexed swaps in the requested time range; Solscan ingestion lag is possible. USDC and SOL lanes are separate, never added."}else{
   snap.Note="Partial indexed swap sample (pagination cap). Totals are lower-bound observations, and absent bars are unknown."
  }
  return snap
