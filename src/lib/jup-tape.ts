@@ -25,15 +25,13 @@ export function bookStat(n?: number) {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// Official Jupiter API gateway; the Lite hostname retires October 30, 2026.
+// Bounded selection to avoid exhausting keyless 0.5 RPS limits.
 const LISTS = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/6h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/recent",
+  "https://api.jup.ag/tokens/v2/toptraded/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/tag?query=stocks",
+  "https://api.jup.ag/tokens/v2/tag?query=verified",
 ];
 
 type RawToken = {
@@ -58,8 +56,12 @@ function asCoin(row: RawToken, seen: Set<string>): TapeCoin | null {
     price: Number(row.usdPrice) || 0,
     change: Number(row.stats24h?.priceChange) || 0,
     icon: row.icon || "",
-    volume: Number(row.stats24h?.buyVolume || 0) + Number(row.stats24h?.sellVolume || 0),
-    liquidity: Number(row.liquidity) || 0,
+    // Absence of reported buy/sell volume is unknown, not a zero-volume reading.
+    volume: Number.isFinite(row.stats24h?.buyVolume) && Number.isFinite(row.stats24h?.sellVolume) &&
+      (row.stats24h?.buyVolume ?? -1) >= 0 && (row.stats24h?.sellVolume ?? -1) >= 0
+      ? (row.stats24h?.buyVolume ?? 0) + (row.stats24h?.sellVolume ?? 0)
+      : undefined,
+    liquidity: Number.isFinite(row.liquidity) && (row.liquidity ?? -1) >= 0 ? row.liquidity : undefined,
     mcap: Number(row.mcap) || 0,
     holders: Number(row.holderCount) || 0,
   };
@@ -74,34 +76,48 @@ function rowsOf(body: unknown): RawToken[] {
   return [];
 }
 
-export const loadTape = createServerFn({ method: "GET" }).handler(async (): Promise<TapeCoin[]> => {
+const TAPE_CACHE_MS = 60_000;
+let tapeCache: { at: number; rows: TapeCoin[] } | null = null;
+let tapePending: Promise<TapeCoin[]> | null = null;
+async function fetchTape(): Promise<TapeCoin[]> {
   const seen = new Set<string>();
   const rows: TapeCoin[] = [];
-  const pages = await Promise.all(
-    LISTS.map(async (url) => {
-      try {
-        const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(20000) });
-        if (!r.ok) return [];
-        return rowsOf(await r.json());
-      } catch {
-        return [];
-      }
-    }),
-  );
-  for (const body of pages) {
+  const apiKey = process.env.SENDA_JUPITER_API_KEY || "";
+  // Keyless tier: serialize requests, spacing at least 2.1 seconds apart.
+  for (let i = 0; i < LISTS.length; i++) {
+    if (i > 0 && !apiKey) await new Promise((resolve) => setTimeout(resolve, 2100));
+    let body: RawToken[] = [];
+    try {
+      const response = await fetch(LISTS[i], {
+        headers: { accept: "application/json", "user-agent": "Senda", ...(apiKey ? { "x-api-key": apiKey } : {}) },
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (response.ok) body = rowsOf(await response.json());
+    } catch { /* Never invent source prices or volume from a failed endpoint. */ }
     for (const row of body) {
       const coin = asCoin(row, seen);
       if (coin) rows.push(coin);
     }
   }
   return rows;
+}
+export const loadTape = createServerFn({ method: "GET" }).handler(async (): Promise<TapeCoin[]> => {
+  if (tapeCache && Date.now() - tapeCache.at < TAPE_CACHE_MS) return tapeCache.rows;
+  if (tapePending) return tapePending;
+  const pending = fetchTape().then((rows) => {
+    // Do not cache a provider failure as a healthy empty market book.
+    if (rows.some((row) => row.price > 0)) tapeCache = { at: Date.now(), rows };
+    return rows;
+  }).finally(() => { tapePending = null; });
+  tapePending = pending;
+  return pending;
 });
 
 /** Last price and the day move for the mints on screen. Called on a timer, not once. */
 export const liveMarks = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.array(z.string().min(32).max(48)).max(40).parse(input))
   .handler(async ({ data }) => {
-    const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${data.join(",")}`, {
+    const r = await fetch(`https://api.jup.ag/price/v3?ids=${data.join(",")}`, {
       headers: { accept: "application/json", "user-agent": "Senda" },
       signal: AbortSignal.timeout(8000),
     });
@@ -119,7 +135,7 @@ export const liveMarks = createServerFn({ method: "POST" })
 export const searchTape = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ q: z.string().trim().min(1).max(32) }).parse(input))
   .handler(async ({ data }): Promise<TapeCoin[]> => {
-    const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data.q)}`, {
+    const r = await fetch(`https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data.q)}`, {
       headers: { accept: "application/json" },
       signal: AbortSignal.timeout(8000),
     });
