@@ -18,6 +18,10 @@ type EvmProvider = {
   isRabby?: boolean;
   isCoinbaseWallet?: boolean;
   isBraveWallet?: boolean;
+  isPhantom?: boolean;
+  isOkxWallet?: boolean;
+  isTrust?: boolean;
+  isTrustWallet?: boolean;
 };
 
 export type WalletId =
@@ -29,10 +33,15 @@ export type WalletId =
   | "bitget"
   | "trust"
   | "coinbase-sol"
+  | "nightly"
+  | "exodus"
   | "metamask"
   | "rabby"
   | "coinbase"
-  | "brave";
+  | "brave"
+  | "phantom-evm"
+  | "okx-evm"
+  | "trust-evm";
 
 export type WalletChoice = {
   id: WalletId;
@@ -50,6 +59,8 @@ const SOL: { id: WalletId; name: string; pick: (w: Window) => SolProvider | unde
   { id: "bitget", name: "Bitget", pick: (w) => (w as Win).bitkeep?.solana },
   { id: "trust", name: "Trust", pick: (w) => (w as Win).trustwallet?.solana },
   { id: "coinbase-sol", name: "Coinbase", pick: (w) => (w as Win).coinbaseSolana },
+  { id: "nightly", name: "Nightly", pick: (w) => (w as Win).nightly?.solana },
+  { id: "exodus", name: "Exodus", pick: (w) => (w as Win).exodus?.solana },
 ];
 
 const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] = [
@@ -57,6 +68,9 @@ const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] =
   { id: "rabby", name: "Rabby", pick: (e) => Boolean(e.isRabby) },
   { id: "coinbase", name: "Coinbase Wallet", pick: (e) => Boolean(e.isCoinbaseWallet) },
   { id: "brave", name: "Brave Wallet", pick: (e) => Boolean(e.isBraveWallet) },
+  { id: "phantom-evm", name: "Phantom", pick: (e) => Boolean(e.isPhantom) },
+  { id: "okx-evm", name: "OKX", pick: (e) => Boolean(e.isOkxWallet) },
+  { id: "trust-evm", name: "Trust", pick: (e) => Boolean(e.isTrust || e.isTrustWallet) },
 ];
 
 type Win = Window & {
@@ -64,18 +78,25 @@ type Win = Window & {
   solflare?: SolProvider;
   backpack?: SolProvider;
   glowSolana?: SolProvider;
-  okxwallet?: { solana?: SolProvider };
+  okxwallet?: { solana?: SolProvider; request?: EvmProvider["request"]; isOkxWallet?: boolean };
   bitkeep?: { solana?: SolProvider };
   trustwallet?: { solana?: SolProvider };
   coinbaseSolana?: SolProvider;
+  nightly?: { solana?: SolProvider };
+  exodus?: { solana?: SolProvider };
   ethereum?: EvmProvider & { providers?: EvmProvider[] };
 };
 
 function ethereumProviders(): EvmProvider[] {
   if (typeof window === "undefined") return [];
-  const eth = (window as Win).ethereum;
-  if (!eth) return [];
-  return eth.providers?.length ? eth.providers : [eth];
+  const w = window as Win;
+  const eth = w.ethereum;
+  const list: EvmProvider[] = eth ? (eth.providers?.length ? [...eth.providers] : [eth]) : [];
+  const okx = w.okxwallet;
+  if (okx?.request && !list.some((p) => p === (okx as EvmProvider))) {
+    list.push({ ...okx, request: okx.request, isOkxWallet: true } as EvmProvider);
+  }
+  return list;
 }
 
 export function detectWallets(): WalletChoice[] {

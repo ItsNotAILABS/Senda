@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { launchTrade } from "@/lib/launch";
-import { loadLaunchBoard, type LaunchCoin } from "@/lib/launch-board";
+import { loadLaunchBoard, BASE_USDC, type LaunchCoin } from "@/lib/launch-board";
+import { quoteSameChain, signSameChain, evmSender } from "@/lib/chain-swap";
+import { fileFill } from "@/lib/trade-log";
 import { connectPhantom } from "@/lib/phantom";
 import { buyCmeshCovered } from "@/lib/cmesh-fund";
 import { CMESH, robinhoodEth } from "@/lib/pons";
@@ -82,6 +84,33 @@ export function LaunchDesk() {
       live = false;
     };
   }, []);
+
+  async function buyPad(row: LaunchCoin) {
+    if (row.chain === "Base") {
+      setBusy("buy");
+      try {
+        const from = await evmSender();
+        const quote = await quoteSameChain({
+          chainId: 8453,
+          tokenIn: BASE_USDC,
+          tokenInDecimals: 6,
+          tokenOut: row.mint,
+          usd: 5,
+          sender: from,
+        });
+        const hash = await signSameChain(quote, from, 8453);
+        fileFill({ symbol: row.symbol, side: "buy", usd: 5, mint: row.mint, signature: hash, route: "Base" });
+        toast.success(`${row.symbol} signed on Base. ${hash.slice(0, 10)}…`);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "The Base coin did not sign.");
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
+    setMint(row.mint);
+    void buy("buy", row.mint);
+  }
 
   async function buy(side: "buy" | "sell", mintOverride?: string) {
     const using = (mintOverride ?? mint).trim();
@@ -294,10 +323,7 @@ export function LaunchDesk() {
         page={boardPage}
         busy={busy !== ""}
         onPage={setBoardPage}
-        onBuy={(next) => {
-          setMint(next);
-          void buy("buy", next);
-        }}
+        onBuy={(row) => void buyPad(row)}
       />
       <section className="rounded-[24px] border border-white/10 bg-[#0c0e14] p-4">
         <p className="text-[11px] tracking-[0.16em] text-accent uppercase">CMesh · Pons</p>
@@ -453,7 +479,7 @@ function LaunchBoard({
   page: number;
   busy: boolean;
   onPage: (n: number) => void;
-  onBuy: (mint: string) => void;
+  onBuy: (row: LaunchCoin) => void;
 }) {
   const pages = Math.max(1, Math.ceil(rows.length / 12));
   const safe = Math.min(page, pages - 1);
@@ -462,16 +488,16 @@ function LaunchBoard({
     <section className="rounded-[24px] border border-white/10 bg-[#0c0e14] p-4">
       <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Live board</p>
       <h2 className="mt-1 text-xl">New coins</h2>
-      <p className="mt-1 text-sm text-muted">{rows.length ? `${rows.length} just created. The SOL amount below is what the buy signs.` : "The board has not answered yet."}</p>
+      <p className="mt-1 text-sm text-muted">{rows.length ? `${rows.length} just created. Solana buys use the SOL amount. A Clanker coin signs $5 of USDC on Base.` : "The board has not answered yet."}</p>
       <ul className="mt-3 space-y-2">
         {shown.map((row) => (
           <li key={row.mint} className="flex items-center gap-2 rounded-2xl border border-white/10 px-2 py-2">
             {row.icon ? <img src={row.icon} alt="" className="size-8 rounded-full bg-white/10" /> : <span className="grid size-8 place-items-center rounded-full bg-white text-[10px] font-bold text-black">{row.symbol.slice(0, 2)}</span>}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold">{row.symbol}</span>
-              <span className="block truncate text-[11px] text-muted">{row.pad}{row.mcap > 0 ? ` · $${Math.round(row.mcap).toLocaleString("en-US")}` : ""}</span>
+              <span className="block truncate text-[11px] text-muted">{row.pad} · {row.chain}{row.mcap > 0 ? ` · $${Math.round(row.mcap).toLocaleString("en-US")}` : ""}</span>
             </span>
-            <button type="button" disabled={busy} onClick={() => onBuy(row.mint)} className="min-h-9 shrink-0 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">
+            <button type="button" disabled={busy} onClick={() => onBuy(row)} className="min-h-9 shrink-0 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">
               Buy
             </button>
           </li>

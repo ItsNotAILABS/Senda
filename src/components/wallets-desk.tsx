@@ -125,7 +125,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
         <h1 className="mt-1 font-display text-3xl tracking-tight">Connect the wallet that matches the trade.</h1>
       </header>
       )}
-      <DeskAudit live="Phantom, Solflare, and Backpack sign here. On a phone the page opens inside the wallet." hold="MetaMask is Base only. It does not sign a Solana USDC transfer." />
+      <DeskAudit live="Each wallet on this list signs if it is installed. A Solana wallet signs a Solana trade. An EVM wallet signs the chain the trade is on." hold="A wallet that is not in this browser is not offered as if it were." />
       <ol className="grid gap-2 lg:grid-cols-3">
         {ORDER.map((step) => (
           <li key={step.n} className="rounded-2xl border border-white/10 bg-[#10131c] px-4 py-3">
@@ -160,7 +160,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
         <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
           <p className="font-mono text-[11px] tracking-[0.14em] text-[#c4b5fd] uppercase">Base · MetaMask</p>
           <h2 className="mt-1 text-xl">This wallet is only the other market.</h2>
-          <p className="mt-2 text-sm text-muted">Gold, oil, and FX ask MetaMask on Base. It does not buy a PreStock.</p>
+          <p className="mt-2 text-sm text-muted">Gold, oil, and FX ask an EVM wallet. It does not buy a Solana token.</p>
           <p className="mt-2 font-mono text-xs text-white/70">{evm ? `${evm.label} · ${shortPk(evm.address)}` : "Not connected."}</p>
           <button type="button" disabled={busy !== null} onClick={() => void other("metamask", "MetaMask")} className="mt-3 min-h-10 rounded-full bg-white px-4 text-sm font-semibold text-black disabled:opacity-50">
             {busy === "metamask" ? "Waiting…" : evm?.label === "MetaMask" ? "MetaMask again" : "Connect MetaMask"}
@@ -213,7 +213,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
           {([
             ["all", "All"],
             ["solana", "Solana"],
-            ["evm", "Base"],
+            ["evm", "EVM"],
           ] as const).map(([id, label]) => (
             <button key={id} type="button" onClick={() => setChain(id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", chain === id ? "bg-white text-black" : "border border-white/10 text-muted")}>{label}</button>
           ))}
@@ -234,7 +234,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
                 >
                   <span>
                     <span className="block text-sm font-semibold">{c.name}</span>
-                    <span className="block text-xs text-muted">{c.chain === "solana" ? "Solana" : "Base"}</span>
+                    <span className="block text-xs text-muted">{c.chain === "solana" ? "Solana" : "EVM"}</span>
                   </span>
                   <span className={cn("rounded-full px-2 py-1 text-[11px] font-semibold", c.installed ? "bg-accent text-accent-fg" : "bg-white/10 text-subtle")}>{status}</span>
                 </button>
