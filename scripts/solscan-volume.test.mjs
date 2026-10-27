@@ -39,3 +39,23 @@ test("current incomplete interval remains unknown despite fetched pages",()=>{
  assert.equal(out.bars.at(-1).totalUsd,null);
  assert.equal(out.bars[0].totalUsd,0);
 });
+
+test("native SOL flow has its own measured SOL unit without invented USD",()=>{
+ const sol=row("a",start+30,"ACTIVITY_TOKEN_SWAP",2500000000,true);
+ sol.routers.token1="So11111111111111111111111111111111111111112";
+ sol.routers.token1_decimals=9;
+ const out=aggregateSolscanVolume({mint,events:[sol],start,end,complete:true});
+ assert.equal(out.solPairedSwaps,1);
+ assert.equal(out.observedSol,2.5);
+ assert.equal(out.observedUsd,0);
+ assert.equal(out.bars[0].solTotal,2.5);
+ assert.equal(out.bars[0].totalUsd,0);
+});
+test("SOL notional rejects unsafe raw token decimal counts",()=>{
+ const sol=row("a",start+30,"ACTIVITY_TOKEN_SWAP",Number.MAX_SAFE_INTEGER+1,true);
+ sol.routers.token1="So11111111111111111111111111111111111111112";
+ sol.routers.token1_decimals=9;
+ const out=aggregateSolscanVolume({mint,events:[sol],start,end,complete:false});
+ assert.equal(out.solPairedSwaps,0);
+ assert.equal(out.unpricedSwaps,1);
+});
