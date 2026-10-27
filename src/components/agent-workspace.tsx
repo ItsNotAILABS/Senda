@@ -22,6 +22,8 @@ import {
 import { toast } from "sonner";
 import { think } from "@/lib/agent-shift";
 import { remember } from "@/lib/agent-memory";
+import { readGenesisOwnership } from "@/lib/genesis-chain";
+import { runGenesisResearch } from "@/lib/genesis-runtime.mjs";
 import { getPrint } from "@/lib/print";
 import { evaluateMatrix } from "@/lib/matrix-engine.mjs";
 import { authorizeWorkerTrade } from "@/lib/worker-trade-authorization.mjs";
@@ -327,7 +329,39 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
         }
       }
     }
-    if (row.tools.includes("trade") && row.autonomy === "queue") {
+    if (row.genesis) {
+      const target = pool.find(item => item.mint && item.mint.length >= 32 && item.last > 0);
+      if (!target) {
+        lines.push({ text: "Genesis held: no live sourced Solana market." });
+      } else {
+        try {
+          const bound = row.genesis;
+          const connectedOwner = wallet.w.links.find(link => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
+          let verifiedAssets: string[] = [];
+          if (bound.owner && bound.owner === connectedOwner) {
+            const proof = await readGenesisOwnership({ data: { owner: bound.owner } });
+            if (proof.state === "verified" && proof.ownedIds.includes(bound.characterId)) {
+              verifiedAssets = [bound.characterId,
+                ...(bound.gear && proof.ownedIds.includes(bound.gear) ? [bound.gear] : []),
+                ...(bound.code && proof.ownedIds.includes(bound.code) ? [bound.code] : [])];
+            }
+          }
+          const observed = await getPrint({ data: { mint: target.mint, tf: "1H" } });
+          const report = runGenesisResearch({ characterId: bound.characterId, symbol: target.symbol,
+            bars: observed.bars, source: observed.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
+            verifiedAssetIds: verifiedAssets });
+          lines.push({ text: "Genesis " + report.runtime + ": " + report.lines.join(" | "), kind: "action" });
+          lines.push({ text: "Genesis research receipt: " + report.data.barCount + " bars, " +
+            (report.data.sourceVerified ? "pool volume verified" : "volume unverified") +
+            ", gear " + (report.enabled.gear ? "unlocked" : "locked") +
+            ", code " + (report.enabled.code ? "unlocked" : "locked") +
+            ", no orders submitted." });
+        } catch (error) {
+          lines.push({ text: "Genesis research unavailable: " + (error instanceof Error ? error.message : "feed error") });
+        }
+      }
+    }
+    if (row.tools.includes("trade") && row.autonomy === "queue" && !row.genesis) {
       const output = think(
         {
           id: row.id,
