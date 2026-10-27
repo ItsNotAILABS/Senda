@@ -38,7 +38,7 @@ func TestNativeVolumeUnpricedAndPartial(t *testing.T){
 func TestRawUSDCNeverGuessesDecimals(t *testing.T){
  if _,ok:=stableRaw(json.Number("15000000"),6);!ok{t.Fatal("valid raw amount missing")}
  for _,q:=range []struct{raw json.Number;decimals int}{
-  {json.Number("15000000"),9},{json.Number("0"),6},{json.Number("1.5"),6},
+  {json.Number("15000000"),8},{json.Number("0"),6},{json.Number("1.5"),6},
   {json.Number("9007199254740992"),6},
  }{
   if n,ok:=stableRaw(q.raw,q.decimals);ok{t.Errorf("should reject raw %v / %d: %v",q.raw,q.decimals,n)}
@@ -52,4 +52,18 @@ func TestPrivateSolscanEndpointsFailClosed(t *testing.T){
  req.Header.Set("X-Senda-Router-Key","private")
  rec=httptest.NewRecorder();service.mux().ServeHTTP(rec,req)
  if rec.Code!=503{t.Fatalf("missing Solscan key must not fake volume, got %d",rec.Code)}
+}
+
+func TestSolVolumeSeparateNativeNotional(t *testing.T){
+ start:=int64(1800000000)
+ row:=act("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",start+5,"ACTIVITY_TOKEN_SWAP",true,"2500000000")
+ row.Router.Token1=wrappedSol
+ row.Router.Decimals1=9
+ res:=indexSolscan(volumeMint,"1H",start,start+2*3600,start+2*3600,true,[]solscanActivity{row})
+ if res.SolPairedSwaps!=1||res.ObservedSol!=2.5||res.ObservedUsd!=0{
+  t.Fatalf("SOL volume must remain native, got %+v",res)
+ }
+ if res.Bars[0].SolTotal==nil||*res.Bars[0].SolTotal!=2.5||res.Bars[0].TotalUsd==nil||*res.Bars[0].TotalUsd!=0{
+  t.Fatal("must expose separately measured SOL and USDC bars")
+ }
 }
