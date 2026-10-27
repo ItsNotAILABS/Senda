@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { MarketMatrix } from "@/components/market-matrix";
 import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
 import { cn } from "@/lib/utils";
 
@@ -174,10 +175,8 @@ export function LiveChart({
     };
   }, [mint, tf]);
 
-  // Historical candles come only from the named candle feed.
-  // Never rewrite an observed OHLC bar with a separate live quote, or fabricate flat bars.
+  // Never fabricate candles or rewrite a historical candle using a different live-price feed.
   const shown = bars;
-
   const px = closes(shown);
   const sma20 = sma(px, 20);
   const ema20 = ema(px, 20);
@@ -242,7 +241,8 @@ export function LiveChart({
     <div>
       {controls}
       {board}
-      <p className="px-1 pt-1 font-mono text-[10px] text-white/40">{note} {live && live > 0 ? `· separate live quote ${money(live)}` : ""}</p>
+      <p className="px-1 py-1 font-mono text-[10px] text-white/35">{note} {live && live > 0 ? ` · Live quote ${money(live)} (separate feed)` : ""}</p>
+      {!compact ? <MarketMatrix bars={bars} note={note} symbol={symbol} /> : null}
       {read.length ? <p className="px-1 pt-1 font-mono text-[10px] text-white/45">{read.join("  ·  ")}</p> : null}
       {screen ? (
         <div className="fixed inset-0 z-[80] flex flex-col overflow-auto bg-[#07070f] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -258,6 +258,7 @@ export function LiveChart({
           <div className="py-2">
             {controls}
             {board}
+            <MarketMatrix bars={bars} note={note} symbol={symbol} />
           </div>
         </div>
       ) : null}
