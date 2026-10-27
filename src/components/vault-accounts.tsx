@@ -50,11 +50,11 @@ export function VaultAccounts({ owner }: { owner: string }) {
   }
 
   return (
-    <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4 sm:p-5">
+    <section className="rounded-2xl border border-white/10 bg-[#10131c] p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Vault</p>
-          <h2 className="mt-1 text-2xl tracking-tight">Accounts on this Phantom</h2>
+          <h2 className="mt-1 text-2xl tracking-tight">Token accounts this Phantom already owns</h2>
           <p className="mt-1 max-w-xl text-sm text-muted">Each line is an address only this wallet can spend. Senda does not hold the key. A closed line opens when Phantom signs. SOL is the wallet itself.</p>
         </div>
         <p className={`rounded-full px-3 py-1 text-xs font-semibold ${seal.open ? "bg-accent text-accent-fg" : "bg-white/10 text-muted"}`}>
@@ -65,15 +65,23 @@ export function VaultAccounts({ owner }: { owner: string }) {
         What this browser remembers is AES-GCM. The key is this visit’s wallet signature and it is not written down. A seen-flag stays in the clear. Fills, pairs, and the journal do not.
       </p>
       {!owner ? <p className="mt-3 text-sm text-subtle">Connect Phantom. These addresses are derived from that account.</p> : null}
-      <ul className="mt-3 divide-y divide-white/10">
+      <ul className="mt-3 space-y-2">
         {ATTACHED.map((row) => {
           const address = owner ? attachedAddress(owner, row) : "";
-          const live = Boolean(open[row.id]);
+          const known = Boolean(owner) && row.id in open;
+          const live = known && Boolean(open[row.id]);
           return (
-            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 px-3 py-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold">{row.symbol}{live ? "" : " · closed"}</p>
-                <p className="text-xs text-muted">{row.line}</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold">{row.symbol}</p>
+                  {known ? (
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${live ? "bg-accent text-accent-fg" : "border border-white/20 text-white"}`}>
+                      {live ? "Open" : "Not open"}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-xs text-muted">{row.line}</p>
                 {address ? <p className="mt-1 truncate font-mono text-[11px] text-subtle">{address}</p> : null}
               </div>
               <div className="flex gap-2">
@@ -82,7 +90,7 @@ export function VaultAccounts({ owner }: { owner: string }) {
                     Copy
                   </button>
                 ) : null}
-                {row.mint && owner && !live ? (
+                {row.mint && owner && known && !live ? (
                   <button type="button" disabled={busy === row.id} onClick={() => void openRow(row)} className="min-h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">
                     {busy === row.id ? "Signing" : "Open"}
                   </button>

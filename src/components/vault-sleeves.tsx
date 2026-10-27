@@ -50,51 +50,54 @@ export function VaultSleeves({ owner, onChain, open = true, onChange }: { owner:
   }
 
   return (
-    <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4 sm:p-5">
+    <section className="rounded-2xl border border-white/10 bg-[#10131c] p-4 sm:p-5">
       <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Sleeves</p>
-      <h2 className="mt-1 text-2xl tracking-tight">One claim, split by name.</h2>
-      <p className="mt-1 max-w-xl text-sm text-muted">A sleeve is a label on USDC that is still in Phantom. The sleeves add up to the wrap. They cannot pass the chain balance.</p>
-      <dl className="mt-4 grid grid-cols-3 gap-2">
-        <div className="rounded-2xl bg-black/30 px-3 py-3">
-          <dt className="text-[11px] text-white/45">On chain</dt>
-          <dd className="mt-1 font-mono text-sm tabular-nums">{open && owner ? `$${onChain.toFixed(2)}` : "—"}</dd>
-        </div>
-        <div className="rounded-2xl bg-black/30 px-3 py-3">
-          <dt className="text-[11px] text-white/45">Claimed</dt>
-          <dd className="mt-1 font-mono text-sm tabular-nums">{open && owner ? `$${health.claimed.toFixed(2)}` : "—"}</dd>
-        </div>
-        <div className="rounded-2xl bg-black/30 px-3 py-3">
-          <dt className="text-[11px] text-white/45">{health.over > 0 ? "Over" : "Free"}</dt>
-          <dd className={`mt-1 font-mono text-sm tabular-nums ${health.over > 0 ? "text-down" : ""}`}>
-            {open && owner ? `$${(health.over > 0 ? health.over : health.free).toFixed(2)}` : "—"}
-          </dd>
-        </div>
-      </dl>
-      {health.over > 0 ? (
-        <p className="mt-3 text-sm text-down">Phantom holds less USDC than this claim. Spend or unwrap before you add more.</p>
-      ) : null}
-      <ul className="mt-3 divide-y divide-white/10">
-        {rows.length === 0 ? <li className="py-3 text-sm text-muted">No sleeve yet. A wrap lands in Cash.</li> : null}
-        {rows.map((row) => (
-          <li key={row.id} className="flex items-baseline justify-between py-3">
-            <span className="text-sm font-semibold">{row.name}</span>
-            <span className="font-mono text-sm tabular-nums">${row.usdc.toFixed(2)}</span>
-          </li>
-        ))}
-      </ul>
+      <h2 className="mt-1 text-2xl tracking-tight">Labels on USDC still in the wallet.</h2>
+      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10">
+        <dl className="flex">
+          <div className="min-w-0 flex-1 px-3 py-2">
+            <dt className="text-[11px] text-white/45">Claimed</dt>
+            <dd className="font-mono text-sm tabular-nums">{open && owner ? `$${health.claimed.toFixed(2)}` : "—"}</dd>
+          </div>
+          <div className="min-w-0 flex-1 border-l border-white/10 px-3 py-2">
+            <dt className="text-[11px] text-white/45">Free</dt>
+            <dd className="font-mono text-sm tabular-nums">{open && owner ? `$${health.free.toFixed(2)}` : "—"}</dd>
+          </div>
+          <div className="min-w-0 flex-1 border-l border-white/10 px-3 py-2">
+            <dt className="text-[11px] text-white/45">Over</dt>
+            <dd className={`font-mono text-sm tabular-nums ${health.over > 0 ? "text-down" : ""}`}>{open && owner ? `$${health.over.toFixed(2)}` : "—"}</dd>
+          </div>
+        </dl>
+        {open && owner && health.over > 0 ? <p className="border-t border-white/10 px-3 py-2 text-sm text-down">The claim is over the chain balance.</p> : null}
+        <ul className="divide-y divide-white/10 border-t border-white/10">
+          {rows.length === 0 ? <li className="px-3 py-3 text-sm text-muted">No sleeve yet. A wrap lands in Cash.</li> : null}
+          {rows.map((row) => {
+            const share = health.claimed > 0 ? `${((row.usdc / health.claimed) * 100).toFixed(1)}% of claim` : "—";
+            return (
+              <li key={row.id} className="flex items-baseline justify-between gap-3 px-3 py-2.5">
+                <span className="text-sm font-semibold">{row.name}</span>
+                <span className="flex items-baseline gap-3 font-mono text-sm tabular-nums">
+                  <span>${row.usdc.toFixed(2)}</span>
+                  <span className="text-white/45">{share}</span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
       <div className="mt-3 flex flex-wrap gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sleeve name" className="min-h-11 flex-1 rounded-full border border-white/10 bg-black/40 px-4 text-sm outline-none" />
-        <button type="button" onClick={add} className="min-h-11 rounded-full border border-white/15 px-4 text-sm font-semibold">Open sleeve</button>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sleeve name" className="min-h-11 flex-1 rounded-2xl border border-white/10 bg-black/40 px-4 text-sm outline-none" />
+        <button type="button" onClick={add} className="min-h-11 rounded-2xl border border-white/10 px-4 text-sm font-semibold">Open sleeve</button>
       </div>
       {from && targets.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="min-h-11 w-24 rounded-full border border-white/10 bg-black/40 px-4 font-mono text-sm outline-none" />
-          <select value={toId || targets[0].id} onChange={(e) => setToId(e.target.value)} className="min-h-11 flex-1 rounded-full border border-white/10 bg-black/40 px-3 text-sm">
+        <div className="mt-2 flex flex-wrap gap-2">
+          <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="min-h-11 w-24 rounded-2xl border border-white/10 bg-black/40 px-4 font-mono text-sm outline-none" />
+          <select value={toId || targets[0].id} onChange={(e) => setToId(e.target.value)} className="min-h-11 flex-1 rounded-2xl border border-white/10 bg-black/40 px-3 text-sm">
             {targets.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
-          <button type="button" onClick={move} className="min-h-11 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">Move from {from.name}</button>
+          <button type="button" onClick={move} className="min-h-11 rounded-2xl bg-accent px-4 text-sm font-semibold text-accent-fg">Move from {from.name}</button>
         </div>
       ) : null}
     </section>

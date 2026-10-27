@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Bot, Gamepad2, RefreshCw, Send, ShoppingBag, Sparkles } from "lucide-react";
 import { PrintChart } from "@/components/print-chart";
 import { PrintTape } from "@/components/print-tape";
+import { PositionActions } from "@/components/position-actions";
 import { DepthScreen } from "@/components/depth-screen";
 import { HoldingCards, type HoldingRow, MarkFace } from "@/components/holding-cards";
 import { WalletPicker } from "@/components/wallet-picker";
@@ -558,19 +559,23 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
               <p className="mt-1 text-xs text-white/45">{chosen?.price ? `${chosen.symbol} at ${formatUsd(chosen.price)} · about ${chosen.price > 0 ? (buyUsd / chosen.price).toPrecision(3) : "—"}` : "USDC in. The wallet signs."}</p>
               <div className="mt-3 grid grid-cols-4 gap-1.5">
                 {[1, 5, 25, 100].map((n) => (
-                  <button key={n} type="button" onClick={() => { setBuyUsd(n); setArm(""); }} className={cn("min-h-10 rounded-xl font-mono text-sm", buyUsd === n ? "bg-white text-black" : "bg-white/5 text-white/70")}>
+                  <button key={n} type="button" onClick={() => setBuyUsd(n)} className={cn("min-h-10 rounded-xl font-mono text-sm", buyUsd === n ? "bg-white text-black" : "bg-white/5 text-white/70")}>
                     ${n}
                   </button>
                 ))}
               </div>
-              <button
-                type="button"
-                disabled={buying || !chosen}
-                onClick={() => { if (arm !== "buy") { setArm("buy"); return; } setArm(""); void buyChosen(); }}
-                className="mt-3 min-h-12 w-full rounded-xl bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
-              >
-                {buying ? "Waiting for the wallet…" : arm === "buy" && chosen ? `Sign $${buyUsd} ${chosen.symbol}` : chosen ? `Buy $${buyUsd} ${chosen.symbol}` : "Buy"}
-              </button>
+              {chosen ? (
+                <PositionActions
+                  symbol={chosen.symbol}
+                  mint={chosen.mint}
+                  price={chosen.price}
+                  qty={rows.find((row) => row.mint === chosen.mint)?.qty || 0}
+                  usd={buyUsd}
+                  owner={owner}
+                />
+              ) : (
+                <p className="mt-3 text-xs text-white/40">Pick a holding or a market.</p>
+              )}
               {!owner ? <div className="mt-3"><WalletPicker /></div> : null}
             </div>
             {chosen?.mint ? (
@@ -579,7 +584,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
                   <button type="button" onClick={() => setPane("book")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "book" ? "bg-white text-black" : "bg-white/10")}>Book</button>
                   <button type="button" onClick={() => setPane("depth")} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", pane === "depth" ? "bg-white text-black" : "bg-white/10")}>Depth</button>
                 </div>
-                {pane === "depth" ? <DepthScreen mint={chosen.mint} symbol={chosen.symbol} onBuy={() => setArm("buy")} /> : <PrintTape mint={chosen.mint} symbol={chosen.symbol} />}
+                {pane === "depth" ? <DepthScreen mint={chosen.mint} symbol={chosen.symbol} /> : <PrintTape mint={chosen.mint} symbol={chosen.symbol} />}
               </div>
             ) : null}
           </div>

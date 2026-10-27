@@ -11,6 +11,8 @@ import { PositionsBook } from "@/components/positions-book";
 import { SavingsYield } from "@/components/savings-yield";
 import { JumpStrip } from "@/components/jump-strip";
 import { HoldingCards, type HoldingRow } from "@/components/holding-cards";
+import { PositionActions } from "@/components/position-actions";
+import { kaminoLoans, type KaminoLoan } from "@/lib/kamino-lend";
 import { VaultAccounts } from "@/components/vault-accounts";
 import { VaultSleeves } from "@/components/vault-sleeves";
 import { WalletPicker } from "@/components/wallet-picker";
@@ -129,6 +131,9 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
   const [moves, setMoves] = useState<Record<string, HoldMove>>({});
   const [name, setName] = useState("");
   const [ccy, setCcy] = useState<Ccy>("USD");
+  const [pick, setPick] = useState("");
+  const [loans, setLoans] = useState<KaminoLoan[]>([]);
+  const [size, setSize] = useState(25);
   const coins = useCoins();
   const chain = snap && snap.owner === owner ? snap.chain : null;
   const usdc = chain?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
@@ -169,6 +174,24 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
       })
       .finally(() => {
         if (live) setReading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [owner, tick]);
+
+  useEffect(() => {
+    if (!owner) {
+      setLoans([]);
+      return;
+    }
+    let live = true;
+    kaminoLoans(owner)
+      .then((rows) => {
+        if (live) setLoans(rows);
+      })
+      .catch(() => {
+        if (live) setLoans([]);
       });
     return () => {
       live = false;
@@ -248,6 +271,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     value: row.value,
     where: row.where,
   }));
+  const picked = marked.find((row) => row.key === pick) || null;
 
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
@@ -290,7 +314,37 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
             <Link to="/equities" className="mt-3 inline-flex min-h-12 items-center rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg">Open the share book</Link>
           </div>
         ) : null}
-        <HoldingCards rows={cards} moves={moves} />
+        <HoldingCards
+          rows={cards}
+          moves={moves}
+          activeMint={pick}
+          onOpen={(row) => setPick(row.mint)}
+        />
+        {picked ? (
+          <div className="mt-3 rounded-2xl border border-white/10 bg-black/30 p-3">
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-semibold">{picked.symbol}</p>
+              <p className="font-mono text-xs text-white/45">{picked.qty.toLocaleString("en-US", { maximumFractionDigits: 4 })} held</p>
+            </div>
+            <div className="mt-2 grid grid-cols-4 gap-1.5">
+              {[5, 25, 100, 500].map((n) => (
+                <button key={n} type="button" onClick={() => setSize(n)} className={cn("min-h-9 rounded-xl font-mono text-xs", size === n ? "bg-white text-black" : "bg-white/10")}>${n}</button>
+              ))}
+            </div>
+            <PositionActions symbol={picked.symbol} mint={picked.key} price={picked.last} qty={picked.qty} usd={size} owner={owner} />
+          </div>
+        ) : cards.length ? (
+          <p className="mt-3 px-2 text-xs text-white/40">Tap a holding to buy, sell, short, or post it to Kamino.</p>
+        ) : null}
+        {loans.length > 0 ? (
+          <ul className="mt-3 space-y-1 px-2">
+            {loans.map((loan) => (
+              <li key={loan.id} className="font-mono text-[11px] text-white/55">
+                Kamino {loan.collateral} against {loan.debt} · LTV {(loan.ltv * 100).toFixed(0)}%
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] px-3 py-4">
