@@ -38,8 +38,8 @@ const MARKS: Omit<NativeMark, "price" | "change">[] = [
   { symbol: "LTC", name: "Litecoin", kind: "price", mint: "", decimals: 8, line: "A price. There is no Litecoin transaction here." },
   { symbol: "TRX", name: "Tron", kind: "price", mint: "", decimals: 6, line: "A price. There is no Tron transaction here." },
   { symbol: "HBAR", name: "Hedera", kind: "price", mint: "", decimals: 8, line: "A price. There is no Hedera transaction here." },
-  { symbol: "LINK", name: "Chainlink", kind: "price", mint: "", decimals: 18, line: "A price. A same-ticker token is not offered from this list." },
-  { symbol: "UNI", name: "Uniswap", kind: "price", mint: "", decimals: 18, line: "A price. A same-ticker token is not offered from this list." },
+  { symbol: "LINK", name: "Chainlink", kind: "wrapped", mint: "2wpTofQ8SkACrkZWrZDjXPitYa8AwWgX8AfxdeBRRVLX", decimals: 8, line: "Portal Chainlink on Solana, from Wormhole’s list. The Ethereum contract is the other listing. Neither one is a new chain." },
+  { symbol: "UNI", name: "Uniswap", kind: "wrapped", mint: "8FU95xFJhUUkyyCLU13HSzDLs7oC4QZdXQHL6SCeab36", decimals: 8, line: "Portal Uniswap on Solana, from Wormhole’s list. The Ethereum contract is the other listing." },
   { symbol: "POL", name: "Polygon", kind: "chain", mint: "", decimals: 18, line: "Polygon is a network this desk signs. This row is not a separate token." },
 ];
 

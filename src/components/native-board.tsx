@@ -53,7 +53,7 @@ export function NativeBoard() {
       <p className="font-mono text-[11px] tracking-[0.14em] text-white/40 uppercase">Marks</p>
       <h2 className="mt-1 text-lg font-semibold">21 prices. Not 21 chains.</h2>
       <p className="mt-1 text-sm leading-relaxed text-white/55">
-        {chains} are networks this desk already signs. {wrapped} are a token on Solana. {prices} are a price and nothing else. Cardano, Aptos, and TON are in that last group.
+        {chains} are networks this desk already signs. {wrapped} are a token on Solana you can buy. {prices} have no published token on those chains, so they stay a price. A pump coin with the same ticker is not added.
       </p>
       <ul className="mt-3 space-y-2">
         {rows.map((row) => (
