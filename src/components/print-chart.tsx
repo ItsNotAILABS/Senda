@@ -379,12 +379,12 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
   }
 
   return (
-    <div className="border border-[#2a2e39] bg-[#131722]">
-      <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#2a2e39] px-1">
+    <div className="border border-[#1a1c24] bg-[#050508]">
+      <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#1a1c24] px-1">
         {(["candles", "line", "volume"] as const).map((id) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={`h-9 shrink-0 border-b-2 px-2.5 text-[13px] capitalize ${kind === id ? "border-[#d1d4dc] text-[#d1d4dc]" : "border-transparent text-[#787b86]"}`}>{id}</button>
         ))}
-        <span className="mx-1 h-4 w-px shrink-0 bg-[#2a2e39]" />
+        <span className="mx-1 h-4 w-px shrink-0 bg-[#1a1c24]" />
         {TF.map((id) => (
           <button
             key={id}
@@ -404,7 +404,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
           <button type="button" onClick={() => setScreen(true)} className="h-9 px-2 text-[12px] text-[#d1d4dc]">Expand</button>
         </span>
       </div>
-      <div className="flex gap-1 overflow-x-auto border-b border-[#2a2e39] px-2 py-1">
+      <div className="flex gap-1 overflow-x-auto border-b border-[#1a1c24] px-2 py-1">
         {(
           [
             ["sma", "SMA 20"],
@@ -444,7 +444,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
           </button>
           {menu && menuAt && typeof document !== "undefined"
             ? createPortal(
-                <div className="fixed z-[120] max-h-[70dvh] w-[220px] overflow-y-auto rounded-lg border border-[#2a2e39] bg-[#1e222d] py-1 shadow-2xl" style={{ left: Math.min(menuAt.left, window.innerWidth - 232), top: menuAt.top }}>
+                <div className="fixed z-[120] max-h-[70dvh] w-[220px] overflow-y-auto rounded-lg border border-[#1a1c24] bg-[#050508] py-1 shadow-2xl" style={{ left: Math.min(menuAt.left, window.innerWidth - 232), top: menuAt.top }}>
                   {DRAW_TOOLS.map(([id, label]) => (
                     <button key={id} type="button" onClick={() => { setTool(id); setDraft(null); setMenu(false); }} className="block w-full px-3 py-1.5 text-left text-[12px] text-[#d1d4dc] hover:bg-white/10">
                       {label}
@@ -498,7 +498,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       {levels.length > 0 ? (
         <div className="flex gap-1 overflow-x-auto px-3 pb-1">
           {levels.map((price, i) => (
-            <span key={`${price}:${i}`} className="inline-flex items-center gap-1 bg-[#1e222d] px-2 py-0.5 font-mono text-[11px] text-[#d1d4dc]">
+            <span key={`${price}:${i}`} className="inline-flex items-center gap-1 bg-[#0c0c10] px-2 py-0.5 font-mono text-[11px] text-[#d1d4dc]">
               {px(price)}
               <button type="button" onClick={() => setLevels((cur) => cur.map((n, j) => (j === i ? n + step : n)))} className="px-1 text-[#787b86]">+</button>
               <button type="button" onClick={() => setLevels((cur) => cur.map((n, j) => (j === i ? Math.max(step, n - step) : n)))} className="px-1 text-[#787b86]">−</button>
@@ -623,7 +623,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       )}
       {state === "ready" ? <MarketMatrix bars={matrixBars} pool={feed !== "none"} source={feed === "none" ? "price-only" : feed} symbol={symbol} /> : null}
       {screen ? (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-[#131722]">
+        <div className="fixed inset-0 z-[80] flex flex-col bg-[#050508]">
           <div className="flex items-center justify-between gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
             <p className="text-sm text-[#d1d4dc]">{symbol} · pool candles{fresh ? " · live" : ""}</p>
             <button type="button" onClick={() => setScreen(false)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>
@@ -646,7 +646,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         </div>
       ) : null}
       {shot === "tv" && TV[symbol.toUpperCase()] ? (
-        <div className="fixed inset-0 z-[90] flex flex-col bg-[#131722]">
+        <div className="fixed inset-0 z-[90] flex flex-col bg-[#050508]">
           <div className="flex items-center justify-between px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
             <p className="text-sm text-[#d1d4dc]">Binance · {symbol}</p>
             <button type="button" onClick={() => setShot(null)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>

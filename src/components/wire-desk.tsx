@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { DeskBots } from "@/components/desk-bots";
 import { DeskStatus } from "@/components/desk-status";
+import { PrintChart } from "@/components/print-chart";
 import { SolBook } from "@/components/sol-book";
-import { WeekLand } from "@/components/week-land";
 import type { LiveCoin } from "@/lib/coin-tape";
 import type { HouseListing } from "@/lib/sol-house";
 import type { Headline } from "@/lib/wire";
@@ -43,17 +43,20 @@ export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins:
   const offCoin = lens === "trending" ? coins.find((c) => c.id === pick && !coinMovers.some((row) => row.id === c.id)) : undefined;
   const offName = lens === "names" ? names.find((h) => h.mint === pick && !nameMovers.some((row) => row.mint === h.mint)) : undefined;
 
+  const chartMint = lens === "names" ? (offName?.mint || nameMovers.find((row) => row.mint === pick)?.mint || names[0]?.mint || "") : (offCoin?.id || coinMovers.find((row) => row.id === pick)?.id || coins[0]?.id || "");
+  const chartSymbol = lens === "names" ? (names.find((row) => row.mint === chartMint)?.symbol || "Market") : (coins.find((row) => row.id === chartMint)?.symbol || "Market");
+
   return (
-    <div className="space-y-4 px-4 py-4">
-      <WeekLand />
+    <div className="space-y-4 bg-black px-4 py-4">
       <header>
         <p className="font-mono text-[10px] tracking-[0.18em] text-accent uppercase">Solana</p>
         <h1 className="mt-1 font-display text-4xl">Markets</h1>
-        <p className="mt-2 text-sm leading-relaxed text-white/55">Verified Jupiter markets, paged. A buy signs in the wallet. If the network drops, the last page and the last chart stay, and a trade waits on this phone until you sign it.</p>
+        <p className="mt-2 text-sm leading-relaxed text-white/55">Candles, a line, or volume. The same chart. A buy is still a signature in the wallet.</p>
         <div className="mt-2">
           <DeskStatus />
         </div>
       </header>
+      {chartMint ? <PrintChart mint={chartMint} symbol={chartSymbol} className="h-[280px]" /> : null}
 
       <DeskBots
         names={names}
@@ -65,7 +68,7 @@ export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins:
 
       <SolBook />
 
-      <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+      <section className="overflow-hidden rounded-[22px] border border-white/10 bg-black">
         <div className="px-4 pt-4 pb-2">
           <h2 className="font-display text-lg">Movers</h2>
           <p className="mt-1 text-xs text-white/40">Eight coins by the day's move, then eight PreStocks.</p>
@@ -128,7 +131,7 @@ export function WireDesk({ house, coins, news }: { house: HouseListing[]; coins:
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+      <section className="overflow-hidden rounded-[22px] border border-white/10 bg-black">
         <button
           type="button"
           aria-expanded={newsOpen}

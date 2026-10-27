@@ -86,10 +86,10 @@ export const CandleChart = forwardRef<ChartHandle, {
     if (!el) return;
     const next = createChart(el, {
       autoSize: true,
-      layout: { background: { type: ColorType.Solid, color: "#131722" }, textColor: "#787b86", fontFamily: "Trebuchet MS, Roboto, Ubuntu, sans-serif", fontSize: 12 },
-      grid: { vertLines: { color: "#1e222d" }, horzLines: { color: "#1e222d" } },
-      rightPriceScale: { borderColor: "#2a2e39", textColor: "#b2b5be", minimumWidth: 78, entireTextOnly: true },
-      timeScale: { borderColor: "#2a2e39", timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 8, minBarSpacing: 4 },
+      layout: { background: { type: ColorType.Solid, color: "#050508" }, textColor: "#787b86", fontFamily: "Trebuchet MS, Roboto, Ubuntu, sans-serif", fontSize: 12 },
+      grid: { vertLines: { color: "#141418" }, horzLines: { color: "#141418" } },
+      rightPriceScale: { borderColor: "#1a1c24", textColor: "#b2b5be", minimumWidth: 78, entireTextOnly: true },
+      timeScale: { borderColor: "#1a1c24", timeVisible: true, secondsVisible: false, rightOffset: 8, barSpacing: 8, minBarSpacing: 4 },
       crosshair: {
         mode: CrosshairMode.Normal,
         vertLine: { color: "#758696", labelBackgroundColor: "#363a45", width: 1, style: LineStyle.Dashed },
