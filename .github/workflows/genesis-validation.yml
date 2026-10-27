@@ -1,0 +1,32 @@
+name: Senda Genesis runtime validation
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/genesis-character-runtimes-20261026
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  genesis-units:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Genesis runtime, manifest and ownership contracts
+        run: node --test scripts/genesis-catalog.test.mjs scripts/genesis-runtime.test.mjs scripts/genesis-ownership.test.mjs scripts/genesis-loadout.test.mjs scripts/genesis-build-metadata.test.mjs
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:dev
