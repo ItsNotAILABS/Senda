@@ -56,8 +56,12 @@ function asCoin(row: RawToken, seen: Set<string>): TapeCoin | null {
     price: Number(row.usdPrice) || 0,
     change: Number(row.stats24h?.priceChange) || 0,
     icon: row.icon || "",
-    volume: Number(row.stats24h?.buyVolume || 0) + Number(row.stats24h?.sellVolume || 0),
-    liquidity: Number(row.liquidity) || 0,
+    // Absence of reported buy/sell volume is unknown, not a zero-volume reading.
+    volume: Number.isFinite(row.stats24h?.buyVolume) && Number.isFinite(row.stats24h?.sellVolume) &&
+      (row.stats24h?.buyVolume ?? -1) >= 0 && (row.stats24h?.sellVolume ?? -1) >= 0
+      ? (row.stats24h?.buyVolume ?? 0) + (row.stats24h?.sellVolume ?? 0)
+      : undefined,
+    liquidity: Number.isFinite(row.liquidity) && (row.liquidity ?? -1) >= 0 ? row.liquidity : undefined,
     mcap: Number(row.mcap) || 0,
     holders: Number(row.holderCount) || 0,
   };
