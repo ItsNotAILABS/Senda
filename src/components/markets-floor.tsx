@@ -552,8 +552,8 @@ export function MarketsFloor({
   return (
     <div className="flex min-h-[calc(100dvh-4.5rem)] flex-col">
       <div className="px-3 pt-3"><JumpStrip /></div>
-      <div className="px-3 pt-3"><DeskAudit live="Print is a stake on the next window. Packs buy the token. Sports and coins sign a Jupiter order." hold="A price here is not a share, and a stake is not a fill until it settles." /></div>
-      <div className="flex gap-1 border-b border-white/10 px-3 py-2">
+      <div className="px-3 pt-3"><DeskAudit live="Nine chains can sign a swap: Solana, Ethereum, Base, Arbitrum, Polygon, Optimism, Avalanche, BNB, Monad. Robinhood Chain signs CipherMesh only." hold="A price here is not a share, and a stake is not a fill until it settles." /></div>
+      <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
         {(
           [
             ["packs", "Packs"],
@@ -571,7 +571,7 @@ export function MarketsFloor({
             ["perps", "Perps"],
           ] as const
         ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", view === id ? "bg-white text-black" : "bg-white/10")}>
+          <button key={id} type="button" onClick={() => setView(id)} className={cn("min-h-9 shrink-0 rounded-full px-3 text-xs font-semibold", view === id ? "bg-white text-black" : "bg-white/10")}>
             {label}
           </button>
         ))}

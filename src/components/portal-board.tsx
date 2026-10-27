@@ -17,13 +17,17 @@ function money(n: number): string {
 export function PortalBoard() {
   const [rows, setRows] = useState<PortalCoin[]>([]);
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
   const [busy, setBusy] = useState("");
 
   useEffect(() => {
     loadPortalCoins().then(setRows).catch(() => setRows([]));
   }, []);
 
-  const shown = rows.filter((row) => !q.trim() || `${row.symbol} ${row.name}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 24);
+  const matched = rows.filter((row) => !q.trim() || `${row.symbol} ${row.name}`.toLowerCase().includes(q.trim().toLowerCase()));
+  const pages = Math.max(1, Math.ceil(matched.length / 20));
+  const safe = Math.min(page, pages - 1);
+  const shown = matched.slice(safe * 20, safe * 20 + 20);
 
   async function buy(row: PortalCoin, venue: PortalListing) {
     const key = `${row.symbol}-${venue.chain}`;
@@ -90,7 +94,7 @@ export function PortalBoard() {
           {busy === "CMESH" ? "Signing" : "Buy CMESH"}
         </button>
       </div>
-      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a coin" className="mt-3 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 text-sm outline-none" />
+      <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder="Search a coin" className="mt-3 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 text-sm outline-none" />
       <ul className="mt-3 space-y-2">
         {shown.map((row) => (
           <li key={row.symbol} className="rounded-2xl border border-white/10 px-3 py-2">
@@ -112,6 +116,13 @@ export function PortalBoard() {
           </li>
         ))}
       </ul>
+      {matched.length > 20 ? (
+        <div className="mt-3 flex items-center justify-between text-xs text-white/45">
+          <button type="button" disabled={safe <= 0} onClick={() => setPage(Math.max(0, safe - 1))} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Back</button>
+          <span className="font-mono">{matched.length} coins · {safe + 1} / {pages}</span>
+          <button type="button" disabled={safe + 1 >= pages} onClick={() => setPage(safe + 1)} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Next</button>
+        </div>
+      ) : null}
     </section>
   );
 }

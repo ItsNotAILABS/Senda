@@ -57,21 +57,24 @@ function gapOf(prices: Array<number | null>): number | null {
 
 async function dexPrices(chain: string, addresses: string[]): Promise<Map<string, { price: number; dex: string; liq: number }>> {
   const out = new Map<string, { price: number; dex: string; liq: number }>();
-  if (!addresses.length) return out;
-  const res = await fetch(`https://api.dexscreener.com/tokens/v1/${chain}/${addresses.join(",")}`, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(12_000),
-  }).catch(() => null);
-  if (!res?.ok) return out;
-  const rows = (await res.json()) as Pair[];
-  if (!Array.isArray(rows)) return out;
-  for (const row of rows) {
-    const address = row.baseToken?.address;
-    const price = Number(row.priceUsd);
-    if (!address || !(price > 0)) continue;
-    const id = chain === "solana" ? address : address.toLowerCase();
-    const prev = out.get(id);
-    if (!prev || (row.liquidity?.usd || 0) > prev.liq) out.set(id, { price, dex: row.dexId || chain, liq: row.liquidity?.usd || 0 });
+  const unique = [...new Set(addresses.filter(Boolean))];
+  for (let i = 0; i < unique.length; i += 30) {
+    const part = unique.slice(i, i + 30);
+    const res = await fetch(`https://api.dexscreener.com/tokens/v1/${chain}/${part.join(",")}`, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    }).catch(() => null);
+    if (!res?.ok) continue;
+    const rows = (await res.json()) as Pair[];
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      const address = row.baseToken?.address;
+      const price = Number(row.priceUsd);
+      if (!address || !(price > 0)) continue;
+      const id = chain === "solana" ? address : address.toLowerCase();
+      const prev = out.get(id);
+      if (!prev || (row.liquidity?.usd || 0) > prev.liq) out.set(id, { price, dex: row.dexId || chain, liq: row.liquidity?.usd || 0 });
+    }
   }
   return out;
 }
@@ -127,7 +130,7 @@ async function ondoBoth(): Promise<Array<{ symbol: string; name: string; eth: st
     const bi = WANT.indexOf(b[0]);
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi);
   });
-  return ranked.slice(0, 20).map(([symbol, row]) => ({ symbol, name: row.name, eth: row.eth || "", bnb: row.bnb || "", decimals: row.decimals }));
+  return ranked.slice(0, 80).map(([symbol, row]) => ({ symbol, name: row.name, eth: row.eth || "", bnb: row.bnb || "", decimals: row.decimals }));
 }
 
 async function xstockBoth(): Promise<Array<{ symbol: string; name: string; sol: string; eth: string }>> {
@@ -143,7 +146,7 @@ async function xstockBoth(): Promise<Array<{ symbol: string; name: string; sol: 
     const eth = node.deployments?.find((d) => d.network === "Ethereum")?.address;
     if (!node.symbol || !sol || !eth) continue;
     rows.push({ symbol: node.symbol, name: node.name || node.symbol, sol, eth });
-    if (rows.length >= 12) break;
+    if (rows.length >= 40) break;
   }
   return rows;
 }

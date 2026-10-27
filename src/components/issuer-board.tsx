@@ -14,6 +14,7 @@ export function IssuerBoard() {
   const [rows, setRows] = useState<IssuerToken[]>([]);
   const [issuer, setIssuer] = useState<"All" | IssuerToken["issuer"]>("All");
   const [q, setQ] = useState("");
+  const [page, setPage] = useState(0);
   const [busy, setBusy] = useState("");
   const [vol, setVol] = useState(deskVolume());
 
@@ -22,13 +23,15 @@ export function IssuerBoard() {
     return onTrades(() => setVol(deskVolume()));
   }, []);
 
-  const shown = useMemo(() => {
+  const matched = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
       .filter((row) => (issuer === "All" ? true : row.issuer === issuer))
-      .filter((row) => !needle || `${row.symbol} ${row.name}`.toLowerCase().includes(needle))
-      .slice(0, 40);
+      .filter((row) => !needle || `${row.symbol} ${row.name}`.toLowerCase().includes(needle));
   }, [rows, issuer, q]);
+  const pages = Math.max(1, Math.ceil(matched.length / 30));
+  const safe = Math.min(page, pages - 1);
+  const shown = matched.slice(safe * 30, safe * 30 + 30);
 
   async function buy(row: IssuerToken, venue: IssuerVenue) {
     const key = `${row.symbol}-${venue.chain}`;
@@ -77,13 +80,13 @@ export function IssuerBoard() {
       </p>
       <input
         value={q}
-        onChange={(e) => setQ(e.target.value)}
+        onChange={(e) => { setQ(e.target.value); setPage(0); }}
         placeholder="Search a ticker"
         className="mt-3 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-3 text-sm outline-none"
       />
       <div className="mt-2 flex gap-1">
         {(["All", "Backpack", "xStocks", "Ondo"] as const).map((id) => (
-          <button key={id} type="button" onClick={() => setIssuer(id)} className={`h-8 rounded-full px-3 text-xs font-semibold ${issuer === id ? "bg-white text-black" : "bg-white/10"}`}>
+          <button key={id} type="button" onClick={() => { setIssuer(id); setPage(0); }} className={`h-8 rounded-full px-3 text-xs font-semibold ${issuer === id ? "bg-white text-black" : "bg-white/10"}`}>
             {id}
           </button>
         ))}
@@ -106,7 +109,13 @@ export function IssuerBoard() {
           </li>
         ))}
       </ul>
-      {!shown.length ? <p className="mt-3 text-sm text-white/40">{rows.length ? "Nothing matches." : "The issuer lists did not load."}</p> : null}
+      {!shown.length ? <p className="mt-3 text-sm text-white/40">{rows.length ? "Nothing matches." : "The issuer lists did not load."}</p> : (
+        <div className="mt-3 flex items-center justify-between text-xs text-white/45">
+          <button type="button" disabled={safe <= 0} onClick={() => setPage(Math.max(0, safe - 1))} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Back</button>
+          <span className="font-mono">{matched.length} names · {safe + 1} / {pages}</span>
+          <button type="button" disabled={safe + 1 >= pages} onClick={() => setPage(safe + 1)} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Next</button>
+        </div>
+      )}
     </section>
   );
 }

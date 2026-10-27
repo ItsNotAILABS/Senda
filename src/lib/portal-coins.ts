@@ -121,7 +121,5 @@ export const loadPortalCoins = createServerFn({ method: "GET" }).handler(async (
     const mint = row.listings[0]?.address;
     row.price = mint ? px.get(mint) ?? null : null;
   }
-  return rows
-    .sort((a, b) => (b.price ?? 0) - (a.price ?? 0) || b.listings.length - a.listings.length)
-    .slice(0, 48);
+  return rows.sort((a, b) => (b.price ?? 0) - (a.price ?? 0) || b.listings.length - a.listings.length);
 });

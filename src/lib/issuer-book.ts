@@ -68,7 +68,7 @@ async function ondo(): Promise<IssuerToken[]> {
 
 async function xstocks(): Promise<IssuerToken[]> {
   const pages = await Promise.all(
-    [0, 1, 2].map(async (page) => {
+    [0, 1, 2, 3, 4, 5, 6, 7].map(async (page) => {
       const res = await fetch(`https://api.xstocks.fi/api/v2/public/assets?page=${page}`, {
         headers: { accept: "application/json", "user-agent": "Senda" },
       });

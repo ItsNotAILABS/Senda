@@ -16,6 +16,10 @@ function money(n: number): string {
 export function GapsBoard() {
   const [rows, setRows] = useState<TwoProduct[]>([]);
   const [busy, setBusy] = useState("");
+  const [page, setPage] = useState(0);
+  const pages = Math.max(1, Math.ceil(rows.length / 20));
+  const safe = Math.min(page, pages - 1);
+  const shown = rows.slice(safe * 20, safe * 20 + 20);
 
   useEffect(() => {
     loadTwoListings().then(setRows).catch(() => setRows([]));
@@ -68,7 +72,7 @@ export function GapsBoard() {
         {rows.length} products are listed twice. The gap is the difference between those prices. A buy signs one side. It does not sell the other, so it is not an arbitrage yet.
       </p>
       <ul className="mt-3 space-y-2">
-        {rows.map((row) => (
+        {shown.map((row) => (
           <li key={row.id} className="rounded-2xl border border-white/10 px-3 py-2">
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-sm font-semibold">{row.symbol}</p>
@@ -96,7 +100,13 @@ export function GapsBoard() {
           </li>
         ))}
       </ul>
-      {!rows.length ? <p className="mt-3 text-sm text-white/40">The listings have not loaded.</p> : null}
+      {!rows.length ? <p className="mt-3 text-sm text-white/40">The listings have not loaded.</p> : rows.length > 20 ? (
+        <div className="mt-3 flex items-center justify-between text-xs text-white/45">
+          <button type="button" disabled={safe <= 0} onClick={() => setPage(Math.max(0, safe - 1))} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Back</button>
+          <span className="font-mono">{rows.length} products · {safe + 1} / {pages}</span>
+          <button type="button" disabled={safe + 1 >= pages} onClick={() => setPage(safe + 1)} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Next</button>
+        </div>
+      ) : null}
     </section>
   );
 }
