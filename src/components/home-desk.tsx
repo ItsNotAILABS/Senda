@@ -290,13 +290,13 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
   const held = (pic?.lines ?? []).filter((l) => l.usd > 0.005 || l.ui > 0);
   const rows: HoldingRow[] = [
     ...(pic && pic.usdc > 0 ? [{ mint: USDC, symbol: "USDC", name: "Spendable", qty: pic.usdc, value: pic.usdc, where: "cash" as const }] : []),
-    ...(pic && pic.sol > 0 ? [{ mint: SOL, symbol: "SOL", name: "Network fees", qty: pic.sol, value: pic.solUsd, where: "coin" as const }] : []),
+    ...(pic && pic.sol > 0 ? [{ mint: SOL, symbol: "SOL", name: "Network fees", qty: pic.sol, value: (moves[SOL]?.price || 0) > 0 ? pic.sol * (moves[SOL]?.price || 0) : pic.solUsd, where: "coin" as const }] : []),
     ...held.map((line) => ({
       mint: line.mint,
       symbol: line.symbol,
       name: line.group === "company" ? "PreStock" : line.group === "listed" ? "Listed" : line.group === "stake" ? "Stake" : "Coin",
       qty: line.ui,
-      value: line.usd > 0 ? line.usd : (moves[line.mint]?.price || 0) * line.ui,
+      value: (moves[line.mint]?.price || 0) > 0 ? line.ui * (moves[line.mint]?.price || 0) : line.usd,
       where: line.group === "company" ? "pre" as const : line.group === "listed" ? "share" as const : "coin" as const,
     })),
   ];
@@ -324,6 +324,49 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
       live = false;
     };
   }, [holdKey]);
+  const priceKey = [...rows.map((row) => row.mint), chosen?.mint || "", ...tape.slice(0, 24).map((row) => row.mint)]
+    .filter((mint) => mint && mint.length >= 32)
+    .slice(0, 40)
+    .join(",");
+  useEffect(() => {
+    const ids = [...new Set(priceKey.split(",").filter((mint) => mint.length >= 32))];
+    if (!ids.length) return;
+    let on = true;
+    const pull = () => {
+      void fetch(`https://lite-api.jup.ag/price/v3?ids=${ids.join(",")}`, { headers: { accept: "application/json" } })
+        .then((res) => res.json())
+        .then((body: Record<string, { usdPrice?: number; priceChange24h?: number }>) => {
+          if (!on || !body) return;
+          setMoves((cur) => {
+            const next = { ...cur };
+            for (const mint of ids) {
+              const price = Number(body[mint]?.usdPrice) || 0;
+              if (!(price > 0)) continue;
+              const prev = next[mint];
+              next[mint] = prev
+                ? { ...prev, price }
+                : { mint, price, hour: null, day: Number(body[mint]?.priceChange24h) || null, week: null };
+            }
+            return next;
+          });
+          setTape((cur) => cur.map((row) => {
+            const price = Number(body[row.mint]?.usdPrice) || 0;
+            return price > 0 ? { ...row, price } : row;
+          }));
+          setWide((cur) => cur.map((row) => {
+            const price = Number(body[row.mint]?.usdPrice) || 0;
+            return price > 0 ? { ...row, price } : row;
+          }));
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 2_000);
+    return () => {
+      on = false;
+      window.clearInterval(id);
+    };
+  }, [priceKey]);
   const have = new Set(tape.map((row) => row.mint));
   const screen = [
     ...tape.map((row) => ({
@@ -474,7 +517,7 @@ export function HomeDesk({ names }: { names: HouseListing[] }) {
           <div className="flex flex-col">
             <div className="border-b border-white/10 p-4">
               <p className="text-[11px] tracking-[0.14em] text-white/40 uppercase">Quick trade</p>
-              <p className="mt-1 text-xs text-white/45">USDC in. The wallet signs. Same route as the book.</p>
+              <p className="mt-1 text-xs text-white/45">{chosen?.price ? `${chosen.symbol} at ${formatUsd(chosen.price)} · about ${chosen.price > 0 ? (buyUsd / chosen.price).toPrecision(3) : "—"}` : "USDC in. The wallet signs."}</p>
               <div className="mt-3 grid grid-cols-4 gap-1.5">
                 {[1, 5, 25, 100].map((n) => (
                   <button key={n} type="button" onClick={() => { setBuyUsd(n); setArm(""); }} className={cn("min-h-10 rounded-xl font-mono text-sm", buyUsd === n ? "bg-white text-black" : "bg-white/5 text-white/70")}>

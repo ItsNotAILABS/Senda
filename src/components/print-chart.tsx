@@ -145,7 +145,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         .catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 4_000);
+    const id = window.setInterval(pull, 1_000);
     return () => {
       on = false;
       window.clearInterval(id);
@@ -263,9 +263,9 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       ) : null}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3 pb-1 pt-2 text-[12px]">
         <span className="text-[15px] font-semibold tracking-tight text-[#d1d4dc]">{symbol}</span>
-        {fresh && livePx > 0 ? <span className="text-[11px] text-[#089981]">Quote 4s</span> : null}
+        {fresh && livePx > 0 ? <span className="text-[11px] text-[#089981]">Live</span> : null}
         {saved ? <span className="text-[11px] text-[#787b86]">Saved chart</span> : null}
-        <span className="font-mono text-[18px] tabular-nums text-[#d1d4dc]">{px(last || livePx)}</span>
+        <span className="font-mono text-[18px] tabular-nums text-[#d1d4dc]">{px(livePx || last)}</span>
         {move != null ? (
           <span className={`font-mono tabular-nums ${move < 0 ? "text-[#f23645]" : "text-[#089981]"}`}>
             {move >= 0 ? "+" : ""}{move.toFixed(2)}%
@@ -278,10 +278,9 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
         <span className="text-[#787b86]">V <span className="text-[#d1d4dc]">{shown?.volume && shown.volume > 0 ? shown.volume.toLocaleString("en-US", { maximumFractionDigits: 0 }) : "—"}</span></span>
       </div>
       <p className="px-3 pb-1 text-[11px] text-[#787b86]">
-        {feed === "gecko-pool" ? "Volume is the Solana pool." : feed === "jup-chart" ? "Volume is Jupiter’s chart, in USD." : "No volume on this span."}
-        {" "}The quote refreshes every 4s. The bar is the {TF_LABEL[span]} bucket
-        {shown ? `, last opened ${Math.max(0, Math.round(Date.now() / 1000 - shown.time))}s ago` : ""}.
-        {" "}TradingView’s SOLUSDT is the Binance book. This is not that book.
+        {livePx > 0 ? `${symbol} is ${px(livePx)} right now. ` : ""}
+        {feed === "gecko-pool" ? "Volume is the Solana pool. " : feed === "jup-chart" ? "Volume is Jupiter’s chart. " : ""}
+        The line is {TF_LABEL[span]} bars. The price above them is the live mark.
       </p>
       {zone ? (
         <div className="flex items-center gap-2 px-3 pb-1 font-mono text-[11px] text-[#089981]">

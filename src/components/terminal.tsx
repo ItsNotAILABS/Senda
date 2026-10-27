@@ -244,7 +244,7 @@ export function Terminal({ lane = "trade", onLane }: { lane?: "trade" | "solana"
         .catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 12_000);
+    const id = window.setInterval(pull, 2_000);
     return () => {
       on = false;
       window.clearInterval(id);

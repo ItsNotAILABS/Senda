@@ -197,6 +197,40 @@ export function MarketsFloor({
     };
   }, []);
 
+  const liveIds = names.map((row) => row.mint).filter((mint) => mint.length >= 32).slice(0, 40).join(",");
+  useEffect(() => {
+    const ids = liveIds.split(",").filter((mint) => mint.length >= 32);
+    if (!ids.length) return;
+    let on = true;
+    const pull = () => {
+      void fetch(`https://lite-api.jup.ag/price/v3?ids=${ids.join(",")}`, { headers: { accept: "application/json" } })
+        .then((res) => res.json())
+        .then((body: Record<string, { usdPrice?: number }>) => {
+          if (!on || !body) return;
+          setTape((cur) => cur.map((row) => {
+            const price = Number(body[row.mint]?.usdPrice) || 0;
+            return price > 0 ? { ...row, price } : row;
+          }));
+          setMarks((cur) => {
+            const next = { ...cur };
+            for (const [mint, row] of Object.entries(body)) {
+              const price = Number(row?.usdPrice) || 0;
+              const hit = names.find((n) => n.mint === mint);
+              if (hit && price > 0) next[hit.symbol] = price;
+            }
+            return next;
+          });
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 2_000);
+    return () => {
+      on = false;
+      window.clearInterval(id);
+    };
+  }, [liveIds]);
+
   useEffect(() => {
     let on = true;
     loadBackpack()

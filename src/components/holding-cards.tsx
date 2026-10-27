@@ -111,8 +111,8 @@ export function HoldingCards({
                 {pct(day)}
               </span>
             </span>
-            <span className="mt-3 block font-mono text-2xl tabular-nums tracking-tight">{usd(value)}</span>
-            <span className="mt-1 block font-mono text-[11px] text-white/40">{qty(row.qty)} held</span>
+            <span className="mt-3 block font-mono text-2xl tabular-nums tracking-tight">{move?.price ? usd(move.price) : "—"}</span>
+            <span className="mt-1 block font-mono text-[11px] text-white/40">{qty(row.qty)} · {usd(value)}</span>
             {mark?.line && mark.line.length > 1 ? (
               <LineGlance points={mark.line} down={(day ?? mark.line[mark.line.length - 1] - mark.line[0]) < 0} />
             ) : (
