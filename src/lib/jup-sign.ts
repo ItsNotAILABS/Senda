@@ -8,7 +8,7 @@ import { readSolSpend } from "@/lib/fill-cost";
 import { fileFill, listTrades, rememberTrade } from "@/lib/trade-log";
 import { routePro, type RoutePro } from "@/lib/route-pro";
 import { readRoutes } from "@/lib/mesie-route";
-import { DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
+import { DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody, routeEarn } from "@/lib/desk-fee";
 
 const QUOTE = "https://api.jup.ag/swap/v1/quote";
 const QUOTE_LITE = "https://lite-api.jup.ag/swap/v1/quote";
@@ -122,7 +122,7 @@ export async function quoteRoute(input: {
   throw new Error(last);
 }
 
-export type RacedQuote = RouteQuote & { ms: number; direct: boolean; why: string; coherence: number; cosine: number; logDistance: number; resonance: number };
+export type RacedQuote = RouteQuote & { ms: number; direct: boolean; why: string; coherence: number; cosine: number; logDistance: number; resonance: number; plainOut: number };
 
 /** Fast returns the first quote under the impact cap and does not wait on the other lane. Best price still compares both. The milliseconds are the quote, not the landing. */
 export async function raceRoute(input: {
@@ -160,6 +160,7 @@ export async function raceRoute(input: {
               cosine: 1,
               logDistance: 0,
               resonance: 0,
+              plainOut: Number(quote.outAmount),
             });
           })
           .catch((error) => {
@@ -201,7 +202,8 @@ export async function raceRoute(input: {
   const why = pro.aim === "price"
     ? `Best output · ${shape} · ${ms}ms to quote · ${math}${dropped}`
     : `Fast · ${shape} · within 0.08% of the best output · ${ms}ms to quote · ${math}${dropped}`;
-  return { ...pick.quote, ms, direct: pick.direct, why, coherence: read.coherence, cosine: read.cosine, logDistance: read.logDistance, resonance: read.resonance[index] };
+  const plainOut = Math.min(...ok.map((row) => Number(row.quote.outAmount)));
+  return { ...pick.quote, ms, direct: pick.direct, why, coherence: read.coherence, cosine: read.cosine, logDistance: read.logDistance, resonance: read.resonance[index], plainOut };
 }
 
 /** The lane a swap will sign. Fast or best price, from the same race the agent uses. */
@@ -211,9 +213,12 @@ export async function decideRoute(input: {
   amountRaw: number;
   outDecimals: number;
   pro?: RoutePro;
-}): Promise<{ onlyDirect: boolean; outUi: number; impact: number; ms: number; why: string }> {
+}): Promise<{ onlyDirect: boolean; outUi: number; plainUi: number; impact: number; ms: number; why: string; feeBps: number; earn: string }> {
   const raced = await raceRoute(input);
-  return { onlyDirect: raced.direct, outUi: raced.outUi, impact: Math.abs(raced.impact), ms: raced.ms, why: raced.why };
+  const outUi = raced.outUi;
+  const plainUi = raced.plainOut / 10 ** input.outDecimals;
+  const earned = routeEarn(outUi, plainUi, Math.abs(raced.impact));
+  return { onlyDirect: raced.direct, outUi, plainUi, impact: Math.abs(raced.impact), ms: raced.ms, why: `${raced.why} · ${earned.why}`, feeBps: earned.bps, earn: earned.why };
 }
 
 /** USDC ↔ SOL. Jupiter pays the network fee when this wallet has no SOL to pay it. */
@@ -294,6 +299,7 @@ export async function signRoute(input: {
   const cap = input.maxImpact ?? 5;
   if (input.inputMint === SOL || input.outputMint === SOL) return signUltra(input);
   let onlyDirect = input.onlyDirect;
+  let feeBps = 0;
   if (onlyDirect == null) {
     const decided = await decideRoute({
       inputMint: input.inputMint,
@@ -304,8 +310,9 @@ export async function signRoute(input: {
     });
     if (decided.impact > cap) throw new Error(`Price impact is ${decided.impact.toFixed(2)}%. The wallet was not asked to sign.`);
     onlyDirect = decided.onlyDirect;
+    feeBps = decided.feeBps;
   }
-  const prefs = JSON.stringify({ slippageBps: slip, onlyDirect: onlyDirect === true, maxImpact: cap });
+  const prefs = JSON.stringify({ slippageBps: slip, onlyDirect: onlyDirect === true, maxImpact: cap, feeBps });
   const built = await chainRpc("jupSwap", [
     input.owner,
     input.inputMint,
@@ -322,12 +329,12 @@ export async function signRoute(input: {
     const tx = VersionedTransaction.deserialize(b64ToBytes(built.swapTransaction));
     feePayerIs(tx, input.owner);
     const signature = await sendVersioned(tx);
-    return filed({ ...input, impact, route: "Jupiter", slippageBps: slip }, signature, Number(built.outAmount) / 10 ** input.outDecimals);
+    return filed({ ...input, impact, route: "Jupiter", slippageBps: slip, platformFeeBps: feeBps }, signature, Number(built.outAmount) / 10 ** input.outDecimals);
   }
   const quoted = await quoteRoute({ ...input, slippageBps: slip, onlyDirect, maxImpact: cap });
   if (quoted.impact > cap) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
   const lane = onlyDirect ? "&onlyDirectRoutes=true" : "&restrictIntermediateTokens=true";
-  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}${feeQuoteParam()}`;
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}${lane}${feeQuoteParam(feeBps)}`;
   let quote: RawQuote | null = null;
   for (const base of [QUOTE, QUOTE_LITE]) {
     const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
@@ -357,7 +364,7 @@ export async function signRoute(input: {
         dynamicComputeUnitLimit: true,
         dynamicSlippage: true,
         prioritizationFeeLamports: "auto",
-        ...feeSwapBody(),
+        ...feeSwapBody(feeBps),
       }),
     });
     const text = await swapRes.text();
@@ -379,7 +386,7 @@ export async function signRoute(input: {
   const tx = VersionedTransaction.deserialize(b64ToBytes(swapTx));
   feePayerIs(tx, input.owner);
   const signature = await sendVersioned(tx);
-  return filed({ ...input, impact: quoted.impact, route: quoted.route, slippageBps: slip }, signature, quoted.outUi);
+  return filed({ ...input, impact: quoted.impact, route: quoted.route, slippageBps: slip, platformFeeBps: feeBps }, signature, quoted.outUi);
 }
 
 function filed(
@@ -392,6 +399,7 @@ function filed(
     impact?: number;
     refPrice?: number;
     slippageBps?: number;
+    platformFeeBps?: number;
     symbol?: string;
     amountRaw?: number;
     inDecimals?: number;
@@ -435,7 +443,7 @@ function filed(
     refPrice: input.refPrice,
     quotedUi: outUi,
     slippageBps: input.slippageBps ?? 100,
-    platformFeeBps: deskFeeAccount() ? DESK_FEE_BPS : 0,
+    platformFeeBps: input.platformFeeBps ?? 0,
     impact: input.impact,
     route: input.route,
   });
@@ -453,7 +461,7 @@ function filed(
       });
     })
     .catch(() => undefined);
-  return { signature, outUi, executed, quotedUi: outUi, route: input.route || "Jupiter", impact: input.impact || 0, slippageBps: input.slippageBps ?? 100, platformFeeBps: deskFeeAccount() ? DESK_FEE_BPS : 0 };
+  return { signature, outUi, executed, quotedUi: outUi, route: input.route || "Jupiter", impact: input.impact || 0, slippageBps: input.slippageBps ?? 100, platformFeeBps: input.platformFeeBps ?? 0 };
 }
 
 export async function signStockSwap(input: {

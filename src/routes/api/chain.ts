@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
+import { DESK_FEE_BPS, deskFeeAccount, feeQuoteParam, feeSwapBody } from "@/lib/desk-fee";
 
 const METHODS = new Set([
   "getBalance",
@@ -131,14 +131,15 @@ async function holdings(address: string) {
   throw new Error(last);
 }
 
-function routePrefs(raw?: string): { slippageBps: number; onlyDirect: boolean; maxImpact: number } {
-  const base = { slippageBps: 100, onlyDirect: false, maxImpact: 5 };
+function routePrefs(raw?: string): { slippageBps: number; onlyDirect: boolean; maxImpact: number; feeBps: number } {
+  const base = { slippageBps: 100, onlyDirect: false, maxImpact: 5, feeBps: 0 };
   if (!raw) return base;
   try {
-    const parsed = JSON.parse(raw) as { slippageBps?: number; onlyDirect?: boolean; maxImpact?: number };
+    const parsed = JSON.parse(raw) as { slippageBps?: number; onlyDirect?: boolean; maxImpact?: number; feeBps?: number };
     const slippageBps = [30, 50, 80, 100].includes(Number(parsed.slippageBps)) ? Number(parsed.slippageBps) : 100;
     const maxImpact = [0.5, 1, 3, 5].includes(Number(parsed.maxImpact)) ? Number(parsed.maxImpact) : 5;
-    return { slippageBps, onlyDirect: parsed.onlyDirect === true, maxImpact };
+    const feeBps = deskFeeAccount() && Number(parsed.feeBps) === DESK_FEE_BPS ? DESK_FEE_BPS : 0;
+    return { slippageBps, onlyDirect: parsed.onlyDirect === true, maxImpact, feeBps };
   } catch {
     return base;
   }
@@ -149,7 +150,7 @@ async function jupSwap(owner: string, inputMint: string, outputMint: string, amo
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter an amount.");
   const prefs = routePrefs(prefsRaw);
   const lane = prefs.onlyDirect ? "&onlyDirectRoutes=true" : "&restrictIntermediateTokens=true";
-  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${prefs.slippageBps}${lane}${feeQuoteParam()}`;
+  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=${prefs.slippageBps}${lane}${feeQuoteParam(prefs.feeBps)}`;
   let quote: Record<string, unknown> | null = null;
   let last = "Jupiter did not quote.";
   for (const base of ["https://api.jup.ag/swap/v1/quote", "https://lite-api.jup.ag/swap/v1/quote"]) {
@@ -189,7 +190,7 @@ async function jupSwap(owner: string, inputMint: string, outputMint: string, amo
           dynamicComputeUnitLimit: true,
           dynamicSlippage: true,
           prioritizationFeeLamports: "auto",
-          ...feeSwapBody(),
+          ...feeSwapBody(prefs.feeBps),
         }),
       });
       const parsed = (await r.json()) as { swapTransaction?: string; error?: string };
