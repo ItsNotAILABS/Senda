@@ -4,11 +4,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-const QUOTE_URLS = [
-  (qs: string) => `https://public.jupiterapi.com/quote?${qs}`,
-  (qs: string) => `https://lite-api.jup.ag/swap/v1/quote?${qs}`,
-  (qs: string) => `https://api.jup.ag/swap/v1/quote?${qs}`,
-];
+// Official Jupiter gateway; the legacy Lite hostname retires October 30, 2026.
+const QUOTE_URLS = [(qs: string) => `https://api.jup.ag/swap/v1/quote?${qs}`];
 
 export type JupQuote = {
   inAmount: string;
