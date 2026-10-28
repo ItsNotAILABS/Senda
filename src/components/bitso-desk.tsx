@@ -39,6 +39,8 @@ export function BitsoDesk({ owner }: { owner: string }) {
   const [pesoPx, setPesoPx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [line, setLine] = useState("");
+  const [review, setReview] = useState(false);
+  const [age, setAge] = useState(0);
 
   useEffect(() => {
     try {
@@ -62,6 +64,16 @@ export function BitsoDesk({ owner }: { owner: string }) {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setAge((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (age === 0 || age % 30 !== 0) return;
+    void getMxnDesk().then(setDesk).catch(() => undefined);
+  }, [age]);
 
   useEffect(() => {
     if (!owner) {
@@ -92,6 +104,7 @@ export function BitsoDesk({ owner }: { owner: string }) {
 
   function keep(next: string) {
     setAddr(next);
+    setReview(false);
     try {
       if (addressOf(next)) localStorage.setItem(ADDR, next.trim());
     } catch {
@@ -163,43 +176,87 @@ export function BitsoDesk({ owner }: { owner: string }) {
     }
   }
 
+  const left = 30 - (age % 30);
+  const step1 = asset === "MXNe" ? "Sell pesos" : asset === "SOL" ? "Send SOL" : "Send USDC";
+
   return (
-    <div id="bitso-rail" className="space-y-3">
-      <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">Bitso</p>
-      <p className="text-sm text-muted">
-        Bitso credits USDC and SOL on Solana. It does not credit MXNe. Pesos are sold for USDC first, then that USDC is sent. Inside Bitso you sell for MXN and withdraw by SPEI. Their peso token, MXNB, is on Arbitrum, not this wallet.
-      </p>
-      <ol className="space-y-1 text-sm text-muted">
-        <li><span className="text-foreground">1.</span> Open Bitso and create the account. Senda cannot do the ID check.</li>
-        <li><span className="text-foreground">2.</span> Verify the INE or passport, the selfie, and the CURP. Without the CURP, SPEI to a bank will not open.</li>
-        <li><span className="text-foreground">3.</span> Deposit, USDC, network Solana. Copy the address it shows today.</li>
-        <li><span className="text-foreground">4.</span> Paste it below. Phantom sends. Bitso credits the dollars.</li>
-        <li><span className="text-foreground">5.</span> In Bitso, sell USDC for MXN, then Enviar to a CLABE, a debit card, or a phone.</li>
+    <div id="bitso-rail" className="space-y-3 rounded-[22px] border border-white/10 bg-black p-4">
+      <p className="font-mono text-[10px] tracking-[0.16em] text-accent uppercase">Liquify</p>
+      <h2 className="text-2xl font-semibold tracking-tight">Cash-out planner</h2>
+      <p className="text-sm text-white/55">Move from Solana to Bitso. You sign the first step. The sale and the bank transfer happen in Bitso.</p>
+      <ol className="grid gap-2 sm:grid-cols-3">
+        {[
+          [step1, asset === "SOL" ? "Solana" : "Solana"],
+          ["Convert on Bitso", "USDC → MXN"],
+          ["Receive MXN", "SPEI, in their app"],
+        ].map(([title, sub], i) => (
+          <li key={title} className="rounded-2xl border border-white/10 px-3 py-3">
+            <p className="font-mono text-[10px] text-accent">{i + 1}</p>
+            <p className="mt-1 text-sm font-semibold">{title}</p>
+            <p className="text-xs text-white/45">{sub}</p>
+          </li>
+        ))}
       </ol>
-      <a href="https://bitso.com" target="_blank" rel="noreferrer" className="inline-flex min-h-10 items-center text-sm font-semibold text-accent">Open Bitso</a>
       <div className="flex gap-1">
-        {(["MXNe", "USDC", "SOL"] as const).map((id) => (
-          <button key={id} type="button" onClick={() => { setAsset(id); setLine(""); }} className={cn("min-h-10 flex-1 rounded-full text-sm font-semibold", asset === id ? "bg-white text-black" : "border border-white/10 text-muted")}>
+        {(["USDC", "MXNe", "SOL"] as const).map((id) => (
+          <button key={id} type="button" onClick={() => { setAsset(id); setLine(""); setReview(false); }} className={cn("min-h-10 flex-1 rounded-full text-sm font-semibold", asset === id ? "bg-white text-black" : "border border-white/10 text-white/60")}>
             {id === "MXNe" ? "Pesos" : id}
           </button>
         ))}
       </div>
-      <input value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setLine(""); }} inputMode="decimal" aria-label="Amount to send to Bitso" placeholder={asset === "MXNe" ? "Pesos" : asset} className="w-full bg-transparent font-mono text-4xl tabular-nums outline-none" />
-      <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setAmount(held > 0 ? String(Math.floor(held * (asset === "SOL" ? 1000 : 100)) / (asset === "SOL" ? 1000 : 100)) : "")} className="min-h-9 rounded-full border border-white/10 px-3 text-xs font-semibold">
-          All held
-        </button>
-        <p className="font-mono text-xs text-subtle">Held {held > 0 ? held.toLocaleString("en-US", { maximumFractionDigits: asset === "SOL" ? 4 : 2 }) : "0"} {asset}</p>
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-stretch">
+        <div className="rounded-2xl border border-white/10 px-3 py-3">
+          <p className="text-xs text-white/45">You send</p>
+          <input value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setLine(""); setReview(false); }} inputMode="decimal" aria-label="Amount to send to Bitso" placeholder="0" className="mt-1 w-full bg-transparent font-mono text-4xl tabular-nums outline-none" />
+          <p className="text-xs text-white/45">{asset === "MXNe" ? "Pesos on Solana" : asset} · held {held > 0 ? held.toLocaleString("en-US", { maximumFractionDigits: asset === "SOL" ? 4 : 2 }) : "0"}</p>
+        </div>
+        <p className="hidden self-center text-white/30 sm:block">→</p>
+        <div className="rounded-2xl border border-white/10 px-3 py-3">
+          <p className="text-xs text-white/45">You receive, estimated</p>
+          <p className="mt-1 font-mono text-3xl tabular-nums">{mxn > 0 ? pesos(mxn) : "Quote pending"}</p>
+          <p className="text-xs text-white/45">{rate > 0 ? `MXN · ${desk?.bitso ? "Bitso dollar book" : "market"} · ${left}s` : "Waiting on the book"}</p>
+        </div>
       </div>
-      <input value={addr} onChange={(e) => keep(e.target.value.trim())} placeholder={asset === "SOL" ? "Bitso Solana address" : "Bitso Solana USDC address"} spellCheck={false} aria-label="Bitso deposit address" className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
-      <p className="text-xs text-muted">
-        {mxn > 0 ? `About ${pesos(mxn)} on Bitso’s dollar book${desk?.bitso ? "" : ", using the market rate"}. Not their fill.` : "The peso estimate loads with the dollar book."}
-        {asset === "MXNe" ? " Two signatures." : " One signature."} Paste a fresh address.
-      </p>
-      <button type="button" disabled={busy || !dest} onClick={() => void go()} className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
-        {busy ? "Waiting on Phantom" : asset === "MXNe" ? "Withdraw pesos to Bitso" : `Send ${asset} to Bitso`}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => setAmount(held > 0 ? String(Math.floor(held * (asset === "SOL" ? 1000 : 100)) / (asset === "SOL" ? 1000 : 100)) : "")} className="h-9 rounded-full border border-white/15 px-3 text-xs font-semibold">All held</button>
+      </div>
+      <input id="bitso-addr" value={addr} onChange={(e) => keep(e.target.value.trim())} placeholder={asset === "SOL" ? "Bitso Solana address" : "Bitso Solana USDC address"} spellCheck={false} aria-label="Bitso deposit address" className="min-h-12 w-full rounded-2xl border border-white/10 bg-black px-3 font-mono text-xs outline-none" />
+      <div className="grid gap-2 sm:grid-cols-3">
+        <p className="rounded-2xl bg-white/[0.04] px-3 py-2 text-xs text-white/55"><span className="block font-semibold text-white">Solana transfer</span>Seconds to minutes after the signature.</p>
+        <p className="rounded-2xl bg-white/[0.04] px-3 py-2 text-xs text-white/55"><span className="block font-semibold text-white">Bitso conversion</span>Their quote. This estimate refreshes every 30 seconds. It is not their fill.</p>
+        <p className="rounded-2xl bg-white/[0.04] px-3 py-2 text-xs text-white/55"><span className="block font-semibold text-white">SPEI</span>A business day, inside Bitso, after you sell. This desk does not send the peso.</p>
+      </div>
+      <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-3 py-3">
+        <p className="text-sm"><span className="font-semibold">Bitso</span> <span className={dest ? "text-accent" : "text-[#e23b4a]"}>{dest ? "Deposit address saved" : "Not connected"}</span></p>
+        <button type="button" onClick={() => document.getElementById("bitso-addr")?.focus()} className="h-10 shrink-0 rounded-full border border-white/15 px-3 text-xs font-semibold">Connect Bitso</button>
+      </div>
+      {review ? (
+        <div className="rounded-2xl bg-white/[0.04] px-3 py-3 text-sm leading-relaxed">
+          {asset === "MXNe"
+            ? `Two signatures. Sell ${n || 0} pesos for USDC, then send that USDC to the address you pasted. Bitso credits the dollars. You sell for pesos there.`
+            : `One signature. Send ${n || 0} ${asset} on Solana to the address you pasted. About ${mxn > 0 ? pesos(mxn) : "an unknown peso amount"} if Bitso’s book is still there. Not a SPEI.`}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        disabled={busy || (review && !dest)}
+        onClick={() => {
+          if (!review) {
+            if (!(n > 0)) {
+              toast.error("Enter an amount.");
+              return;
+            }
+            setReview(true);
+            return;
+          }
+          void go();
+        }}
+        className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40"
+      >
+        {busy ? "Waiting on the wallet" : review ? (asset === "MXNe" ? "Sign the sale and the send" : `Sign the ${asset} send`) : "Review route"}
       </button>
-      {line ? <p className="font-mono text-xs text-muted">{line}</p> : null}
+      {line ? <p className="font-mono text-xs text-white/55">{line}</p> : null}
+      <p className="text-xs text-white/40">Bitso credits USDC and SOL on Solana. It does not credit MXNe, so pesos are sold first. MXNB is a different token, on Arbitrum. The ID check, the CURP, and the CLABE stay in Bitso.</p>
       <OutRails owner={owner} />
     </div>
   );

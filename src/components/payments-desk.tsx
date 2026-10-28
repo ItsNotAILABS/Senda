@@ -143,6 +143,7 @@ export function PaymentsDesk({
         <div className={act === "nearby" ? "" : "mt-4"}>
         {act === "send" ? (
           <div className="space-y-6">
+            <BitsoDesk owner={owner} />
             <SendTicket owner={owner} />
             <details className="rounded-2xl border border-white/10 px-3 py-2">
               <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Accounts, cards, batch, Bitso</summary>
@@ -153,7 +154,6 @@ export function PaymentsDesk({
                 <CousinPesos />
                 <MerchantDesk owner={owner} />
                 <BatchPay owner={owner} />
-                <BitsoDesk owner={owner} />
               </div>
             </details>
             <div className="border-t border-white/10 pt-4">

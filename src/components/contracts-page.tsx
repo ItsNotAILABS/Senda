@@ -81,6 +81,7 @@ export function ContractsPage() {
   const [due, setDue] = useState(tomorrow);
   const [busy, setBusy] = useState(false);
   const [deskOpen, setDeskOpen] = useState(false);
+  const [armed, setArmed] = useState(false);
 
   function refresh() {
     setRows(readRows());
@@ -106,6 +107,10 @@ export function ContractsPage() {
   }, [open]);
   const shown = lane === "all" ? open : open.filter((r) => r.lane === lane);
   const live = deals.filter((d) => d.status === "signed");
+
+  useEffect(() => {
+    setArmed(false);
+  }, [chain, who, usd, note, due, pick.id]);
 
   async function sign() {
     if (!(amount >= 1) || amount > 5000) {
@@ -208,10 +213,37 @@ export function ContractsPage() {
           <p className="font-mono text-[10px] tracking-[0.14em] text-white/40 uppercase">The contract</p>
           <p className="mt-2 text-sm leading-relaxed">{terms || "Enter an amount."}</p>
         </div>
-        <button type="button" disabled={busy} onClick={() => void sign()} className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50">
-          {busy ? "Waiting on the wallet" : pick.pays ? `Sign and pay $${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"}` : "Sign the mandate"}
+        {armed ? (
+          <div className="mt-3 rounded-2xl border border-white/10 px-3 py-3 text-sm leading-relaxed">
+            {pick.pays && chain === "Solana" ? <p>One Solana signature. ${amount.toFixed(2)} USDC leaves this wallet for the address you typed. Gas is a little SOL.</p> : null}
+            {pick.pays && chain !== "Solana" && chain !== "Monad" ? <p>The wallet switches to {chain}. One signature calls that chain’s USDC transfer for ${amount.toFixed(2)}. Gas is that chain’s coin, not USDC.</p> : null}
+            {pick.pays && chain === "Monad" ? <p>Monad is on the chain row. This desk has no USDC contract there, so the wallet is not asked.</p> : null}
+            {!pick.pays ? <p>No USDC moves. The desk cap becomes ${amount.toFixed(2)} until {due}. A later send still asks the wallet.</p> : null}
+            <p className="mt-2 text-white/45">Voiding the record later does not pull a payment back.</p>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          disabled={busy || (armed && pick.pays && chain === "Monad")}
+          onClick={() => {
+            if (!armed) {
+              if (!(amount >= 1) || amount > 5000) {
+                toast.error("The amount is between $1 and $5,000.");
+                return;
+              }
+              if (pick.pays && who.trim().length < 8) {
+                toast.error(chain === "Solana" ? "Paste the Solana address that gets paid." : "Paste the address that gets paid.");
+                return;
+              }
+              setArmed(true);
+              return;
+            }
+            void sign();
+          }}
+          className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {busy ? "Waiting on the wallet" : armed ? (pick.pays ? `Sign $${Number.isFinite(amount) ? amount.toFixed(2) : "0.00"} on ${chain}` : "Sign the mandate") : "Review the signature"}
         </button>
-        {chain === "Monad" && pick.pays ? <p className="mt-2 text-xs text-white/45">Monad can be named. Paying it waits until a USDC address is on this desk.</p> : null}
       </section>
 
       <section>
