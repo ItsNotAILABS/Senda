@@ -6,6 +6,7 @@ import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "
 import { AttachedAccounts, CousinPesos } from "@/components/attached-accounts";
 import { BatchPay } from "@/components/batch-pay";
 import { BitsoDesk } from "@/components/bitso-desk";
+import { MoveWidget } from "@/components/move-widget";
 import { MerchantDesk } from "@/components/merchant-desk";
 import { SpendCards } from "@/components/spend-cards";
 import { TillDesk } from "@/components/till-desk";
@@ -143,6 +144,7 @@ export function PaymentsDesk({
         <div className={act === "nearby" ? "" : "mt-4"}>
         {act === "send" ? (
           <div className="space-y-6">
+            <MoveWidget owner={owner} />
             <BitsoDesk owner={owner} />
             <SendTicket owner={owner} />
             <details className="rounded-2xl border border-white/10 px-3 py-2">
