@@ -127,7 +127,7 @@ export function MoveWidget({ owner }: { owner: string }) {
           <li className="px-3 py-4 text-sm text-white/45">{amount >= 5 ? fault || "Asking Mayan…" : "Minimum is $5."}</li>
         )}
       </ul>
-      <p className="mt-2 text-xs text-white/40">{quote ? `${quote.route}${quote.seconds ? ` · about ${quote.seconds}s` : ""} · ${picked.where}` : picked.where}</p>
+      <p className="mt-2 text-xs text-white/40">{quote ? `${quote.route}${quote.seconds ? ` · about ${quote.seconds}s` : ""} · ${picked.where}` : picked.where} Jupiter is cheaper when both sides are on Solana. Circle CCTP is the burn-and-mint when both sides are native USDC on Ethereum or Base. This button is the cross-chain one.</p>
       <button type="button" disabled={busy || !quote} onClick={() => void sign()} className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
         {busy ? "Waiting on Phantom" : "Sign the move"}
       </button>

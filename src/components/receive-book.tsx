@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CashRail } from "@/components/cash-rail";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { stablePayLink, STABLES } from "@/lib/stables";
 import { cn } from "@/lib/utils";
 
 type Btc = { address?: string } | string;
@@ -22,6 +24,7 @@ export function ReceiveBook() {
   const [eth, setEth] = useState(linkedEvm);
   const [btc, setBtc] = useState("");
   const [picked, setPicked] = useState("solana");
+  const [stable, setStable] = useState("USDC");
   const [qr, setQr] = useState("");
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export function ReceiveBook() {
   const taproot = btc.startsWith("bc1p") ? btc : "";
   const segwit = btc.startsWith("bc1q") ? btc : "";
   const rows = [
-    { id: "cash", name: "Cash", tag: "Stablecoins only", address: sol },
+    { id: "cash", name: "Cash", tag: "Separate address", address: sol },
     { id: "solana", name: "Solana", tag: "", address: sol },
     { id: "ethereum", name: "Ethereum", tag: "", address: eth },
     { id: "taproot", name: "Bitcoin", tag: "Taproot", address: taproot },
@@ -45,21 +48,24 @@ export function ReceiveBook() {
   ];
   const open = rows.find((row) => row.id === picked) ?? rows[1];
 
+  const mint = STABLES.find((row) => row.symbol === stable)?.mint ?? STABLES[0].mint;
+  const qrText = open.address && (open.id === "solana" || open.id === "cash") ? stablePayLink(open.address, mint) : open.address;
+
   useEffect(() => {
-    if (!open.address) {
+    if (!qrText) {
       setQr("");
       return;
     }
     let live = true;
     void import("qrcode").then((QR) =>
-      QR.default.toDataURL(open.address, { margin: 1, width: 220, color: { dark: "#050508", light: "#ffffff" } }).then((url) => {
+      QR.default.toDataURL(qrText, { margin: 1, width: 220, color: { dark: "#050508", light: "#ffffff" } }).then((url) => {
         if (live) setQr(url);
       }),
     );
     return () => {
       live = false;
     };
-  }, [open.address]);
+  }, [qrText]);
 
   async function read() {
     const win = window as unknown as {
@@ -125,12 +131,22 @@ export function ReceiveBook() {
           </li>
         ))}
       </ul>
+      {open.address && (open.id === "solana" || open.id === "cash") ? (
+        <div className="mt-3 flex gap-1.5 overflow-x-auto">
+          {STABLES.map((row) => (
+            <button key={row.symbol} type="button" onClick={() => setStable(row.symbol)} className={cn("h-8 shrink-0 rounded-full px-3 text-xs font-semibold", stable === row.symbol ? "bg-white text-black" : "bg-white/10 text-white/70")}>
+              {row.symbol}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {open.address && qr ? (
         <div className="mt-3 flex items-center gap-3">
           <img src={qr} alt="" className="size-28 rounded-xl" />
           <p className="break-all font-mono text-[11px] text-white/55">{open.address}</p>
         </div>
       ) : null}
+      <CashRail owner={sol} />
     </section>
   );
 }
