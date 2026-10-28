@@ -10,6 +10,7 @@ import { sendCut } from "@/lib/desk-fee";
 import { connectWallet, detectWallets, rememberWallet, type WalletChoice, type WalletId } from "@/lib/wallets";
 import { shortPk } from "@/lib/senda-keys";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { ReceiveBook } from "@/components/receive-book";
 import { cn } from "@/lib/utils";
 
 const ORDER = [
@@ -125,6 +126,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
         <h1 className="mt-1 font-display text-3xl tracking-tight">Connect the wallet that matches the trade.</h1>
       </header>
       )}
+      <ReceiveBook />
       <DeskAudit live="Each wallet on this list signs if it is installed. A Solana wallet signs a Solana trade. An EVM wallet signs the chain the trade is on." hold="A wallet that is not in this browser is not offered as if it were." />
       <ol className="grid gap-2 lg:grid-cols-3">
         {ORDER.map((step) => (

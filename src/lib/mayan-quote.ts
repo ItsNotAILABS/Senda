@@ -1,9 +1,11 @@
-/** A Mayan quote with no referrer. Senda does not take a cut of this route. */
+/** Mayan quote. The referrer is Senda's Solana address. The person pays 8 bps. */
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+export const MAYAN_FEE_ADDRESS = "4mwAnghwCjCEe9FaMQxEx6B1hmfrXwwPjoeq9MyGG4fF";
+export const MAYAN_FEE_BPS = 8;
 
 export const MOVE_LANES = [
   { id: "hl-perps", label: "Hyperliquid perps", where: "USDC collateral", chain: "hypercore", token: "0x0000000000000000000000000000000000000000", dest: "evm" as const },
@@ -31,6 +33,7 @@ export type MoveQuote = {
   route: string;
   lines: FeeLine[];
   quote: Json;
+  quotedAt: number;
 };
 
 function money(n: number): string {
@@ -49,14 +52,16 @@ function lines(amount: number, quote: Json): FeeLine[] {
   const bridge = num(row.bridgeFee);
   const hcBox = row.hcSwiftDeposit;
   const hc = hcBox && typeof hcBox === "object" && !Array.isArray(hcBox) ? num(hcBox.relayerFee64) / 1e6 : 0;
-  const named = protocol + bridge + hc;
+  const referrer = num(row.referrerFeeUsd);
+  const named = protocol + bridge + hc + referrer;
   const spread = Math.max(0, Math.round((amount - out - named) * 1e6) / 1e6);
+  const who = `${MAYAN_FEE_ADDRESS.slice(0, 4)}…${MAYAN_FEE_ADDRESS.slice(-4)}`;
   return [
     { name: "You send", value: `$${money(amount)} USDC`, note: "Solana" },
     { name: "Mayan Swift", value: hc > 0 ? `$${money(hc)}` : "None on this route", note: hc > 0 ? "Hyperliquid deposit" : "No separate Swift line" },
     { name: "Circle CCTP", value: bridge > 0 ? `$${money(bridge)}` : "None on this route", note: bridge > 0 ? "Named on the quote" : "Not itemized inside this route" },
     { name: "Mayan protocol", value: protocol > 0 ? `$${money(protocol)}` : "$0.00", note: "Their fee" },
-    { name: "Senda referrer", value: "None", note: "Nothing is deducted for us." },
+    { name: "Senda", value: referrer > 0 ? `$${money(referrer)}` : "$0.00", note: `${MAYAN_FEE_BPS} bps. You pay it. It lands at ${who}.` },
     { name: "Route spread", value: spread > 0 ? `$${money(spread)}` : "$0.00", note: "Send minus receive, after the lines above." },
     { name: "You receive", value: `$${money(out)}`, note: typeof row.clientEta === "string" ? row.clientEta : "Quote" },
   ];
@@ -81,6 +86,8 @@ export const mayanQuote = createServerFn({ method: "POST" })
       sdkVersion: "15_3_0",
       solanaProgram: "FC4eXxkyrMPTjiYUpp4EAnkmwMbQyZ6NDCh1kfLn6vsf",
       forwarderAddress: "0x337685fdaB40D39bd02028545a4FfA7D287cC3E2",
+      referrer: MAYAN_FEE_ADDRESS,
+      referrerBps: String(MAYAN_FEE_BPS),
     });
     const res = await fetch(`https://price-api.mayan.finance/v3/quote?${q}`, {
       headers: { accept: "application/json" },
@@ -89,7 +96,7 @@ export const mayanQuote = createServerFn({ method: "POST" })
     const body = (await res.json()) as { quotes?: Json[]; msg?: string };
     const quote = body.quotes?.[0];
     if (!res.ok || !quote || typeof quote !== "object" || Array.isArray(quote)) throw new Error(body.msg || "Mayan did not quote.");
-    if (num(quote.referrerBps) !== 0) throw new Error("This quote has a referrer. It was not used.");
+    if (num(quote.referrerBps) !== MAYAN_FEE_BPS) throw new Error("Mayan did not attach the Senda fee. The quote was not used.");
     return {
       lane: lane.id,
       amount: data.amount,
@@ -98,5 +105,6 @@ export const mayanQuote = createServerFn({ method: "POST" })
       route: String(quote.type || "Mayan"),
       lines: lines(data.amount, quote),
       quote,
+      quotedAt: Date.now(),
     };
   });

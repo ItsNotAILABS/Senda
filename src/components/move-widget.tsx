@@ -77,7 +77,7 @@ export function MoveWidget({ owner }: { owner: string }) {
       const from = owner || (await connectPhantom());
       const to = await destination();
       if (!/^0x[a-fA-F0-9]{40}$/.test(to)) throw new Error("Hyperliquid and these chains receive at an 0x address.");
-      const sig = await signMayan(quote.quote, from, to);
+      const sig = await signMayan(quote.quote, from, to, quote.quotedAt);
       toast.success(`Signed. ${sig.slice(0, 10)}…`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "The wallet did not sign.");
@@ -95,15 +95,14 @@ export function MoveWidget({ owner }: { owner: string }) {
       void navigator.clipboard.writeText(owner).then(() => toast.success("Address copied."));
       return;
     }
-    const url = `https://buy.moonpay.com/?currencyCode=usdc_sol&walletAddress=${encodeURIComponent(owner)}`;
-    window.open(url, "senda-fund", "popup,width=420,height=720");
+    void navigator.clipboard.writeText(owner).then(() => toast.success("Address copied. A deposit lands on this Phantom."));
   }
 
   return (
     <section className="rounded-[22px] border border-white/10 bg-black p-4">
       <p className="font-mono text-[10px] tracking-[0.16em] text-accent uppercase">Move</p>
       <h2 className="mt-1 text-xl font-semibold tracking-tight">Solana USDC, one signature</h2>
-      <p className="mt-1 text-sm text-white/55">Hyperliquid perps or spot, or USDC on another chain. Mayan Swift. No referrer.</p>
+      <p className="mt-1 text-sm text-white/55">Hyperliquid perps or spot, or USDC on another chain. Mayan Swift. Senda takes 8 bps. A failed route refunds to this Solana account.</p>
       <div className="mt-3 flex gap-1.5 overflow-x-auto">
         {MOVE_LANES.map((row) => (
           <button key={row.id} type="button" onClick={() => setLane(row.id)} className={cn("h-9 shrink-0 rounded-full px-3 text-xs font-semibold", lane === row.id ? "bg-white text-black" : "bg-white/10 text-white/70")}>
@@ -128,7 +127,7 @@ export function MoveWidget({ owner }: { owner: string }) {
           <li className="px-3 py-4 text-sm text-white/45">{amount >= 5 ? fault || "Asking Mayan…" : "Minimum is $5."}</li>
         )}
       </ul>
-      <p className="mt-2 text-xs text-white/40">{quote ? `${quote.route}${quote.seconds ? ` · about ${quote.seconds}s` : ""} · ${picked.where}` : picked.where} Senda referrer fee: none.</p>
+      <p className="mt-2 text-xs text-white/40">{quote ? `${quote.route}${quote.seconds ? ` · about ${quote.seconds}s` : ""} · ${picked.where}` : picked.where}</p>
       <button type="button" disabled={busy || !quote} onClick={() => void sign()} className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
         {busy ? "Waiting on Phantom" : "Sign the move"}
       </button>
@@ -146,9 +145,8 @@ export function MoveWidget({ owner }: { owner: string }) {
           ))}
         </div>
         <button type="button" onClick={fundGo} className="mt-3 min-h-11 w-full rounded-full border border-white/15 text-sm font-semibold">
-          {fund === "usdc" ? "Copy the Phantom address" : `Continue with ${FUND.find((row) => row.id === fund)?.label}. Senda stays open.`}
+          {fund === "usdc" ? "Copy this Phantom address" : "Copy the address the deposit lands on"}
         </button>
-        {fund !== "usdc" ? <p className="mt-2 text-xs text-white/40">Apple Pay, the card, Revolut, and PayPal are Phantom’s providers, not a Senda charge. The provider delivers USDC to the address above. Senda does not see the card.</p> : null}
       </div>
     </section>
   );
