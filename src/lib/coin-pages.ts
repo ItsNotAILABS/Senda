@@ -35,6 +35,7 @@ function rowOf(raw: unknown): LiveCoin | null {
     change: Number(row.stats24h?.priceChange) || 0,
     icon: row.icon || "",
     decimals: Number.isFinite(Number(row.decimals)) ? Number(row.decimals) : 6,
+    liq: Number((raw as { liquidity?: number }).liquidity) || undefined,
   };
 }
 
@@ -78,7 +79,12 @@ export const coinPage = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ rows: LiveCoin[]; total: number; page: number; pages: number }> => {
     const all = await catalog();
     const q = (data.q || "").trim().toLowerCase();
-    const matched = q ? all.filter((row) => `${row.symbol} ${row.name}`.toLowerCase().includes(q)) : all;
+    const searched = q.length >= 2 ? await pull(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(q)}`).catch(() => [] as LiveCoin[]) : [];
+    searched.sort((a, b) => (b.liq ?? 0) - (a.liq ?? 0));
+    const seen = new Set(searched.map((row) => row.id));
+    const matched = q
+      ? [...searched, ...all.filter((row) => !seen.has(row.id) && `${row.symbol} ${row.name} ${row.id}`.toLowerCase().includes(q))]
+      : all;
     const pages = Math.max(1, Math.ceil(matched.length / PAGE));
     const page = Math.min(data.page, pages - 1);
     return { rows: matched.slice(page * PAGE, page * PAGE + PAGE), total: matched.length, page, pages };

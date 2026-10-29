@@ -28,6 +28,8 @@ export type TapeRow = {
   price: number | null;
   change: number | null;
   icon?: string;
+  /** Pool depth in dollars, when Jupiter search returned it. */
+  liquidity?: number;
 };
 
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
@@ -409,3 +411,40 @@ export const worldBook = createServerFn({ method: "GET" }).handler(async () => l
 export const ostiumBook = createServerFn({ method: "GET" }).handler(async () => loadOstium());
 
 export const jupTape = createServerFn({ method: "GET" }).handler(async () => loadTape());
+
+/** A ticker Jupiter can quote, including names that are not on the verified list. Deepest pool first. */
+export const searchTape = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const q = typeof input === "string" ? input : "";
+    return q.trim().slice(0, 44);
+  })
+  .handler(async ({ data }): Promise<TapeRow[]> => {
+    if (data.length < 2) return [];
+    const json = await getJson(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data)}`, 8000).catch(() => []);
+    if (!Array.isArray(json)) return [];
+    const rows: TapeRow[] = [];
+    for (const raw of json) {
+      if (!raw || typeof raw !== "object") continue;
+      const row = raw as {
+        id?: unknown;
+        symbol?: unknown;
+        name?: unknown;
+        usdPrice?: unknown;
+        icon?: unknown;
+        liquidity?: unknown;
+        stats24h?: { priceChange?: unknown };
+      };
+      if (typeof row.id !== "string" || row.id.length < 32 || typeof row.symbol !== "string") continue;
+      rows.push({
+        id: row.id,
+        symbol: row.symbol,
+        name: typeof row.name === "string" && row.name ? row.name : row.symbol,
+        price: num(row.usdPrice),
+        change: num(row.stats24h?.priceChange),
+        icon: typeof row.icon === "string" ? row.icon : undefined,
+        liquidity: num(row.liquidity) ?? undefined,
+      });
+    }
+    rows.sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0));
+    return rows.slice(0, 30);
+  });

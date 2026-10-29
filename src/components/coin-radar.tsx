@@ -96,7 +96,11 @@ export function CoinRadar({ house = [], onOpen }: { house?: HouseListing[]; onOp
       <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Spot</p>
       <h1 className="mt-1 font-display text-3xl tracking-tight">Every coin, in its own card.</h1>
       <p className="mt-2 max-w-xl text-sm text-muted">
-        {total ? `${total.toLocaleString("en-US")} verified coins. Page ${page + 1} of ${pages}.` : "Waiting on Jupiter."} Search a coin, an xStock, or a PreStock. Open it to trade the whole ticket.
+        {q.trim().length >= 2
+          ? `${total.toLocaleString("en-US")} matches. Jupiter search is first, deepest pool first. The same ticker can be more than one mint.`
+          : total
+            ? `${total.toLocaleString("en-US")} verified coins. Page ${page + 1} of ${pages}. Search finds the rest.`
+            : "Waiting on Jupiter."}
       </p>
       <input
         value={q}
@@ -144,6 +148,7 @@ export function CoinRadar({ house = [], onOpen }: { house?: HouseListing[]; onOp
               {c.icon ? <img src={c.icon} alt="" className="size-8 shrink-0 rounded-full bg-white/10" /> : <span className="grid size-8 shrink-0 place-items-center rounded-full bg-white text-[10px] font-bold text-black">{c.symbol.slice(0, 2)}</span>}
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{c.symbol}</span>
+                <span className="block truncate font-mono text-[10px] text-subtle">{c.id.slice(0, 4)}…{c.id.slice(-4)}{c.liq ? ` · pool $${Math.round(c.liq).toLocaleString("en-US")}` : ""}</span>
                 <span className={cn("font-mono text-[11px] tabular-nums", c.change < 0 ? "text-down" : "text-up")}>
                   {c.change >= 0 ? "+" : ""}
                   {c.change.toFixed(1)}%
