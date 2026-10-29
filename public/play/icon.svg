@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Senda">
+  <rect width="512" height="512" rx="112" fill="#07080d"/>
+  <path d="M352 156c-24-32-68-52-120-52-86 0-140 46-140 108 0 54 40 86 128 104 78 16 112 40 112 90 0 52-50 92-136 92-58 0-106-18-140-52" fill="none" stroke="#d6ff4a" stroke-width="40" stroke-linecap="round"/>
+</svg>

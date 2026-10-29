@@ -129,6 +129,7 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
       )}
       <ReceiveBook />
       <AndroidInstall />
+      <Link to="/listing" className="inline-flex text-sm text-accent">Play listing</Link>
       <DeskAudit live="Each wallet on this list signs if it is installed. A Solana wallet signs a Solana trade. An EVM wallet signs the chain the trade is on." hold="A wallet that is not in this browser is not offered as if it were." />
       <ol className="grid gap-2 lg:grid-cols-3">
         {ORDER.map((step) => (

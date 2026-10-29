@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" role="img" aria-label="Senda. The wallet signs.">
+  <rect width="1024" height="500" fill="#07080d"/>
+  <text x="72" y="210" fill="#f5f7fb" font-family="Arial, sans-serif" font-size="92" font-weight="700">SENDA</text>
+  <rect x="72" y="236" width="84" height="6" fill="#d6ff4a"/>
+  <text x="72" y="290" fill="#d6ff4a" font-family="Arial, sans-serif" font-size="28">The wallet signs.</text>
+  <rect x="700" y="70" width="230" height="360" rx="28" fill="#10131c" stroke="#232838"/>
+  <rect x="724" y="98" width="70" height="8" rx="4" fill="#d6ff4a"/>
+  <text x="724" y="150" fill="#f5f7fb" font-family="Arial, sans-serif" font-size="22">$4,280</text>
+  <text x="724" y="196" fill="#a7adbe" font-family="Arial, sans-serif" font-size="14">SOL</text>
+  <text x="724" y="228" fill="#a7adbe" font-family="Arial, sans-serif" font-size="14">USDC</text>
+  <text x="724" y="260" fill="#a7adbe" font-family="Arial, sans-serif" font-size="14">POPCAT</text>
+</svg>
