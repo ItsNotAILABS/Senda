@@ -5,9 +5,11 @@ import { STABLES, USDC_MINT, type Stable } from "@/lib/stables";
 import { cn } from "@/lib/utils";
 
 const SPEND = [
-  { name: "This desk", line: "Swap the stable to USDC here. Jupiter quotes it. Then it trades or sends like any other USDC." },
-  { name: "Phantom Cash Visa", line: "A different Solana address inside Phantom, not this one. Lead Bank issues the Visa. Bridge runs the program. A store sees Visa. United States except New York." },
-  { name: "Kraken and Coinbase", line: "They accept CASH on Solana. Binance, OKX, Bybit, Robinhood, Fidelity, Schwab, Webull, and eToro do not. Swap to USDC before those." },
+  { name: "This desk", line: "Swap the stable to USDC here. Jupiter quotes it. Then it trades or sends like any other USDC.", href: "" },
+  { name: "Bitrefill", line: "Gift cards, phone top-ups, and eSIMs. They take Bitcoin, Ethereum, USDT, USDC, and a few others. The gift card is what the store sees.", href: "https://www.bitrefill.com/pay-with-crypto/" },
+  { name: "Shopify checkout", line: "A shop that turned on Shopify’s built-in crypto checkout takes USDC. It is not every Shopify store. Look for it at that shop’s checkout.", href: "" },
+  { name: "Phantom Cash Visa", line: "Online or in a store, the terminal sees Visa. Lead Bank issues it. Bridge runs it. United States except New York. The Cash account is a different Solana address.", href: "https://help.phantom.com/articles/understand-your-cash-account-44799497237395" },
+  { name: "Kraken and Coinbase", line: "They accept CASH on Solana. Binance, OKX, Bybit, Robinhood, Fidelity, Schwab, Webull, and eToro do not. Swap to USDC before those.", href: "https://help.phantom.com/articles/use-cash-on-exchanges-and-brokerages-48631671713427" },
 ];
 
 /** Swap a Solana stable to USDC, and say where CASH can actually be spent. */
@@ -95,7 +97,7 @@ export function CashRail({ owner }: { owner: string }) {
       <ul className="mt-3 divide-y divide-white/10 rounded-2xl border border-white/10">
         {SPEND.map((row) => (
           <li key={row.name} className="px-3 py-2">
-            <p className="text-sm font-semibold">{row.name}</p>
+            <p className="text-sm font-semibold">{row.href ? <a href={row.href} target="_blank" rel="noreferrer" className="underline decoration-white/30 underline-offset-2">{row.name}</a> : row.name}</p>
             <p className="text-xs leading-snug text-white/45">{row.line}</p>
           </li>
         ))}
