@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Activity, ArrowDownToLine, ArrowLeftRight, ArrowRight, Bot, CheckCircle2, ChevronDown,
-  Clipboard, Database, ExternalLink, FileSearch, LoaderCircle, LockKeyhole, Radar,
-  RefreshCw, ShieldCheck, Sparkles, Wallet, AlertTriangle, Network
+  Activity, ArrowDownToLine, ArrowLeftRight, ArrowRight, Bot, CheckCircle2,
+  Database, ExternalLink, FileSearch, LoaderCircle, LockKeyhole, Radar,
+  ShieldCheck, Sparkles, AlertTriangle, Network
 } from "lucide-react";
 import { toast } from "sonner";
-import { explainUtilityResearch, getUtilityResearch, type UtilityEvidence, type UtilityExplanation, type UtilityQuery } from "@/lib/utility-ai";
+import { explainUtilityResearch, getUtilityResearch, getUtilityInstruments, type UtilityEvidence, type UtilityExplanation, type UtilityQuery, type UtilityInstrumentList } from "@/lib/utility-ai";
 import type { UtilityTask, UtilityFact } from "@/lib/utility-ai-core.mjs";
 
 const TASKS=[
@@ -27,11 +27,13 @@ export function UtilityAIDesk(){
  const [mint,setMint]=useState("");
  const [currency,setCurrency]=useState<"USDC"|"USDT">("USDC");
  const [amount,setAmount]=useState("25");
+ const [registry,setRegistry]=useState<UtilityInstrumentList|null>(null);
  const [evidence,setEvidence]=useState<UtilityEvidence|null>(null);
  const [explanation,setExplanation]=useState<UtilityExplanation|null>(null);
  const [pending,setPending]=useState(false);
  const [modelPending,setModelPending]=useState(false);
  const [problem,setProblem]=useState("");
+ useEffect(()=>{let live=true;void getUtilityInstruments().then(result=>{if(live)setRegistry(result);}).catch(()=>{if(live)setRegistry({state:"unavailable",observedAt:null,source:"PreStocks public API",instruments:[]});});return()=>{live=false;};},[]);
  const validMint=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint.trim());
  const canResearch=task==="transfer"?amount.trim()===""||(Number.isFinite(Number(amount))&&Number(amount)>0&&Number(amount)<=100000):validMint;
  const params=():UtilityQuery=>task==="transfer"?{
@@ -89,6 +91,14 @@ export function UtilityAIDesk(){
     <section className="rounded-2xl border border-white/10 bg-[#0c1320] p-5">
      <div className="flex items-center gap-2"><FileSearch className="size-4 text-cyan-300"/><h2 className="text-sm font-semibold">Research setup</h2></div>
      {task!=="transfer"?<>
+      {registry?.state==="ready"?<div className="mt-4">
+       <label className="block text-xs text-white/60" htmlFor="senda-ai-registry">Choose a currently listed PreStock</label>
+       <select id="senda-ai-registry" className={field+" mt-2"} value={registry.instruments.some(x=>x.mint===mint) ? mint : ""} onChange={e=>{setMint(e.target.value);setEvidence(null);setExplanation(null);}}>
+        <option value="">Select a live provider listing</option>
+        {registry.instruments.map(x=><option key={x.mint} value={x.mint}>{x.symbol} — {x.name}</option>)}
+       </select>
+       <p className="mt-1 font-mono text-[10px] text-emerald-200/75">PreStocks API · {registry.instruments.length} sourced instruments · {registry.observedAt?readable(registry.observedAt):"Unverified timestamp"}</p>
+      </div>:<p className="mt-4 text-[11px] text-amber-200/65">PreStocks instrument lookup unavailable. You can still enter an exact mint manually.</p>}
       <label className="mt-4 block text-xs text-white/60" htmlFor="senda-ai-mint">Solana token mint</label>
       <input id="senda-ai-mint" value={mint} onChange={e=>{setMint(e.target.value.trim());setEvidence(null);setExplanation(null);}} className={field+" mt-2"} placeholder="Paste a real Solana mint" spellCheck={false} autoComplete="off" maxLength={48}/>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px]">
