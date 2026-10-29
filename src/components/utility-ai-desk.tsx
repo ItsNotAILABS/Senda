@@ -67,7 +67,7 @@ export function UtilityAIDesk(){
    purpose:"Review the latest sourced "+task+" evidence and produce a constrained, auditable follow-up. No trading or signing.",
    instructions:"Inspect the real book and Matrix if applicable. Distinguish observed provider facts from price estimates. No tokens, wallet signing, auto-queued trade, transfers or unsupported confidence claims. Evidence observed "+evidence.report.observedAt+".",
    category:task==="transfer"?"operations":"markets",
-   tools:task==="transfer"?["planner","notes"]:["planner","notes","book","matrix","memory"],
+   tools:task==="market"&&evidence.report.symbol?["planner","notes","matrix"]:["planner","notes"],
    trigger:"manual",autonomy:"draft",symbols,maxUsd:1,side:"buy",
   });
   logWorker(row.id,"Utility AI sourced evidence receipt · "+evidence.report.task+" · "+evidence.report.observedAt+
