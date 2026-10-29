@@ -89,6 +89,44 @@ async function evidence(input:UtilityQuery):Promise<UtilityEvidence>{
  inflight.set(key,work);
  return work;
 }
+export type UtilityInstrument={mint:string;symbol:string;name:string};
+export type UtilityInstrumentList={state:"ready"|"unavailable";observedAt:string|null;source:string;instruments:UtilityInstrument[]};
+let instrumentsCache:{until:number;data:UtilityInstrumentList}|null=null;
+let instrumentsPending:Promise<UtilityInstrumentList>|null=null;
+async function instruments():Promise<UtilityInstrumentList>{
+ if(instrumentsCache&&instrumentsCache.until>Date.now())return instrumentsCache.data;
+ if(instrumentsPending)return instrumentsPending;
+ withinBudget();
+ const pending=(async()=>{
+  const now=new Date().toISOString();
+  try{
+   const raw=await getJSON("https://prestocks.com/api/prestocks");
+   const rows=findPrestocks(raw);
+   const seen=new Set<string>();
+   const instruments:UtilityInstrument[]=[];
+   for(const item of rows){
+    if(!item||typeof item!=="object")continue;
+    const x=item as Record<string,unknown>;
+    const mint=typeof x.contract_address==="string"?x.contract_address:"";
+    if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)||seen.has(mint))continue;
+    const symbol=typeof x.symbol==="string"?x.symbol.replace(/[^a-zA-Z0-9_.-]/g,"").slice(0,24):"";
+    if(!symbol)continue;
+    seen.add(mint);
+    instruments.push({mint,symbol,name:typeof x.name==="string"?x.name.slice(0,90):symbol});
+   }
+   if(!instruments.length)throw Error("No verified token registry in provider response.");
+   const data:UtilityInstrumentList={state:"ready",observedAt:now,source:"PreStocks public API",instruments:instruments.slice(0,80)};
+   instrumentsCache={until:Date.now()+45000,data};
+   return data;
+  }catch{
+   return {state:"unavailable" as const,observedAt:null,source:"PreStocks public API",instruments:[]};
+  }
+ })().finally(()=>{instrumentsPending=null;});
+ instrumentsPending=pending;
+ return pending;
+}
+export const getUtilityInstruments=createServerFn({method:"GET"}).handler(instruments);
+
 export const getUtilityResearch=createServerFn({method:"POST"})
  .validator((input:unknown)=>querySchema.parse(input))
  .handler(async({data}):Promise<UtilityEvidence>=>evidence(data));
