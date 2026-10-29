@@ -57,3 +57,7 @@ Additional gates before production: attach authenticated model key and budgets; 
 
 - The page's live instrument picker retrieves current Solana PreStock mint IDs directly from `getUtilityInstruments`; it never populates the selector from seeded prices or guessed addresses. It also supports an explicitly typed mint for general pool research.
 - After reviewing a report, the visitor can choose **Create research agent**, which creates a manually triggered `draft` worker in Agent Studio with planner/notes tools (and source-only Matrix analysis for a verified PreStock). It writes a public evidence summary to that local worker's log. This is an explicit user action and cannot queue a trade or sign a transfer. This research worker stays local to the current browser, not a multi-user durable VM.
+
+## Focus questions
+
+The person can optionally ask a short (400-character maximum) analytical question after gathering verified evidence. The question and normalized public facts are sent to the configured provider **only after explicitly clicking Generate analysis**. Changing the question does not invent fresh quotes or mutate the evidence cache. User questions are untrusted input, not agent instructions, and may not authorize financial actions. Never include private keys, personal account information, recipient lists or other sensitive data.
