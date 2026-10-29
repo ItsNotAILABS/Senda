@@ -32,3 +32,15 @@ test("LLM commentary must reference observed facts only",()=>{
  assert.equal(validateModelCommentary(message,["pool_reserve"]).observations.length,1);
  assert.throws(()=>validateModelCommentary({...message,observations:[{text:"Invented",evidence_ids:["not_a_source"]}]},["pool_reserve"]));
 });
+
+test("rejects mixed fictional and valid references rather than laundering evidence",()=>{
+ const model={summary:"Source review",observations:[{text:"Unsupported claim",evidence_ids:["pool","invented"]}],uncertainties:[],next_steps:[]};
+ assert.throws(()=>validateModelCommentary(model,["pool"]),/unverified/);
+});
+test("rejects forged pool addresses and nonzero fake prices",()=>{
+ const bogus=normalizePools({data:[{attributes:{address:"bad",reserve_in_usd:"500000",volume_usd:{h24:"900000"}}}]},mint);
+ assert.equal(bogus.length,0);
+ const reported=normalizePrestock([{contract_address:mint,tokenPrice:0,markPrice:-100}],mint);
+ assert.equal(reported.tokenPrice,null);
+ assert.equal(reported.markPrice,null);
+});
