@@ -52,3 +52,8 @@ Additional gates before production: attach authenticated model key and budgets; 
 - Attach real, timestamped Jupiter Swap V2 route quotes and RFQs as an independent executable-liquidity tool only after wallet-signing migration validation.
 - Integrate Solscan recent USDC/SOL volume as a separate notional source once Liquify PR #17 is certified and merged. Do not sum it with Gecko pool volume.
 - Add durable per-user research receipts, tool-call budgets and governed handoff to Agent Studio only after authenticated storage and evaluation receipts exist.
+
+## Usability updates
+
+- The page's live instrument picker retrieves current Solana PreStock mint IDs directly from `getUtilityInstruments`; it never populates the selector from seeded prices or guessed addresses. It also supports an explicitly typed mint for general pool research.
+- After reviewing a report, the visitor can choose **Create research agent**, which creates a manually triggered `draft` worker in Agent Studio with planner/notes tools (and source-only Matrix analysis for a verified PreStock). It writes a public evidence summary to that local worker's log. This is an explicit user action and cannot queue a trade or sign a transfer. This research worker stays local to the current browser, not a multi-user durable VM.
