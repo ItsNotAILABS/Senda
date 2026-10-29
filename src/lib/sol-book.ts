@@ -5,6 +5,13 @@ import { z } from "zod";
 import { cachedJson } from "@/lib/net-cache";
 
 const VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified";
+const EXTRA = [
+  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/recent",
+];
+const PIN = "https://lite-api.jup.ag/tokens/v2/search?query=USOE";
 const PAGE = 60;
 
 export type Shelf = "all" | "crypto" | "majors" | "stocks" | "rwa" | "meme" | "launch" | "stakes" | "companies" | "cash" | "defi";
@@ -118,9 +125,43 @@ async function catalog(): Promise<BookRow[]> {
   for (const fund of FUNDS) {
     if (!seen.has(fund.mint)) rows.push(fund);
   }
+  const add = async (url: string, floor: number) => {
+    const extra = await cachedJson(url, 60_000).catch(() => ({ ok: false as const, body: null }));
+    if (!extra.ok || !Array.isArray(extra.body)) return;
+    for (const raw of extra.body as Raw[]) {
+      const mint = raw.id || "";
+      const symbol = (raw.symbol || "").trim();
+      const liquidity = Number(raw.liquidity) || 0;
+      if (mint.length < 32 || !symbol || seen.has(mint) || liquidity < floor) continue;
+      const price = Number(raw.usdPrice) || 0;
+      if (!(price > 0)) continue;
+      seen.add(mint);
+      const tags = floor > 0 ? [...new Set([...(raw.tags ?? []), "launchpad"])] : raw.tags?.length ? raw.tags : ["launchpad"];
+      rows.push({
+        mint,
+        symbol,
+        name: raw.name || symbol,
+        price,
+        change: Number(raw.stats24h?.priceChange) || 0,
+        mcap: Number(raw.mcap) || 0,
+        liquidity,
+        decimals: Number.isFinite(Number(raw.decimals)) ? Number(raw.decimals) : 6,
+        shelf: primary(tags),
+        tags,
+        note: raw.tags?.length ? "" : "Not on the verified list. The mint is the token.",
+      });
+    }
+  };
+  for (const url of EXTRA) await add(url, 0);
+  await add(PIN, 20_000);
   rows.sort((a, b) => b.mcap - a.mcap || b.liquidity - a.liquidity || a.symbol.localeCompare(b.symbol));
-  slim = { at: Date.now(), rows };
-  return rows;
+  const head = rows.filter((row) => !row.tags.includes("launchpad")).slice(0, 12);
+  const headIds = new Set(head.map((row) => row.mint));
+  const pinned = rows.filter((row) => row.tags.includes("launchpad") && row.liquidity >= 20_000 && !headIds.has(row.mint));
+  const pinnedIds = new Set(pinned.map((row) => row.mint));
+  const rest = rows.filter((row) => !headIds.has(row.mint) && !pinnedIds.has(row.mint));
+  slim = { at: Date.now(), rows: [...head, ...pinned, ...rest] };
+  return slim.rows;
 }
 
 export const loadSolBook = createServerFn({ method: "POST" })
@@ -139,7 +180,7 @@ export const loadSolBook = createServerFn({ method: "POST" })
       if (data.shelf !== "all" && data.shelf !== "crypto" && !listed(row.tags, data.shelf) && !(data.shelf === "cash" && row.note)) return false;
       if (data.shelf === "crypto" && (row.shelf !== "crypto" || listed(row.tags, "meme"))) return false;
       if (!q) return true;
-      return `${row.symbol} ${row.name}`.toLowerCase().includes(q);
+      return `${row.symbol} ${row.name} ${row.mint}`.toLowerCase().includes(q);
     });
     const pages = Math.max(1, Math.ceil(all.length / PAGE));
     const page = Math.min(data.page, pages - 1);

@@ -6,11 +6,13 @@ import type { LiveCoin } from "@/lib/coin-tape";
 
 const PAGE = 24;
 const VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified";
-const FALLBACK = [
+const EXTRA = [
   "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
   "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/recent",
 ];
+const PIN = "https://lite-api.jup.ag/tokens/v2/search?query=USOE";
 
 let book: LiveCoin[] = [];
 let at = 0;
@@ -54,22 +56,28 @@ async function pull(url: string): Promise<LiveCoin[]> {
 
 async function catalog(): Promise<LiveCoin[]> {
   if (book.length && Date.now() - at < 60_000) return book;
-  try {
-    const rows = await pull(VERIFIED);
-    if (rows.length) {
-      book = rows;
-      at = Date.now();
-      return rows;
+  const verified = await pull(VERIFIED).catch(() => [] as LiveCoin[]);
+  const seen = new Set(verified.map((row) => row.id));
+  const extra: LiveCoin[] = [];
+  const take = (rows: LiveCoin[], floor: number) => {
+    for (const row of rows) {
+      if (seen.has(row.id) || (row.liq ?? 0) < floor) continue;
+      seen.add(row.id);
+      extra.push(row);
     }
-  } catch {
-    /* the three shorter lists still trade */
+  };
+  for (const url of EXTRA) take(await pull(url).catch(() => [] as LiveCoin[]), 0);
+  take(await pull(PIN).catch(() => [] as LiveCoin[]), 20_000);
+  extra.sort((a, b) => (b.liq ?? 0) - (a.liq ?? 0));
+  if (!verified.length) {
+    book = extra;
+    at = Date.now();
+    return book;
   }
-  const merged = new Map<string, LiveCoin>();
-  for (const url of FALLBACK) {
-    const rows = await pull(url).catch(() => [] as LiveCoin[]);
-    for (const row of rows) merged.set(row.id, row);
-  }
-  book = [...merged.values()];
+  const head = verified.slice(0, 12);
+  const headIds = new Set(head.map((row) => row.id));
+  const rest = verified.filter((row) => !headIds.has(row.id));
+  book = [...head, ...extra, ...rest];
   at = Date.now();
   return book;
 }
