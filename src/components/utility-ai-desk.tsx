@@ -6,6 +6,7 @@ import {
   ShieldCheck, Sparkles, AlertTriangle, Network
 } from "lucide-react";
 import { toast } from "sonner";
+import { createWorker, logWorker } from "@/lib/agent-workspace";
 import { explainUtilityResearch, getUtilityResearch, getUtilityInstruments, type UtilityEvidence, type UtilityExplanation, type UtilityQuery, type UtilityInstrumentList } from "@/lib/utility-ai";
 import type { UtilityTask, UtilityFact } from "@/lib/utility-ai-core.mjs";
 
@@ -55,6 +56,23 @@ export function UtilityAIDesk(){
    if(result.modelStatus!=="ready")toast.message(result.note);
   }catch(e){setProblem(e instanceof Error?e.message:"Model service unavailable. Sign in and retry.");}
   finally{setModelPending(false);}
+ }
+ function createResearchWorker(){
+  if(!evidence||!evidence.report.facts.length)return;
+  const taskName=task==="market"?"Market Research":task==="liquidity"?"Liquidity Review":"Transfer Review";
+  const goal=taskName+" · "+(evidence.report.symbol||currency);
+  const symbols=evidence.report.symbol?[evidence.report.symbol]:[];
+  const row=createWorker({
+   name:goal.slice(0,48),
+   purpose:"Review the latest sourced "+task+" evidence and produce a constrained, auditable follow-up. No trading or signing.",
+   instructions:"Inspect the real book and Matrix if applicable. Distinguish observed provider facts from price estimates. No tokens, wallet signing, auto-queued trade, transfers or unsupported confidence claims. Evidence observed "+evidence.report.observedAt+".",
+   category:task==="transfer"?"operations":"markets",
+   tools:task==="transfer"?["planner","notes"]:["planner","notes","book","matrix","memory"],
+   trigger:"manual",autonomy:"draft",symbols,maxUsd:1,side:"buy",
+  });
+  logWorker(row.id,"Utility AI sourced evidence receipt · "+evidence.report.task+" · "+evidence.report.observedAt+
+   " · "+evidence.report.facts.map(f=>f.id+"="+String(f.value)).join("; ").slice(0,800),"info");
+  toast.success("Read-only research worker created in Agent Studio.");
  }
  function exportReceipt(){
   if(!evidence)return;
@@ -147,7 +165,10 @@ export function UtilityAIDesk(){
         <h2 className="mt-2 text-xl font-semibold">{evidence.report.headline}</h2>
         <p className="mt-1 font-mono text-[11px] text-white/45">Observed {readable(evidence.report.observedAt)} · {evidence.report.scope}</p>
        </div>
+       <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={createResearchWorker} disabled={!evidence.report.facts.length} className="flex min-h-10 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-3 text-xs text-cyan-100 disabled:opacity-40"><Bot className="size-4"/>Create research agent</button>
        <button type="button" onClick={exportReceipt} className="flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-xs text-white/70 hover:border-cyan-300/40"><ArrowDownToLine className="size-4"/>Export receipt</button>
+       </div>
       </div>
       <div className="mt-4 grid grid-cols-3 gap-2">
        {[["Verified facts",counts.facts],["Reported risks",counts.risks],["Responding sources",counts.sources]].map(([label,value])=>
