@@ -105,9 +105,12 @@ export function validateModelCommentary(raw,allowedIds){
  const ids=new Set(allowedIds);
  const observations=raw.observations.slice(0,5).map(x=>{
   if(!x||typeof x!=="object"||!Array.isArray(x.evidence_ids))throw Error("Missing evidence reference.");
-  const evidence_ids=x.evidence_ids.filter(id=>typeof id==="string"&&ids.has(id)).slice(0,5);
-  if(!evidence_ids.length)throw Error("Model cited no verified evidence IDs.");
-  return {text:plain(x.text,300),evidence_ids};
+  if(!x.evidence_ids.length||x.evidence_ids.length>5||x.evidence_ids.some(id=>typeof id!=="string"||!ids.has(id)))
+   throw Error("Model used an unverified evidence ID.");
+  const evidence_ids=[...new Set(x.evidence_ids)];
+  const text=plain(x.text,300);
+  if(!text)throw Error("Model observation is empty.");
+  return {text,evidence_ids};
  });
  return {summary:plain(raw.summary,550),observations,
   uncertainties:raw.uncertainties.slice(0,5).map(x=>plain(x,220)).filter(Boolean),
