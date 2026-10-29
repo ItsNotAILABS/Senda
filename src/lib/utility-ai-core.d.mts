@@ -1,0 +1,12 @@
+export type UtilityTask="market"|"liquidity"|"transfer";
+export type UtilityFact={id:string;label:string;value:string|number;unit:string;source:string;url:string;observedAt:string};
+export type UtilityReport={schema:string;task:UtilityTask;mint:string|null;observedAt:string;scope:string;authority:string;verdict:string;facts:UtilityFact[];risks:string[];actions:string[];symbol:string|null;headline:string;dataStatus:string};
+export declare const UTILITY_TASKS:readonly UtilityTask[];
+export declare const SOL_USDC:string;
+export declare function validMint(x:unknown):boolean;
+export declare function normalizePrestock(raw:unknown,mint:string):{mint:string;symbol:string;name:string;tokenPrice:number|null;markPrice:number|null;impliedValuation:number|null;markValuation:number|null;holders:number|null;source:string}|null;
+export type PoolSnapshot={address:string;name:string;reserveUsd:number|null;volume24Usd:number|null;buys24h:number|null;sells24h:number|null;basePriceUsd:number|null;quotePriceUsd:number|null;poolCreatedAt:string|null};
+export declare function normalizePools(raw:unknown,mint:string):PoolSnapshot[];
+export declare function buildUtilityReport(input:{task:UtilityTask;mint?:string;prestock?:ReturnType<typeof normalizePrestock>;pools?:PoolSnapshot[];currency?:string;amount?:number|null;prestockAt?:string|null;poolsAt?:string|null;now?:string}):UtilityReport;
+export type ModelCommentary={summary:string;observations:Array<{text:string;evidence_ids:string[]}>;uncertainties:string[];next_steps:string[]};
+export declare function validateModelCommentary(raw:unknown,allowedIds:string[]):ModelCommentary;
