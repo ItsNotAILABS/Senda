@@ -39,7 +39,6 @@ export function normalizePools(raw,mint){
  return out.sort((a,b)=>(b.reserveUsd??-1)-(a.reserveUsd??-1)).slice(0,6);
 }
 function fact(id,label,value,source,url,observedAt,unit=""){return {id,label,value,unit,source,url,observedAt};}
-const money=n=>"$"+n.toLocaleString("en-US",{maximumFractionDigits:n<1?6:2});
 const entry=(id,label,value,source,url,at,unit)=>fact(id,label,value,source,url,at,unit);
 export function buildUtilityReport({task,mint="",prestock=null,pools=[],currency="USDC",amount=null,prestockAt=null,poolsAt=null,now=new Date().toISOString()}){
  if(!UTILITY_TASKS.includes(task))throw Error("Unknown Senda utility.");
