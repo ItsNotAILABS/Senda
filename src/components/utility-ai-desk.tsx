@@ -28,6 +28,7 @@ export function UtilityAIDesk(){
  const [mint,setMint]=useState("");
  const [currency,setCurrency]=useState<"USDC"|"USDT">("USDC");
  const [amount,setAmount]=useState("25");
+ const [focus,setFocus]=useState("");
  const [registry,setRegistry]=useState<UtilityInstrumentList|null>(null);
  const [evidence,setEvidence]=useState<UtilityEvidence|null>(null);
  const [explanation,setExplanation]=useState<UtilityExplanation|null>(null);
@@ -38,8 +39,8 @@ export function UtilityAIDesk(){
  const validMint=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint.trim());
  const canResearch=task==="transfer"?amount.trim()===""||(Number.isFinite(Number(amount))&&Number(amount)>0&&Number(amount)<=100000):validMint;
  const params=():UtilityQuery=>task==="transfer"?{
-  task,currency,amount:amount.trim()?Number(amount):null
- }:{task,mint:mint.trim()};
+  task,currency,amount:amount.trim()?Number(amount):null,question:focus.trim()||undefined
+ }:{task,mint:mint.trim(),question:focus.trim()||undefined};
  function switchTask(next:UtilityTask){setTask(next);setEvidence(null);setExplanation(null);setProblem("");}
  async function research(){
   if(!canResearch)return;
@@ -205,6 +206,11 @@ export function UtilityAIDesk(){
         {modelPending?<LoaderCircle className="size-4 animate-spin"/>:<Sparkles className="size-4"/>}{modelPending?"Analyzing...":"Generate analysis"}
        </button>
       </div>
+      <label htmlFor="senda-ai-focus" className="mt-4 block text-xs text-white/60">Ask a focused research question (optional)</label>
+      <textarea id="senda-ai-focus" maxLength={400} rows={2} value={focus} onChange={e=>{setFocus(e.target.value);setExplanation(null);}}
+       placeholder="Which facts support this valuation, and what would invalidate the liquidity thesis?"
+       className="mt-2 min-h-20 w-full resize-y rounded-xl border border-white/15 bg-[#0a1524] px-3 py-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-cyan-300/50"/>
+      <p className="mt-1 text-[11px] text-white/40">Only your question and public market evidence go to the configured model. Never enter wallet secrets or private account information.</p>
       {explanation?<div className="mt-4 border-t border-white/10 pt-4">
        <p className="font-mono text-[10px] uppercase text-cyan-300">{explanation.modelStatus} · {explanation.modelName??"model not configured"}</p>
        <p className="mt-2 text-xs text-white/50">{explanation.note}</p>
