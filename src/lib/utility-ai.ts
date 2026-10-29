@@ -106,10 +106,16 @@ const modelSchema={
 
 let activeModelCalls=0;
 let modelWindow={at:0,count:0};
-function authorizeModelBudget(){
+const userModelBudget=new Map<string,{at:number;count:number}>();
+function authorizeModelBudget(userId:string){
  const now=Date.now();
  if(now-modelWindow.at>60000)modelWindow={at:now,count:0};
- if(activeModelCalls>=2||modelWindow.count>=6)throw new Error("AI analysis capacity reached. Retry shortly.");
+ if(userModelBudget.size>500)userModelBudget.clear();
+ const old=userModelBudget.get(userId);
+ const row=old&&now-old.at<3600000?old:{at:now,count:0};
+ if(activeModelCalls>=2||modelWindow.count>=6||row.count>=12)
+  throw new Error("AI analysis capacity reached. Retry shortly.");
+ row.count++;userModelBudget.set(userId,row);
  activeModelCalls++;modelWindow.count++;
 }
 function outputText(payload:unknown):string|null{
@@ -124,8 +130,8 @@ function outputText(payload:unknown):string|null{
  }
  return null;
 }
-async function narrate(e:UtilityEvidence):Promise<UtilityExplanation>{
- if(process.env.SENDA_UTILITY_AI_ENABLED!=="true"||!process.env.SENDA_AI_API_KEY){
+async function narrate(e:UtilityEvidence,userId:string):Promise<UtilityExplanation>{
+ if(process.env.VITE_AUTH_ENABLED==="false"||process.env.SENDA_UTILITY_AI_ENABLED!=="true"||!process.env.SENDA_AI_API_KEY){
   return {evidence:e,modelStatus:"disabled",model:null,modelName:null,
    note:"Structured model analysis is not configured. Verified, deterministic research remains available."};
  }
@@ -135,7 +141,7 @@ async function narrate(e:UtilityEvidence):Promise<UtilityExplanation>{
  }
  const model=(process.env.SENDA_AI_MODEL||"gpt-4.1-mini").trim();
  if(!/^[a-zA-Z0-9_.-]{3,70}$/.test(model))throw new Error("Invalid Senda model configuration.");
- authorizeModelBudget();
+ authorizeModelBudget(userId);
  try{
   const evidenceOnly={task:e.report.task,observedAt:e.report.observedAt,
    facts:e.report.facts.map(f=>({id:f.id,label:f.label,value:f.value,unit:f.unit,source:f.source,at:f.observedAt})),
@@ -170,6 +176,6 @@ async function narrate(e:UtilityEvidence):Promise<UtilityExplanation>{
 export const explainUtilityResearch=createServerFn({method:"POST"})
  .middleware([authMiddleware])
  .validator((input:unknown)=>querySchema.parse(input))
- .handler(async({data}):Promise<UtilityExplanation>=>{
-  return narrate(await evidence(data));
+ .handler(async({data,context}):Promise<UtilityExplanation>=>{
+  return narrate(await evidence(data),context.userId);
  });
