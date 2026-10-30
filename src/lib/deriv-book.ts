@@ -3,6 +3,15 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+export type DerivBar = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume?: number;
+};
+
 export type DerivLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
 export type DerivPair = {

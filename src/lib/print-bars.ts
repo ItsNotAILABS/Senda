@@ -16,16 +16,25 @@ async function geckoBars(mint: string, span: string): Promise<DerivBar[]> {
     .sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
   const pool = pairs[0]?.pairAddress;
   if (!pool) return [];
-  const spec =
-    span === "5" ? ["ohlcv/minute?aggregate=5&limit=160", 20_000]
-    : span === "15" ? ["ohlcv/minute?aggregate=15&limit=160", 20_000]
-    : span === "hour" || span === "60" ? ["ohlcv/hour?aggregate=1&limit=160", 60_000]
-    : span === "240" ? ["ohlcv/hour?aggregate=4&limit=160", 60_000]
-    : span === "1D" ? ["ohlcv/day?aggregate=1&limit=180", 120_000]
-    : ["ohlcv/minute?aggregate=1&limit=160", 20_000];
+  const spec: Record<string, [string, number]> = {
+    "1": ["ohlcv/minute?aggregate=1&limit=200", 20_000],
+    minute: ["ohlcv/minute?aggregate=1&limit=200", 20_000],
+    "3": ["ohlcv/minute?aggregate=3&limit=200", 20_000],
+    "5": ["ohlcv/minute?aggregate=5&limit=200", 20_000],
+    "15": ["ohlcv/minute?aggregate=15&limit=200", 20_000],
+    "30": ["ohlcv/minute?aggregate=30&limit=200", 20_000],
+    "60": ["ohlcv/hour?aggregate=1&limit=200", 60_000],
+    hour: ["ohlcv/hour?aggregate=1&limit=200", 60_000],
+    "120": ["ohlcv/hour?aggregate=2&limit=160", 60_000],
+    "240": ["ohlcv/hour?aggregate=4&limit=160", 60_000],
+    "480": ["ohlcv/hour?aggregate=8&limit=120", 60_000],
+    "720": ["ohlcv/hour?aggregate=12&limit=120", 60_000],
+    "1D": ["ohlcv/day?aggregate=1&limit=180", 120_000],
+  };
+  const picked = spec[span] ?? spec["15"];
   const g = await cachedJson(
-    `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/${spec[0]}`,
-    spec[1] as number,
+    `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/${picked[0]}`,
+    picked[1],
     { headers: { accept: "application/json", "user-agent": UA } },
   );
   const list = (g.body as { data?: { attributes?: { ohlcv_list?: number[][] } } })?.data?.attributes?.ohlcv_list || [];
@@ -53,11 +62,16 @@ async function geckoBars(mint: string, span: string): Promise<DerivBar[]> {
 const JUP_SPAN: Record<string, string> = {
   "1": "1_MINUTE",
   minute: "1_MINUTE",
+  "3": "3_MINUTE",
   "5": "5_MINUTE",
   "15": "15_MINUTE",
+  "30": "30_MINUTE",
   "60": "1_HOUR",
   hour: "1_HOUR",
+  "120": "2_HOUR",
   "240": "4_HOUR",
+  "480": "8_HOUR",
+  "720": "12_HOUR",
   "1D": "1_DAY",
 };
 
@@ -113,11 +127,11 @@ export async function dayLine(mint: string): Promise<number[]> {
 }
 
 export const printBook = createServerFn({ method: "GET" })
-  .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "5", "15", "60", "240", "1D"]).optional() }))
+  .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "3", "5", "15", "30", "60", "120", "240", "480", "720", "1D"]).optional() }))
   .handler(async ({ data }) => loadBars(data.mint, data.span || "1"));
 
 export const printBars = createServerFn({ method: "GET" })
-  .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "5", "15", "60", "240", "1D"]).optional() }))
+  .validator(z.object({ mint: z.string().min(32).max(48), span: z.enum(["minute", "hour", "1", "3", "5", "15", "30", "60", "120", "240", "480", "720", "1D"]).optional() }))
   .handler(async ({ data }): Promise<DerivBar[]> => (await loadBars(data.mint, data.span || "1")).bars);
 
 export async function poolMatrixBars(mint: string) {

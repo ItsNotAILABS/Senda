@@ -23,10 +23,32 @@ const TV: Record<string, string> = {
   PENGU: "BINANCE:PENGUUSDT",
 };
 
-const TF = ["1", "5", "15", "60", "240", "1D"] as const;
+const TF = ["1", "3", "5", "15", "30", "60", "120", "240", "480", "720"] as const;
 type Tf = (typeof TF)[number];
-const TF_LABEL: Record<Tf, string> = { "1": "1m", "5": "5m", "15": "15m", "60": "1H", "240": "4H", "1D": "1D" };
-const TF_SEC: Record<Tf, number> = { "1": 60, "5": 300, "15": 900, "60": 3600, "240": 14400, "1D": 86400 };
+const TF_LABEL: Record<Tf, string> = {
+  "1": "1m",
+  "3": "3m",
+  "5": "5m",
+  "15": "15m",
+  "30": "30m",
+  "60": "1h",
+  "120": "2h",
+  "240": "4h",
+  "480": "8h",
+  "720": "12h",
+};
+const TF_SEC: Record<Tf, number> = {
+  "1": 60,
+  "3": 180,
+  "5": 300,
+  "15": 900,
+  "30": 1800,
+  "60": 3600,
+  "120": 7200,
+  "240": 14400,
+  "480": 28800,
+  "720": 43200,
+};
 const CHARTS = "senda.chart.v1";
 const DRAW = "senda.draw.v1";
 type Pt = { time: number; price: number };
@@ -401,7 +423,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
           <button type="button" disabled={!(last > 0)} onClick={() => setZone(last > 0 ? { low: last * 0.996, high: last * 1.004 } : null)} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Zone</button>
           <button type="button" disabled={!zone} onClick={() => setZone(null)} className="h-9 px-2 text-[12px] text-[#787b86] disabled:opacity-40">Clear</button>
           <button type="button" onClick={() => setShot(chartRef.current?.png() ?? null)} className="h-9 px-2 text-[12px] text-[#d1d4dc]">Print</button>
-          <button type="button" onClick={() => setScreen(true)} className="h-9 px-2 text-[12px] text-[#d1d4dc]">Expand</button>
+          <button type="button" onClick={() => setScreen(true)} className="h-9 px-2 text-[12px] font-semibold text-[#c6f56a]">Big view</button>
         </span>
       </div>
       <div className="flex gap-1 overflow-x-auto border-b border-[#1a1c24] px-2 py-1">
@@ -623,20 +645,23 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
       )}
       {state === "ready" ? <MarketMatrix bars={matrixBars} pool={feed !== "none"} source={feed === "none" ? "price-only" : feed} symbol={symbol} /> : null}
       {screen ? (
-        <div className="fixed inset-0 z-[80] flex flex-col bg-[#050508]">
-          <div className="flex items-center justify-between gap-3 px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-            <p className="text-sm text-[#d1d4dc]">{symbol} · pool candles{fresh ? " · live" : ""}</p>
-            <button type="button" onClick={() => setScreen(false)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>
-          </div>
-          <CandleChart bars={bars} precision={precision} levels={levels} band={zone} overlays={overlays} kind={kind} dayOpen={dayOpen} className="min-h-0 flex-1" />
-          <div className="max-h-[40dvh] overflow-y-auto">
-            <MarketMatrix bars={matrixBars} pool={feed !== "none"} source={feed === "none" ? "price-only" : feed} symbol={symbol} />
-          </div>
-          {TV[symbol.toUpperCase()] ? (
-            <button type="button" onClick={() => setShot("tv")} className="mx-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] min-h-10 text-left text-xs text-[#787b86]">
-              Binance {symbol.toUpperCase()} is a different book. Open it only if you mean that market.
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+          <div className="flex items-center gap-1 overflow-x-auto px-2 pt-[max(0.35rem,env(safe-area-inset-top))]">
+            {TF.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setSpan(id)}
+                className={`h-9 shrink-0 rounded-full px-2.5 text-[13px] ${span === id ? "bg-white/15 font-semibold text-white" : "text-white/45"}`}
+              >
+                {TF_LABEL[id]}
+              </button>
+            ))}
+            <button type="button" onClick={() => setScreen(false)} aria-label="Close chart" className="ml-auto grid size-9 shrink-0 place-items-center text-lg text-white/70">
+              ×
             </button>
-          ) : null}
+          </div>
+          <CandleChart bars={bars} precision={precision} kind="candles" vivid className="min-h-0 flex-1" />
         </div>
       ) : null}
       {shot && shot !== "tv" ? (
@@ -651,7 +676,7 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
             <p className="text-sm text-[#d1d4dc]">Binance · {symbol}</p>
             <button type="button" onClick={() => setShot(null)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>
           </div>
-          <iframe title={`${symbol} on Binance`} src={`https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(TV[symbol.toUpperCase()])}&interval=${span === "1D" ? "D" : span}&hidetoptoolbar=0&theme=dark&style=1&locale=en`} className="min-h-0 w-full flex-1 border-0" />
+          <iframe title={`${symbol} on Binance`} src={`https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(TV[symbol.toUpperCase()])}&interval=${span}&hidetoptoolbar=0&theme=dark&style=1&locale=en`} className="min-h-0 w-full flex-1 border-0" />
         </div>
       ) : null}
     </div>

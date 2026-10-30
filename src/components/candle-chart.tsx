@@ -32,6 +32,7 @@ export const CandleChart = forwardRef<ChartHandle, {
   band?: { low: number; high: number } | null;
   overlays?: ChartLine[];
   kind?: "candles" | "line" | "volume";
+  vivid?: boolean;
   dayOpen?: number;
   onFrame?: () => void;
   className?: string;
@@ -43,6 +44,7 @@ export const CandleChart = forwardRef<ChartHandle, {
   band = null,
   overlays = [],
   kind = "candles",
+  vivid = false,
   dayOpen = 0,
   onFrame,
   className = "h-[560px]",
@@ -97,23 +99,25 @@ export const CandleChart = forwardRef<ChartHandle, {
       },
       handleScroll: { vertTouchDrag: false },
     });
+    const up = vivid ? "#c6f56a" : UP;
+    const down = vivid ? "#ff5d73" : DOWN;
     const price = kind === "volume"
       ? null
       : kind === "line"
         ? next.addLineSeries({ color: "#d1d4dc", lineWidth: 2, priceLineVisible: true, lastValueVisible: true })
         : next.addCandlestickSeries({
-            upColor: UP,
-            downColor: DOWN,
-            borderUpColor: UP,
-            borderDownColor: DOWN,
-            wickUpColor: UP,
-            wickDownColor: DOWN,
+            upColor: up,
+            downColor: down,
+            borderUpColor: up,
+            borderDownColor: down,
+            wickUpColor: up,
+            wickDownColor: down,
             priceLineVisible: true,
             lastValueVisible: true,
             priceLineWidth: 1,
             priceLineStyle: LineStyle.Dashed,
           });
-    if (price && kind !== "volume") price.priceScale().applyOptions({ scaleMargins: { top: 0.08, bottom: 0.26 } });
+    if (price && kind !== "volume") price.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: vivid ? 0.28 : 0.26 } });
     const hist = next.addHistogramSeries({
       priceScaleId: kind === "volume" ? "right" : "volume",
       priceFormat: { type: "volume" },
@@ -142,7 +146,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       series.current = null;
       volume.current = null;
     };
-  }, [precision, kind]);
+  }, [precision, kind, vivid]);
 
   useEffect(() => {
     const s = series.current;
@@ -159,7 +163,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       data.push({ time, open: bar.open, high: bar.high, low: bar.low, close: bar.close });
       closes.push({ time, value: bar.close });
       if (bar.volume && bar.volume > 0) {
-        vols.push({ time, value: bar.volume, color: bar.close >= bar.open ? "rgba(8,153,129,0.55)" : "rgba(242,54,69,0.55)" });
+        vols.push({ time, value: bar.volume, color: bar.close >= bar.open ? (vivid ? "rgba(198,245,106,0.72)" : "rgba(8,153,129,0.55)") : (vivid ? "rgba(255,93,115,0.72)" : "rgba(242,54,69,0.55)") });
       }
     }
     const key = `${kind}:${data.map((row) => row.time).join(",")}`;
@@ -184,7 +188,7 @@ export const CandleChart = forwardRef<ChartHandle, {
     const close = tip;
     if (close && kind === "candles") {
       const rising = close.close >= close.open;
-      (s as ISeriesApi<"Candlestick">).applyOptions({ priceLineColor: rising ? UP : DOWN });
+      (s as ISeriesApi<"Candlestick">).applyOptions({ priceLineColor: rising ? (vivid ? "#c6f56a" : UP) : (vivid ? "#ff5d73" : DOWN) });
     }
     const open = data[0]?.time ?? 0;
     if (open && fitted.current !== open) {
@@ -225,7 +229,7 @@ export const CandleChart = forwardRef<ChartHandle, {
       }
       study.setData(row.points.filter((p) => p.value > 0).map((p) => ({ time: p.time as UTCTimestamp, value: p.value })));
     }
-  }, [bars, levels, band, overlays, kind, dayOpen]);
+  }, [bars, levels, band, overlays, kind, dayOpen, vivid]);
 
   return <div ref={box} className={`w-full ${className}`} />;
 });
