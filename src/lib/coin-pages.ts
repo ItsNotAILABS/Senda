@@ -3,16 +3,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { LiveCoin } from "@/lib/coin-tape";
+import { loadEco } from "@/lib/eco-pools";
 
 const PAGE = 24;
 const VERIFIED = "https://lite-api.jup.ag/tokens/v2/tag?query=verified";
-const EXTRA = [
-  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/recent",
-];
-const PIN = "https://lite-api.jup.ag/tokens/v2/search?query=USOE";
 
 let book: LiveCoin[] = [];
 let at = 0;
@@ -59,25 +53,21 @@ async function catalog(): Promise<LiveCoin[]> {
   const verified = await pull(VERIFIED).catch(() => [] as LiveCoin[]);
   const seen = new Set(verified.map((row) => row.id));
   const extra: LiveCoin[] = [];
-  const take = (rows: LiveCoin[], floor: number) => {
-    for (const row of rows) {
-      if (seen.has(row.id) || (row.liq ?? 0) < floor) continue;
-      seen.add(row.id);
-      extra.push(row);
-    }
-  };
-  for (const url of EXTRA) take(await pull(url).catch(() => [] as LiveCoin[]), 0);
-  take(await pull(PIN).catch(() => [] as LiveCoin[]), 20_000);
-  extra.sort((a, b) => (b.liq ?? 0) - (a.liq ?? 0));
-  if (!verified.length) {
-    book = extra;
-    at = Date.now();
-    return book;
+  for (const row of await loadEco().catch(() => [])) {
+    if (seen.has(row.mint)) continue;
+    seen.add(row.mint);
+    extra.push({
+      id: row.mint,
+      symbol: row.symbol,
+      name: row.name,
+      price: row.price,
+      change: row.change,
+      icon: row.icon,
+      decimals: row.decimals,
+      liq: row.liquidity,
+    });
   }
-  const head = verified.slice(0, 12);
-  const headIds = new Set(head.map((row) => row.id));
-  const rest = verified.filter((row) => !headIds.has(row.id));
-  book = [...head, ...extra, ...rest];
+  book = [...verified, ...extra].sort((a, b) => (b.liq ?? 0) - (a.liq ?? 0));
   at = Date.now();
   return book;
 }

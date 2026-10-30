@@ -399,29 +399,6 @@ export async function loadTape(): Promise<TapeRow[]> {
       });
     }
   }
-  try {
-    const found = await getJson("https://lite-api.jup.ag/tokens/v2/search?query=USOE", 8000);
-    if (Array.isArray(found)) {
-      for (const raw of found) {
-        if (!raw || typeof raw !== "object") continue;
-        const row = raw as { id?: unknown; symbol?: unknown; name?: unknown; usdPrice?: unknown; icon?: unknown; liquidity?: unknown; stats24h?: { priceChange?: unknown } };
-        const liq = num(row.liquidity) ?? 0;
-        if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id) || liq < 20_000) continue;
-        seen.add(row.id);
-        rows.unshift({
-          id: row.id,
-          symbol: row.symbol,
-          name: typeof row.name === "string" && row.name ? row.name : row.symbol,
-          price: num(row.usdPrice),
-          change: num(row.stats24h?.priceChange),
-          icon: typeof row.icon === "string" ? row.icon : undefined,
-          liquidity: liq,
-        });
-      }
-    }
-  } catch {
-    /* verified coins still load */
-  }
   for (const hold of Object.values(HOLDS)) {
     if (!hold.mint || seen.has(hold.mint)) continue;
     seen.add(hold.mint);

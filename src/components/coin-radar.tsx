@@ -99,7 +99,7 @@ export function CoinRadar({ house = [], onOpen }: { house?: HouseListing[]; onOp
         {q.trim().length >= 2
           ? `${total.toLocaleString("en-US")} matches. Jupiter search is first, deepest pool first. The same ticker can be more than one mint.`
           : total
-            ? `${total.toLocaleString("en-US")} coins. Verified, plus what Jupiter is trading that is not on that list. USOE is in that set when the pool is real.`
+            ? `${total.toLocaleString("en-US")} coins with a live pool. Ordered by pool size, not by a pinned ticker.`
             : "Waiting on Jupiter."}
       </p>
       <input
