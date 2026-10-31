@@ -8,6 +8,8 @@ import { CardUse } from "@/components/card-use";
 import { MexicoSend } from "@/components/mexico-send";
 import { SignCall } from "@/components/sign-call";
 import { paySol, payUsdc } from "@/lib/solana-pay";
+import { CASH, USDC } from "@/lib/jup-exec";
+import { signRoute } from "@/lib/jup-sign";
 import { humanWalletError } from "@/lib/mobile-wallet";
 import { SignedReceipt, solAddress } from "@/components/money-flow";
 import { TabLead } from "@/components/tab-lead";
@@ -96,18 +98,7 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           hold: "The number caps a spend of the balance already on this wallet. It is shown once.",
         }}
       />
-      <section className="grid gap-2 sm:grid-cols-3">
-        {[
-          { name: "USDC", line: "The payment. The wallet signs it." },
-          { name: "Cash", line: "Phantom’s CASH token. Their Visa is issued in the Phantom app by Lead Bank. This desk does not issue it." },
-          { name: "Route", line: "A Mayan move can carry 8 bps. That is the fee this desk can take. A card purchase fee is not ours." },
-        ].map((face) => (
-          <div key={face.name} className="min-h-[120px] rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-            <p className="font-mono text-[10px] tracking-[0.16em] text-[#d7e36a] uppercase">{face.name}</p>
-            <p className="mt-4 text-sm leading-snug text-white/75">{face.line}</p>
-          </div>
-        ))}
-      </section>
+      <CardConnect owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
       <BusinessDesk owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
       <PayOnChain
         owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
@@ -461,6 +452,78 @@ function ChipMark() {
         <span key={i} className="rounded-[1px] bg-[#8d7344]/80" />
       ))}
     </span>
+  );
+}
+
+function CardConnect({ owner }: { owner: string }) {
+  const [where, setWhere] = useState<"jupiter" | "phantom">("jupiter");
+  const [to, setTo] = useState("");
+  const [usd, setUsd] = useState("10");
+  const [busy, setBusy] = useState(false);
+
+  async function send() {
+    const n = Number(usd);
+    if (!(n >= 3) || n > 200_000) {
+      toast.error("A card top-up is from $3 to $200,000.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const who = owner || (await connectPhantom());
+      if (where === "jupiter") {
+        const dest = solAddress(to);
+        if (!dest) throw new Error("Paste the Spend address from Jupiter. It belongs to that account, and only USDC should go there.");
+        const done = await payUsdc({ owner: who, to: dest, usd: n, memo: "jupiter spend", deskFee: false });
+        toast.success(`USDC is on the way to that Spend account. solscan.io/tx/${done.signature}`);
+      } else {
+        const done = await signRoute({
+          owner: who,
+          inputMint: USDC,
+          outputMint: CASH,
+          amountRaw: Math.round(n * 1e6),
+          outDecimals: 6,
+          inDecimals: 6,
+          usd: n,
+          symbol: "CASH",
+        });
+        toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The wallet did not send.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+      <h2 className="text-lg font-semibold">Fund a card you already have</h2>
+      <label className="mt-3 block text-[12px] text-white/45">
+        Where it goes
+        <select value={where} onChange={(e) => setWhere(e.target.value as "jupiter" | "phantom")} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+          <option value="jupiter">Jupiter card — USDC to your Spend address</option>
+          <option value="phantom">Phantom Cash — swap USDC into CASH in this wallet</option>
+        </select>
+      </label>
+      {where === "jupiter" ? (
+        <label className="mt-3 block text-[12px] text-white/45">
+          Spend address
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From Jupiter, Send to Spend" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
+        </label>
+      ) : null}
+      <label className="mt-3 block text-[12px] text-white/45">
+        USDC
+        <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white" />
+      </label>
+      <p className="mt-3 text-[13px] leading-snug text-white/50">
+        {where === "jupiter"
+          ? "Jupiter’s card is theirs. Their app shows a Spend address that is only yours. This sends USDC there. Any other token sent to that address is not credited."
+          : "Phantom’s Visa is theirs. This swaps USDC for their CASH token and leaves it in the wallet you sign with."}
+      </p>
+      <button type="button" disabled={busy} onClick={() => void send()} className="mt-3 h-12 w-full rounded-full bg-[#d7e36a] text-[15px] font-semibold text-black disabled:opacity-50">
+        {busy ? "Waiting on the wallet" : "Sign and send"}
+      </button>
+    </section>
   );
 }
 

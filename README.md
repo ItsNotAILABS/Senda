@@ -33,17 +33,17 @@ There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
 
 ## Charts
 
-The trade chart keeps more than one book.
+The trade chart is one menu.
 
-- **Desk** is the Solana pool, with candles and studies.
-- **Price** is that same pool as a line.
-- **Binance** opens a TradingView book only for names it lists. It is not the pool, and it is not Phantom’s chart. Phantom draws its chart inside its own app.
+- **Senda candles, line, and volume** are drawn here from the Solana pool.
+- **Binance** opens a TradingView book only for names it lists. It is not the pool, and it is not Phantom’s chart.
 
 ## Shop
 
-USDC moves when the wallet signs. Phantom’s virtual Visa is issued in the Phantom app by Lead Bank. This desk does not issue it.
+USDC moves when the wallet signs. A card you already have can be funded from here.
 
-A Mayan move can carry 8 basis points to this desk’s Solana address. A card purchase fee is not that.
+- **Jupiter’s card** takes USDC at the Spend address shown in their app. That address is theirs and it is unique. Only USDC belongs there.
+- **Phantom Cash** is a swap of USDC into their CASH token. The token stays in the wallet that signs. Their Visa stays in the Phantom app.
 
 ## Devnet
 

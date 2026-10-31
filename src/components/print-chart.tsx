@@ -402,16 +402,33 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
 
   return (
     <div className="border border-[#1a1c24] bg-[#050508]">
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-[#1a1c24] px-2 py-1">
-        <button type="button" onClick={() => setKind("candles")} className={`h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold ${kind === "candles" ? "bg-[#d7e36a] text-black" : "text-[#787b86]"}`}>Desk</button>
-        <button type="button" onClick={() => setKind("line")} className={`h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold ${kind === "line" ? "bg-[#d7e36a] text-black" : "text-[#787b86]"}`}>Price</button>
-        <button type="button" onClick={() => setShot(TV[symbol.toUpperCase()] ? "tv" : "no-book")} className="h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold text-[#787b86]">Binance</button>
-        <span className="shrink-0 px-1 text-[11px] text-[#787b86]">{feed === "gecko-pool" ? "Pool candles." : feed === "jup-chart" ? "Jupiter price. No pool volume." : "No second feed yet."} Binance is a different book, only for names it lists.</span>
+      <div className="flex flex-col gap-2 border-b border-[#1a1c24] px-2 py-2 sm:flex-row sm:items-center">
+        <label className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-[12px] text-[#787b86]">Chart</span>
+          <select
+            value={kind}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (next === "binance") {
+                setShot(TV[symbol.toUpperCase()] ? "tv" : "no-book");
+                return;
+              }
+              setKind(next as "candles" | "line" | "volume");
+              if (shot === "no-book") setShot(null);
+            }}
+            className="h-11 min-w-0 flex-1 rounded-lg border border-[#2a2e39] bg-[#131722] px-2 text-[14px] text-[#d1d4dc]"
+          >
+            <option value="candles">Senda candles — we draw the pool</option>
+            <option value="line">Senda line — the same pool</option>
+            <option value="volume">Senda volume — the same pool</option>
+            <option value="binance">{TV[symbol.toUpperCase()] ? "Binance — their book, not ours" : "Binance — not listed for this name"}</option>
+          </select>
+        </label>
+        <p className="text-[12px] leading-snug text-[#787b86] sm:max-w-[220px]">
+          {feed === "gecko-pool" ? "Bars are the pool’s own trades." : feed === "jup-chart" ? "Jupiter’s price. This feed has no volume." : "Waiting on a print."}
+        </p>
       </div>
       <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#1a1c24] px-1">
-        {(["candles", "line", "volume"] as const).map((id) => (
-          <button key={id} type="button" onClick={() => setKind(id)} className={`h-9 shrink-0 border-b-2 px-2.5 text-[13px] capitalize ${kind === id ? "border-[#d1d4dc] text-[#d1d4dc]" : "border-transparent text-[#787b86]"}`}>{id}</button>
-        ))}
         <span className="mx-1 h-4 w-px shrink-0 bg-[#1a1c24]" />
         {TF.map((id) => (
           <button

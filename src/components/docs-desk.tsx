@@ -48,7 +48,7 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
             h: "Where to go",
             p: [
               "Home is the money and the book. PreStocks is the names. Convert is the route. Play is the print. Shop is a number and a USDC payment. Agents is the workspace. Send moves cash in this browser. Portfolio is what the wallet holds. Make is work other people can pay for in USDC. Cover is a drop. Docs is this set.",
-              "A chart has three books. Desk is the pool. Price is that pool as a line. Binance is a TradingView book, and only for names it lists. It is not the pool.",
+              "The chart is one menu. Senda candles, the line, and the volume are drawn here from the pool. Binance is a separate book, and only when that name is listed.",
             ],
           },
         ],
