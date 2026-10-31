@@ -5,6 +5,7 @@ import { TokenMark } from "@/components/token-mark";
 import { FillButton } from "@/components/fill-button";
 import { ShortActions } from "@/components/short-actions";
 import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
+import { ExtraRails } from "@/components/extra-rails";
 import { mintDecimals } from "@/lib/phantom";
 import { formatChg, formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { admit, emptyBook, liquidFirst } from "@/lib/liq-router";
@@ -268,6 +269,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
           )}
         </div>
         <p className="mt-2 px-4 text-center text-xs text-white/40">Phantom signs. The tokens land in that wallet.</p>
+        <ExtraRails mint={stock.mint} symbol={stock.symbol} usd={usd} side={side} price={stock.last} decimals={decimals} jupOut={get} />
         <div className="px-4">
           <ShortActions symbol={stock.symbol} usd={usd} />
         </div>

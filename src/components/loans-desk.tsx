@@ -4,6 +4,7 @@ import { PortfolioNav } from "@/components/portfolio-nav";
 import { TabLead } from "@/components/tab-lead";
 import { AAVE, aaveAccount, aaveBorrow, aaveRepay, aaveSupply, type AaveAccount, type AaveNet } from "@/lib/aave-lend";
 import { kaminoLoans, kaminoMarkets, signKamino, type KaminoLoan, type KaminoReserve } from "@/lib/kamino-lend";
+import { MarginfiBook } from "@/components/extra-rails";
 import { connectPhantom, mintDecimals, phantomProvider } from "@/lib/phantom";
 import { liquidateLock, lockPubkey, lockShares, readLock, unlockShares, type ShareLock } from "@/lib/share-lock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -216,6 +217,7 @@ export function LoansDesk() {
           A size over 5% of that reserve is blocked. Deposit locks the token in Kamino. The token does not come to Senda.
         </p>
       </section>
+      <MarginfiBook />
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
         <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Ethereum and Base · Aave</p>
         <div className="mt-3 flex gap-1">
