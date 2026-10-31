@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { dflowOrder, dflowQuote } from "@/lib/dflow";
+import { bindDflowTx } from "@/lib/dflow-bind";
 import { placeLimit } from "@/lib/jup-limit";
-import { USDC } from "@/lib/jup-exec";
+import { quoteJup, USDC } from "@/lib/jup-exec";
 import { pythMark } from "@/lib/pyth-mark";
-import { connectPhantom, liveSolAddress, sendVersioned } from "@/lib/phantom";
+import { chainRpc, connectPhantom, liveSolAddress, sendVersioned } from "@/lib/phantom";
 import { marginfiBanks, type MarginBank } from "@/lib/marginfi";
 
 /** DFlow next to the Jupiter quote, a Pyth mark for the majors, and a Jupiter limit. Not a second Buy for an xStock. */
@@ -67,11 +68,15 @@ export function ExtraRails({
       const owner = liveSolAddress() || (await connectPhantom());
       const row = await dflowOrder({ data: { owner, mint, usd, side, price, decimals } });
       if (!row.ok || !row.transaction) throw new Error(row.ok ? "DFlow did not return a transaction." : row.reason);
-      const { Buffer } = await import("buffer");
-      const { VersionedTransaction } = await import("@solana/web3.js");
-      const tx = VersionedTransaction.deserialize(Buffer.from(row.transaction, "base64"));
-      const payer = tx.message.staticAccountKeys[0]?.toBase58?.() ?? "";
-      if (payer && payer !== owner) throw new Error("The fee payer is not this wallet.");
+      const jup = await quoteJup({ data: { mint, usd, side, price, decimals } });
+      if ("error" in jup) throw new Error(jup.error);
+      const inputMint = side === "buy" ? USDC : mint;
+      const outputMint = side === "buy" ? mint : USDC;
+      const amount = side === "sell" && price > 0 ? Math.round((usd / price) * 10 ** decimals) : Math.round(usd * 1e6);
+      const tx = await bindDflowTx(
+        { quote: row, transaction: row.transaction, owner, inputMint, outputMint, amount, jupiterOut: jup.outAmount },
+        chainRpc,
+      );
       const sig = await sendVersioned(tx);
       toast.success(`DFlow signed. solscan.io/tx/${sig}`);
     } catch (e) {

@@ -15,6 +15,8 @@ export type DflowQuote = {
   priceImpactPct: string;
   venue: string;
   transaction: string | null;
+  inputMint: string;
+  outputMint: string;
 };
 
 function atoms(usd: number, side: "buy" | "sell", price: number, decimals: number) {
@@ -74,6 +76,8 @@ async function order(input: {
       priceImpactPct: json.priceImpactPct || "0",
       venue: json.routePlan?.[0]?.venue || "DFlow",
       transaction: json.transaction || null,
+      inputMint,
+      outputMint,
     };
   }
   return { ok: false, reason: last };
