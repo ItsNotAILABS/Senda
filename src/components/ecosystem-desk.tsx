@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { VendorHub } from "@/components/vendor-hub";
+import { DriveWealthDesk } from "@/components/drivewealth-desk";
 import { LEGAL } from "@/lib/ecosystem";
 import { pre8 } from "@/lib/pre8";
 import { formatUsd, formatValuation, type HouseListing } from "@/lib/sol-house";
@@ -9,6 +10,7 @@ export function EcosystemDesk({ house }: { house: HouseListing[] }) {
   return (
     <div className="pb-10">
       <VendorHub />
+      <DriveWealthDesk />
       <div className="px-4">
       <h2 className="font-display text-3xl tracking-tight">PreStocks rails</h2>
       <p className="mt-2 text-sm text-muted">
