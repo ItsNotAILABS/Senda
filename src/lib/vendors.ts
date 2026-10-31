@@ -19,5 +19,4 @@ export const VENDORS: { name: string; kind: string; does: string }[] = [
   { name: "Raydium", kind: "Pools", does: "AMM pools. A second venue, not a second balance." },
   { name: "Circle CCTP", kind: "Send", does: "USDC between Ethereum and Base. Phantom signs the burn." },
   { name: "Phantom", kind: "Wallet", does: "The signer. Senda does not hold a key." },
-  { name: "DriveWealth", kind: "Brokerage", does: "Cashless model only. No deposit into Senda. Not connected until the server has a session, and this desk does not place the order." },
 ];
