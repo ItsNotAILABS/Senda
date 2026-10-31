@@ -402,6 +402,12 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
 
   return (
     <div className="border border-[#1a1c24] bg-[#050508]">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-[#1a1c24] px-2 py-1">
+        <button type="button" onClick={() => setKind("candles")} className={`h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold ${kind === "candles" ? "bg-[#d7e36a] text-black" : "text-[#787b86]"}`}>Desk</button>
+        <button type="button" onClick={() => setKind("line")} className={`h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold ${kind === "line" ? "bg-[#d7e36a] text-black" : "text-[#787b86]"}`}>Price</button>
+        <button type="button" onClick={() => setShot(TV[symbol.toUpperCase()] ? "tv" : "no-book")} className="h-8 shrink-0 rounded-full px-3 text-[12px] font-semibold text-[#787b86]">Binance</button>
+        <span className="shrink-0 px-1 text-[11px] text-[#787b86]">{feed === "gecko-pool" ? "Pool candles." : feed === "jup-chart" ? "Jupiter price. No pool volume." : "No second feed yet."} Binance is a different book, only for names it lists.</span>
+      </div>
       <div className="flex items-center gap-0.5 overflow-x-auto border-b border-[#1a1c24] px-1">
         {(["candles", "line", "volume"] as const).map((id) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={`h-9 shrink-0 border-b-2 px-2.5 text-[13px] capitalize ${kind === id ? "border-[#d1d4dc] text-[#d1d4dc]" : "border-transparent text-[#787b86]"}`}>{id}</button>
@@ -664,16 +670,19 @@ export function PrintChart({ mint, symbol, className = "h-[320px]" }: { mint: st
           <CandleChart bars={bars} precision={precision} kind="candles" vivid className="min-h-0 flex-1" />
         </div>
       ) : null}
-      {shot && shot !== "tv" ? (
+      {shot && shot !== "tv" && shot !== "no-book" ? (
         <div className="fixed inset-0 z-[90] flex flex-col bg-black/80 px-4 pt-[max(1rem,env(safe-area-inset-top))]" onClick={() => setShot(null)}>
           <p className="pb-2 text-sm text-white">Long-press the chart to save it.</p>
           <img src={shot} alt={`${symbol} chart`} className="max-h-[80dvh] w-full object-contain" />
         </div>
       ) : null}
+      {shot === "no-book" ? (
+        <p className="border-b border-[#1a1c24] px-3 py-2 text-[12px] text-[#787b86]">{symbol} has no Binance book here. The desk chart stays the pool.</p>
+      ) : null}
       {shot === "tv" && TV[symbol.toUpperCase()] ? (
         <div className="fixed inset-0 z-[90] flex flex-col bg-[#050508]">
           <div className="flex items-center justify-between px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-2">
-            <p className="text-sm text-[#d1d4dc]">Binance · {symbol}</p>
+            <p className="text-sm text-[#d1d4dc]">Binance · {symbol}. This is not the pool.</p>
             <button type="button" onClick={() => setShot(null)} className="min-h-10 rounded-full bg-[#d1d4dc] px-4 text-sm font-semibold text-[#131722]">Close</button>
           </div>
           <iframe title={`${symbol} on Binance`} src={`https://www.tradingview.com/widgetembed/?symbol=${encodeURIComponent(TV[symbol.toUpperCase()])}&interval=${span}&hidetoptoolbar=0&theme=dark&style=1&locale=en`} className="min-h-0 w-full flex-1 border-0" />

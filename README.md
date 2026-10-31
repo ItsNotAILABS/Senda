@@ -31,6 +31,20 @@ A payment to someone in Mexico is USDC to their Solana address. The peso line is
 
 There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
 
+## Charts
+
+The trade chart keeps more than one book.
+
+- **Desk** is the Solana pool, with candles and studies.
+- **Price** is that same pool as a line.
+- **Binance** opens a TradingView book only for names it lists. It is not the pool, and it is not Phantom’s chart. Phantom draws its chart inside its own app.
+
+## Shop
+
+USDC moves when the wallet signs. Phantom’s virtual Visa is issued in the Phantom app by Lead Bank. This desk does not issue it.
+
+A Mayan move can carry 8 basis points to this desk’s Solana address. A card purchase fee is not that.
+
 ## Devnet
 
 The cover program is deployed.

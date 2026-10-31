@@ -48,6 +48,7 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
             h: "Where to go",
             p: [
               "Home is the money and the book. PreStocks is the names. Convert is the route. Play is the print. Shop is a number and a USDC payment. Agents is the workspace. Send moves cash in this browser. Portfolio is what the wallet holds. Make is work other people can pay for in USDC. Cover is a drop. Docs is this set.",
+              "A chart has three books. Desk is the pool. Price is that pool as a line. Binance is a TradingView book, and only for names it lists. It is not the pool.",
             ],
           },
         ],
@@ -173,6 +174,7 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
             p: [
               "Phantom Cash spends Bridge’s CASH on Solana. The issuer is Lead Bank. Jupiter spends USDC on a Visa issued through Rain or DCS. KAST spends USDC, USDT, or PYUSD deposited on Solana, custodial, Visa. Solflare’s card paused on 28 Jul 2026 when Kulipa wound down.",
               "The pipes under those cards are Rain and Bridge. Both require a program and KYC. This repo does not have a BIN. Until it does, the payment a Solana merchant can clear is the USDC transfer.",
+              "Shop shows three faces. USDC is the payment. Cash is Phantom’s token, and their Visa stays in the Phantom app. Route is a Mayan move, where this desk can take 8 basis points.",
             ],
           },
         ],
