@@ -42,8 +42,7 @@ The trade chart is one menu.
 
 USDC moves when the wallet signs. A card you already have can be funded from here.
 
-- **Jupiter’s card** takes USDC at the Spend address shown in their app. That address is theirs and it is unique. Only USDC belongs there.
-- **Phantom Cash** is a swap of USDC into their CASH token. The token stays in the wallet that signs. Their Visa stays in the Phantom app.
+- **Jupiter, Avici, KAST, XPlace, and Fuse** take USDC at the address that app shows for the account. Phantom Cash is a swap into their CASH token. None of those cards are issued here.
 
 ## Devnet
 

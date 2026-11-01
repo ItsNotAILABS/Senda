@@ -111,6 +111,23 @@ export const BRIDGE: BridgeChain[] = [
       { symbol: "MON", address: NATIVE, decimals: 18 },
     ],
   },
+  {
+    id: "hyperevm",
+    name: "HyperEVM",
+    chainId: 100000022,
+    kind: "evm",
+    tokens: [
+      { symbol: "USDC", address: "0xb88339cb7199b77e23db6e890353e22632ba630f", decimals: 6 },
+      { symbol: "HYPE", address: NATIVE, decimals: 18 },
+    ],
+  },
+  {
+    id: "robinhood",
+    name: "Robinhood",
+    chainId: 4663,
+    kind: "evm",
+    tokens: [{ symbol: "ETH", address: NATIVE, decimals: 18 }],
+  },
 ];
 
 export type BridgeQuote = {

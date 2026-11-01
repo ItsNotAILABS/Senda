@@ -214,17 +214,24 @@ export function SwapDesk() {
       <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Swap</p>
       <h1 className="font-display text-3xl tracking-tight">Across chains</h1>
       <p className="text-sm text-muted">
-        deBridge builds the order. The wallet on the source chain signs it. Monad, Optimism, Avalanche, and BNB Chain quote the same way as Base. Senda does not hold either side.
+        deBridge builds the order. The wallet on the source chain signs it. On a 100 USDC move from Solana to Ethereum, Relay returned about 99.96, deBridge about 99.92, and Mayan about 99.50. Mayan has no Robinhood route. Across has no Solana route. BNB Chain, Polygon, Monad, HyperEVM, and Robinhood are on this list.
       </p>
       <label className="block text-xs text-muted">
         From
-        <div className="mt-1 flex gap-2 overflow-x-auto pb-1">
+        <select
+          value={src.id}
+          onChange={(e) => {
+            const c = BRIDGE.find((row) => row.id === e.target.value) ?? src;
+            setSrcId(c.id);
+            if (!c.tokens.some((t) => t.symbol === inSym)) setInSym(c.tokens[0].symbol);
+            setQuote(null);
+          }}
+          className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white"
+        >
           {BRIDGE.map((c) => (
-            <button key={c.id} type="button" onClick={() => { setSrcId(c.id); if (!c.tokens.some((t) => t.symbol === inSym)) setInSym(c.tokens[0].symbol); setQuote(null); }} className={cn("min-h-11 shrink-0 rounded-full px-3 text-sm font-semibold", src.id === c.id ? "bg-white text-black" : "border border-white/10")}>
-              {c.name}
-            </button>
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </div>
+        </select>
         <div className="mt-2 flex gap-2">
           {src.tokens.map((t) => (
             <button key={t.symbol} type="button" onClick={() => { setInSym(t.symbol); setQuote(null); }} className={cn("min-h-11 flex-1 rounded-full text-sm font-semibold", tokenIn.symbol === t.symbol ? "bg-accent text-accent-fg" : "border border-white/10")}>
@@ -235,13 +242,20 @@ export function SwapDesk() {
       </label>
       <label className="block text-xs text-muted">
         To
-        <div className="mt-1 flex gap-2 overflow-x-auto pb-1">
+        <select
+          value={dst.id}
+          onChange={(e) => {
+            const c = BRIDGE.find((row) => row.id === e.target.value) ?? dst;
+            setDstId(c.id);
+            if (!c.tokens.some((t) => t.symbol === outSym)) setOutSym(c.tokens[0].symbol);
+            setQuote(null);
+          }}
+          className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white"
+        >
           {BRIDGE.map((c) => (
-            <button key={c.id} type="button" onClick={() => { setDstId(c.id); if (!c.tokens.some((t) => t.symbol === outSym)) setOutSym(c.tokens[0].symbol); setQuote(null); }} className={cn("min-h-11 shrink-0 rounded-full px-3 text-sm font-semibold", dst.id === c.id ? "bg-white text-black" : "border border-white/10")}>
-              {c.name}
-            </button>
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
-        </div>
+        </select>
         <div className="mt-2 flex gap-2">
           {dst.tokens.map((t) => (
             <button key={t.symbol} type="button" onClick={() => { setOutSym(t.symbol); setQuote(null); }} className={cn("min-h-11 flex-1 rounded-full text-sm font-semibold", tokenOut.symbol === t.symbol ? "bg-accent text-accent-fg" : "border border-white/10")}>

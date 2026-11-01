@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { USDC } from "@/lib/jup-exec";
+import { CASH, USDC } from "@/lib/jup-exec";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { connectPhantom, splHolding } from "@/lib/phantom";
 import { payUsdc } from "@/lib/solana-pay";
@@ -13,30 +13,15 @@ const KEY = "senda.cardfund.v2";
 const USDPT = "HVWf8JmLoHs99Lw8Psf3fyqAtA4crWxCPkrmSdNjhNH3";
 
 const PROGRAMS = [
-  {
-    id: "jupiter",
-    name: "Jupiter",
-    state: "Sends now",
-    line: "Address from the Jupiter deposit screen, remembered after the first paste. Phantom sends the USDC. The Visa is Rain’s, in the Jupiter app.",
-  },
-  {
-    id: "rain",
-    name: "Rain",
-    state: "Program slot",
-    line: "Same box the program will fill in. Until Rain sends an address, a paste still works and stays saved.",
-  },
-  {
-    id: "bridge",
-    name: "Bridge",
-    state: "Not signed",
-    line: "Solana USDC only. Paste the address Bridge shows. A Base address is rejected by the signature.",
-  },
-  {
-    id: "stable",
-    name: "Stablecard",
-    state: "Swap",
-    line: "Senda quotes USDC to USDPT and Phantom signs. The Western Union Visa spends that token in their app, not from this screen.",
-  },
+  { id: "jupiter", name: "Jupiter", state: "USDC", line: "Paste the Spend address from Jupiter. Only USDC. Their Visa stays in their app." },
+  { id: "avici", name: "Avici", state: "USDC", line: "Paste the escrow address Avici shows. The card balance sits in their contract, not in this wallet." },
+  { id: "kast", name: "KAST", state: "USDC", line: "Paste the Solana deposit KAST shows. They hold it. USDC, USDT, or PYUSD. This send is USDC." },
+  { id: "xplace", name: "XPlace", state: "Check asset", line: "Send only the asset XPlace asked for. Their usual collateral is USDT, SOL, wETH, cbBTC, or jitoSOL. USDC goes only if that screen says USDC." },
+  { id: "phantom", name: "Phantom", state: "CASH", line: "Swaps USDC into Phantom’s CASH token and leaves it in this wallet. Their Visa stays in Phantom." },
+  { id: "fuse", name: "Fuse", state: "USDC", line: "Paste the address Fuse shows for the card account. Their Visa. United States, except New York and Alaska." },
+  { id: "rain", name: "Rain", state: "Address", line: "Same box. Until Rain sends an address, a paste still works and stays saved." },
+  { id: "bridge", name: "Bridge", state: "USDC", line: "Solana USDC only. Paste the address Bridge shows." },
+  { id: "stable", name: "Stablecard", state: "Swap", line: "Senda quotes USDC to USDPT and the wallet signs. The Western Union Visa spends that token in their app." },
 ] as const;
 
 type Id = (typeof PROGRAMS)[number]["id"];
@@ -151,6 +136,19 @@ export function CardFund({ owner }: { owner: string }) {
         toast.success(`${done.outUi.toFixed(way === "pt-sol" ? 4 : 2)} ${route.noun} is in this Phantom.`);
         return;
       }
+      if (id === "phantom") {
+        const done = await signRoute({
+          owner: who,
+          inputMint: USDC,
+          outputMint: CASH,
+          amountRaw: Math.round(amount * 1_000_000),
+          outDecimals: 6,
+          usd: amount,
+        });
+        setSig(done.signature);
+        toast.success(`CASH is in this wallet. Phantom’s card spends it.`);
+        return;
+      }
       const dest = to.trim();
       if (!dest) throw new Error("Paste the Solana address that screen is showing.");
       const paid = await payUsdc({ owner: who, to: dest, usd: amount, memo: program.name });
@@ -184,8 +182,16 @@ export function CardFund({ owner }: { owner: string }) {
         </button>
       </div>
       <div className="rounded-[24px] border border-white/10 bg-[#0c0e14] p-4 sm:p-5">
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
-        {PROGRAMS.map((row) => (
+      <div className="grid grid-cols-3 gap-2">
+        {PROGRAMS.filter((row) => ["jupiter", "avici", "kast", "xplace", "phantom", "fuse"].includes(row.id)).map((row) => (
+          <button key={row.id} type="button" onClick={() => setId(row.id)} className={cn("min-h-16 rounded-2xl px-2 py-2 text-center", id === row.id ? "bg-white text-black" : "bg-white/5")}>
+            <span className="block text-sm font-semibold">{row.name}</span>
+            <span className={cn("block text-[10px] uppercase tracking-wide", id === row.id ? "text-black/55" : "text-muted")}>{row.state}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {PROGRAMS.filter((row) => ["rain", "bridge", "stable"].includes(row.id)).map((row) => (
           <button key={row.id} type="button" onClick={() => setId(row.id)} className={cn("min-h-12 rounded-2xl px-2 text-left", id === row.id ? "bg-white text-black" : "bg-white/5")}>
             <span className="block text-sm font-semibold">{row.name}</span>
             <span className={cn("block text-[10px] uppercase tracking-wide", id === row.id ? "text-black/60" : "text-muted")}>{row.state}</span>
@@ -231,11 +237,11 @@ export function CardFund({ owner }: { owner: string }) {
         ) : null}
       </div>
       {id === "stable" && out ? <p className="mt-2 font-mono text-sm text-muted">About {out}</p> : null}
-      {id === "stable" ? null : (
+      {id === "stable" ? null : id === "phantom" ? null : (
         <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder={to ? "Saved Solana address" : "Paste once. Senda keeps it."} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
       )}
       <button type="button" disabled={busy} onClick={() => void fund()} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
-        {busy ? "Waiting on Phantom" : id === "stable" ? route.label : `Send to ${program.name}`}
+        {busy ? "Waiting on Phantom" : id === "stable" ? route.label : id === "phantom" ? "Swap into CASH" : `Send to ${program.name}`}
       </button>
       {sig ? (
         <a href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer" className="mt-3 block font-mono text-xs break-all text-accent">{sig}</a>

@@ -456,10 +456,18 @@ function ChipMark() {
 }
 
 function CardConnect({ owner }: { owner: string }) {
-  const [where, setWhere] = useState<"jupiter" | "phantom">("jupiter");
+  const [where, setWhere] = useState<"jupiter" | "avici" | "kast" | "xplace" | "phantom" | "fuse">("jupiter");
   const [to, setTo] = useState("");
   const [usd, setUsd] = useState("10");
   const [busy, setBusy] = useState(false);
+  const note: Record<typeof where, string> = {
+    jupiter: "Jupiter’s card is theirs. Paste the Spend address their app shows. Only USDC.",
+    avici: "Avici’s card is theirs. Paste the escrow address they show. The balance sits in their contract.",
+    kast: "KAST holds the deposit. Paste the Solana address they show. This send is USDC.",
+    xplace: "Send only if XPlace asked for USDC. Their usual collateral is USDT, SOL, wETH, cbBTC, or jitoSOL.",
+    phantom: "Phantom’s Visa is theirs. This swaps USDC for their CASH token and leaves it in the wallet that signs.",
+    fuse: "Fuse’s Visa is theirs. Paste the card address they show. United States, except New York and Alaska.",
+  };
 
   async function send() {
     const n = Number(usd);
@@ -470,12 +478,7 @@ function CardConnect({ owner }: { owner: string }) {
     setBusy(true);
     try {
       const who = owner || (await connectPhantom());
-      if (where === "jupiter") {
-        const dest = solAddress(to);
-        if (!dest) throw new Error("Paste the Spend address from Jupiter. It belongs to that account, and only USDC should go there.");
-        const done = await payUsdc({ owner: who, to: dest, usd: n, memo: "jupiter spend", deskFee: false });
-        toast.success(`USDC is on the way to that Spend account. solscan.io/tx/${done.signature}`);
-      } else {
+      if (where === "phantom") {
         const done = await signRoute({
           owner: who,
           inputMint: USDC,
@@ -487,6 +490,11 @@ function CardConnect({ owner }: { owner: string }) {
           symbol: "CASH",
         });
         toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
+      } else {
+        const dest = solAddress(to);
+        if (!dest) throw new Error("Paste the address that app is showing. It belongs to that account.");
+        const done = await payUsdc({ owner: who, to: dest, usd: n, memo: where, deskFee: false });
+        toast.success(`USDC is on the way. solscan.io/tx/${done.signature}`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The wallet did not send.");
@@ -500,28 +508,28 @@ function CardConnect({ owner }: { owner: string }) {
       <h2 className="text-lg font-semibold">Fund a card you already have</h2>
       <label className="mt-3 block text-[12px] text-white/45">
         Where it goes
-        <select value={where} onChange={(e) => setWhere(e.target.value as "jupiter" | "phantom")} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
-          <option value="jupiter">Jupiter card — USDC to your Spend address</option>
-          <option value="phantom">Phantom Cash — swap USDC into CASH in this wallet</option>
+        <select value={where} onChange={(e) => setWhere(e.target.value as typeof where)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+          <option value="jupiter">Jupiter</option>
+          <option value="avici">Avici</option>
+          <option value="kast">KAST</option>
+          <option value="xplace">XPlace</option>
+          <option value="phantom">Phantom</option>
+          <option value="fuse">Fuse</option>
         </select>
       </label>
-      {where === "jupiter" ? (
+      {where === "phantom" ? null : (
         <label className="mt-3 block text-[12px] text-white/45">
-          Spend address
-          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From Jupiter, Send to Spend" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
+          Their address
+          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
         </label>
-      ) : null}
+      )}
       <label className="mt-3 block text-[12px] text-white/45">
         USDC
         <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white" />
       </label>
-      <p className="mt-3 text-[13px] leading-snug text-white/50">
-        {where === "jupiter"
-          ? "Jupiter’s card is theirs. Their app shows a Spend address that is only yours. This sends USDC there. Any other token sent to that address is not credited."
-          : "Phantom’s Visa is theirs. This swaps USDC for their CASH token and leaves it in the wallet you sign with."}
-      </p>
+      <p className="mt-3 text-[13px] leading-snug text-white/50">{note[where]}</p>
       <button type="button" disabled={busy} onClick={() => void send()} className="mt-3 h-12 w-full rounded-full bg-[#d7e36a] text-[15px] font-semibold text-black disabled:opacity-50">
-        {busy ? "Waiting on the wallet" : "Sign and send"}
+        {busy ? "Waiting on the wallet" : where === "phantom" ? "Swap into CASH" : "Sign and send"}
       </button>
     </section>
   );
@@ -646,11 +654,32 @@ const RAILS: { name: string; spend: string; holds: string; clears: string; here:
     here: "Not ours. The card lives in Jupiter.",
   },
   {
+    name: "Avici",
+    spend: "USDC in their escrow",
+    holds: "Avici’s card contract",
+    clears: "Their Visa.",
+    here: "Paste the address they show. The wallet sends USDC.",
+  },
+  {
     name: "KAST",
     spend: "USDC, USDT, or PYUSD, deposited on Solana",
     holds: "KAST. Custodial.",
     clears: "Visa, including a Solana-branded physical card.",
-    here: "Not ours. KYC in the KAST app.",
+    here: "Paste the address they show. This send is USDC.",
+  },
+  {
+    name: "XPlace",
+    spend: "Collateral they name",
+    holds: "Their Solana contract",
+    clears: "Their Visa, against a credit line.",
+    here: "USDC only if their screen asks for USDC.",
+  },
+  {
+    name: "Fuse",
+    spend: "USDC on Solana",
+    holds: "The Fuse card account",
+    clears: "Their Visa. United States, except New York and Alaska.",
+    here: "Paste the address they show.",
   },
   {
     name: "Solflare",
