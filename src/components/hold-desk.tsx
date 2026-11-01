@@ -6,6 +6,7 @@ import { connectPhantom, phantomProvider, readChain, type ChainToken } from "@/l
 import { cancelJob, fundJob, listJobs, releaseJob, type WorkJob } from "@/lib/work-escrow";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { fileCrew } from "@/lib/crew-book";
 import { VENDORS } from "@/lib/vendors";
 import { cn } from "@/lib/utils";
 
@@ -287,11 +288,16 @@ export function WorkContracts() {
     setBusy(true);
     try {
       const who = await signer();
-      const job = await fundJob({ owner: who, title, brief, usd, worker: worker.trim(), venue });
+      await fundJob({ owner: who, title, brief, usd, worker: worker.trim(), venue });
       setTitle("");
       setBrief("");
       setJobs(listJobs().filter((row) => row.status === "open"));
-      toast.success(`${job.venue} order open. Nothing has moved.`);
+      try {
+        fileCrew({ payer: who, kind: "milestone", title, brief, usd, payee: worker.trim(), net: "Solana", venue });
+      } catch {
+        /* the work order stands even if the seal is still closed */
+      }
+      toast.success(`${venue} order open. Nothing has moved.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The job did not fund.");
     } finally {

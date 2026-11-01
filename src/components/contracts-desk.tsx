@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { CrewDesk } from "@/components/crew-desk";
 import { ContractBoard, type BoardLane } from "@/components/contract-board";
 import { PrintChart } from "@/components/print-chart";
 import { HoldDesk, WorkContracts } from "@/components/hold-desk";
@@ -150,6 +151,7 @@ export function ContractsDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-4">
+      <CrewDesk />
       <div className="flex gap-1 overflow-x-auto">
         {(
           [

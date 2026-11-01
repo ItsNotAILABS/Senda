@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Activity, Binoculars, CalendarClock, CreditCard, Crosshair, Eye, FileText, Lock, Scale, Shield, TrendingDown, TrendingUp } from "lucide-react";
+import { CrewThread } from "@/components/crew-desk";
 import { AgentComputer } from "@/components/agent-computer";
 import { TabLead } from "@/components/tab-lead";
 import { JumpStrip } from "@/components/jump-strip";
@@ -535,6 +536,15 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           hold: "The signature is still yours, on the wallet this browser connected.",
         }}
       />
+
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Crew</p>
+        <h2 className="mt-1 text-xl">Work the agent can see</h2>
+        <p className="mt-1 text-sm text-muted">The brief is in the seal. A note stays there. Paying still happens on Contracts, and you sign it.</p>
+        <div className="mt-3">
+          <CrewThread />
+        </div>
+      </section>
 
       <section className="rounded-[24px] border border-white/10 bg-[#101114] p-4">
         <p className="text-sm font-semibold">Daily cap. One tap revokes the queue.</p>
