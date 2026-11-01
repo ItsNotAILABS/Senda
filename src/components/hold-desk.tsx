@@ -6,6 +6,7 @@ import { connectPhantom, phantomProvider, readChain, type ChainToken } from "@/l
 import { cancelJob, fundJob, listJobs, releaseJob, type WorkJob } from "@/lib/work-escrow";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { VENDORS } from "@/lib/vendors";
 import { cn } from "@/lib/utils";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -264,6 +265,7 @@ export function WorkContracts() {
   const [title, setTitle] = useState("");
   const [brief, setBrief] = useState("");
   const [worker, setWorker] = useState("");
+  const [venue, setVenue] = useState(VENDORS[0].name);
   const [usd, setUsd] = useState(5);
   const [busy, setBusy] = useState(false);
 
@@ -285,11 +287,11 @@ export function WorkContracts() {
     setBusy(true);
     try {
       const who = await signer();
-      const job = await fundJob({ owner: who, title, brief, usd, worker: worker.trim() });
+      const job = await fundJob({ owner: who, title, brief, usd, worker: worker.trim(), venue });
       setTitle("");
       setBrief("");
       setJobs(listJobs().filter((row) => row.status === "open"));
-      toast.success(`USDC is in the work account. ${job.sig.slice(0, 8)}…`);
+      toast.success(`${job.venue} order open. Nothing has moved.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The job did not fund.");
     } finally {
@@ -303,7 +305,7 @@ export function WorkContracts() {
       const who = await signer();
       const sig = kind === "release" ? await releaseJob(job, who) : await cancelJob(job, who);
       setJobs(listJobs().filter((row) => row.status === "open"));
-      toast.success(kind === "release" ? `Paid the worker. ${sig.slice(0, 8)}…` : `Paid you back. ${sig.slice(0, 8)}…`);
+      toast.success(kind === "release" ? `Paid the worker from this wallet. ${sig.slice(0, 8)}…` : sig ? `Paid you back. ${sig.slice(0, 8)}…` : "Closed. Nothing had been sent.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The work account did not pay.");
     } finally {
@@ -316,11 +318,26 @@ export function WorkContracts() {
       <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>
       <h2 className="mt-1 text-2xl tracking-tight">Work order</h2>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        Phantom puts USDC into the work account. Release pays the worker that USDC. Cancel pays it back to you. The smallest order is $1. Same account the Work tab uses.
+        The order names a venue this desk already uses. Pay sends USDC from this wallet to the worker, the same send as everywhere else. Close before that sends nothing. The smallest order is $1.
       </p>
+      <label className="mt-4 block text-xs text-muted">
+        Venue
+        <select value={venue} onChange={(e) => setVenue(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+          {VENDORS.map((row) => (
+            <option key={row.name} value={row.name}>{row.name} · {row.kind}</option>
+          ))}
+        </select>
+      </label>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Job" className="min-h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm" />
         <input value={worker} onChange={(e) => setWorker(e.target.value)} placeholder="Worker Solana address" className="min-h-11 rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
+        {wallet.w.links.filter((l) => l.kind !== "evm").length ? (
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            {wallet.w.links.filter((l) => l.kind !== "evm").map((l) => (
+              <button key={l.address} type="button" onClick={() => setWorker(l.address)} className={cn("min-h-10 rounded-full px-3 text-xs font-semibold", worker === l.address ? "bg-white text-black" : "border border-white/15")}>{l.label}</button>
+            ))}
+          </div>
+        ) : null}
         <input value={brief} onChange={(e) => setBrief(e.target.value)} placeholder="What done looks like" className="min-h-11 rounded-xl border border-white/10 bg-black/30 px-3 text-sm sm:col-span-2" />
       </div>
       <div className="mt-3 flex gap-1">
@@ -331,7 +348,7 @@ export function WorkContracts() {
         ))}
       </div>
       <button type="button" disabled={busy} onClick={() => void fund()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
-        Put ${usd} in
+        Open the order
       </button>
       <ul className="mt-4 space-y-2">
         {jobs.length === 0 ? <li className="text-sm text-muted">No open work order in this browser.</li> : null}
@@ -339,10 +356,10 @@ export function WorkContracts() {
           <li key={job.id} className="rounded-2xl border border-white/10 px-3 py-3">
             <p className="text-sm font-semibold">{job.title}</p>
             <p className="mt-1 text-xs text-muted">{job.brief}</p>
-            <p className="mt-1 font-mono text-xs text-subtle">${job.usd.toFixed(2)} · {job.worker.slice(0, 4)}…{job.worker.slice(-4)}</p>
+            <p className="mt-1 font-mono text-xs text-subtle">${job.usd.toFixed(2)} · {job.venue || "Desk"} · {job.worker.slice(0, 4)}…{job.worker.slice(-4)}</p>
             <div className="mt-2 flex gap-2">
               <button type="button" disabled={busy} onClick={() => void finish(job, "release")} className="min-h-10 flex-1 rounded-full bg-accent text-xs font-semibold text-accent-fg">
-                Execute · pay the worker
+                Pay ${job.usd.toFixed(0)} USDC
               </button>
               <button type="button" disabled={busy} onClick={() => void finish(job, "cancel")} className="min-h-10 flex-1 rounded-full border border-white/15 text-xs font-semibold">
                 Pay me back

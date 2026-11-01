@@ -157,7 +157,8 @@ export function WalletsDesk({ embedded = false }: { embedded?: boolean }) {
             <Link to="/invest" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Buy a name</Link>
             <Link to="/social" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Above or below</Link>
             <Link to="/invest" search={{ lane: "solana" }} className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Buy on Solana</Link>
-            <Link to="/payments" search={{ act: "link" }} className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Send USDC</Link>
+            <Link to="/payments" search={{ act: "link" }} className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Send</Link>
+            <Link to="/contracts" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Work</Link>
             <Link to="/wallet" className="min-h-9 rounded-full bg-white/10 px-3 py-2 text-xs font-semibold">Convert SOL</Link>
           </div>
         </article>

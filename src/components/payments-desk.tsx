@@ -557,7 +557,7 @@ function SendTicket({ owner }: { owner: string }) {
   return (
     <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
       <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Send</p>
-      {!owner ? <p className="mt-3 text-sm">Connect Phantom.</p> : null}
+      {!owner ? <p className="mt-3 text-sm">Connect a Solana wallet. Send uses that address.</p> : null}
       {owner && !chain && !miss ? <p className="mt-3 text-sm text-muted">Reading this address.</p> : null}
       {miss ? <p className="mt-3 text-sm text-down">{miss}</p> : null}
       {owner && chain && assets.length === 0 ? <p className="mt-3 text-sm text-muted">Nothing held on this address.</p> : null}
