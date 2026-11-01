@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { BRIDGE, quoteBridge, signBridge, type BridgeQuote } from "@/lib/bridge-swap";
+import { bridgeRace, type RaceRow } from "@/lib/bridge-race";
 import { USDC } from "@/lib/jup-exec";
 import { SOL, quoteRoute, signRoute } from "@/lib/jup-sign";
 import { connectPhantom, phantomProvider } from "@/lib/phantom";
@@ -127,6 +128,50 @@ function SolPair() {
   );
 }
 
+function RaceBoard() {
+  const [usd, setUsd] = useState("100");
+  const [rows, setRows] = useState<RaceRow[]>([]);
+  const [at, setAt] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const n = Number(usd);
+
+  async function run() {
+    if (!(n >= 10)) return;
+    setBusy(true);
+    try {
+      const got = await bridgeRace({ data: { usd: n } });
+      setRows(got.rows);
+      setAt(got.at);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No quotes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-white/10 p-3">
+      <p className="text-sm font-semibold">Same move, three quotes</p>
+      <p className="mt-1 text-xs text-muted">Solana USDC to Ethereum USDC. The figure is what that API returned just now. The order you sign is still the deBridge form under this.</p>
+      <div className="mt-2 flex gap-2">
+        <input value={usd} onChange={(e) => setUsd(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black px-3 text-white" />
+        <button type="button" disabled={busy} onClick={() => void run()} className="h-11 rounded-full bg-white px-4 text-sm font-semibold text-black disabled:opacity-40">{busy ? "Quoting" : "Quote"}</button>
+      </div>
+      {rows.length ? (
+        <ul className="mt-3 space-y-2">
+          {rows.map((row) => (
+            <li key={row.name} className="flex items-baseline justify-between gap-3 text-sm">
+              <span className="font-semibold">{row.name}</span>
+              <span className="font-mono">{row.out == null ? "—" : row.out.toFixed(2)} <span className="text-xs text-muted">{row.ms} ms</span></span>
+            </li>
+          ))}
+          <li className="text-[11px] text-muted">{new Date(at).toLocaleString()} · ${n} in</li>
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 export function SwapDesk() {
   const wallet = useWallet();
   const sol = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
@@ -214,8 +259,9 @@ export function SwapDesk() {
       <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Swap</p>
       <h1 className="font-display text-3xl tracking-tight">Across chains</h1>
       <p className="text-sm text-muted">
-        deBridge builds the order on this screen, and that quote is the one the wallet signs. A comparison of Relay, deBridge, Mayan, and Across was taken on 31 Oct 2026 for 100 USDC from Solana to Ethereum. It is not a live quote. Mayan has no Robinhood route. Across has no Solana route. BNB Chain, Polygon, Monad, HyperEVM, and Robinhood are on this list. Robinhood here is ETH, because deBridge does not list a USDC there.
+        deBridge builds the order under this, and that quote is the one the wallet signs. BNB Chain, Polygon, Monad, HyperEVM, and Robinhood are on the list. Robinhood here is ETH, because deBridge does not list a USDC there. Mayan has no Robinhood route. Across has no Solana route.
       </p>
+      <RaceBoard />
       <label className="block text-xs text-muted">
         From
         <select

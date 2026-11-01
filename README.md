@@ -42,9 +42,7 @@ The trade chart is one menu.
 
 USDC moves when the wallet signs. A card you already have can be funded from here.
 
-- **Jupiter, Avici, KAST, and Fuse** take USDC at the address that app shows. A first send to a new address stops at 250, and the last four characters of the address have to match. That check does not prove the company owns the address.
-- **XPlace** takes USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.
-- **Phantom Cash** is a swap of USDC into their CASH token. The token stays in the wallet that signs.
+- **Jupiter, Avici, KAST, and Fuse** take USDC at the address that app shows, up to 200,000. XPlace takes USDT, SOL, wETH, cbBTC, or jitoSOL, and USDC is refused. Phantom Cash is a swap into Bridge’s CASH token, which stays in the wallet that signs.
 
 ## Devnet
 

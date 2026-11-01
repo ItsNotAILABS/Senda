@@ -17,7 +17,7 @@ const PROGRAMS = [
   { id: "jupiter", name: "Jupiter", state: "USDC", line: "Paste the Spend address from Jupiter. Only USDC. Their Visa stays in their app." },
   { id: "avici", name: "Avici", state: "USDC", line: "Paste the escrow address Avici shows. The card balance sits in their contract, not in this wallet." },
   { id: "kast", name: "KAST", state: "USDC", line: "Paste the Solana deposit KAST shows. They hold it. USDC, USDT, or PYUSD. This send is USDC." },
-  { id: "xplace", name: "XPlace", state: "No USDC", line: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused. A new address stops at the first-send cap. The last four characters have to match." },
+  { id: "xplace", name: "XPlace", state: "No USDC", line: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused. Up to the cap on that asset." },
   { id: "phantom", name: "Phantom", state: "CASH", line: "Swaps USDC into Phantom’s CASH token and leaves it in this wallet. Their Visa stays in Phantom." },
   { id: "fuse", name: "Fuse", state: "USDC", line: "Paste the address Fuse shows for the card account. Their Visa. United States, except New York and Alaska." },
   { id: "rain", name: "Rain", state: "Address", line: "Same box. Until Rain sends an address, a paste still works and stays saved." },
@@ -49,7 +49,6 @@ export function CardFund({ owner }: { owner: string }) {
   const [usd, setUsd] = useState("");
   const [to, setTo] = useState("");
   const [asset, setAsset] = useState("USDC");
-  const [tail, setTail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sig, setSig] = useState("");
   const [out, setOut] = useState("");
@@ -62,7 +61,6 @@ export function CardFund({ owner }: { owner: string }) {
 
   useEffect(() => {
     setTo(saved()[id] || "");
-    setTail("");
     setSig("");
     const book = CARD_BOOK[id];
     if (book) setAsset(book.assets[0].symbol);
@@ -156,7 +154,7 @@ export function CardFund({ owner }: { owner: string }) {
         return;
       }
       if (id === "jupiter" || id === "avici" || id === "kast" || id === "xplace" || id === "fuse" || id === "rain" || id === "bridge") {
-        const bound = bindCardSend({ program: id, symbol: asset, dest: to, amount, tail, remembered: saved()[id] || "" });
+        const bound = bindCardSend({ program: id, symbol: asset, dest: to, amount });
         const whoPay = who;
         const sigOut = bound.asset.native
           ? await paySol({ owner: whoPay, to: bound.dest, sol: amount })
@@ -263,9 +261,8 @@ export function CardFund({ owner }: { owner: string }) {
               </select>
             </label>
           ) : null}
-          <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder={to ? "Saved Solana address" : "Paste once. Senda keeps it."} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
-          <input value={tail} onChange={(e) => setTail(e.target.value.trim())} placeholder="Last 4 of that address" maxLength={4} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-sm" />
-          <p className="mt-2 text-xs text-muted">A new address stops at the first-send cap. This matches the last four characters. It does not prove the address belongs to {program.name}.</p>
+          <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder={to ? "Saved Solana address" : "Paste the address that app shows"} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
+          <p className="mt-2 text-xs text-muted">The asset above is the only one this button will send. Up to {CARD_BOOK[id]?.assets.find((row) => row.symbol === asset)?.cap ?? ""} {asset}.</p>
         </>
       )}
       <button type="button" disabled={busy} onClick={() => void fund()} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">

@@ -460,17 +460,16 @@ function CardConnect({ owner }: { owner: string }) {
   const [where, setWhere] = useState<"jupiter" | "avici" | "kast" | "xplace" | "phantom" | "fuse">("jupiter");
   const [asset, setAsset] = useState("USDC");
   const [to, setTo] = useState("");
-  const [tail, setTail] = useState("");
   const [usd, setUsd] = useState("10");
   const [busy, setBusy] = useState(false);
   const book = CARD_BOOK[where];
   const note: Record<typeof where, string> = {
-    jupiter: "USDC only. A new address stops at 250. Type the last four characters of the address Jupiter shows.",
-    avici: "USDC only, to the escrow they show. A new address stops at 250. This does not prove the address is Avici’s.",
-    kast: "USDC only. KAST holds it. A new address stops at 250.",
+    jupiter: "USDC only. Up to 200,000.",
+    avici: "USDC only, to the escrow they show. Up to 200,000.",
+    kast: "USDC only. They hold the deposit. Up to 200,000.",
     xplace: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.",
-    phantom: "Swaps USDC into Phantom’s CASH token. No address.",
-    fuse: "USDC only. A new address stops at 250, and a saved one stops at 2,000.",
+    phantom: "Swaps USDC into Bridge’s CASH token, in this wallet. Their Visa spends that token.",
+    fuse: "USDC only. Up to 200,000.",
   };
 
   async function send() {
@@ -495,15 +494,7 @@ function CardConnect({ owner }: { owner: string }) {
         });
         toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
       } else {
-        const remembered = (() => {
-          try {
-            const raw = JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") as Record<string, string>;
-            return raw[where] || "";
-          } catch {
-            return "";
-          }
-        })();
-        const bound = bindCardSend({ program: where, symbol: asset, dest: to, amount: n, tail, remembered });
+        const bound = bindCardSend({ program: where, symbol: asset, dest: to, amount: n });
         const sigOut = bound.asset.native
           ? await paySol({ owner: who, to: bound.dest, sol: n })
           : bound.asset.symbol === "USDC"
@@ -556,10 +547,6 @@ function CardConnect({ owner }: { owner: string }) {
           <label className="mt-3 block text-[12px] text-white/45">
             Their address
             <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
-          </label>
-          <label className="mt-3 block text-[12px] text-white/45">
-            Last 4
-            <input value={tail} onChange={(e) => setTail(e.target.value)} maxLength={4} placeholder="Matches the address" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[15px] text-white" />
           </label>
         </>
       )}
