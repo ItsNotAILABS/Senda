@@ -3,7 +3,8 @@ import { toast } from "sonner";
 import { CASH, USDC } from "@/lib/jup-exec";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { connectPhantom, splHolding } from "@/lib/phantom";
-import { payUsdc } from "@/lib/solana-pay";
+import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
+import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
 import { rememberTrade } from "@/lib/trade-log";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { WuDesk } from "@/components/wu-desk";
@@ -16,7 +17,7 @@ const PROGRAMS = [
   { id: "jupiter", name: "Jupiter", state: "USDC", line: "Paste the Spend address from Jupiter. Only USDC. Their Visa stays in their app." },
   { id: "avici", name: "Avici", state: "USDC", line: "Paste the escrow address Avici shows. The card balance sits in their contract, not in this wallet." },
   { id: "kast", name: "KAST", state: "USDC", line: "Paste the Solana deposit KAST shows. They hold it. USDC, USDT, or PYUSD. This send is USDC." },
-  { id: "xplace", name: "XPlace", state: "Check asset", line: "Send only the asset XPlace asked for. Their usual collateral is USDT, SOL, wETH, cbBTC, or jitoSOL. USDC goes only if that screen says USDC." },
+  { id: "xplace", name: "XPlace", state: "No USDC", line: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused. A new address stops at the first-send cap. The last four characters have to match." },
   { id: "phantom", name: "Phantom", state: "CASH", line: "Swaps USDC into Phantom’s CASH token and leaves it in this wallet. Their Visa stays in Phantom." },
   { id: "fuse", name: "Fuse", state: "USDC", line: "Paste the address Fuse shows for the card account. Their Visa. United States, except New York and Alaska." },
   { id: "rain", name: "Rain", state: "Address", line: "Same box. Until Rain sends an address, a paste still works and stays saved." },
@@ -47,6 +48,8 @@ export function CardFund({ owner }: { owner: string }) {
   const [id, setId] = useState<Id>("jupiter");
   const [usd, setUsd] = useState("");
   const [to, setTo] = useState("");
+  const [asset, setAsset] = useState("USDC");
+  const [tail, setTail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sig, setSig] = useState("");
   const [out, setOut] = useState("");
@@ -59,7 +62,10 @@ export function CardFund({ owner }: { owner: string }) {
 
   useEffect(() => {
     setTo(saved()[id] || "");
+    setTail("");
     setSig("");
+    const book = CARD_BOOK[id];
+    if (book) setAsset(book.assets[0].symbol);
   }, [id]);
 
   useEffect(() => {
@@ -149,15 +155,23 @@ export function CardFund({ owner }: { owner: string }) {
         toast.success(`CASH is in this wallet. Phantom’s card spends it.`);
         return;
       }
-      const dest = to.trim();
-      if (!dest) throw new Error("Paste the Solana address that screen is showing.");
-      const paid = await payUsdc({ owner: who, to: dest, usd: amount, memo: program.name });
-      const prior = saved();
-      prior[id] = dest;
-      localStorage.setItem(KEY, JSON.stringify(prior));
-      rememberTrade({ symbol: "USDC", side: "send", usd: amount, mint: USDC, signature: paid.signature });
-      setSig(paid.signature);
-      toast.success(`${program.name} funded. ${paid.signature.slice(0, 8)}…`);
+      if (id === "jupiter" || id === "avici" || id === "kast" || id === "xplace" || id === "fuse" || id === "rain" || id === "bridge") {
+        const bound = bindCardSend({ program: id, symbol: asset, dest: to, amount, tail, remembered: saved()[id] || "" });
+        const whoPay = who;
+        const sigOut = bound.asset.native
+          ? await paySol({ owner: whoPay, to: bound.dest, sol: amount })
+          : bound.asset.symbol === "USDC"
+            ? (await payUsdc({ owner: whoPay, to: bound.dest, usd: amount, memo: id, deskFee: false })).signature
+            : (await payToken({ owner: whoPay, to: bound.dest, mint: bound.asset.mint, symbol: bound.asset.symbol, amount, decimals: bound.asset.decimals })).signature;
+        const prior = saved();
+        prior[id] = bound.dest;
+        localStorage.setItem(KEY, JSON.stringify(prior));
+        rememberTrade({ symbol: bound.asset.symbol, side: "send", usd: amount, mint: bound.asset.mint || USDC, signature: sigOut });
+        setSig(sigOut);
+        toast.success(`${amount} ${bound.asset.symbol} sent for ${bound.name}. ${sigOut.slice(0, 8)}…`);
+        return;
+      }
+      throw new Error("That card is not on this desk.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Nothing was sent.");
     } finally {
@@ -238,7 +252,21 @@ export function CardFund({ owner }: { owner: string }) {
       </div>
       {id === "stable" && out ? <p className="mt-2 font-mono text-sm text-muted">About {out}</p> : null}
       {id === "stable" ? null : id === "phantom" ? null : (
-        <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder={to ? "Saved Solana address" : "Paste once. Senda keeps it."} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
+        <>
+          {CARD_BOOK[id] && CARD_BOOK[id].assets.length > 1 ? (
+            <label className="mt-3 block text-xs text-muted">
+              Asset
+              <select value={asset} onChange={(e) => setAsset(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+                {CARD_BOOK[id].assets.map((row) => (
+                  <option key={row.symbol} value={row.symbol}>{row.symbol}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder={to ? "Saved Solana address" : "Paste once. Senda keeps it."} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-xs" />
+          <input value={tail} onChange={(e) => setTail(e.target.value.trim())} placeholder="Last 4 of that address" maxLength={4} spellCheck={false} className="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 font-mono text-sm" />
+          <p className="mt-2 text-xs text-muted">A new address stops at the first-send cap. This matches the last four characters. It does not prove the address belongs to {program.name}.</p>
+        </>
       )}
       <button type="button" disabled={busy} onClick={() => void fund()} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
         {busy ? "Waiting on Phantom" : id === "stable" ? route.label : id === "phantom" ? "Swap into CASH" : `Send to ${program.name}`}

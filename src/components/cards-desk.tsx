@@ -7,7 +7,8 @@ import { BatchPay } from "@/components/batch-pay";
 import { CardUse } from "@/components/card-use";
 import { MexicoSend } from "@/components/mexico-send";
 import { SignCall } from "@/components/sign-call";
-import { paySol, payUsdc } from "@/lib/solana-pay";
+import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
+import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
 import { CASH, USDC } from "@/lib/jup-exec";
 import { signRoute } from "@/lib/jup-sign";
 import { humanWalletError } from "@/lib/mobile-wallet";
@@ -457,22 +458,25 @@ function ChipMark() {
 
 function CardConnect({ owner }: { owner: string }) {
   const [where, setWhere] = useState<"jupiter" | "avici" | "kast" | "xplace" | "phantom" | "fuse">("jupiter");
+  const [asset, setAsset] = useState("USDC");
   const [to, setTo] = useState("");
+  const [tail, setTail] = useState("");
   const [usd, setUsd] = useState("10");
   const [busy, setBusy] = useState(false);
+  const book = CARD_BOOK[where];
   const note: Record<typeof where, string> = {
-    jupiter: "Jupiter’s card is theirs. Paste the Spend address their app shows. Only USDC.",
-    avici: "Avici’s card is theirs. Paste the escrow address they show. The balance sits in their contract.",
-    kast: "KAST holds the deposit. Paste the Solana address they show. This send is USDC.",
-    xplace: "Send only if XPlace asked for USDC. Their usual collateral is USDT, SOL, wETH, cbBTC, or jitoSOL.",
-    phantom: "Phantom’s Visa is theirs. This swaps USDC for their CASH token and leaves it in the wallet that signs.",
-    fuse: "Fuse’s Visa is theirs. Paste the card address they show. United States, except New York and Alaska.",
+    jupiter: "USDC only. A new address stops at 250. Type the last four characters of the address Jupiter shows.",
+    avici: "USDC only, to the escrow they show. A new address stops at 250. This does not prove the address is Avici’s.",
+    kast: "USDC only. KAST holds it. A new address stops at 250.",
+    xplace: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.",
+    phantom: "Swaps USDC into Phantom’s CASH token. No address.",
+    fuse: "USDC only. A new address stops at 250, and a saved one stops at 2,000.",
   };
 
   async function send() {
     const n = Number(usd);
-    if (!(n >= 3) || n > 200_000) {
-      toast.error("A card top-up is from $3 to $200,000.");
+    if (!(n > 0)) {
+      toast.error("Enter an amount.");
       return;
     }
     setBusy(true);
@@ -491,10 +495,30 @@ function CardConnect({ owner }: { owner: string }) {
         });
         toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
       } else {
-        const dest = solAddress(to);
-        if (!dest) throw new Error("Paste the address that app is showing. It belongs to that account.");
-        const done = await payUsdc({ owner: who, to: dest, usd: n, memo: where, deskFee: false });
-        toast.success(`USDC is on the way. solscan.io/tx/${done.signature}`);
+        const remembered = (() => {
+          try {
+            const raw = JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") as Record<string, string>;
+            return raw[where] || "";
+          } catch {
+            return "";
+          }
+        })();
+        const bound = bindCardSend({ program: where, symbol: asset, dest: to, amount: n, tail, remembered });
+        const sigOut = bound.asset.native
+          ? await paySol({ owner: who, to: bound.dest, sol: n })
+          : bound.asset.symbol === "USDC"
+            ? (await payUsdc({ owner: who, to: bound.dest, usd: n, memo: where, deskFee: false })).signature
+            : (await payToken({ owner: who, to: bound.dest, mint: bound.asset.mint, symbol: bound.asset.symbol, amount: n, decimals: bound.asset.decimals })).signature;
+        const prior = (() => {
+          try {
+            return JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") as Record<string, string>;
+          } catch {
+            return {} as Record<string, string>;
+          }
+        })();
+        prior[where] = bound.dest;
+        localStorage.setItem("senda.cardfund.v2", JSON.stringify(prior));
+        toast.success(`${n} ${bound.asset.symbol} sent. solscan.io/tx/${sigOut}`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "The wallet did not send.");
@@ -508,7 +532,7 @@ function CardConnect({ owner }: { owner: string }) {
       <h2 className="text-lg font-semibold">Fund a card you already have</h2>
       <label className="mt-3 block text-[12px] text-white/45">
         Where it goes
-        <select value={where} onChange={(e) => setWhere(e.target.value as typeof where)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+        <select value={where} onChange={(e) => { const next = e.target.value as typeof where; setWhere(next); setAsset(CARD_BOOK[next]?.assets[0].symbol ?? "USDC"); }} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
           <option value="jupiter">Jupiter</option>
           <option value="avici">Avici</option>
           <option value="kast">KAST</option>
@@ -518,10 +542,26 @@ function CardConnect({ owner }: { owner: string }) {
         </select>
       </label>
       {where === "phantom" ? null : (
-        <label className="mt-3 block text-[12px] text-white/45">
-          Their address
-          <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
-        </label>
+        <>
+          {book && book.assets.length > 1 ? (
+            <label className="mt-3 block text-[12px] text-white/45">
+              Asset
+              <select value={asset} onChange={(e) => setAsset(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+                {book.assets.map((row) => (
+                  <option key={row.symbol} value={row.symbol}>{row.symbol}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="mt-3 block text-[12px] text-white/45">
+            Their address
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
+          </label>
+          <label className="mt-3 block text-[12px] text-white/45">
+            Last 4
+            <input value={tail} onChange={(e) => setTail(e.target.value)} maxLength={4} placeholder="Matches the address" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[15px] text-white" />
+          </label>
+        </>
       )}
       <label className="mt-3 block text-[12px] text-white/45">
         USDC
@@ -672,7 +712,7 @@ const RAILS: { name: string; spend: string; holds: string; clears: string; here:
     spend: "Collateral they name",
     holds: "Their Solana contract",
     clears: "Their Visa, against a credit line.",
-    here: "USDC only if their screen asks for USDC.",
+    here: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.",
   },
   {
     name: "Fuse",

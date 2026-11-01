@@ -122,11 +122,14 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
   return { signature, reference: signature, feeUsd };
 }
 
-/** Any 6-decimal stable the wallet holds. Same signature path as USDC. Senda does not hold the token. */
-export async function payToken(input: { owner: string; to: string; mint: string; symbol: string; amount: number }): Promise<{ signature: string }> {
-  const amount = Math.round(input.amount * 1_000_000) / 1_000_000;
-  if (!(amount >= 0.001)) throw new Error("Send at least 0.001.");
-  assertSpend(amount);
+/** Any SPL the wallet holds. Decimals default to 6. Senda does not hold the token. */
+export async function payToken(input: { owner: string; to: string; mint: string; symbol: string; amount: number; decimals?: number }): Promise<{ signature: string }> {
+  const decimals = input.decimals ?? 6;
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 9) throw new Error("That token size is not supported.");
+  const scale = 10 ** decimals;
+  const amount = Math.round(input.amount * scale) / scale;
+  if (!(amount > 0)) throw new Error("Enter an amount.");
+  if (decimals === 6) assertSpend(amount);
   let to: PublicKey;
   let owner: PublicKey;
   let mint: PublicKey;
@@ -141,7 +144,7 @@ export async function payToken(input: { owner: string; to: string; mint: string;
   const source = ataOf(owner, mint);
   if (!(await accountExists(source))) throw new Error(`This wallet has no ${input.symbol}.`);
   const dest = ataOf(to, mint);
-  const raw = BigInt(Math.round(amount * 1_000_000));
+  const raw = BigInt(Math.round(amount * 10 ** decimals));
   const ix: TransactionInstruction[] = [];
   if (!(await accountExists(dest))) {
     ix.push(

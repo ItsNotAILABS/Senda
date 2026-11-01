@@ -214,7 +214,7 @@ export function SwapDesk() {
       <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Swap</p>
       <h1 className="font-display text-3xl tracking-tight">Across chains</h1>
       <p className="text-sm text-muted">
-        deBridge builds the order. The wallet on the source chain signs it. On a 100 USDC move from Solana to Ethereum, Relay returned about 99.96, deBridge about 99.92, and Mayan about 99.50. Mayan has no Robinhood route. Across has no Solana route. BNB Chain, Polygon, Monad, HyperEVM, and Robinhood are on this list.
+        deBridge builds the order on this screen, and that quote is the one the wallet signs. A comparison of Relay, deBridge, Mayan, and Across was taken on 31 Oct 2026 for 100 USDC from Solana to Ethereum. It is not a live quote. Mayan has no Robinhood route. Across has no Solana route. BNB Chain, Polygon, Monad, HyperEVM, and Robinhood are on this list. Robinhood here is ETH, because deBridge does not list a USDC there.
       </p>
       <label className="block text-xs text-muted">
         From
