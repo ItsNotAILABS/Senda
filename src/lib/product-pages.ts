@@ -131,5 +131,6 @@ export const DOCS_PAGES: ProductPage[] = [
 
 export const AGENT_PAGES: ProductPage[] = [
   { href: "/agents", label: "Studio", hint: "Agents on this browser" },
+  { href: "/agents/intelligence", label: "Intelligence", hint: "Sourced markets, liquidity and stablecoin review" },
   { href: "/agents/build", label: "Build", hint: "Make one" },
 ];
