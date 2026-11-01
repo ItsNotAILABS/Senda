@@ -27,6 +27,63 @@ export const CARD_BOOK: Record<string, { name: string; assets: CardAsset[]; addr
   bridge: { name: "Bridge", address: true, assets: [USDC] },
 };
 
+export type CardDoor = "send" | "handoff" | "swap" | "one-way";
+
+export const CARD_TERMS: Record<string, { name: string; stack: string; door: CardDoor; href: string; holds: string }> = {
+  jupiter: {
+    name: "Jupiter",
+    stack: "Rain",
+    door: "send",
+    href: "https://jup.ag",
+    holds: "Visa issued by Rain. The Spend balance is theirs after the top-up. In August 2026 an old Rain Solana card contract was drained. Rain refunded it. A send here is USDC to the address Jupiter shows.",
+  },
+  avici: {
+    name: "Avici",
+    stack: "Rain",
+    door: "handoff",
+    href: "https://avici.money",
+    holds: "Same Rain stack. Their Visa is secured by USDC in an escrow they show. There is no public API. The top-up leaves this wallet.",
+  },
+  kast: {
+    name: "KAST",
+    stack: "Rain",
+    door: "handoff",
+    href: "https://www.kast.xyz",
+    holds: "Outside the US this is the Rain stack. A deposit becomes a custodial dollar claim on KAST. This desk does not attach an affiliate code.",
+  },
+  xplace: {
+    name: "XPlace",
+    stack: "Kamino",
+    door: "send",
+    href: "https://x.place",
+    holds: "This is x.place. Collateral is USDT, SOL, wETH, cbBTC, or jitoSOL in Kamino. XPlace says it cannot move that balance. It is not the Rain stack. USDC is refused here.",
+  },
+  phantom: {
+    name: "Phantom",
+    stack: "Bridge",
+    door: "swap",
+    href: "https://phantom.com",
+    holds: "Lead Bank issues the Visa. Bridge runs the CASH token. The card is Phantom’s product and is not called from here. The swap leaves CASH in this wallet.",
+  },
+  fuse: {
+    name: "Fuse",
+    stack: "Bridge",
+    door: "one-way",
+    href: "https://fusewallet.com",
+    holds: "Same Lead Bank and Bridge stack. Fuse does not open a signer to other apps. USDC sent to the vault address they show does not come back from this desk.",
+  },
+};
+
+const DESK = "https://senda.pocketnova.app";
+
+export function phantomBrowse(url: string): string {
+  return `https://phantom.com/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(DESK)}`;
+}
+
+export function phantomToken(mint: string, chain = "solana"): string {
+  return `https://phantom.com/tokens/${chain}/${mint}`;
+}
+
 export function bindCardSend(input: { program: string; symbol: string; dest: string; amount: number }): { name: string; asset: CardAsset; dest: string } {
   const book = CARD_BOOK[input.program];
   if (!book) throw new Error("That card is not on this desk.");

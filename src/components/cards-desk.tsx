@@ -9,6 +9,7 @@ import { MexicoSend } from "@/components/mexico-send";
 import { SignCall } from "@/components/sign-call";
 import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
 import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
+import { CardTerms } from "@/components/card-terms";
 import { CASH, USDC } from "@/lib/jup-exec";
 import { signRoute } from "@/lib/jup-sign";
 import { humanWalletError } from "@/lib/mobile-wallet";
@@ -555,8 +556,9 @@ function CardConnect({ owner }: { owner: string }) {
         <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white" />
       </label>
       <p className="mt-3 text-[13px] leading-snug text-white/50">{note[where]}</p>
+      <CardTerms id={where} />
       <button type="button" disabled={busy} onClick={() => void send()} className="mt-3 h-12 w-full rounded-full bg-[#d7e36a] text-[15px] font-semibold text-black disabled:opacity-50">
-        {busy ? "Waiting on the wallet" : where === "phantom" ? "Swap into CASH" : "Sign and send"}
+        {busy ? "Waiting on the wallet" : where === "phantom" ? "Swap into CASH" : where === "fuse" ? "Send one way" : "Sign and send"}
       </button>
     </section>
   );

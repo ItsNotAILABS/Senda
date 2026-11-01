@@ -5,6 +5,7 @@ import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { connectPhantom, splHolding } from "@/lib/phantom";
 import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
 import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
+import { CardTerms } from "@/components/card-terms";
 import { rememberTrade } from "@/lib/trade-log";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { WuDesk } from "@/components/wu-desk";
@@ -239,6 +240,7 @@ export function CardFund({ owner }: { owner: string }) {
       ) : id === "jupiter" ? null : (
         <p className="mt-3 text-xs text-muted">{program.line}</p>
       )}
+      {id === "stable" ? null : <CardTerms id={id} />}
       <input value={usd} onChange={(e) => setUsd(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0" aria-label="Dollars" className="mt-3 w-full bg-transparent font-mono text-5xl tabular-nums outline-none" />
       <div className="mt-2 flex gap-2">
         {["10", "25", "50"].map((n) => (
@@ -266,7 +268,7 @@ export function CardFund({ owner }: { owner: string }) {
         </>
       )}
       <button type="button" disabled={busy} onClick={() => void fund()} className="mt-4 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-40">
-        {busy ? "Waiting on Phantom" : id === "stable" ? route.label : id === "phantom" ? "Swap into CASH" : `Send to ${program.name}`}
+        {busy ? "Waiting on Phantom" : id === "stable" ? route.label : id === "phantom" ? "Swap into CASH" : id === "fuse" ? "Send one way" : `Send to ${program.name}`}
       </button>
       {sig ? (
         <a href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer" className="mt-3 block font-mono text-xs break-all text-accent">{sig}</a>

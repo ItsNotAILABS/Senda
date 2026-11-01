@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Activity, Binoculars, CalendarClock, Crosshair, Eye, FileText, Lock, Scale, Shield, TrendingDown, TrendingUp } from "lucide-react";
+import { Activity, Binoculars, CalendarClock, CreditCard, Crosshair, Eye, FileText, Lock, Scale, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
 import { TabLead } from "@/components/tab-lead";
 import { JumpStrip } from "@/components/jump-strip";
@@ -85,6 +85,16 @@ const READY = [
     icon: FileText,
     line: "Writes the book onto the sheet. No money moves.",
     mandate: "Log the book onto the sheet. Do not send.",
+  },
+  {
+    id: "cards",
+    title: "Card stacks",
+    job: "clerk",
+    side: "buy",
+    holdCap: false,
+    icon: CreditCard,
+    line: "Rain holds Jupiter, Avici, and KAST after a top-up. Bridge holds Phantom Cash and Fuse. XPlace collateral stays in Kamino. This desk does not keep the card balance.",
+    mandate: "Name the stack before a card send. Rain: Jupiter, Avici, KAST. Bridge: Phantom CASH and Fuse, one way. Kamino: XPlace collateral, never USDC. Do not send. Do not custody.",
   },
 ] as const;
 

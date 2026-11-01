@@ -4,6 +4,8 @@ import { listHolds } from "@/lib/hold-contract";
 import { listPairs } from "@/lib/pair-contract";
 import { splHolding } from "@/lib/phantom";
 import { listJobs, type WorkJob } from "@/lib/work-escrow";
+import { Link } from "@tanstack/react-router";
+import { CARD_TERMS } from "@/lib/card-rails";
 import { cn } from "@/lib/utils";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -131,6 +133,18 @@ export function ContractBoard({ onOpen }: { onOpen: (lane: BoardLane) => void })
             <button type="button" onClick={() => onOpen(row.lane)} className={cn("min-h-10 shrink-0 rounded-full border border-white/15 px-3 text-xs font-semibold")}>
               Open
             </button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-6 text-[11px] tracking-[0.14em] text-subtle uppercase">Card doors</p>
+      <ul className="mt-2 divide-y divide-white/10">
+        {Object.entries(CARD_TERMS).map(([id, row]) => (
+          <li key={id} className="flex items-center gap-3 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">{row.name}</p>
+              <p className="mt-0.5 text-xs text-muted">{row.stack} · {row.door}. {row.holds}</p>
+            </div>
+            <Link to="/cards" className="min-h-10 shrink-0 rounded-full border border-white/15 px-3 text-xs font-semibold leading-10">Open</Link>
           </li>
         ))}
       </ul>
