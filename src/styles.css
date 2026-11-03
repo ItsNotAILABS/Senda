@@ -161,3 +161,12 @@ select.agent-input option {
   background: #11131b;
   color: #f5f7fb;
 }
+
+
+/* Senda Interface Studio previews: opt-in, reversible, browser-local only. */
+html[data-senda-font="large"] {
+  font-size: 17px;
+}
+html[data-senda-density="compact"] {
+  --spacing: 0.22rem;
+}

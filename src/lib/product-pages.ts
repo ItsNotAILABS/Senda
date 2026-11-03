@@ -75,6 +75,7 @@ export const COVER_PAGES: ProductPage[] = [
 ];
 
 export const WORK_PAGES: ProductPage[] = [
+  { href: "/work/interface", label: "Interface Studio", hint: "Review screens, designs, QA gates" },
   { href: "/work", label: "Jobs", hint: "Pay someone in USDC" },
   { href: "/work/sheet", label: "Sheet", hint: "A note on every name" },
   { href: "/work/page", label: "Page", hint: "One name, written out" },
