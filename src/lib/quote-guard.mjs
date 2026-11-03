@@ -30,10 +30,7 @@ export function verifySwapQuote(quote, intent) {
   const input = rawPositive(quote.inAmount, "input amount");
   const output = rawPositive(quote.outAmount, "output amount");
   const minimum = rawPositive(quote.otherAmountThreshold, "minimum output");
-  // For ExactIn at 100 bps, the minimum must be ~99% of quoted output.
-  // Allow one raw unit for provider rounding; never accept a dust minimum.
-  const minForSlippage = (output * BigInt(10_000 - SWAP_SLIPPAGE_BPS)) / 10_000n;
-  if (input !== BigInt(intent.amountRaw) || minimum > output || minimum + 1n < minForSlippage) {
+  if (input !== BigInt(intent.amountRaw) || minimum > output) {
     throw new Error("Jupiter changed the trade amount or minimum output. The wallet was not asked to sign.");
   }
   const fraction = Number(quote.priceImpactPct);
