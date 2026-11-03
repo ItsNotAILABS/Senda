@@ -73,7 +73,8 @@ async function pullCandles(mint: string, tf: PrintTf): Promise<{ bars: PrintBar[
     const pool = await topPool(mint).catch(() => "");
     if (pool) {
       const q = tfQuery(tf);
-      const endpoint = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`;
+      // Request OHLC for the exact selected mint, not the other token in its pool.
+      const endpoint = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd&token=${encodeURIComponent(mint)}`;
       try {
         let res = await fetch(endpoint, { headers: { accept: "application/json", "user-agent": "Senda" } });
         if (res.status === 429) {

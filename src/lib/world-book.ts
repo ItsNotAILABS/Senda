@@ -1,6 +1,7 @@
 /** Ostium prints, and the Jupiter tokens that can actually be signed. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { readJupiterTokenMetrics } from "@/lib/jupiter-token-metrics.mjs";
 
 export type WorldLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
@@ -27,18 +28,24 @@ export type TapeRow = {
   name: string;
   price: number | null;
   change: number | null;
+  /** Exact Jupiter Tokens V2 percent, not a 0-1 fractional change. */
+  changePct?: number | null;
   icon?: string;
+  liquidityUsd?: number | null;
+  volume24hUsd?: number | null;
+  organicScore?: number | null;
+  verified?: boolean;
+  updatedAt?: string;
 };
 
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
 const JUP = "https://api.jup.ag/price/v3?ids=";
+// Official Jupiter gateway. Lite is scheduled to shut down October 30, 2026.
 const FEEDS = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptraded/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/tag?query=stocks",
+  "https://api.jup.ag/tokens/v2/tag?query=verified",
 ];
 
 const BOOK: { lane: WorldLane; ids: string[] }[] = [
@@ -367,41 +374,63 @@ async function loadOstium(): Promise<WorldRow[]> {
   return rows.sort((a, b) => a.lane.localeCompare(b.lane) || a.base.localeCompare(b.base));
 }
 
-export async function loadTape(): Promise<TapeRow[]> {
-  const lists = await Promise.all(FEEDS.map((url) => getJson(url, 8000).catch(() => [])));
-  const rows: TapeRow[] = [];
-  const seen = new Set<string>();
-  for (const json of lists) {
-    if (!Array.isArray(json)) continue;
-    for (const raw of json) {
-      if (!raw || typeof raw !== "object") continue;
-      const row = raw as {
-        id?: unknown;
-        symbol?: unknown;
-        name?: unknown;
-        usdPrice?: unknown;
-        icon?: unknown;
-        stats24h?: { priceChange?: unknown };
-      };
-      if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
-      if (rows.length >= 6000) break;
-      seen.add(row.id);
-      rows.push({
-        id: row.id,
-        symbol: row.symbol,
-        name: typeof row.name === "string" && row.name ? row.name : row.symbol,
-        price: num(row.usdPrice),
-        change: num(row.stats24h?.priceChange),
-        icon: typeof row.icon === "string" ? row.icon : undefined,
-      });
+export let tapeCache: { at: number; rows: TapeRow[] } | null = null;
+let tapePending: Promise<TapeRow[]> | null = null;
+const TAPE_TTL_MS = 60_000;
+async function loadTape(): Promise<TapeRow[]> {
+  if (tapeCache && Date.now() - tapeCache.at < TAPE_TTL_MS) return tapeCache.rows;
+  if (tapePending) return tapePending;
+  const job = (async (): Promise<TapeRow[]> => {
+    const rows: TapeRow[] = [];
+    const seen = new Set<string>();
+    // Keyless gateway is limited to 0.5 requests/second. Limit network calls, share
+    // results across viewers, and never seed a fictional "live" price after a failure.
+    const key = process.env.SENDA_JUPITER_API_KEY || "";
+    for (const [index, url] of FEEDS.entries()) {
+      if (index > 0 && !key) await new Promise((resolve) => setTimeout(resolve, 2100));
+      let json: unknown = null;
+      try {
+        const res = await fetch(url, {
+          headers: { accept: "application/json", "user-agent": "Senda", ...(key ? { "x-api-key": key } : {}) },
+          signal: AbortSignal.timeout(6500),
+        });
+        if (res.ok) json = await res.json();
+      } catch { /* Preserve truthful missing-price states; no fake fallback. */ }
+      if (!Array.isArray(json)) continue;
+      for (const raw of json) {
+        if (!raw || typeof raw !== "object") continue;
+        const row = raw as { id?: unknown; symbol?: unknown; name?: unknown; usdPrice?: unknown;
+          icon?: unknown; liquidity?: unknown; organicScore?: unknown; isVerified?: unknown;
+          updatedAt?: unknown; stats24h?: { priceChange?: unknown; buyVolume?: unknown; sellVolume?: unknown } };
+        if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
+        if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(row.id)) continue;
+        seen.add(row.id);
+        const metric = readJupiterTokenMetrics(row);
+        if (!metric) continue;
+        rows.push({ id: row.id, symbol: row.symbol,
+          name: typeof row.name === "string" && row.name ? row.name : row.symbol,
+          price: metric.priceUsd,
+          // Legacy Senda pages read 'change' as a decimal fraction (0.05 = 5%).
+          // Intelligence reads 'changePct' as Jupiter's exact percent points (5 = 5%).
+          change: metric.priceChangePct == null ? null : metric.priceChangePct / 100,
+          changePct: metric.priceChangePct,
+          icon: typeof row.icon === "string" ? row.icon : undefined,
+          liquidityUsd: metric.liquidityUsd, volume24hUsd: metric.volume24hUsd,
+          organicScore: metric.organicScore, verified: metric.verified,
+          updatedAt: metric.updatedAt ?? undefined });
+      }
     }
-  }
-  for (const hold of Object.values(HOLDS)) {
-    if (!hold.mint || seen.has(hold.mint)) continue;
-    seen.add(hold.mint);
-    rows.push({ id: hold.mint, symbol: hold.symbol, name: hold.symbol, price: null, change: null });
-  }
-  return rows;
+    for (const hold of Object.values(HOLDS)) {
+      if (!hold.mint || seen.has(hold.mint)) continue;
+      seen.add(hold.mint);
+      rows.push({ id: hold.mint, symbol: hold.symbol, name: hold.symbol, price: null, change: null });
+    }
+    // Cache successful lists only. Every price-null fallback remains explicitly unknown.
+    if (rows.some(row => row.price != null && row.price > 0)) tapeCache = { at: Date.now(), rows };
+    return rows;
+  })().finally(() => { tapePending = null; });
+  tapePending = job;
+  return job;
 }
 
 export const worldBook = createServerFn({ method: "GET" }).handler(async () => loadBook());

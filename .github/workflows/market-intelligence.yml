@@ -1,0 +1,64 @@
+name: Senda Market Intelligence checks
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/market-intelligence-terminal-20261026
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  analytics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run indicator and market parser regression checks
+        shell: bash
+        run: |
+          set -o pipefail
+          node --test scripts/market-quality.test.mjs scripts/jupiter-token-metrics.test.mjs 2>&1 | tee market-unit.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: market-quality-unit-diagnostics
+          path: market-unit.log
+          retention-days: 7
+          if-no-files-found: warn
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee market-install.log
+      - name: Typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee market-typecheck.log
+      - name: Development build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build:dev 2>&1 | tee market-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: market-app-diagnostics
+          path: |
+            market-install.log
+            market-typecheck.log
+            market-build.log
+          retention-days: 7
+          if-no-files-found: warn
