@@ -3,7 +3,6 @@ import { jupTape, type TapeRow } from "@/lib/world-book";
 import { useHouse } from "@/lib/use-house";
 import { FillButton } from "@/components/fill-button";
 import { LiveChart } from "@/components/price-chart";
-import { MarketIntelligence } from "@/components/market-intelligence";
 import { ListedView } from "@/components/desk-views";
 import { OstiumBook } from "@/components/ostium-book";
 import { PairBook } from "@/components/pair-book";
@@ -34,10 +33,9 @@ import { NetBrief, NetworkSheet } from "@/components/network-sheet";
 import { PHANTOM_NETS, netMatches } from "@/lib/chain-book";
 import { cn } from "@/lib/utils";
 
-type Tab = "intel" | "trending" | "up" | "down" | "names" | "registry" | "futures" | "kalshi" | "poly" | "fx" | "metals" | "comms" | "pairs" | "ostium" | "hl" | "deriv" | "chains" | "vaults" | "products" | "shares" | "perps" | "solana" | "stake" | "basket" | "lend" | "cover" | "radar" | "curve" | "launch" | "rails" | "news";
+type Tab = "trending" | "up" | "down" | "names" | "registry" | "futures" | "kalshi" | "poly" | "fx" | "metals" | "comms" | "pairs" | "ostium" | "hl" | "deriv" | "chains" | "vaults" | "products" | "shares" | "perps" | "solana" | "stake" | "basket" | "lend" | "cover" | "radar" | "curve" | "launch" | "rails" | "news";
 
 const TITLES: Record<Tab, string> = {
-  intel: "Market Intelligence",
   trending: "Coins",
   up: "Up",
   down: "Down",
@@ -121,8 +119,8 @@ export function MarketsPage() {
     .sort((a, b) => {
       if (sort === "name") return a.symbol.localeCompare(b.symbol);
       if (sort === "price") return (b.price ?? 0) - (a.price ?? 0);
-      const av = a.changePct ?? -1e9;
-      const bv = b.changePct ?? -1e9;
+      const av = a.change == null ? -1e9 : Math.abs(a.change) <= 2 ? a.change * 100 : a.change;
+      const bv = b.change == null ? -1e9 : Math.abs(b.change) <= 2 ? b.change * 100 : b.change;
       return sort === "loss" ? av - bv : bv - av;
     });
   const names = house.filter((h) => (!query || `${h.symbol} ${h.name}`.toLowerCase().includes(query)) && netMatches(net, h.symbol));
@@ -171,7 +169,6 @@ export function MarketsPage() {
       <div className="mt-3 flex gap-1 overflow-x-auto">
         {(
           [
-            ["intel", "Intelligence"],
             ["trending", "Coins"],
             ["up", "Up"],
             ["down", "Down"],
@@ -240,7 +237,6 @@ export function MarketsPage() {
           />
         </div>
       ) : null}
-      {tab === "intel" ? <MarketIntelligence house={book} tape={tape} embedded /> : null}
       {tab === "fx" ? <WorldDesk start="fx" /> : null}
       {tab === "metals" ? <WorldDesk start="metals" /> : null}
       {tab === "comms" ? <CommodityBook /> : null}
@@ -307,7 +303,7 @@ export function MarketsPage() {
         shape === "cards" ? (
           <ul className="mt-3 grid grid-cols-2 gap-3">
             {coinsOnNet.slice(0, cap).map((r) => {
-              const chg = r.changePct ?? null;
+              const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
               return (
                 <li key={r.id} className="flex min-h-[168px] flex-col rounded-[22px] border border-white/10 bg-[#10131c] p-3">
                   <button type="button" onClick={() => setOpen(r)} className="text-left">
@@ -334,7 +330,7 @@ export function MarketsPage() {
         ) : (
           <ul className="mt-2">
             {coinsOnNet.slice(0, cap).map((r) => {
-              const chg = r.changePct ?? null;
+              const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
               return (
                 <li key={r.id}>
                   <button type="button" onClick={() => setOpen(r)} className="flex w-full items-center gap-3 py-3 text-left">

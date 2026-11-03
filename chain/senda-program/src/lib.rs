@@ -39,6 +39,23 @@ pub fn process_instruction(
     if cover.key != &expected {
         return Err(ProgramError::InvalidSeeds);
     }
+    // A registry entry is immutable; it is not a funded protection contract.
+    if !cover.data_is_empty() || **cover.lamports.borrow() != 0 {
+        return Err(ProgramError::AccountAlreadyInitialized);
+    }
+    if !payer.is_writable || !cover.is_writable || *system.key != solana_program::system_program::id() {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    let expiry = u64::from_le_bytes(data[37..45].try_into().map_err(|_| ProgramError::InvalidInstructionData)?);
+    let now = solana_program::clock::Clock::get()?.unix_timestamp;
+    if expiry <= u64::try_from(now).map_err(|_| ProgramError::InvalidInstructionData)? {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    for offset in [13usize, 21, 29] {
+        if u64::from_le_bytes(data[offset..offset+8].try_into().map_err(|_| ProgramError::InvalidInstructionData)?) == 0 {
+            return Err(ProgramError::InvalidInstructionData);
+        }
+    }
     let rent = Rent::get()?.minimum_balance(LEN);
     if cover.data_is_empty() {
         invoke_signed(

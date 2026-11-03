@@ -6,6 +6,10 @@
 import { Buffer } from "buffer";
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { signAndBroadcast } from "@/lib/phantom";
+import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
+import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
+import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
+import { quoteRoute, SOL } from "@/lib/jup-sign";
 import { spendCap } from "@/lib/spend-cap";
 
 const TOKEN = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
@@ -78,6 +82,7 @@ async function accountExists(address: PublicKey): Promise<boolean> {
 
 /** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
 export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string }): Promise<{ signature: string; reference: string }> {
+  return withWalletExecutionLock(input.owner, async () => {
   const usd = Math.round(input.usd * 100) / 100;
   if (!(usd > 0)) throw new Error("Enter an amount.");
   const cap = spendCap();
@@ -91,10 +96,15 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
     throw new Error("That is not a Solana address.");
   }
   if (owner.equals(to)) throw new Error("Pay someone else.");
+  const raw = BigInt(Math.round(usd * 1_000_000));
+  const journalDraft = {
+    owner: owner.toBase58(), kind: "send" as const,
+    asset: "USDC", destination: to.toBase58(), amountRaw: raw.toString(),
+  };
+  assertNoPendingDuplicate(window.localStorage, journalDraft);
   const source = ata(owner);
   if (!(await accountExists(source))) throw new Error("This wallet has no USDC account.");
   const dest = ata(to);
-  const raw = BigInt(Math.round(usd * 1_000_000));
   const reference = Keypair.generate().publicKey;
   const ix: TransactionInstruction[] = [];
   if (!(await accountExists(dest))) {
@@ -140,11 +150,15 @@ export async function payUsdc(input: { owner: string; to: string; usd: number; m
   tx.recentBlockhash = await blockhash();
   tx.add(...ix);
   const signature = await signAndBroadcast(tx);
+  // The broadcast signature alone is not an irreversible USDC payment receipt.
+  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
   return { signature, reference: reference.toBase58() };
+  });
 }
 
 /** SOL from the connected wallet. Phantom signs. Senda does not hold the key. */
 export async function paySol(input: { owner: string; to: string; sol: number }): Promise<string> {
+  return withWalletExecutionLock(input.owner, async () => {
   if (!(input.sol > 0)) throw new Error("Enter an amount.");
   let owner: PublicKey;
   let to: PublicKey;
@@ -156,10 +170,22 @@ export async function paySol(input: { owner: string; to: string; sol: number }):
   }
   if (owner.equals(to)) throw new Error("Pay someone else.");
   const lamports = Math.round(input.sol * 1_000_000_000);
-  if (lamports < 1) throw new Error("Enter an amount.");
+  if (!Number.isSafeInteger(lamports) || lamports < 1) throw new Error("Enter an exact SOL amount.");
+  // A SOL send also consumes the dollar-denominated wallet spend cap.
+  const quoted = await quoteRoute({ inputMint: SOL, outputMint: USDC_MINT.toBase58(), amountRaw: lamports, outDecimals: 6 });
+  if (!(quoted.outUi > 0) || !Number.isFinite(quoted.outUi)) throw new Error("Could not value SOL for the spending limit.");
+  if (quoted.outUi > spendCap()) throw new Error("This SOL transfer exceeds your wallet spend cap.");
+  const journalDraft = {
+    owner: owner.toBase58(), kind: "send" as const,
+    asset: "SOL", destination: to.toBase58(), amountRaw: String(lamports),
+  };
+  assertNoPendingDuplicate(window.localStorage, journalDraft);
   const tx = new Transaction();
   tx.feePayer = owner;
   tx.recentBlockhash = await blockhash();
   tx.add(SystemProgram.transfer({ fromPubkey: owner, toPubkey: to, lamports }));
-  return signAndBroadcast(tx);
+  const signature = await signAndBroadcast(tx);
+  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
+  return signature;
+  });
 }

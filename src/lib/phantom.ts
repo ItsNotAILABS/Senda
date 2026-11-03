@@ -186,7 +186,7 @@ function bytesToBase64(bytes: Uint8Array): string {
 
 const RPCS = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
 
-async function rpc(method: string, params: unknown[]): Promise<unknown> {
+export async function rpc(method: string, params: unknown[]): Promise<unknown> {
   let last = "RPC failed";
   for (const url of RPCS) {
     try {

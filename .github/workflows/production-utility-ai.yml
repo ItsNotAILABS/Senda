@@ -1,0 +1,32 @@
+name: SENDA Utility AI verification
+on:
+  pull_request:
+  push:
+    branches:
+      - feature/production-utility-ai-20261028
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  evidence-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test financial source and model-evidence policy
+        run: node --test scripts/utility-ai-core.test.mjs
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:dev
