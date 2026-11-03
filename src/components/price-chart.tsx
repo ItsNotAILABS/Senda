@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { MarketMatrix } from "@/components/market-matrix";
 import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
 import { cn } from "@/lib/utils";
 
@@ -174,29 +175,8 @@ export function LiveChart({
     };
   }, [mint, tf]);
 
-  const shown = useMemo(() => {
-    if (bars.length >= 2) {
-      if (!(live && live > 0)) return bars;
-      const next = bars.slice();
-      const bar = { ...next[next.length - 1] };
-      bar.c = live;
-      bar.h = Math.max(bar.h, live);
-      bar.l = Math.min(bar.l, live);
-      next[next.length - 1] = bar;
-      return next;
-    }
-    if (!(live && live > 0)) return bars;
-    const now = Date.now();
-    return Array.from({ length: 32 }, (_, i) => ({
-      t: now - (31 - i) * 3_600_000,
-      o: live,
-      h: live,
-      l: live,
-      c: live,
-      v: 0,
-    }));
-  }, [bars, live]);
-
+  // Never fabricate candles or rewrite a historical candle using a different live-price feed.
+  const shown = bars;
   const px = closes(shown);
   const sma20 = sma(px, 20);
   const ema20 = ema(px, 20);
@@ -261,6 +241,8 @@ export function LiveChart({
     <div>
       {controls}
       {board}
+      <p className="px-1 py-1 font-mono text-[10px] text-white/35">{note} {live && live > 0 ? ` · Live quote ${money(live)} (separate feed)` : ""}</p>
+      {!compact ? <MarketMatrix bars={bars} note={note} symbol={symbol} /> : null}
       {read.length ? <p className="px-1 pt-1 font-mono text-[10px] text-white/45">{read.join("  ·  ")}</p> : null}
       {screen ? (
         <div className="fixed inset-0 z-[80] flex flex-col overflow-auto bg-[#07070f] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -276,6 +258,7 @@ export function LiveChart({
           <div className="py-2">
             {controls}
             {board}
+            <MarketMatrix bars={bars} note={note} symbol={symbol} />
           </div>
         </div>
       ) : null}

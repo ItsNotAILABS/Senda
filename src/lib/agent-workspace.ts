@@ -6,6 +6,7 @@ export const TOOLS = [
   { id: "planner", label: "Plan work", line: "Turns the goal into a clear, saved checklist." },
   { id: "notes", label: "Write a brief", line: "Writes a concise brief into the run log." },
   { id: "book", label: "Read the book", line: "Reads live PreStock prices for the names it watches." },
+  { id: "matrix", label: "Market matrix", line: "Checks real pool volume, momentum, VWAP, breakout and ATR. Research only." },
   { id: "memory", label: "Remember context", line: "Keeps the latest market observation for the next run." },
   { id: "trade", label: "Queue a trade", line: "Prepares one bounded buy or sell. The wallet still signs." },
 ] as const;
@@ -15,6 +16,7 @@ export type AgentCategory = "research" | "markets" | "operations" | "content" | 
 export type AgentTrigger = "manual" | "on_open" | "daily";
 export type AgentAutonomy = "observe" | "draft" | "queue";
 export type AgentStatus = "active" | "paused";
+export type GenesisWorkerBinding = { characterId: string; owner: string; gear: string | null; code: string | null };
 
 export type Worker = {
   id: string;
@@ -30,6 +32,7 @@ export type Worker = {
   maxUsd: number;
   side: "buy" | "sell";
   queue: { symbol: string; side: "buy" | "sell"; usd: number; why: string } | null;
+  genesis?: GenesisWorkerBinding;
   checklist: string[];
   log: { at: string; text: string; kind?: "info" | "action" | "success" }[];
   createdAt: string;
@@ -52,6 +55,8 @@ function normalize(row: Partial<Worker> & Pick<Worker, "id" | "name" | "purpose"
     maxUsd: Math.min(5000, Math.max(1, Number(row.maxUsd) || 25)),
     side: row.side === "sell" ? "sell" : "buy",
     queue: row.queue || null,
+    genesis: row.genesis && typeof row.genesis.characterId === "string" && typeof row.genesis.owner === "string"
+      ? { characterId: row.genesis.characterId, owner: row.genesis.owner, gear: row.genesis.gear || null, code: row.genesis.code || null } : undefined,
     checklist: Array.isArray(row.checklist) ? row.checklist : [],
     log: Array.isArray(row.log) ? row.log : [],
     createdAt: row.createdAt || new Date().toISOString(),
@@ -95,6 +100,7 @@ export function createWorker(input: {
   symbols: string[];
   maxUsd: number;
   side: "buy" | "sell";
+  genesis?: GenesisWorkerBinding;
 }): Worker {
   const now = new Date().toISOString();
   const allowedTools = input.autonomy === "queue" ? input.tools : input.tools.filter((tool) => tool !== "trade");
@@ -112,6 +118,7 @@ export function createWorker(input: {
     maxUsd: Math.min(5000, Math.max(1, Math.round(input.maxUsd) || 25)),
     side: input.side,
     queue: null,
+    genesis: input.genesis,
     checklist: [],
     log: [],
     createdAt: now,
