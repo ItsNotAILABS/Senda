@@ -1,0 +1,40 @@
+name: Senda Solana ecosystem scout
+on:
+  schedule:
+    - cron: "15 14 * * 1,4"
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Probe curated protocol sources
+        run: node scripts/solana-ecosystem-scout.mjs --out=solana-scout-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: solana-scout-report
+          path: solana-scout-report.json
+          retention-days: 30
+      - name: Update single review issue, never auto-integrate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('solana-scout-report.json')) return;
+            const report = JSON.parse(fs.readFileSync('solana-scout-report.json','utf8'));
+            const title = 'Senda ecosystem scout — candidate integrations (review only)';
+            const {owner,repo}=context.repo;
+            const issues=await github.paginate(github.rest.issues.listForRepo,{owner,repo,state:'open',per_page:100});
+            const existing=issues.find(i=>!i.pull_request&&i.title===title);
+            const rows=report.rows.map(r=>'- '+r.priority+' **'+r.name+'** / '+r.lane+': '+r.status+' (HTTP '+(r.httpCode??'unknown')+') · '+r.disposition+' · '+r.source).join('\n');
+            const body='Automated source **reachability** survey. It does not connect liquidity or grant wallet permission. Last sampled: '+report.observedAt+'\n\n'+rows+'\n\n**Reviewer checklist:** verify official documentation, terms, mint identity, venue and token-program authenticity, live executable quotes, slippage, route expiry, owner signatures, fees, jurisdiction and token risks. Only a reviewed PR can add an adapter.\n\nDigest: '+report.digest;
+            if (existing) await github.rest.issues.update({owner,repo,issue_number:existing.number,body});
+            else await github.rest.issues.create({owner,repo,title,body});

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Activity, ArrowUpRight, BarChart3, CheckCircle2, CircleAlert, Eye, RefreshCw, Search, ShieldCheck, Star, TrendingUp } from "lucide-react";
 import { LiveChart } from "@/components/price-chart";
+import { NativeVolumePanel } from "@/components/native-volume-panel";
 import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
 import { inspectMarketQuality, shortlistMarkets, type QualityResult } from "@/lib/market-quality.mjs";
 import type { HouseListing } from "@/lib/sol-house";
@@ -167,6 +168,7 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
      </div>:null}
      {error?<p className="mt-2 rounded-lg border border-rose-500/25 bg-rose-500/10 p-2 text-xs text-rose-200">{error}</p>:null}
      {chosen?.mint?<div className="mt-3 rounded-xl border border-white/10 bg-[#070c16] p-2"><LiveChart mint={chosen.mint} symbol={chosen.symbol} live={chosen.price??undefined}/></div>:null}
+     {chosen?.mint?<div className="mt-4"><NativeVolumePanel key={chosen.mint} mint={chosen.mint} symbol={chosen.symbol} initialTf={tf}/></div>:null}
     </div>
     <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
      {[["Last candle volume",money(model.lastVolumeUsd)],["Rel. volume / 20",model.relativeVolume==null?"—":model.relativeVolume.toFixed(2)+"×"],["Rolling VWAP 20",money(model.vwap20)],["ATR 14 / close",model.atrPct==null?"—":model.atrPct.toFixed(2)+"%"],["EMA 9",money(model.ema9)],["EMA 21",money(model.ema21)],["RSI 14",model.rsi14==null?"—":model.rsi14.toFixed(1)],["Condition alignment",model.status==="verified"?model.alignment+"/100":"NOT SCORED"]].map(([label,value])=><div key={label} className="rounded-xl border border-white/10 bg-[#0e1624] p-3"><p className="text-[10px] text-white/45">{label}</p><p className="mt-1 font-mono text-sm text-white">{value}</p></div>)}

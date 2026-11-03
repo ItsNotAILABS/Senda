@@ -30,7 +30,6 @@ import { RadarDesk } from "@/components/radar-desk";
 import { SpotPage } from "@/components/spot-page";
 import { FillButton } from "@/components/fill-button";
 import { LiveChart } from "@/components/price-chart";
-import { MarketIntelligence } from "@/components/market-intelligence";
 import { SolanaFloor } from "@/components/solana-floor";
 import { ListedView } from "@/components/desk-views";
 import { WalletDesk } from "@/components/wallet-desk";
@@ -44,7 +43,6 @@ import { chainFor, type OptContract, type OptTenor } from "@/lib/option-chain";
 import { cn } from "@/lib/utils";
 
 const DESKS = [
-  ["matrix", "Matrix"],
   ["chart", "Chart"],
   ["news", "News"],
   ["kalshi", "Kalshi"],
@@ -99,11 +97,6 @@ export function TradePit() {
   const under = pre.find((h) => h.id === underId) ?? pre[0] ?? null;
 
   useEffect(() => {
-    const focus = window.sessionStorage.getItem("senda.market.focus");
-    if (focus && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(focus)) setDesk("matrix");
-  }, []);
-
-  useEffect(() => {
     getPreRoutes()
       .then(setRoutes)
       .catch(() => undefined);
@@ -146,7 +139,6 @@ export function TradePit() {
         </div>
       </div>
       <div className="min-w-0 flex-1">
-        {desk === "matrix" ? <MarketIntelligence house={house} tape={tape} /> : null}
         {desk === "quotes" ? <SpotPage scope="all" /> : null}
         {desk === "futures" ? <FdvDesk /> : null}
         {desk === "registry" ? <RegistryDesk /> : null}
@@ -235,19 +227,19 @@ function ChartBook({
   for (const r of tape) {
     if (!r.id || seen.has(r.id)) continue;
     seen.add(r.id);
-    rows.push({ id: r.id, symbol: r.symbol, name: r.name, price: r.price ?? 0, change: r.changePct ?? null });
+    rows.push({ id: r.id, symbol: r.symbol, name: r.name, price: r.price ?? 0, change: r.change });
   }
   for (const h of house) {
     if (!h.mint || seen.has(h.mint) || !(h.last > 0)) continue;
     seen.add(h.mint);
-    rows.push({ id: h.mint, symbol: h.symbol, name: h.name, price: h.last, change: h.change24h == null ? null : h.change24h * 100 });
+    rows.push({ id: h.mint, symbol: h.symbol, name: h.name, price: h.last, change: h.change24h });
   }
   const book = rows.filter((r) => !query || `${r.symbol} ${r.name}`.toLowerCase().includes(query));
   book.sort((a, b) => {
     if (sort === "name") return a.symbol.localeCompare(b.symbol);
     if (sort === "price") return b.price - a.price;
-    const av = a.change ?? -1e9;
-    const bv = b.change ?? -1e9;
+    const av = a.change == null ? -1e9 : Math.abs(a.change) <= 2 ? a.change * 100 : a.change;
+    const bv = b.change == null ? -1e9 : Math.abs(b.change) <= 2 ? b.change * 100 : b.change;
     return sort === "loss" ? av - bv : bv - av;
   });
   const pick = book.find((r) => r.id === chartId) ?? book[0] ?? null;
