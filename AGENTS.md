@@ -76,3 +76,10 @@ The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_m
 - Treat model summaries as interpretive and potentially wrong. Quantitative assertions must come from source-linked deterministic facts; fail closed on unsupported model evidence IDs.
 - Rate limits and model budgets are currently **per server instance**. Do not call this production scale-certified until an authenticated shared quota store and CI/browser verification exist.
 - Run `node --test scripts/utility-ai-core.test.mjs`, `npm run typecheck` and `npm run build:dev`; never claim those last two passed merely from reading source or GitHub mergeability.
+
+
+## Liquify Global — international markets and governed agents (November 2026)
+
+Senda's four coordinated primary products are **Trade**, **Pay & Send**, **Agents**, and **Liquify**. Product entry: `/liquify`. Use `src/lib/liquify-global.mjs` as the research registry for 11 international markets and the payment/liquidity candidate records. Use `docs/LIQUIFY_GLOBAL.md` for architectural limits and next integrations. This is **not** a list of available licensed fiat rails.
+
+Every autonomous scout or integration agent must (1) discover a supported venue or payout provider, (2) attach current official evidence and permission/eligibility constraints, (3) classify status as source research, code-present, verified-with-credentials, tested end-to-end, or live, (4) generate a reviewed task/PR with tests and rollback plan. No arbitrary credentials, wallet signing, auto-merge, fake pool liquidity or merchant/card/bank payout claims. For every local fiat market, require a qualifying provider, user eligibility, fee disclosure, identity compliance and confirmed settlement, not a screen that simply converts currencies mathematically. Do not change existing Trade/Pay security controls while implementing discovery UI.
