@@ -158,3 +158,12 @@ The submission note is [public/senda-submission.md](public/senda-submission.md).
 </p>
 
 <p align="center"><sub>ItsNotAILABS · <a href="https://github.com/ItsNotAILABS/Senda">github.com/ItsNotAILABS/Senda</a></sub></p>
+
+
+---
+
+## Liquify Global — fourth product (integration branch)
+
+**Trade · Pay & Send · Agents · Liquify.** Liquify is a first-class international liquidity, stablecoin and spending-rail discovery surface, accessible at `/liquify` after merge/deployment. It organizes researched market groups (US, Mexico/LATAM, Brazil, South Korea, Nigeria, Vietnam, Philippines, Hong Kong, UAE, Singapore and Türkiye), verified code-present rail references, and unconnected regional fiat partner candidates. **A listed region or provider is not a live fiat withdrawal, card network, brokerage service or guaranteed executable quote.**
+
+The product links to the existing on-chain route and payment screens; it does not issue cards or execute regional payouts automatically. Source of truth: [Liquify global operating notes](docs/LIQUIFY_GLOBAL.md), `src/lib/liquify-global.mjs`. Run `node --test scripts/liquify-global.test.mjs` before review. Wallet execution and settlement remain separately authorized. This feature is not live until the GitHub PR is merged and deployed.
