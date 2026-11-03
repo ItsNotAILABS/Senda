@@ -1,0 +1,30 @@
+name: Liquify read-only Go validation
+on:
+  pull_request:
+    paths:
+      - 'services/liquify/**'
+      - '.github/workflows/liquify-go.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/liquify/**'
+      - '.github/workflows/liquify-go.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  go-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/liquify/go.mod
+          cache: false
+      - name: Go unit and API handler tests
+        working-directory: services/liquify
+        run: go test -race ./...
+      - name: Static Go checks
+        working-directory: services/liquify
+        run: go vet ./...
