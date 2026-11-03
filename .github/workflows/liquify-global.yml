@@ -1,0 +1,32 @@
+name: Liquify Global Registry Validation
+on:
+  pull_request:
+    paths:
+      - 'src/lib/liquify-global.mjs'
+      - 'src/components/liquify-global-desk.tsx'
+      - 'src/routes/liquify.tsx'
+      - 'scripts/liquify-global.test.mjs'
+      - 'docs/LIQUIFY_GLOBAL.md'
+      - 'README.md'
+      - 'AGENTS.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Test market/rail registry
+        run: node --test scripts/liquify-global.test.mjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck all routes
+        run: npm run typecheck
+      - name: Build review app
+        run: npm run build:dev

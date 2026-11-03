@@ -22,6 +22,7 @@ import {
   Tv,
   UserRound,
   Wallet,
+  Waypoints,
   Zap,
   Bell,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const PRIMARY = [
   { to: "/invest", label: "Trade", icon: Hexagon },
   { to: "/wire", label: "Markets", icon: Radar },
   { to: "/wallet", label: "Swap", icon: ArrowLeftRight },
+  { to: "/liquify", label: "Liquify", icon: Waypoints },
   { to: "/social", label: "Predict", icon: Gamepad2 },
   { to: "/cards", label: "Pay", icon: CreditCard },
   { to: "/work", label: "Work", icon: SquarePen },
