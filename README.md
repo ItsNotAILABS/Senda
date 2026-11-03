@@ -3,11 +3,17 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/BYOW-bring%20your%20own%20wallet-d6ff4a?style=flat-square&labelColor=111111" alt="Bring Your Own Wallet">
-  <img src="https://img.shields.io/badge/control-you%20sign-111111?style=flat-square&labelColor=14F195" alt="Wallet signed">
-  <img src="https://img.shields.io/badge/markets-multi--venue-111111?style=flat-square" alt="Multi-venue desk">
-  <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC payments">
-  <img src="https://img.shields.io/github/last-commit/ItsNotAILABS/Senda?style=flat-square&color=111111" alt="Last commit">
+  <a href="#how-byow-works"><img src="https://img.shields.io/badge/BYOW-Bring%20Your%20Own%20Wallet-d6ff4a?style=for-the-badge&labelColor=111827" alt="Bring Your Own Wallet"></a>
+  <a href="#wallet-compatibility"><img src="https://img.shields.io/badge/Wallets-12%20adapters-31c8ff?style=for-the-badge&labelColor=111827" alt="12 wallet connector types in the source"></a>
+  <a href="#crypto-and-network-coverage"><img src="https://img.shields.io/badge/Markets-Solana%20%2B%20EVM-c0a7ff?style=for-the-badge&labelColor=111827" alt="Solana and EVM market integrations"></a>
+  <a href="#integrations-by-role"><img src="https://img.shields.io/badge/Integrations-Quotes%20%2B%20Data%20%2B%20AI-31d5ae?style=for-the-badge&labelColor=111827" alt="Quotes, analytics, and intelligence integrations"></a>
+</p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Custody-Wallet--signed%20core-25344a?style=flat-square&labelColor=111827" alt="Wallet-signed core">
+  <img src="https://img.shields.io/badge/Settlement-Chain--verified-25344a?style=flat-square&labelColor=111827" alt="Transaction confirmation">
+  <img src="https://img.shields.io/badge/Liquidity-Quote--only%20Go%20engine-25344a?style=flat-square&labelColor=111827" alt="Read-only Liquify router">
+  <img src="https://img.shields.io/badge/Agents-No%20delegated%20signatures-25344a?style=flat-square&labelColor=111827" alt="Agents cannot sign">
+  <img src="https://img.shields.io/github/last-commit/ItsNotAILABS/Senda?style=flat-square&color=31c8ff&labelColor=111827" alt="GitHub last commit">
 </p>
 
 <h1 align="center">SENDA — Bring Your Own Wallet.</h1>
@@ -19,9 +25,11 @@
 
 <p align="center">
   <a href="https://senda.pocketnova.app">Open Senda</a> ·
-  <a href="#the-senda-products">Explore the products</a> ·
-  <a href="#how-byow-works">How BYOW works</a> ·
-  <a href="#run-and-verify">Build and verify</a>
+  <a href="#wallet-compatibility">Wallets</a> ·
+  <a href="#crypto-and-network-coverage">Crypto</a> ·
+  <a href="#integrations-by-role">Integrations</a> ·
+  <a href="#the-senda-products">Products</a> ·
+  <a href="#run-and-verify">Build</a>
 </p>
 
 <p align="center">
@@ -30,6 +38,117 @@
 </p>
 
 **One wallet. A wider financial world.** Senda is a wallet-native workspace, not merely a PreStocks trading page. It brings together trading, liquidity intelligence, payments, financial tools, agents, and interactive market experiences. Some flows are live wallet-signed code; other views are research, browser-local prototypes, or integrations that require credentials and provider access. Those differences are explicit below.
+
+## One platform. Multiple ways to use your wallet.
+
+| **CONNECT** | **TRADE** | **MOVE** | **INTELLIGENCE** |
+| :---: | :---: | :---: | :---: |
+| Your existing Solana or EVM wallet | Jupiter swaps, selected perps, tokenized instruments | USDC sends, signed payment requests, venue-dependent bridges | Liquify, Matrix, Solscan activity, AI research |
+| No Senda-held wallet seed | Quotes and venue permissions decide execution | A signature is not final settlement | Evidence and agent proposals are not trades |
+
+### Wallet compatibility
+
+<p align="center"><strong>Solana wallet connectors</strong></p>
+<p align="center">
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Phantom-Solana-273a46?style=flat-square&labelColor=111827" alt="Phantom Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Solflare-Solana-273a46?style=flat-square&labelColor=111827" alt="Solflare Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Backpack-Solana-273a46?style=flat-square&labelColor=111827" alt="Backpack Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Glow-Solana-273a46?style=flat-square&labelColor=111827" alt="Glow Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/OKX-Solana-273a46?style=flat-square&labelColor=111827" alt="OKX Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Bitget-Solana-273a46?style=flat-square&labelColor=111827" alt="Bitget Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Trust-Solana-273a46?style=flat-square&labelColor=111827" alt="Trust Solana"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Coinbase%20Solana-Solana-273a46?style=flat-square&labelColor=111827" alt="Coinbase Solana Solana"></a>
+</p>
+<p align="center"><strong>EVM wallet connectors</strong></p>
+<p align="center">
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/MetaMask-EVM-263449?style=flat-square&labelColor=111827" alt="MetaMask EVM"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Rabby-EVM-263449?style=flat-square&labelColor=111827" alt="Rabby EVM"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Coinbase%20Wallet-EVM-263449?style=flat-square&labelColor=111827" alt="Coinbase Wallet EVM"></a>
+<a href="src/lib/wallets.ts"><img src="https://img.shields.io/badge/Brave%20Wallet-EVM-263449?style=flat-square&labelColor=111827" alt="Brave Wallet EVM"></a>
+</p>
+
+<sub>**Wallet support** means Senda contains a provider-detection/connection adapter, not that a wallet is installed, that every device is compatible, or that all listed wallets can sign every trading route. Solana and EVM account types remain distinct. [Wallet detection source](src/lib/wallets.ts) · [Mobile wallet handling](src/lib/mobile-wallet.ts)</sub>
+
+### Crypto and network coverage
+
+<p align="center"><strong>Solana: assets and stablecoin routes</strong></p>
+<p align="center">
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/SOL-native-345b83?style=flat-square&labelColor=111827" alt="SOL native"></a>
+<a href="src/lib/solana-pay.ts"><img src="https://img.shields.io/badge/USDC-signed%20send-22664d?style=flat-square&labelColor=111827" alt="USDC signed send"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/USDT-quote--eligible-22394e?style=flat-square&labelColor=111827" alt="USDT quote-eligible"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/CASH-route--eligible-22394e?style=flat-square&labelColor=111827" alt="CASH route-eligible"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/PYUSD-quote--eligible-22394e?style=flat-square&labelColor=111827" alt="PYUSD quote-eligible"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/xStocks-tokenized-22394e?style=flat-square&labelColor=111827" alt="xStocks tokenized"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/PreStocks-tokenized-22394e?style=flat-square&labelColor=111827" alt="PreStocks tokenized"></a>
+</p>
+<p align="center"><strong>EVM: venue-specific token and chain support</strong></p>
+<p align="center">
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/WETH-listed%20market-25344a?style=flat-square&labelColor=111827" alt="WETH listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/WBTC-listed%20market-25344a?style=flat-square&labelColor=111827" alt="WBTC listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/LINK-listed%20market-25344a?style=flat-square&labelColor=111827" alt="LINK listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/UNI-listed%20market-25344a?style=flat-square&labelColor=111827" alt="UNI listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/ARB-listed%20market-25344a?style=flat-square&labelColor=111827" alt="ARB listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/OP-listed%20market-25344a?style=flat-square&labelColor=111827" alt="OP listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/WBNB-listed%20market-25344a?style=flat-square&labelColor=111827" alt="WBNB listed market"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/WAVAX-listed%20market-25344a?style=flat-square&labelColor=111827" alt="WAVAX listed market"></a>
+</p>
+<p align="center">
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/Ethereum-EVM%20route-263449?style=flat-square&labelColor=111827" alt="Ethereum EVM route"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/Arbitrum-EVM%20route-263449?style=flat-square&labelColor=111827" alt="Arbitrum EVM route"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/Optimism-EVM%20route-263449?style=flat-square&labelColor=111827" alt="Optimism EVM route"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/BNB%20Chain-EVM%20route-263449?style=flat-square&labelColor=111827" alt="BNB Chain EVM route"></a>
+<a href="src/lib/trade-book.mjs"><img src="https://img.shields.io/badge/Avalanche-EVM%20route-263449?style=flat-square&labelColor=111827" alt="Avalanche EVM route"></a>
+<a href="src/lib/lifi.ts"><img src="https://img.shields.io/badge/Base-USDC%20bridge%20route-243f4a?style=flat-square&labelColor=111827" alt="Base USDC bridge route"></a>
+<a href="src/lib/lifi.ts"><img src="https://img.shields.io/badge/Polygon-USDC%20bridge%20route-243f4a?style=flat-square&labelColor=111827" alt="Polygon USDC bridge route"></a>
+</p>
+
+<sub>These badges describe asset classes, token entries, connected wallet routes, or quote/bridge adapters **found in the source**. They are not live balances, guaranteed swap fills, token endorsement, or proof that all provider routes are enabled. Exact mint, network, token authenticity, execution quote, liquidity, eligibility and wallet approval must be independently verified. [Solana/EVM market table](src/lib/trade-book.mjs) · [Bridge rails](src/lib/lifi.ts) · [Tokenized equity data](src/lib/equities.ts)</sub>
+
+### Integrations by role
+
+**Wallet-signed execution and external venue adapters**
+<p align="center">
+<a href="src/lib/jup-sign.ts"><img src="https://img.shields.io/badge/Jupiter%20Swap-swap%20path-31506b?style=flat-square&labelColor=111827" alt="Jupiter Swap swap path"></a>
+<a href="src/lib/jup-perps.ts"><img src="https://img.shields.io/badge/Jupiter%20Perps-venue%20adapter-31506b?style=flat-square&labelColor=111827" alt="Jupiter Perps venue adapter"></a>
+<a href="src/lib/lifi.ts"><img src="https://img.shields.io/badge/LI.FI-cross--chain%20quotes-31506b?style=flat-square&labelColor=111827" alt="LI.FI cross-chain quotes"></a>
+<a href="src/lib/hl-sign.ts"><img src="https://img.shields.io/badge/Hyperliquid-EVM%20signing-31506b?style=flat-square&labelColor=111827" alt="Hyperliquid EVM signing"></a>
+<a href="src/lib/ostium-trade.ts"><img src="https://img.shields.io/badge/Ostium-EVM%20signing-31506b?style=flat-square&labelColor=111827" alt="Ostium EVM signing"></a>
+</p>
+
+**Market feeds, discovery and liquidity intelligence**
+<p align="center">
+<a href="src/lib/sol-house.ts"><img src="https://img.shields.io/badge/PreStocks-data%20feed-1d4653?style=flat-square&labelColor=111827" alt="PreStocks data feed"></a>
+<a href="src/lib/sol-house.ts"><img src="https://img.shields.io/badge/Tessera-data%20feed-1d4653?style=flat-square&labelColor=111827" alt="Tessera data feed"></a>
+<a href="src/lib/equities.ts"><img src="https://img.shields.io/badge/xStocks-asset%20data-1d4653?style=flat-square&labelColor=111827" alt="xStocks asset data"></a>
+<a href="src/lib/equities.ts"><img src="https://img.shields.io/badge/Kamino-reserves-1d4653?style=flat-square&labelColor=111827" alt="Kamino reserves"></a>
+<a href="src/lib/print.ts"><img src="https://img.shields.io/badge/GeckoTerminal-OHLCV-1d4653?style=flat-square&labelColor=111827" alt="GeckoTerminal OHLCV"></a>
+<a href="src/lib/solscan-volume.ts"><img src="https://img.shields.io/badge/Solscan%20Pro-needs%20key-1d4653?style=flat-square&labelColor=111827" alt="Solscan Pro needs key"></a>
+<a href="services/liquify/README.md"><img src="https://img.shields.io/badge/Liquify%20Go-quote%20only-1d4653?style=flat-square&labelColor=111827" alt="Liquify Go quote only"></a>
+<a href="src/lib/feeds.ts"><img src="https://img.shields.io/badge/Polymarket-market%20data-1d4653?style=flat-square&labelColor=111827" alt="Polymarket market data"></a>
+<a href="src/lib/feeds.ts"><img src="https://img.shields.io/badge/Kalshi-market%20data-1d4653?style=flat-square&labelColor=111827" alt="Kalshi market data"></a>
+</p>
+
+**Agent, identity, payment and on-chain research components**
+<p align="center">
+<a href="src/lib/utility-ai.ts"><img src="https://img.shields.io/badge/Utility%20AI-evidence--first-4a3c56?style=flat-square&labelColor=111827" alt="Utility AI evidence-first"></a>
+<a href="docs/production-utility-ai.md"><img src="https://img.shields.io/badge/OpenAI%20API-optional-4a3c56?style=flat-square&labelColor=111827" alt="OpenAI API optional"></a>
+<a href="src/lib/genesis-chain.ts"><img src="https://img.shields.io/badge/Genesis%20DAS-needs%20RPC-4a3c56?style=flat-square&labelColor=111827" alt="Genesis DAS needs RPC"></a>
+<a href="src/lib/mastercard-vcn.ts"><img src="https://img.shields.io/badge/Mastercard-needs%20provider-4a3c56?style=flat-square&labelColor=111827" alt="Mastercard needs provider"></a>
+<a href="src/lib/solana-pay.ts"><img src="https://img.shields.io/badge/Solana%20Pay-wallet%20signed-4a3c56?style=flat-square&labelColor=111827" alt="Solana Pay wallet signed"></a>
+<a href="mcp/README.md"><img src="https://img.shields.io/badge/Senda%20MCP-read%20%2B%20quote-4a3c56?style=flat-square&labelColor=111827" alt="Senda MCP read + quote"></a>
+<a href="docs/SENDA_PARRALAX_ONCHAIN_V1.md"><img src="https://img.shields.io/badge/PARRALAX-design%20contract-4a3c56?style=flat-square&labelColor=111827" alt="PARRALAX design contract"></a>
+<a href="chain/devnet.json"><img src="https://img.shields.io/badge/Cover%20Program-devnet%20terms-4a3c56?style=flat-square&labelColor=111827" alt="Cover Program devnet terms"></a>
+</p>
+
+| Status | What a badge means |
+| --- | --- |
+| **Wallet signed** | A client transaction-building/signing path is present; network/provider verification is still necessary. |
+| **Venue adapter / EVM route** | Source implements integration logic; availability, liquidity and jurisdiction depend on the external venue. |
+| **Data feed / quote only** | Research and indicative routing data; not a fill, market-making inventory or settlement promise. |
+| **Needs key / needs RPC / needs provider / optional** | Configuration or third-party access is required; presence of the adapter alone does not imply a live deployment. |
+| **Design contract / devnet terms** | Research and prototype work, not funded insurance, on-chain credit or mainnet production. |
+
+---
 
 ## How BYOW works
 
