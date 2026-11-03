@@ -1,6 +1,7 @@
 /** Ostium prints, and the Jupiter tokens that can actually be signed. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { readJupiterTokenMetrics } from "@/lib/jupiter-token-metrics.mjs";
 
 export type WorldLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
@@ -27,6 +28,13 @@ export type TapeRow = {
   name: string;
   price: number | null;
   change: number | null;
+  /** Exact Jupiter Tokens V2 percentage points, separate from the legacy change field. */
+  changePct?: number | null;
+  liquidityUsd?: number | null;
+  volume24hUsd?: number | null;
+  organicScore?: number | null;
+  verified?: boolean;
+  updatedAt?: string;
   icon?: string;
 };
 
@@ -386,12 +394,19 @@ export async function loadTape(): Promise<TapeRow[]> {
       if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
       if (rows.length >= 6000) break;
       seen.add(row.id);
+      const sourceMetrics = readJupiterTokenMetrics(row);
       rows.push({
         id: row.id,
         symbol: row.symbol,
         name: typeof row.name === "string" && row.name ? row.name : row.symbol,
         price: num(row.usdPrice),
         change: num(row.stats24h?.priceChange),
+        changePct: sourceMetrics?.priceChangePct ?? null,
+        liquidityUsd: sourceMetrics?.liquidityUsd ?? null,
+        volume24hUsd: sourceMetrics?.volume24hUsd ?? null,
+        organicScore: sourceMetrics?.organicScore ?? null,
+        verified: sourceMetrics?.verified ?? false,
+        updatedAt: sourceMetrics?.updatedAt ?? undefined,
         icon: typeof row.icon === "string" ? row.icon : undefined,
       });
     }

@@ -1,0 +1,10 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {inspectMarketQuality,cleanMarketBars,shortlistMarkets,TIMEFRAME_MS} from "../src/lib/market-quality.mjs";
+const now=1800000000000;
+const rows=Array.from({length:50},(_,i)=>{const p=80+i*0.65;return {t:now-(49-i)*TIMEFRAME_MS["1H"],o:p,h:p+1,l:p-0.5,c:p+0.4,v:1000+i*25}});
+test("validates OHLCV and chronological duplicates",()=>{let x=cleanMarketBars([rows[1],{...rows[1],h:1},rows[0],rows[0]]);assert.equal(x.length,2);assert.ok(x[0].t<x[1].t);});
+test("cannot claim volume or a trade signal from price-only candles",()=>{const m=inspectMarketQuality({bars:rows,source:"price-only",now});assert.equal(m.status,"price-only");assert.equal(m.relativeVolume,null);assert.equal(m.alignment,0);});
+test("real fresh pool candles produce measurable relative volume and risk",()=>{const m=inspectMarketQuality({bars:rows,source:"gecko-pool",now});assert.equal(m.status,"verified");assert.ok(m.relativeVolume>0&&m.vwap20>0);assert.ok(m.rsi14>=0&&m.rsi14<=100);assert.ok(m.alignment>=0&&m.alignment<=100);});
+test("stale and insufficient feeds fail closed",()=>{assert.equal(inspectMarketQuality({bars:rows,source:"gecko-pool",now:now+TIMEFRAME_MS["1H"]*8}).status,"stale");assert.equal(inspectMarketQuality({bars:rows.slice(-12),source:"gecko-pool",now}).status,"insufficient");});
+test("zero pool volume forbids volume-dependent ranking",()=>{const m=inspectMarketQuality({bars:rows.map(b=>({...b,v:0})),source:"gecko-pool",now});assert.equal(m.status,"volume-unverified");assert.equal(m.relativeVolume,null);});
+test("screeners never invent a volume field and deduplicate mints",()=>{const mint="6".repeat(44);const s=shortlistMarkets([{mint,symbol:"SOL",name:"SOL",venue:"spot",changePct:2},{mint,symbol:"SOL",name:"SOL",venue:"spot",changePct:4}],"SOL");assert.equal(s.length,1);assert.equal(s[0].volume,undefined);});

@@ -1,6 +1,7 @@
 import type { ProductPage } from "@/components/product-shell";
 
 export const TRADE_PAGES: ProductPage[] = [
+  { href: "/market-intelligence", label: "Market Intelligence", hint: "Sourced volume and liquidity research" },
   { href: "/invest", label: "Quotes", hint: "A name, a last price, and a ticket" },
   { href: "/invest/world", label: "FX & metals", hint: "Metals, FX, indexes" },
   { href: "/invest/world?lane=energy", label: "Commodities", hint: "Energy and softs" },
@@ -75,7 +76,7 @@ export const COVER_PAGES: ProductPage[] = [
 ];
 
 export const WORK_PAGES: ProductPage[] = [
-  { href: "/work/interface", label: "Interface Studio", hint: "Review screens, designs, QA gates" },
+  { href: "/work/interface", label: "Interface Studio", hint: "Opt-in design board; current screens remain unchanged" },
   { href: "/work", label: "Jobs", hint: "Pay someone in USDC" },
   { href: "/work/sheet", label: "Sheet", hint: "A note on every name" },
   { href: "/work/page", label: "Page", hint: "One name, written out" },
@@ -132,6 +133,6 @@ export const DOCS_PAGES: ProductPage[] = [
 
 export const AGENT_PAGES: ProductPage[] = [
   { href: "/agents", label: "Studio", hint: "Agents on this browser" },
-  { href: "/agents/genesis", label: "Genesis", hint: "Verified characters and market runtimes" },
+  { href: "/agents/intelligence", label: "Intelligence", hint: "Sourced markets, liquidity and stablecoin review" },
   { href: "/agents/build", label: "Build", hint: "Make one" },
 ];
