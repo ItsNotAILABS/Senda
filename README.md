@@ -3,155 +3,155 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/devnet-4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta-111111?style=flat-square&labelColor=14F195&color=111111" alt="Devnet program">
-  <img src="https://img.shields.io/badge/wallet-you%20sign-c6f135?style=flat-square&labelColor=111111" alt="You sign">
-  <img src="https://img.shields.io/badge/route-Jupiter-111111?style=flat-square" alt="Jupiter">
-  <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC">
+  <img src="https://img.shields.io/badge/BYOW-bring%20your%20own%20wallet-d6ff4a?style=flat-square&labelColor=111111" alt="Bring Your Own Wallet">
+  <img src="https://img.shields.io/badge/control-you%20sign-111111?style=flat-square&labelColor=14F195" alt="Wallet signed">
+  <img src="https://img.shields.io/badge/markets-multi--venue-111111?style=flat-square" alt="Multi-venue desk">
+  <img src="https://img.shields.io/badge/pay-USDC-111111?style=flat-square" alt="USDC payments">
   <img src="https://img.shields.io/github/last-commit/ItsNotAILABS/Senda?style=flat-square&color=111111" alt="Last commit">
 </p>
 
-<h1 align="center">Your pre-IPO shouldn’t sit still after you buy it.</h1>
+<h1 align="center">SENDA — Bring Your Own Wallet.</h1>
+<h3 align="center">Your wallet is the account. Senda is everything you can do around it.</h3>
 
 <p align="center">
-  Senda is the desk for tokenized pre-IPO names on Solana.<br>
-  The wallet you already have is the account. Jupiter quotes the route. You sign.<br>
-  A payment is USDC to their address. The print does not close at four.
+  Bring the wallet you already control. Trade across supported markets, swap, move USDC, review your portfolio, research liquidity, explore tokenized assets, and work with bounded AI agents — without surrendering your wallet's signing keys to Senda.
 </p>
 
 <p align="center">
-  <a href="public/video/desk.mp4"><img src="public/cover.jpg" width="49%" alt="The desk"></a>
-  <a href="public/video/card.mp4"><img src="public/images/metal-card.jpg" width="49%" alt="The card"></a>
+  <a href="https://senda.pocketnova.app">Open Senda</a> ·
+  <a href="#the-senda-products">Explore the products</a> ·
+  <a href="#how-byow-works">How BYOW works</a> ·
+  <a href="#run-and-verify">Build and verify</a>
 </p>
 
----
+<p align="center">
+  <a href="public/video/desk.mp4"><img src="public/cover.jpg" width="49%" alt="Senda multi-market desk"></a>
+  <a href="public/video/card.mp4"><img src="public/images/metal-card.jpg" width="49%" alt="Senda payment and card experience concept"></a>
+</p>
 
-A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. Senda is the layer in between: buy the name, hold it in your wallet, cover a drop, pay someone in USDC, play the print, or hand an agent a job it cannot sign.
+**One wallet. A wider financial world.** Senda is a wallet-native workspace, not merely a PreStocks trading page. It brings together trading, liquidity intelligence, payments, financial tools, agents, and interactive market experiences. Some flows are live wallet-signed code; other views are research, browser-local prototypes, or integrations that require credentials and provider access. Those differences are explicit below.
 
-There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
+## How BYOW works
 
-## The book
+1. **Connect yours.** Senda discovers the wallets installed in your browser or opens supported mobile wallet experiences. The connector reads public addresses; it does not require a seed phrase.
+2. **Choose your lane.** Explore Solana markets, tokenized instruments, supported EVM venues, payments, or research. A price feed is not an execution quote.
+3. **Inspect the transaction.** For supported actions, Senda requests a venue quote, enforces application limits and presents the route or amount. Provider availability, network, mint, and eligibility matter.
+4. **You approve.** Your wallet signs. Senda does not sign with your Phantom, Solflare, Backpack, MetaMask, or other linked-wallet private keys.
+5. **Verify the result.** On-chain transaction status is authoritative. A broadcast signature, historical candle, card-shaped UI, or browser-local balance is not proof of final settlement.
 
-Counted from the live venues on 21 October 2026. One row is one instrument. A mint on Jupiter is counted once: an xStock, a PreStock, and a staked-SOL token that already sit in the verified set are classified, not added a second time. A perpetual, a Hyperliquid spot pair, and an Ostium pair are their own rows. They are not the Solana token.
+**Wallets represented in the code:** Phantom, Solflare, Backpack, Glow, OKX, Bitget, Trust, and Coinbase on Solana; MetaMask, Rabby, Coinbase Wallet, and Brave on EVM. Actual availability depends on an installed provider, its signing methods, and the selected chain. A linked EVM address is not interchangeable with a Solana wallet for SPL transfers or Jupiter swaps. See [wallet detection](src/lib/wallets.ts), [wallet signing](src/lib/phantom.ts), and [wallet interface](src/components/wallets-desk.tsx).
 
-**5,105 individual offerings.**
+## The Senda products
 
-| Family | Count | What it is |
-| --- | ---: | --- |
-| Pre-IPO names | 10 | PreStocks. Jupiter swap. Phantom signs. |
-| Listed shares (xStocks) | 1,374 | Solana xStocks inside the Jupiter verified set. |
-| Staked SOL | 163 | Liquid staking tokens inside the same set. |
-| Solana spot | 2,486 | The rest of Jupiter verified. |
-| Perpetuals | 619 | Hyperliquid, every builder dex, plus Drift and Jupiter perps. |
-| Hyperliquid spot | 337 | Spot pairs. The Ethereum account signs. |
-| Ostium | 83 | Arbitrum. USDC margin. The Ethereum account signs. |
-| EVM tokens | 9 | LiFi. The Ethereum account signs. |
-| Loans | 2 | Against a name or a listed share this wallet holds. |
-| Send USDC | 1 | The wallet signs the transfer. |
-| Native chains | 21 | The chain itself. A wrapper is already in spot. |
-| **Total** | **5,105** | |
+| Product | What it brings together | Source of truth / boundary |
+| --- | --- | --- |
+| **Wallets & Portfolio** | Bring your own Solana or EVM wallet, inspect connected addresses, token holdings and account positions. | Chain reads and wallet providers for on-chain assets; browser-local account tools are separate. [Wallets](src/lib/wallets.ts) · [Portfolio](src/components/vault-desk.tsx) |
+| **Trade & Swap** | Explore Solana assets; request Jupiter swap quotes; sign buy, sell, and conversion transactions from the wallet. | [Jupiter signing](src/lib/jup-sign.ts), [quote guard](src/lib/quote-guard.mjs), [transaction journal](src/lib/tx-journal.mjs). A quote is not a fill. |
+| **Multi-market trading** | Solana spot, liquid-staking assets, xStocks, PreStocks and venue-specific perpetual/spot interfaces, including Jupiter Perps, Hyperliquid, Ostium, and supported LI.FI EVM routes. | Each venue has separate accounts, contract rules, network support, liquidity, eligibility, and approval. [Jupiter Perps](src/lib/jup-perps.ts) · [Hyperliquid](src/lib/hl-sign.ts) · [Ostium](src/lib/ostium-trade.ts) · [LI.FI](src/lib/lifi.ts) |
+| **Liquify** | Indicative Jupiter quote-size ladders and a standalone read-only Go router. Compare route availability by actual mint and size instead of pretending historical volume is executable depth. | [App adapter](src/lib/liquify.ts) · [Go router](services/liquify/README.md). **Quote and analytics only**, not a Senda order book, market maker, or swap signer. |
+| **Market Intelligence** | Source-led price, liquidity and volume research, GeckoTerminal pool candles, quality checks, relative-volume analysis, and Solscan-indexed swap observations. | [Research screen](src/components/market-intelligence.tsx) · [volume methodology](docs/native-solscan-volume.md). Historical flow is not an executable order; unavailable data stays unavailable. |
+| **Pay, Send & Move** | Wallet-signed Solana USDC transfers, SOL and token payments, Solana Pay links, payment requests, and chain-route exploration. | [Solana payment builder](src/lib/solana-pay.ts). LI.FI bridge and Mexico-oriented transfer views are provider/network dependent; Senda does not itself settle bank payouts or MXN cash withdrawals. |
+| **AI Agent & Utility AI** | Local bounded workers, research briefs, proposed/queued actions, evidence-led market/liquidity analysis and optional server-configured model interpretation. | [Agent workspace](src/lib/agent-workspace.ts) · [Utility AI](src/lib/utility-ai.ts). Agents cannot independently sign a wallet transaction; optional model access is configuration gated. |
+| **Genesis** | Six character-based research runtimes, gear and loadout concepts, asset ownership lookup, and research outputs. | [Genesis runtime](src/lib/genesis-runtime.mjs) · [ownership verification](src/lib/genesis-chain.ts). Collectibles/entitlements are not assumed minted or verified without an actual configured chain registry. |
+| **PreStocks & xStocks** | Tokenized pre-IPO economic exposure and tokenized listed-equity market discovery beside the wider crypto desk. | [PreStocks/Tessera book](src/lib/sol-house.ts) · [xStocks/Kamino research](src/lib/equities.ts). Tokens are not automatically direct corporate shares, voting rights, redemption rights, or dividends. |
+| **Work & Make** | USDC-priced services, local work listings, payment links, and wallet-signed transfers to participating addresses. | [Work jobs](src/lib/work-jobs.ts) · [Make board](src/lib/make-board.ts). A listing or signed transfer is not proof of escrow or delivery. |
+| **Play & Predict** | Print-driven games, market ideas, and practice experiences with a separate local ledger. | [Game interface](src/components/play-ten.tsx) · [guest ledger](src/lib/guest-stack.ts). Browser cash/chips are not a funded on-chain gambling or payout service. |
+| **Cover, Pockets & Finance Lab** | Protection-term experiments, time/condition pockets, loan concepts, derivative research and controlled-value flows. | [Cover program](chain/senda-program/src/lib.rs) · [pockets](src/lib/pocket-contract.ts) · [loan prototype](src/lib/lend.ts). **Not** an audited mainnet insurance product, funded lending pool, or guaranteed payout. |
+| **Cards & Spending** | Card-management interfaces, local checkout limits, wallet payments, and optional server-side Mastercard Commercial Connect functions. | [Card UI](src/components/cards-desk.tsx) · [Mastercard adapter](src/lib/mastercard-vcn.ts). Locally generated desk numbers are **not** scheme-cleared payment cards. Provider issuance requires separate configuration and authorization. |
 
-The full list, every symbol, is [docs/OFFERINGS.md](docs/OFFERINGS.md). The same rows are [docs/offerings.csv](docs/offerings.csv).
+<p align="center">
+  <img src="public/images/hero.jpg" width="49%" alt="Senda wallet-first experience">
+  <img src="public/images/markets-desk.jpg" width="49%" alt="Senda multi-market interface">
+</p>
 
-## Devnet
+## The four connected layers
 
-The cover program is deployed.
+**01 · Wallet.** The user's existing wallet is the signing and on-chain ownership boundary. Senda offers discovery, review and transaction composition without taking over wallet signing.
 
-| | |
+**02 · Markets.** Multiple source feeds and venue-specific execution adapters coexist in one desk. Jupiter handles Solana swap paths; supported EVM markets use their own wallet and venue flows. No single price print is promised as tradeable inventory.
+
+**03 · Money movement.** Solana USDC can move via wallet-signed SPL transfers. Other routes, card issuance, bridging and fiat destinations require their real providers; availability is not inferred from a visible interface.
+
+**04 · Intelligence.** Liquify, Matrix, Genesis, MCP and Utility AI observe data, generate research or draft bounded actions. They do not silently elevate themselves to transaction-signing authority.
+
+<p align="center">
+  <img src="public/images/orbit.jpg" width="49%" alt="Senda discovery and intelligence concept">
+  <img src="public/images/term-sheet.jpg" width="49%" alt="Senda research and terms concept">
+</p>
+
+## Status: what is code, what is funded, what still needs a provider
+
+| Status | Current boundary |
 | --- | --- |
-| Cluster | devnet |
-| Program | [`4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`](https://explorer.solana.com/address/4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta?cluster=devnet) |
-| Deploy | [`2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay`](https://explorer.solana.com/tx/2erKJos87WTkYxyA1QFJvZNUjHeL2m15wE6kUSu2bk2G1upUV9yfZw6ykacmLEP3oUc3K8AgHQddgapjvVBqRMay?cluster=devnet) |
-| Ref | [chain/devnet.json](chain/devnet.json) |
+| **WALLET-SIGNED CODE** | Solana quote/swap construction, wallet approvals, on-chain USDC payment paths, transaction confirmation and recovery logic are implemented. External RPCs, wallet adapters and live provider responses still need verification for the deployed environment. |
+| **MULTI-VENUE INTEGRATIONS** | EVM route, Hyperliquid, Ostium, Jupiter Perps and xStocks/Kamino source adapters exist. Execution is only possible where the actual network, quote, account, permissions and venue conditions allow. |
+| **READ-ONLY / CONFIGURATION-GATED** | Go Liquify, Solscan Pro volume, Genesis asset ownership, AI model interpretation and Mastercard Commercial Connect require their respective services, credentials, registry or other setup to make all functions usable. |
+| **DEVNET** | Senda records cover *terms* in an identified Solana devnet program. It does not reserve funded USDC protection payouts, validate an on-chain price oracle, or create a general mainnet lending protocol. |
+| **BROWSER-LOCAL / PROTOTYPE** | Senda cash, locally created desk numbers, practice bankrolls, some job/loan records, and selected conditional pockets are not the same as external cash, scheme-cleared cards or on-chain credit. Some pocket/game-pot flows use device-held keys; review their backup and custody risks before funding them. |
+| **NOT VERIFIED AS DEPLOYED** | Successful end-to-end current CI, authenticated market feeds, audited cover settlement, bank/MXN off-ramp, production card issuance, or autonomous on-chain agent spending are not established merely by this source repository. |
 
-The wallet signs. The program writes the cover account. It does not hold the PreStock.
+The code deliberately separates a **verified wallet signature** from a **wallet balance**, a **price print** from an **executable quote**, a **research agent** from a **signing key**, and a **browser-local feature** from a **real financial institution**. See the [repository architecture audit](docs/REPOSITORY_CODE_AUDIT_2026-11-02.md) for exact source files and remaining validation gates.
 
-## After the buy
+## More than PreStocks: the market universe
 
-The token stays in the wallet. Half the print can be drawn as cash. Spending that cash does not sell the name, and the name is what you still owe against. Listed shares that Kamino already lends on stay on that market. A PreStock uses this loan, because that mint is not in the xStocks market.
+The [instrument catalog](docs/OFFERINGS.md) and [CSV](docs/offerings.csv) preserve a **dated October 21, 2026 snapshot** of 5,105 classified entries across tokenized names, verified Solana spot, staking assets, listed tokens, perpetual venues, EVM spot, native-chain prints, and service rows. That is a catalog snapshot — **not** a live count of currently executable positions, funded markets, or unique issuer permissions. Always request current provider data and a fresh route before trading.
 
-## The lane
+Senda's pre-IPO instruments represent tokenized economic exposure, not automatically corporate equity. Eligibility, offer restrictions, issuer terms, jurisdiction, secondary transferability, and redemption mechanics can differ. Review each instrument's documents rather than treating a token mint as a brokerage security.
 
-A holder gets the price, not the company. No legal share, no vote, no dividend. OpenAI and Anthropic have voided unauthorized SPV transfers. Those prints fell 34–40%, and the book on the chain is thin next to the valuation on the wrapper.
+## How Senda fits the ecosystem
 
-Minting, redemption, and most of the issuer interfaces block a U.S. address or ask for a non-U.S. declaration. Solana does not. A U.S. person can still buy on Jupiter, then sits in the Regulation S resale window, forty days or a year, and carries the risk that the marketing is later called a U.S. offer. Forge and EquityZen remain the compliant route for American retail and institutions. The September 2026 Innovation Exemption does not cover these wrappers. It is for already-listed stocks that come with votes and dividends and that trade on a permissioned U.S. venue. Pre-IPO tokens stay offshore.
+| Layer | Technologies and integrations in the repository |
+| --- | --- |
+| **Web application** | React 19, TypeScript, Vite, TanStack Start/Router, Tailwind CSS |
+| **Wallet & on-chain** | Solana wallet providers, @solana/web3.js, SPL transfers, wallet-bound Jupiter swap signing, EVM wallet methods |
+| **Markets** | PreStocks, Tessera, Jupiter, xStocks/Kamino, GeckoTerminal, Solscan, Hyperliquid, Ostium, LI.FI, public event-market feeds |
+| **Liquidity intelligence** | Native Go quote and swap-volume service, server-side research adapters, short-lived source caches |
+| **AI & agents** | Bounded local agent workers, deterministic market rules, optional server-side model narration, read-only MCP |
+| **Storage & identity** | Browser-local state; wallet-signature-derived encryption in selected flows; Better Auth, Postgres/Neon or PGlite where configured |
+| **On-chain research** | Rust and Python payment/cover-memo tools; Solana devnet terms registry; PARRALAX governance boundary documented separately |
 
-## Tonight
+The read-only [Senda MCP](mcp/README.md) exposes market observation, quote, payment-link and public-address tooling. It cannot sign for the user. The [Senda × PARRALAX on-chain specification](docs/SENDA_PARRALAX_ONCHAIN_V1.md) describes governance and escrow proposals — not a deployed funded insurance or agent-budget program.
 
-| | What happens | Where |
-| --- | --- | --- |
-| **Buy** | Jupiter quotes USDC into the mint. Simulated, then signed. The token lands in the wallet that signed. | PreStocks |
-| **Hold** | Portfolio is the token account, marked at the last print. Empty until the chain says otherwise. | Portfolio |
-| **Convert** | SOL or USDC in, the name out. Or the slice back. One route. | Convert |
-| **Cover** | Ten percent under the print you lock. The premium is a USDC transfer you sign. The token stays. Not a policy. | Cover |
-| **Play** | Ten games. The result is the live print. Practice cash never touches the wallet. | Play |
-| **Pay** | USDC to a Solana address. Their token account receives it. | Shop |
-| **Number** | Shown once. Caps cash in this browser. A card terminal will decline it. It is not a BIN. | Shop |
-| **Agent** | You write what it is for. It can read the book and queue a trade. You still sign. | Agents |
-| **Make** | Post a job, software, a service, hardware, or what a class needs. The price is USDC. The whole amount goes to their address. | Make |
+### Devnet cover reference
 
-## Pay
+- Cluster: **Solana devnet**, not mainnet-beta.
+- Program: [4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta](https://explorer.solana.com/address/4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta?cluster=devnet)
+- Deployment transaction recorded in [chain/devnet.json](chain/devnet.json).
+- Program behavior: record immutable cover terms for a wallet/market symbol, subject to its current one-record constraint. **It does not hold reserves or execute payouts.**
 
-A store on a card network and a merchant on Solana are not the same door.
+## Run and verify
 
-**USDC.** Shop takes an address and an amount. Senda builds one mainnet transaction: your USDC account, theirs, and a memo with a reference. You sign. If they have no USDC account yet, the same transaction creates it and you pay the rent. The signature is the receipt. The mint is `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`. The code is [src/lib/solana-pay.ts](src/lib/solana-pay.ts).
+    npm install
+    npm run dev
 
-**The number.** Make one, see it once, keep the last four and the cap. A charge debits Senda cash in this browser. Visa never sees it.
+Open the local app on port **8080**. For validation:
 
-A swipe a terminal will clear needs an issuer. Phantom Cash, Jupiter, and KAST already spend Solana dollars through Lead Bank, Rain, DCS, or their own custody. Each of those is someone else’s program and someone else’s KYC. This repo does not mint them. Until there is a program, the payment a Solana address can clear is the USDC transfer.
+    npm run typecheck
+    npm test
+    npm run build:dev
 
-## On the chain
+Optional standalone Liquify service:
 
-Cluster is **mainnet-beta**.
+    cd services/liquify
+    go test -race ./...
+    go vet ./...
+    go run .
 
-| Action | What is signed | Code |
-| --- | --- | --- |
-| Buy, sell, convert | Jupiter swap. Simulated, then signed. | [src/lib/jup-sign.ts](src/lib/jup-sign.ts) |
-| Pay | SPL transfer of USDC, plus a memo | [src/lib/solana-pay.ts](src/lib/solana-pay.ts) |
-| Cover | USDC into a cover account whose key stays in this browser, plus the terms in a memo | [src/lib/cover-chain.ts](src/lib/cover-chain.ts) |
-| Portfolio | A read of token accounts. Nothing is signed. | the wallet |
+Additional on-chain and cross-language checks:
 
-- Token program `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA`
-- Associated token program `ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL`
-- Memo program `MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr`
-- Jupiter quote `https://lite-api.jup.ag/swap/v1/quote`
-- RPC `https://api.mainnet-beta.solana.com`, then `https://solana-rpc.publicnode.com`
-- Wallets: the Solana injector that is actually in the window. Phantom, Solflare, Backpack, and the others in [src/lib/wallets.ts](src/lib/wallets.ts). A missing extension is not drawn as connected.
+    cargo test --manifest-path chain/senda-chain/Cargo.toml
+    cargo test --manifest-path chain/senda-program/Cargo.toml
+    PYTHONPATH=chain/python python3 -m unittest discover -s chain/python/tests
 
-Senda cash, practice play, the sheet, the agent log, and the desk-number last four live in this browser. Clearing the site clears them. They are not a chain balance.
+The web app's build process may run database migrations when configured. Go Liquify, Solscan, third-party cards, and model narration need their own **server-side** configuration; never put private API keys, a seed phrase, card PAN/CVV, or device-held pocket keys in the Git repository.
 
-## Not built
+**Verification status:** source architecture reviewed at the repository head referenced in the audit. A successful app build, green GitHub Actions run, live trade, live card issuance, or live payout was **not** established by this documentation change.
 
-A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift that keeps running after the tab closes. A second computer that inherits this browser’s cash.
+## Work on Senda without breaking the desk
 
-## The chain, in Rust and Python
+Start with [AGENTS.md](AGENTS.md), [architecture modules](docs/MODULES.md), the [code audit](docs/REPOSITORY_CODE_AUDIT_2026-11-02.md) and [current integration receipts](docs/merge-reconciliations/PR-11.md). Preserve the existing Senda interface, connected-wallet signing, confirmed-transaction recovery, real asset provenance and source-status labels.
 
-The page is TypeScript because the browser is where the wallet signs. The payment and the book are not.
-
-[chain/senda-chain](chain/senda-chain) is Rust. It builds the SPL Token transfer of USDC (instruction 3, six decimals) and the cover memo. `cargo test --manifest-path chain/senda-chain/Cargo.toml`
-
-[chain/python](chain/python) is Python. It reads `https://prestocks.com/api/prestocks`, ranks the print against the mark, and builds the same transfer and the same memo. The tests lock those bytes to the Rust crate.
-
-```bash
-PYTHONPATH=chain/python python3 -m unittest discover -s chain/python/tests
-PYTHONPATH=chain/python python3 -m senda
-```
-
-The devnet cover program is `4Zsghb1rMfxbM3hAECdTfZBq1wiRNi19V5J3Bm2A4Kta`. A holder of a PreStock has the price, not the company: no legal share, no vote, no dividend. These wrappers sit outside the SEC’s September 2026 Innovation Exemption, which is for real tokenized public stocks. Most exclude U.S. persons under Regulation S. Rust and Python build the payment. The wallet signs it.
-
-## Run
-
-```bash
-npm install
-npm run dev
-```
-
-The desk is on port 8080. `npm run typecheck` has to pass. No env var is required to read the book or to ask a wallet to sign. A Jupiter API key is optional. The public RPC rate-limits. Point a private RPC at the same calls in [src/lib/phantom.ts](src/lib/phantom.ts) when you need a higher limit.
-
-Open the book. Load practice cash and play a print. Connect a wallet and quote the same name. On Shop, paste an address and sign a dollar of USDC.
-
-[AGENTS.md](AGENTS.md) is the manual for anyone changing the code. The same file is `CLAUDE.md`, `GEMINI.md`, and `llms.txt`. Do not invent a balance, a card, or a position the wallet does not have. Do not add a program id that was not deployed.
-
-The submission note is [public/senda-submission.md](public/senda-submission.md).
+Do not replace the app with a demo, report browser cash as bank funds, suggest unverified card numbers can clear merchants, or call a quote, memo, or devnet account a finished financial product.
 
 <p align="center">
   <img src="public/og.jpg" width="720" alt="Senda">
