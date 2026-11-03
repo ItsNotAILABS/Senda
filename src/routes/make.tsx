@@ -1,15 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { MakeDesk } from "@/components/make-desk";
+import { ProductShell } from "@/components/product-shell";
+import { MAKE_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/make")({
-  component: MakePage,
+  component: Layout,
 });
 
-function MakePage() {
+function Layout() {
   return (
     <AppShell>
-      <MakeDesk />
+      <ProductShell title="Make" pages={MAKE_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

@@ -1,8 +1,9 @@
 /** Every PreStock is the same object: a mint, a live route, a signed swap. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { noteFill } from "@/lib/account-book";
 import { signStockSwap } from "@/lib/jup-sign";
-import { mintDecimals, splHolding } from "@/lib/phantom";
+import { mintDecimals, PRESTOCK_MINTS, splHolding } from "@/lib/phantom";
 
 const PRE = "https://prestocks.com/api/prestocks";
 
@@ -22,8 +23,7 @@ export async function runPrestock(input: {
   /** Token price in USD. Used to size a partial sell. */
   price?: number;
   symbol?: string;
-  pay?: string;
-  solUsd?: number;
+  desk?: string;
 }): Promise<{ signature: string; outUi: number }> {
   const holding = input.side === "sell" ? await splHolding(input.owner, input.mint) : null;
   const decimals = holding?.decimals || (await mintDecimals(input.mint));
@@ -39,17 +39,23 @@ export async function runPrestock(input: {
       tokenAmount = have;
     }
   }
-  return signStockSwap({
+  const done = await signStockSwap({
     owner: input.owner,
     mint: input.mint,
     usd: input.usd,
     side: input.side,
     decimals,
     tokenAmount,
-    symbol: input.symbol,
-    pay: input.pay,
-    solUsd: input.solUsd,
   });
+  const known = PRESTOCK_MINTS.find((row) => row[1] === input.mint)?.[0];
+  noteFill({
+    desk: input.desk || "trade",
+    symbol: input.symbol || known || input.mint.slice(0, 4),
+    side: input.side,
+    usd: input.usd,
+    sig: done.signature,
+  });
+  return done;
 }
 
 /** What a sale of the on-chain balance would raise, at the live token price. */

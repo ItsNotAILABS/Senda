@@ -26,10 +26,8 @@ async function topPool(mint: string): Promise<string> {
   if (hit && Date.now() - hit.at < 120_000) return hit.pool;
   const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`, {
     headers: { accept: "application/json", "user-agent": "Senda" },
-    signal: AbortSignal.timeout(7000),
   });
-  if (res.status === 429) return "";
-  if (!res.ok) throw new Error(`Pools ${res.status}`);
+  if (res.status === 429 || !res.ok) return "";
   const json = (await res.json()) as { data?: { attributes?: { address?: string } }[] };
   const pool = json.data?.[0]?.attributes?.address ?? "";
   if (pool) poolCache.set(mint, { at: Date.now(), pool });
@@ -43,7 +41,6 @@ function llamaPeriod(tf: PrintTf): { period: string; step: number; limit: number
   return { period: "1h", step: 3600, limit: 72 };
 }
 
-/** Real prints from DefiLlama. Each point is a traded price, not a flat line. */
 async function llamaCandles(mint: string, tf: PrintTf): Promise<PrintBar[]> {
   const q = llamaPeriod(tf);
   const now = Math.floor(Date.now() / 1000);
@@ -68,54 +65,50 @@ async function llamaCandles(mint: string, tf: PrintTf): Promise<PrintBar[]> {
 async function pullCandles(mint: string, tf: PrintTf): Promise<{ bars: PrintBar[]; note: string }> {
   const key = `${mint}:${tf}`;
   const hit = candleCache.get(key);
-  if (hit && Date.now() - hit.at < 15_000) return { bars: hit.bars, note: hit.note };
+  if (hit && Date.now() - hit.at < 90_000) return { bars: hit.bars, note: hit.note };
   const pending = inflight.get(key);
   if (pending) return pending;
   const job = (async () => {
+    // Real USD-denominated pool OHLCV first. A price-only provider cannot supply volume.
+    const pool = await topPool(mint).catch(() => "");
+    if (pool) {
+      const q = tfQuery(tf);
+      const endpoint = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`;
+      try {
+        let res = await fetch(endpoint, { headers: { accept: "application/json", "user-agent": "Senda" } });
+        if (res.status === 429) {
+          await sleep(900);
+          res = await fetch(endpoint, { headers: { accept: "application/json", "user-agent": "Senda" } });
+        }
+        if (res.ok) {
+          const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
+          const bars: PrintBar[] = (json.data?.attributes?.ohlcv_list ?? [])
+            .map((row) => ({
+              t: Number(row[0]) * 1000, o: Number(row[1]), h: Number(row[2]),
+              l: Number(row[3]), c: Number(row[4]), v: Number(row[5]),
+            }))
+            .filter((v) => Number.isFinite(v.t) && v.t > 0 && [v.o,v.h,v.l,v.c,v.v].every(Number.isFinite) &&
+              v.o > 0 && v.c > 0 && v.h >= Math.max(v.o,v.c) && v.l > 0 &&
+              v.l <= Math.min(v.o,v.c) && v.v >= 0)
+            .sort((a,b) => a.t-b.t);
+          if (bars.length >= 2) {
+            const out = { bars, note: "Pool OHLCV · GeckoTerminal · USD volume" };
+            candleCache.set(key, { at: Date.now(), ...out });
+            return out;
+          }
+        }
+      } catch { /* The fallback is explicitly price-only, never volume. */ }
+    }
     try {
       const fromLlama = await llamaCandles(mint, tf);
       if (fromLlama.length >= 2) {
-        const out = { bars: fromLlama, note: "Price history." };
+        const out = { bars: fromLlama, note: "Price-only proxy · DefiLlama · derived intervals · NO traded volume" };
         candleCache.set(key, { at: Date.now(), ...out });
         return out;
       }
-    } catch {
-      /* The pool candles are the next try. */
-    }
-    const pool = await topPool(mint);
-    if (!pool) return { bars: [], note: "Candle feed is busy. The last price is still live." };
-    const q = tfQuery(tf);
-    let res = await fetch(
-      `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-      { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(8000) },
-    );
-    if (res.status === 429) {
-      await sleep(900);
-      res = await fetch(
-        `https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/${q.frame}?aggregate=${q.aggregate}&limit=${q.limit}&currency=usd`,
-        { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(8000) },
-      );
-    }
-    if (!res.ok) return { bars: [], note: res.status === 429 ? "Candle feed is busy. The last price is still live." : `Print ${res.status}` };
-    const json = (await res.json()) as { data?: { attributes?: { ohlcv_list?: number[][] } } };
-    const raw = json.data?.attributes?.ohlcv_list ?? [];
-    const bars: PrintBar[] = raw
-      .map((row) => ({
-        t: Number(row[0]) * 1000,
-        o: Number(row[1]),
-        h: Number(row[2]),
-        l: Number(row[3]),
-        c: Number(row[4]),
-        v: Number(row[5]),
-      }))
-      .filter((b) => b.t > 0 && b.h > 0 && b.l > 0)
-      .sort((a, b) => a.t - b.t);
-    const out = { bars, note: bars.length ? "Pool candles." : "The pool returned no candles." };
-    if (bars.length) candleCache.set(key, { at: Date.now(), ...out });
-    return out;
-  })().finally(() => {
-    inflight.delete(key);
-  });
+    } catch { /* Nothing to show rather than synthetic candles. */ }
+    return { bars: [], note: "No verified historical OHLCV available. Volume strategies disabled." };
+  })().finally(() => inflight.delete(key));
   inflight.set(key, job);
   return job;
 }

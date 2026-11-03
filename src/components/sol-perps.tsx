@@ -4,7 +4,7 @@ import { FillCard } from "@/components/fill-card";
 import { MarkChart } from "@/components/mark-chart";
 import { noteAct } from "@/lib/book";
 import { driftBook, type DriftMarket } from "@/lib/drift-book";
-import { jupPerpOpen, jupPerpPositions, type JupAsset, type JupPosition } from "@/lib/jup-perps";
+import { jupPerpOpen, jupPerpPositions, type JupAsset, type JupPosition } from "@/lib/jup-perp-api";
 import { connectPhantom, sendVersioned } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";

@@ -1,38 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ArrowDownLeft, ArrowUpRight, Bluetooth, Plus, RefreshCw } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
 import { AddMoneyScreen } from "@/components/add-money";
+import { ClearStrip } from "@/components/clear-strip";
+import { MoneyBar } from "@/components/money-bar";
 import { SpaceDesk } from "@/components/space-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
-import { MoneyBar } from "@/components/money-bar";
-import { MexicoSend } from "@/components/mexico-send";
-import { ClearingCard } from "@/components/clearing-card";
+import { rememberClear } from "@/lib/clearing";
+import { noteFill } from "@/lib/account-book";
+import { connectPhantom } from "@/lib/phantom";
+import { payUsdc } from "@/lib/solana-pay";
 import { CCYS, CCY_META, formatMoney, revolutFee, type Ccy, type Contact, type Tx } from "@/lib/wallet";
 import { rate } from "@/lib/wallet-fx";
-import { FillCard } from "@/components/fill-card";
-import { PayQr } from "@/components/pay-qr";
-import { connectPhantom, readChain } from "@/lib/phantom";
-import { SEND_ASSETS, paySol, payUsdc, splPayLink } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
-export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "link";
+export type PayAct = "send" | "request" | "exchange" | "add" | "withdraw" | "nearby" | "chain";
 
 const ACTS: { id: PayAct; label: string; icon: typeof ArrowUpRight }[] = [
   { id: "send", label: "Send", icon: ArrowUpRight },
+  { id: "chain", label: "On chain", icon: Link2 },
   { id: "request", label: "Request", icon: ArrowDownLeft },
   { id: "nearby", label: "Nearby", icon: Bluetooth },
   { id: "exchange", label: "Exchange", icon: RefreshCw },
   { id: "add", label: "Add", icon: Plus },
-  { id: "link", label: "QR", icon: ArrowDownLeft },
-  { id: "withdraw", label: "Revolut", icon: ArrowUpRight },
 ];
 
 const field =
   "min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none placeholder:text-subtle";
 
-const SEND_PRESETS = [1, 5, 20, 100] as const;
+const SEND_PRESETS = [1, 5, 10, 25, 50] as const;
 
 const PERSON_TX = new Set<Tx["kind"]>(["send", "receive", "request", "nearby", "split"]);
 
@@ -62,12 +60,17 @@ function payAgainRows(txs: Tx[], contacts: Contact[]) {
   return rows;
 }
 
-export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string; initialFrom?: string }) {
-  const start: PayAct = initialAct === "revolut" ? "withdraw" : ACTS.some((a) => a.id === initialAct) ? (initialAct as PayAct) : "send";
+export type SendPage = PayAct | "activity" | "pockets" | "space";
+
+export function PaymentsDesk({ initialAct, initialFrom, page }: { initialAct?: string; initialFrom?: string; page?: SendPage }) {
+  const lone = Boolean(page);
+  const start: PayAct =
+    page === "chain" || page === "request" || page === "nearby" || page === "exchange" || page === "add" || page === "send" || page === "withdraw"
+      ? page
+      : ACTS.some((a) => a.id === initialAct)
+        ? (initialAct as PayAct)
+        : "send";
   const [act, setAct] = useState<PayAct>(start);
-  useEffect(() => {
-    setAct(start);
-  }, [start]);
   const [pocket, setPocket] = useState<Ccy | null>(null);
   const w = useWallet();
   const fromInit = CCYS.includes(initialFrom as Ccy) ? (initialFrom as Ccy) : "USD";
@@ -81,26 +84,29 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      {lone ? null : (
       <TabLead
         kicker="Send"
-        title="Send USDC."
-        accent="They get the token."
-        line="A peso figure is a quote. The transfer is USDC. You sign it. Senda does not hold it."
-        live={["Send", "Request", "Nearby", "Exchange", "Add"]}
+        title="Same cash"
+        accent="to a person."
+        line="Your pocket, their tag. It stays in this browser."
+        live={["Send", "On-chain USDC", "Request", "Nearby", "Exchange", "Add"]}
         coming={["Bank wires", "A handle that exists outside this browser"]}
       />
+      )}
+      {lone ? null : <MoneyBar />}
 
-      <MoneyBar />
+      {!lone || page === "space" ? <SpaceDesk /> : null}
 
+      {!lone || (page !== "space" && page !== "pockets" && page !== "activity") ? (
       <section className={cn("rounded-[22px] border border-white/10 bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
         {act === "send" ? <SendForm w={w} /> : null}
+        {act === "chain" ? <ChainPay w={w} /> : null}
         {act === "nearby" ? <NearbyDesk /> : null}
         {act === "request" ? <RequestForm w={w} /> : null}
         {act === "exchange" ? <ExchangeForm key={pocket ?? fromInit} w={w} fromInit={pocket ?? fromInit} /> : null}
         {act === "add" ? <AddForm w={w} /> : null}
-        {act === "link" ? <PayLinkForm w={w} /> : null}
-        {act === "withdraw" ? <RevolutSend w={w} /> : null}
-        <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-4 border-t border-white/10 pt-3")}>
+        <div className={cn("flex flex-wrap gap-2", act === "nearby" ? "px-4 pt-2" : "mt-4 border-t border-white/10 pt-3", lone && "hidden")}>
           {ACTS.map((a) => {
             const Icon = a.icon;
             const on = act === a.id;
@@ -121,19 +127,11 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
           })}
         </div>
       </section>
+      ) : null}
 
-      <MexicoSend
-        owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
-        onLinked={(addr) => {
-          w.linkChain(addr, "Phantom", "phantom");
-        }}
-      />
-      <ClearingCard />
-
-      <SpaceDesk />
-
-      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]">
+      {!lone || page === "pockets" || page === "activity" ? (
+      <section className={cn("grid gap-3", page === "activity" ? "" : page === "pockets" ? "" : "xl:grid-cols-[minmax(0,1fr)_300px]")}>
+        <section className={cn("overflow-hidden rounded-[22px] border border-white/10 bg-[#10131c]", page === "activity" && "hidden")}>
           <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
             <h2 className="text-sm font-semibold">Pockets</h2>
             <p className="font-mono text-[11px] text-subtle">
@@ -173,7 +171,7 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
             })}
           </ul>
         </section>
-        <aside className="h-fit rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+        <aside className={cn("h-fit rounded-[22px] border border-white/10 bg-[#10131c] p-4", page === "pockets" && "hidden")}>
           <h2 className="text-sm font-semibold">Activity</h2>
           {w.w.txs.length === 0 ? <p className="py-4 text-sm text-subtle">Nothing sent yet.</p> : null}
           <ul>
@@ -192,94 +190,49 @@ export function PaymentsDesk({ initialAct, initialFrom }: { initialAct?: string;
           </ul>
         </aside>
       </section>
+      ) : null}
+      {lone ? null : <ClearStrip desk="send" />}
     </div>
   );
 }
 
-function PayLinkForm({ w }: { w: ReturnType<typeof useWallet> }) {
-  const [raw, setRaw] = useState("1");
-  const [mint, setMint] = useState(SEND_ASSETS[1].mint);
-  const [held, setHeld] = useState<{ symbol: string; mint: string }[]>([]);
-  const [link, setLink] = useState("");
-  const amount = Number(raw) || 0;
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
   const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const choices = [
-    ...SEND_ASSETS.map((a) => ({ symbol: a.label, mint: a.mint })),
-    ...held.filter((h) => !SEND_ASSETS.some((a) => a.mint === h.mint || (a.id === "SOL" && h.symbol === "SOL"))),
-  ];
+  const [to, setTo] = useState("");
+  const [usd, setUsd] = useState(1);
+  const [amountText, setAmountText] = useState("1");
+  const [memo, setMemo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [sig, setSig] = useState("");
+  const link = useMemo(() => {
+    const dest = to.trim();
+    if (!dest) return "";
+    const params = new URLSearchParams({
+      amount: String(usd),
+      "spl-token": USDC_MINT,
+    });
+    if (memo.trim()) params.set("memo", memo.trim());
+    return `solana:${dest}?${params.toString()}`;
+  }, [to, usd, memo]);
+  const shown = !Number.isFinite(usd) || usd <= 0 ? "$0" : Number.isInteger(usd) ? `$${usd}` : `$${usd.toFixed(2)}`;
+  const dest = to.trim();
+  const short = !dest ? "—" : dest.length <= 12 ? dest : `${dest.slice(0, 4)}…${dest.slice(-4)}`;
 
-  useEffect(() => {
-    if (!owner) {
-      setHeld([]);
-      return;
-    }
-    let live = true;
-    readChain(owner)
-      .then((s) => {
-        if (!live) return;
-        const rows = s.sol > 0 ? [{ symbol: "SOL", mint: "" }] : [];
-        for (const token of s.tokens) {
-          if (token.ui > 0) rows.push({ symbol: token.symbol, mint: token.mint });
-        }
-        setHeld(rows);
-      })
-      .catch(() => live && setHeld([]));
-    return () => {
-      live = false;
-    };
-  }, [owner]);
-
-  async function make() {
-    try {
-      const who = owner || (await connectPhantom());
-      if (!owner) {
-        const linked = w.linkChain(who, "Phantom", "phantom");
-        if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
-      }
-      const url = splPayLink(who, mint, amount, "Senda");
-      setLink(url);
-      await navigator.clipboard?.writeText(url);
-      toast.success("QR is ready. They scan it in Phantom. Nothing moves until they sign.");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The link was not made.");
-    }
+  function pickUsd(n: number) {
+    setUsd(n);
+    setAmountText(String(n));
   }
 
-  return (
-    <div>
-      <h2 className="text-xl tracking-tight">Pay QR</h2>
-      <p className="mt-2 text-sm text-muted">
-        A code can request SOL, USDC, CASH, USDT, PYUSD, or any other token this address already holds. That is the whole Send tab a camera can move. A bank payout, an eSIM, and a Circle burn are not in the code. Nothing leaves until the other wallet signs. A send you sign still stops at your spend cap.
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {choices.map((row) => (
-          <button key={`${row.symbol}-${row.mint}`} type="button" onClick={() => { setMint(row.mint); setLink(""); }} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", mint === row.mint ? "bg-white text-black" : "bg-white/10")}>
-            {row.symbol}
-          </button>
-        ))}
-      </div>
-      <input inputMode="decimal" value={raw} onChange={(e) => { setRaw(e.target.value); setLink(""); }} aria-label="Amount" className={cn(field, "mt-3 font-mono")} />
-      <button type="button" disabled={!(amount > 0)} onClick={() => void make()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50">
-        Make the QR
-      </button>
-      {link ? (
-        <div className="mt-4">
-          <PayQr value={link} />
-          <p className="mt-3 break-all font-mono text-xs text-subtle">{link}</p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function RevolutSend({ w }: { w: ReturnType<typeof useWallet> }) {
-  const [to, setTo] = useState("");
-  const [raw, setRaw] = useState("1");
-  const [asset, setAsset] = useState<"USDC" | "SOL">("USDC");
-  const [busy, setBusy] = useState(false);
-  const [fill, setFill] = useState<{ amount: string; asset: string; sig: string } | null>(null);
-  const amount = Number(raw) || 0;
-  const owner = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  function onAmount(raw: string) {
+    const cleaned = raw.replace(/[^0-9.]/g, "");
+    const [head, ...rest] = cleaned.split(".");
+    const next = rest.length ? `${head}.${rest.join("").slice(0, 2)}` : head;
+    setAmountText(next);
+    const n = Number(next);
+    setUsd(next === "" || next === "." || Number.isNaN(n) ? 0 : n);
+  }
 
   async function send() {
     setBusy(true);
@@ -287,16 +240,22 @@ function RevolutSend({ w }: { w: ReturnType<typeof useWallet> }) {
       const who = owner || (await connectPhantom());
       if (!owner) {
         const linked = w.linkChain(who, "Phantom", "phantom");
-        if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep the address.");
+        if (!linked.ok) throw new Error(linked.error || "The wallet did not stay.");
       }
-      const done =
-        asset === "USDC"
-          ? await payUsdc({ owner: who, to, usd: amount, memo: "Senda Revolut USDC" })
-          : await paySol({ owner: who, to, sol: amount, memo: "Senda Revolut SOL" });
-      toast.success(`Signed. ${done.signature.slice(0, 8)}…`);
-      setFill({ amount: String(amount), asset, sig: done.signature });
+      const out = await payUsdc({ owner: who, to, usd, memo: memo || "Senda USDC" });
+      setSig(out.signature);
+      rememberClear({
+        desk: "send",
+        title: `USDC to ${to.slice(0, 4)}…`,
+        legs: [{ side: "out", asset: "USDC", amount: usd, where: to }],
+        feeUsd: 0,
+        sig: out.signature,
+        status: "signed",
+      });
+      noteFill({ desk: "send", symbol: "USDC", side: "send", usd, sig: out.signature });
+      toast.success(`Sent. ${out.signature.slice(0, 8)}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The withdraw did not sign.");
+      toast.error(e instanceof Error ? e.message : "The send did not go.");
     } finally {
       setBusy(false);
     }
@@ -304,30 +263,87 @@ function RevolutSend({ w }: { w: ReturnType<typeof useWallet> }) {
 
   return (
     <div>
-      {fill ? (
-        <FillCard title={`To Revolut · ${fill.asset}`} symbol={fill.asset} amount={fill.amount} paid={`${fill.amount} ${fill.asset}`} received="Their Revolut Solana address" where="Solana" when="Just now" sig={fill.sig} onDone={() => setFill(null)} />
-      ) : null}
-      <h2 className="text-xl tracking-tight">Revolut</h2>
-      <p className="mt-2 text-sm text-muted">
-        Their app gives you a Solana address. Paste it. Phantom signs the USDC or SOL to that address. This is not browser cash.
-      </p>
-      <div className="mt-4 flex gap-2">
-        {(["USDC", "SOL"] as const).map((id) => (
+      <p className="text-sm text-muted">USDC leaves the wallet you connect and lands in theirs. You sign. Senda does not hold it.</p>
+      <label className="mt-4 block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
+        <div className="mt-1 flex items-baseline gap-1">
+          <span className="font-mono text-5xl tabular-nums tracking-tight">$</span>
+          <input
+            inputMode="decimal"
+            value={amountText}
+            onChange={(e) => onAmount(e.target.value)}
+            aria-label="Amount"
+            placeholder="0"
+            className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
+          />
+        </div>
+        <p className="font-mono text-xs text-subtle">USDC</p>
+      </label>
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        {SEND_PRESETS.map((n) => (
           <button
-            key={id}
+            key={n}
             type="button"
-            onClick={() => setAsset(id)}
-            className={cn("min-h-11 flex-1 rounded-full text-sm font-semibold", asset === id ? "bg-accent text-accent-fg" : "border border-white/10 text-muted")}
+            onClick={() => pickUsd(n)}
+            className={cn(
+              "min-h-12 min-w-14 shrink-0 rounded-full px-4 font-mono text-sm font-semibold",
+              usd === n ? "bg-accent text-accent-fg" : "border border-white/10 text-muted",
+            )}
           >
-            {id}
+            ${n}
           </button>
         ))}
       </div>
-      <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="Solana address from Revolut" className={cn(field, "mt-3")} />
-      <input inputMode="decimal" value={raw} onChange={(e) => setRaw(e.target.value)} className={cn(field, "mt-2")} />
-      <button type="button" disabled={busy || !(amount > 0) || to.trim().length < 32} onClick={() => void send()} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50">
-        {busy ? "Waiting for the wallet…" : `Withdraw ${amount || 0} ${asset}`}
-      </button>
+      <label className="mt-3 block text-xs text-subtle">
+        Their Solana address
+        <input value={to} onChange={(e) => setTo(e.target.value)} className={`${field} mt-1 font-mono`} placeholder="Address" />
+      </label>
+      <label className="mt-3 block text-xs text-subtle">
+        Note
+        <input value={memo} onChange={(e) => setMemo(e.target.value)} className={`${field} mt-1`} placeholder="What this is for" />
+      </label>
+      <div className="mt-4 space-y-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">Amount</span>
+          <span className="font-mono tabular-nums">{shown}</span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">To</span>
+          <span className="max-w-[65%] truncate font-mono">{short}</span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">Note</span>
+          <span className="max-w-[65%] truncate">{memo.trim() || "—"}</span>
+        </p>
+        <p className="text-subtle">Network fee, paid by the wallet</p>
+      </div>
+      <div className="mt-4 flex flex-col gap-2">
+        <button
+          type="button"
+          disabled={busy || !(usd > 0) || !dest}
+          onClick={() => void send()}
+          className="min-h-12 w-full rounded-full bg-accent px-5 text-base font-semibold text-accent-fg disabled:opacity-50"
+        >
+          {busy ? "Waiting for the wallet…" : `Send ${shown}`}
+        </button>
+        <button
+          type="button"
+          disabled={!link}
+          onClick={() => {
+            void navigator.clipboard.writeText(link);
+            toast.success("Payment link copied.");
+          }}
+          className="min-h-12 w-full rounded-full border border-white/15 px-5 text-sm font-semibold disabled:opacity-40"
+        >
+          Copy payment link
+        </button>
+      </div>
+      {link ? <p className="mt-3 break-all font-mono text-[11px] text-subtle">{link}</p> : null}
+      {sig ? (
+        <a className="mt-2 block font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
+          {sig}
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -339,9 +355,16 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const [raw, setRaw] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [fill, setFill] = useState<{ amount: string; to: string; sig: string } | null>(null);
   const amount = Number(raw) || 0;
   const again = payAgainRows(w.w.txs, w.w.contacts);
+  const who = tag.trim();
+  const short = !who ? "—" : who.length <= 18 ? who : `${who.slice(0, 8)}…${who.slice(-4)}`;
+  const shown = ccy === "USD" ? (Number.isInteger(amount) ? `$${amount}` : `$${amount.toFixed(2)}`) : formatMoney(amount, ccy);
+
+  function setUsd(n: number) {
+    setRaw(String(n));
+    setCcy("USD");
+  }
 
   function go() {
     if (busy) return;
@@ -350,46 +373,22 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
       toast.error("Who is it for?");
       return;
     }
-    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t)) {
-      toast.error("Paste their Solana address. USDC was not sent.");
-      return;
-    }
-    if (!(amount > 0)) {
-      toast.error("Enter an amount.");
-      return;
-    }
     setBusy(true);
-    void (async () => {
-      try {
-        const existing = w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-        const owner = existing || (await connectPhantom());
-        if (!existing) {
-          const linked = w.linkChain(owner, "Phantom", "phantom");
-          if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
-        }
-        const paid = await payUsdc({ owner, to: t, usd: amount, memo: note || "Senda send" });
-        setFill({ amount: String(amount), to: t, sig: paid.signature });
-        toast.success(`USDC signed. ${paid.signature.slice(0, 8)}…`);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "The payment did not send.");
-      } finally {
-        setBusy(false);
-      }
-    })();
+    const person = w.remember(name || t, t);
+    const r = w.send(amount, ccy, person, note);
+    setBusy(false);
+    if (!r.ok) toast.error(r.error);
+    else toast.success(`Sent ${formatMoney(amount, ccy)} to ${person.tag}.`);
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {fill ? (
-        <FillCard title="USDC sent" symbol="USDC" amount={`$${fill.amount}`} paid={`$${fill.amount} USDC`} received={fill.to} where="Solana" when="Just now" sig={fill.sig} onDone={() => setFill(null)} />
-      ) : null}
-      <p className="text-sm text-white/55">USDC leaves your Phantom and lands in their wallet. That is the spendable dollar. Phantom signs it. Nothing moves before that.</p>
       <label className="block">
         <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Person</span>
         <input
           value={tag}
           onChange={(e) => setTag(e.target.value)}
-          placeholder="Solana address"
+          placeholder="@someone"
           aria-label="Person"
           className={cn(field, "mt-1 text-lg")}
         />
@@ -404,7 +403,7 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
                 setTag(c.tag);
                 setName(c.name);
               }}
-              className="min-h-10 shrink-0 rounded-full border border-white/10 px-4 text-sm font-medium"
+              className="min-h-12 shrink-0 rounded-full border border-white/10 px-4 text-sm font-medium"
             >
               {c.tag}
             </button>
@@ -415,10 +414,11 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
       <label className="block">
         <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Amount</span>
         <div className="mt-1 flex items-end gap-3">
+          {ccy === "USD" ? <span className="mb-1 font-mono text-5xl tabular-nums tracking-tight">$</span> : null}
           <input
             inputMode="decimal"
             value={raw}
-            onChange={(e) => setRaw(e.target.value)}
+            onChange={(e) => setRaw(e.target.value.replace(/[^0-9.]/g, ""))}
             placeholder="0"
             aria-label="Amount"
             className="min-h-14 w-full bg-transparent font-mono text-5xl tabular-nums tracking-tight outline-none placeholder:text-white/20"
@@ -427,7 +427,7 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
             value={ccy}
             onChange={(e) => setCcy(e.target.value as Ccy)}
             aria-label="Currency"
-            className="mb-1 min-h-11 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
+            className="mb-1 min-h-12 rounded-full border border-white/10 bg-black/30 px-3 font-mono text-sm"
           >
             {CCYS.map((c) => (
               <option key={c} value={c}>
@@ -439,17 +439,14 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
         <p className="font-mono text-xs tabular-nums text-subtle">Available {formatMoney(w.w.balances[ccy], ccy)}</p>
       </label>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {SEND_PRESETS.map((n) => (
           <button
             key={n}
             type="button"
-            onClick={() => {
-              setRaw(String(n));
-              setCcy("USD");
-            }}
+            onClick={() => setUsd(n)}
             className={cn(
-              "min-h-11 flex-1 rounded-full font-mono text-sm font-semibold",
+              "min-h-12 min-w-14 shrink-0 rounded-full px-4 font-mono text-sm font-semibold",
               ccy === "USD" && Number(raw) === n ? "bg-accent text-accent-fg" : "border border-white/10",
             )}
           >
@@ -458,13 +455,40 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
         ))}
       </div>
 
+      <label className="block">
+        <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Note</span>
+        <input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="What this is for"
+          aria-label="Note"
+          className={cn(field, "mt-1")}
+        />
+      </label>
+
+      <div className="space-y-1 rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">Amount</span>
+          <span className="font-mono tabular-nums">{amount > 0 ? shown : "—"}</span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">To</span>
+          <span className="max-w-[65%] truncate font-mono">{short}</span>
+        </p>
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-subtle">Note</span>
+          <span className="max-w-[65%] truncate">{note.trim() || "—"}</span>
+        </p>
+        <p className="text-subtle">Network fee, paid by the wallet</p>
+      </div>
+
       <button
         type="button"
         disabled={busy || !(amount > 0)}
         onClick={go}
         className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
       >
-        Send USDC
+        {busy ? "Waiting for the wallet…" : `Send ${shown}`}
       </button>
 
       {again.length > 0 ? (

@@ -1,4 +1,4 @@
-/** A loan row is the slice that was sold. Repay buys it back. */
+/** Cash against a PreStock that stays in the wallet. Half the print. Not a sale. */
 
 const KEY = "senda.lend.v1";
 
@@ -9,7 +9,6 @@ export type Loan = {
   borrowed: number;
   shares: number;
   createdAt: string;
-  mint?: string;
 };
 
 export function loadLoans(): Loan[] {
@@ -34,9 +33,9 @@ function save(rows: Loan[]) {
 
 export const LTV = 0.5;
 
-export function borrow(rows: Loan[], stockId: string, symbol: string, shares: number, last: number, mint?: string): Loan[] | { error: string } {
+export function borrow(rows: Loan[], stockId: string, symbol: string, shares: number, last: number): Loan[] | { error: string } {
   const room = shares * last * LTV;
-  if (!(room >= 0.5)) return { error: "Need a holding first." };
+  if (!(room > 1)) return { error: "Need a long first." };
   const next = [
     {
       id: `ln${Math.random().toString(36).slice(2, 8)}`,
@@ -45,7 +44,6 @@ export function borrow(rows: Loan[], stockId: string, symbol: string, shares: nu
       borrowed: Math.round(room * 100) / 100,
       shares,
       createdAt: new Date().toISOString(),
-      mint,
     },
     ...rows.filter((r) => r.stockId !== stockId),
   ];

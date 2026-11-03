@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { FilmBand } from "@/components/film-band";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
-import { WorkHub } from "@/components/work-hub";
+import { WorkJobs } from "@/components/work-jobs";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
 
@@ -18,7 +19,7 @@ function notes(): Record<string, string> {
   }
 }
 
-export function WorkDesk({ names }: { names: HouseListing[] }) {
+export function WorkDesk({ names, view = "all" }: { names: HouseListing[]; view?: "all" | "jobs" | "sheet" | "page" }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0);
   const [sheet, setSheet] = useState<Record<string, string>>({});
   const [doc, setDoc] = useState("");
@@ -63,27 +64,31 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
+      {view === "all" ? (
+      <>
       <TabLead
         kicker="Work"
-        title="Work, then get paid."
-        accent="USDC to their wallet."
-        line="Post what you need, or offer to do it. A person or one of your agents takes it. Paying is a USDC transfer. The token book stays on PreStocks."
-        live={["The board is shared on this app.", "Take it, then pay the wallet that did the work."]}
-        coming={["Work that pays in a PreStock instead of USDC."]}
+        title="Your sheet"
+        accent="next to the book."
+        line="Post a job and pay it in USDC. The sheet stays next to the live print."
+        live={["Pay a job in USDC. You sign.", "The live sheet, a note on every name."]}
+        coming={["A shared sheet on someone else's computer."]}
       />
-      <WorkHub />
-      <details className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-        <summary className="cursor-pointer text-sm font-semibold">Name notes</summary>
-        <div className="mt-4">
-        {name ? (
+      <MoneyBar />
+      </>
+      ) : null}
+      {view === "all" || view === "jobs" ? <WorkJobs symbol={name?.symbol ?? ""} /> : null}
+      {view === "page" || view === "sheet" || view === "all" ? (
+      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">
+        {view === "sheet" ? null : name ? (
           <>
             <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Open row</p>
             <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight">{name.symbol}</h2>
+                <h2 className="text-4xl tracking-tight lg:text-5xl">{name.symbol}</h2>
                 <p className="mt-1 text-sm text-muted">{name.name}</p>
               </div>
-              <p className="font-mono text-2xl tabular-nums">{formatUsd(name.last)}</p>
+              <p className="font-mono text-4xl tabular-nums">{formatUsd(name.last)}</p>
             </div>
             <p className="mt-2 font-mono text-sm tabular-nums text-muted">
               Mark {formatUsd(name.mark)} · {formatPremium(name.premium)}
@@ -114,7 +119,7 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
             </button>
           ))}
         </div>
-        <div className="mt-5 overflow-x-auto rounded-[22px] border border-white/10">
+        <div className={`mt-5 overflow-x-auto rounded-[22px] border border-white/10 ${view === "page" ? "hidden" : ""}`}>
           <table className="w-full min-w-[640px] text-left text-sm">
             <thead className="text-xs text-subtle">
               <tr>
@@ -149,8 +154,10 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
             </tbody>
           </table>
         </div>
-      </div>
-      </details>
+      </section>
+      ) : null}
+      {view === "all" ? (
+      <>
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-6 lg:p-8">
           <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Work</p>
@@ -271,6 +278,8 @@ export function WorkDesk({ names }: { names: HouseListing[] }) {
             )}
           </aside>
         </div>
+      ) : null}
+      </>
       ) : null}
     </div>
   );

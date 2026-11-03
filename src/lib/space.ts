@@ -104,7 +104,7 @@ export function rememberCard(card: string): Space {
 }
 
 async function x25519(): Promise<{ publicRaw: Uint8Array; secret: JsonWebKey }> {
-  const pair = await crypto.subtle.generateKey({ name: "X25519" } as AlgorithmIdentifier, true, ["deriveBits"]);
+  const pair = (await crypto.subtle.generateKey({ name: "X25519" } as AlgorithmIdentifier, true, ["deriveBits"])) as CryptoKeyPair;
   const publicRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pair.publicKey));
   const secret = await crypto.subtle.exportKey("jwk", pair.privateKey);
   return { publicRaw, secret };
@@ -123,8 +123,8 @@ async function signWithWallet(text: string): Promise<Uint8Array> {
 
 export async function verifyArm(owner: string, members: [string, string], nonce: string, arm: Arm): Promise<boolean> {
   const text = signText(members, nonce, arm.x25519);
-  const key = await crypto.subtle.importKey("raw", new PublicKey(owner).toBytes(), { name: "Ed25519" } as AlgorithmIdentifier, false, ["verify"]);
-  return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, b64(arm.sig), new TextEncoder().encode(text));
+  const key = await crypto.subtle.importKey("raw", new PublicKey(owner).toBytes() as BufferSource, { name: "Ed25519" } as AlgorithmIdentifier, false, ["verify"]);
+  return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, b64(arm.sig) as BufferSource, new TextEncoder().encode(text));
 }
 
 /** Opens the room as this wallet. Stores the secret here. Returns the public card. */
@@ -165,7 +165,7 @@ async function roomKey(id: string, me: string, space: Space): Promise<CryptoKey>
   const theirOk = await verifyArm(other as string, space.members, space.nonce, their);
   if (!mineOk || !theirOk) throw new Error("A key in this room does not match the wallet that signed it.");
   const priv = await crypto.subtle.importKey("jwk", mine.secret, { name: "X25519" } as AlgorithmIdentifier, false, ["deriveBits"]);
-  const pub = await crypto.subtle.importKey("raw", unhex(their.x25519), { name: "X25519" } as AlgorithmIdentifier, false, []);
+  const pub = await crypto.subtle.importKey("raw", unhex(their.x25519) as BufferSource, { name: "X25519" } as AlgorithmIdentifier, false, []);
   const bits = await crypto.subtle.deriveBits({ name: "X25519", public: pub } as AlgorithmIdentifier, priv, 256);
   const aes = await crypto.subtle.digest("SHA-256", bits);
   return crypto.subtle.importKey("raw", aes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
@@ -205,7 +205,7 @@ export async function readNote(id: string, me: string, event: SpaceEvent): Promi
   const space = loadSpace(id);
   if (!space) throw new Error("No room.");
   const key = await roomKey(id, pubkey(me), space);
-  const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(event.iv) }, key, b64(event.box));
+  const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64(event.iv) as BufferSource }, key, b64(event.box) as BufferSource);
   const parsed = JSON.parse(new TextDecoder().decode(clear)) as { text?: string };
   return parsed.text || "";
 }

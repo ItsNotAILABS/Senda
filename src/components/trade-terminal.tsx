@@ -4,7 +4,6 @@ import { Sparkles } from "lucide-react";
 import { FillButton } from "@/components/fill-button";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { getPrint, type PrintBar } from "@/lib/print";
-import { CandleChart } from "@/components/price-chart";
 import { askTrade, type TradeSetup } from "@/lib/trade-assist";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
@@ -22,6 +21,7 @@ export function TradeTerminal({
   onArmed,
   onSide,
   positions,
+  focus = "all",
 }: {
   names: HouseListing[];
   under: HouseListing | null;
@@ -31,8 +31,9 @@ export function TradeTerminal({
   onArmed: (n: number) => void;
   onSide: (s: "buy" | "sell") => void;
   positions: { id: string; symbol: string; shares: number; cost: number; last: number }[];
+  focus?: "all" | "ticket" | "book";
 }) {
-  const [tab, setTab] = useState<"markets" | "book" | "depth">("markets");
+  const [tab, setTab] = useState<"markets" | "book" | "depth">(focus === "book" ? "book" : "markets");
   const [asks, setAsks] = useState<Level[]>([]);
   const [bids, setBids] = useState<Level[]>([]);
   const [bookNote, setBookNote] = useState("Asking Jupiter…");
@@ -160,47 +161,44 @@ export function TradeTerminal({
   }
 
   return (
-    <section className="mx-3 mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0e13]">
-      <header className="flex flex-wrap items-center gap-4 border-b border-white/10 px-4 py-3">
-        <div>
-          <p className="text-[11px] text-subtle">Last</p>
-          <p className={cn("font-mono text-lg tabular-nums", down ? "text-[#ff5d73]" : "text-[#3dd68c]")}>
-            {under ? formatUsd(under.last) : "—"} {down ? "↓" : "↑"}
-          </p>
+    <section className="mx-3 mt-3 overflow-hidden rounded-[28px] bg-[#101114]">
+      <header className="px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm text-white/50">{under ? `${under.symbol} · ${under.name}` : "Pick a name"}</p>
+            <p className={cn("mt-1 font-mono text-4xl tracking-tight tabular-nums", down ? "text-[#ff5d73]" : "text-white")}>
+              {under ? formatUsd(under.last) : "—"}
+            </p>
+            <p className="mt-1 font-mono text-sm text-white/55">
+              {under?.change24h == null ? "No 24h" : `${under.change24h >= 0 ? "+" : ""}${(under.change24h * 100).toFixed(2)}%`}
+              <span className="text-white/35"> · mark {under ? formatPremium(under.premium) : "—"}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAskOpen(true);
+              const line = `Draft a long on ${under?.symbol || "this name"} from the live print.`;
+              setQ(line);
+              void ask(line);
+            }}
+            className="inline-flex min-h-9 items-center gap-2 rounded-full bg-white/10 px-3 text-sm text-[#c9d4ff]"
+          >
+            <Sparkles className="size-3.5" />
+            Ask
+          </button>
         </div>
-        <div>
-          <p className="text-[11px] text-subtle">Vs mark</p>
-          <p className="font-mono text-sm tabular-nums">{under ? formatPremium(under.premium) : "—"}</p>
-        </div>
-        <div>
-          <p className="text-[11px] text-subtle">24h</p>
-          <p className="font-mono text-sm tabular-nums">
-            {under?.change24h == null ? "—" : `${(under.change24h * 100).toFixed(2)}%`}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAskOpen(true);
-            const line = `Draft a long on ${under?.symbol || "this name"} from the live print.`;
-            setQ(line);
-            void ask(line);
-          }}
-          className="ml-auto inline-flex min-h-9 items-center gap-2 rounded-full border border-white/10 px-3 text-sm text-[#c9d4ff]"
-        >
-          <Sparkles className="size-3.5" />
-          Ask about {under?.symbol || "the print"}
-        </button>
       </header>
 
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+      <div className={cn("flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2", focus === "ticket" && "hidden")}>
         <p className="text-[11px] tracking-wide text-subtle uppercase">{names.length} live names</p>
         <Link to="/equities" className="text-[12px] text-[#9eb6ff]">
           Listed shares
         </Link>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+      <div className={cn("grid", focus === "all" && "lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]", focus === "book" && "lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]")}>
+        {focus === "ticket" ? null : (
         <div className="border-white/10 lg:border-r">
           <div className="flex items-center gap-4 px-4 pt-3 text-sm">
             {(["markets", "book", "depth"] as const).map((id) => (
@@ -245,7 +243,9 @@ export function TradeTerminal({
           ) : null}
           {tab === "depth" ? <DepthBars asks={asks} bids={bids} /> : null}
         </div>
+        )}
 
+        {focus === "book" ? null : (
         <div className="flex min-h-[520px] flex-col bg-[#10131a]">
           <div className="flex items-center gap-1 border-b border-white/10 px-3 py-2">
             {(["15m", "1H", "4H", "1D"] as const).map((id) => (
@@ -263,7 +263,7 @@ export function TradeTerminal({
             ))}
             <span className="ml-auto font-mono text-[11px] text-subtle">{printNote}</span>
           </div>
-          <CandleChart symbol={under?.symbol ?? ""} bars={bars} note={printNote} tf={tf} className="min-h-[360px]" />
+          <PrintChart symbol={under?.symbol ?? ""} bars={bars} note={printNote} tf={tf} />
           <div className="grid gap-3 border-t border-white/10 p-3 sm:grid-cols-[minmax(0,1fr)_200px]">
             <div>
               <div className="grid grid-cols-2 gap-1">
@@ -284,6 +284,11 @@ export function TradeTerminal({
               </div>
               <label className="mt-2 block text-[11px] text-subtle">
                 Size, USDC
+                <div className="mt-1 flex gap-1">
+                  {[1, 5, 25, 100].map((n) => (
+                    <button key={n} type="button" onClick={() => onArmed(n)} className={cn("min-h-8 flex-1 rounded-full font-mono text-[11px]", armed === n ? "bg-white text-black" : "bg-white/10 text-white/70")}>${n}</button>
+                  ))}
+                </div>
                 <input
                   inputMode="decimal"
                   value={armed ? String(armed) : ""}
@@ -368,8 +373,10 @@ export function TradeTerminal({
             </div>
           ) : null}
         </div>
+        )}
       </div>
 
+      {focus === "all" ? (
       <div className="overflow-x-auto border-t border-white/10">
         <table className="w-full min-w-[640px] text-left text-xs">
           <thead className="text-subtle">
@@ -413,7 +420,81 @@ export function TradeTerminal({
           </tbody>
         </table>
       </div>
+      ) : null}
     </section>
+  );
+}
+
+function PrintChart({
+  symbol,
+  bars,
+  note,
+  tf,
+}: {
+  symbol: string;
+  bars: { t: number; o: number; h: number; l: number; c: number; v: number }[];
+  note: string;
+  tf: string;
+}) {
+  if (bars.length < 2) {
+    return <div className="grid min-h-[360px] flex-1 place-items-center px-6 text-center text-sm text-muted">{note || "No pool candles."}</div>;
+  }
+  const w = 860;
+  const h = 420;
+  const padL = 8;
+  const padR = 72;
+  const padT = 16;
+  const volH = 64;
+  const padB = 22;
+  const chartH = h - padT - volH - padB;
+  const hi = Math.max(...bars.map((b) => b.h));
+  const lo = Math.min(...bars.map((b) => b.l));
+  const span = hi - lo || hi * 0.01;
+  const maxVol = Math.max(1, ...bars.map((b) => b.v));
+  const innerW = w - padL - padR;
+  const slot = innerW / bars.length;
+  const y = (price: number) => padT + ((hi - price) / span) * chartH;
+  const ticks = [hi, hi - span / 2, lo];
+  const up = bars[bars.length - 1].c >= bars[0].o;
+  const fmt = (price: number) => (price >= 100 ? price.toFixed(2) : price.toFixed(4));
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="min-h-[360px] w-full flex-1" role="img" aria-label={`${symbol} pool candles`}>
+      {ticks.map((price) => (
+        <g key={price}>
+          <line x1={padL} x2={w - padR} y1={y(price)} y2={y(price)} stroke="#ffffff" strokeOpacity="0.08" />
+          <text x={w - padR + 8} y={y(price) + 4} fill="#9aa3b5" fontSize="11" fontFamily="ui-monospace, monospace">
+            {fmt(price)}
+          </text>
+        </g>
+      ))}
+      {bars.map((b, i) => {
+        const x = padL + i * slot + slot / 2;
+        const green = b.c >= b.o;
+        const color = green ? "#3dd68c" : "#ff5d73";
+        const top = y(Math.max(b.o, b.c));
+        const bot = y(Math.min(b.o, b.c));
+        const body = Math.max(1, bot - top);
+        const bw = Math.max(2.2, slot * 0.62);
+        return (
+          <g key={b.t}>
+            <line x1={x} x2={x} y1={y(b.h)} y2={y(b.l)} stroke={color} strokeWidth="1" />
+            <rect x={x - bw / 2} y={top} width={bw} height={body} fill={color} />
+            <rect
+              x={x - bw / 2}
+              y={padT + chartH + 8 + (1 - b.v / maxVol) * (volH - 10)}
+              width={bw}
+              height={(b.v / maxVol) * (volH - 10)}
+              fill={color}
+              opacity="0.4"
+            />
+          </g>
+        );
+      })}
+      <text x={padL} y={h - 4} fill="#9aa3b5" fontSize="11" fontFamily="ui-monospace, monospace">
+        {symbol} · {tf} · {bars.length} candles · {up ? "up" : "down"} over the window
+      </text>
+    </svg>
   );
 }
 

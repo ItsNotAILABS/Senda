@@ -29,13 +29,13 @@ function bytesOf(value: string): Uint8Array {
 async function verify(owner: string, message: string, signature: string): Promise<boolean> {
   const key = await crypto.subtle.importKey(
     "raw",
-    bytesOf(owner),
+    bytesOf(owner) as BufferSource,
     { name: "Ed25519" } as AlgorithmIdentifier,
     false,
     ["verify"],
   );
   const raw = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
-  return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, raw, new TextEncoder().encode(message));
+  return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, raw as BufferSource, new TextEncoder().encode(message));
 }
 
 async function granted(owner: string, proof: string): Promise<boolean> {

@@ -102,14 +102,6 @@
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
 
-@keyframes senda-tape {
-  from { transform: translateX(0); }
-  to { transform: translateX(-50%); }
-}
-.tape-scroll { animation: senda-tape 96s linear infinite; }
-.tape-scroll:hover,
-.tape-scroll:focus-within { animation-play-state: paused; }
-
 /* Content type only. The side column is outside this box, so it stays as it is.
    Phone and laptop use the same steps. A wider window does not jump back to poster size. */
 .senda-stage .text-xs { font-size: 11px; line-height: 1.35; }
@@ -139,4 +131,33 @@
 }
 @media (min-width: 80rem) {
   .senda-stage .xl\:text-6xl { font-size: 32px; line-height: 1.05; }
+}
+
+
+.agent-input {
+  min-height: 2.75rem;
+  width: 100%;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 0.035);
+  padding-inline: 0.875rem;
+  color: var(--color-fg);
+  font-size: 0.8125rem;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.agent-input::placeholder {
+  color: rgb(255 255 255 / 0.25);
+}
+.agent-input:focus {
+  border-color: rgb(214 255 74 / 0.42);
+  background: rgb(214 255 74 / 0.035);
+  box-shadow: 0 0 0 3px rgb(214 255 74 / 0.06);
+}
+textarea.agent-input {
+  resize: vertical;
+}
+select.agent-input option {
+  background: #11131b;
+  color: #f5f7fb;
 }

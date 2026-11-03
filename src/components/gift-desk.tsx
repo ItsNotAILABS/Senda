@@ -1,112 +1,145 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { GIFT_WINDOWS, readGiftHash } from "@/lib/gift-link.mjs";
-import { claimGift, fundGift, loadGifts, reclaimGift, type HeldGift } from "@/lib/gift-vault";
 import { connectPhantom } from "@/lib/phantom";
+import { fundGift, giftLink, loadGifts, markGift, newGift, saveGift, secretBytes, sweepGift, type GiftRecord } from "@/lib/gift-vault";
+import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+
+const WINDOWS = [
+  { hours: 1, label: "1 hour" },
+  { hours: 24, label: "1 day" },
+  { hours: 24 * 7, label: "7 days" },
+  { hours: 24 * 30, label: "30 days" },
+];
 
 export function GiftDesk() {
+  const wallet = useWallet();
   const [usd, setUsd] = useState("25");
+  const [memo, setMemo] = useState("");
   const [hours, setHours] = useState(24);
-  const [held, setHeld] = useState<HeldGift[]>([]);
   const [link, setLink] = useState("");
-  const [incoming, setIncoming] = useState<ReturnType<typeof readGiftHash>>(null);
   const [busy, setBusy] = useState(false);
+  const [rows, setRows] = useState<GiftRecord[]>([]);
 
-  useEffect(() => {
-    setHeld(loadGifts());
-    setIncoming(readGiftHash(window.location.hash));
-  }, []);
+  useEffect(() => setRows(loadGifts()), []);
 
-  async function fund() {
+  async function create() {
+    const amount = Number(usd);
+    if (!(amount > 0)) {
+      toast.error("Enter dollars.");
+      return;
+    }
     setBusy(true);
     try {
-      const owner = await connectPhantom();
-      const gift = await fundGift({ owner, usd: Number(usd), hours });
-      setLink(gift.link);
-      setHeld(loadGifts());
-      toast.success("The vault is funded. Send the link.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The gift did not fund.");
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      const made = newGift(amount, memo, hours);
+      const sig = await fundGift({ owner, vault: made.record.pubkey, usd: amount, memo: made.record.memo });
+      saveGift(made.record);
+      setRows(loadGifts());
+      const absolute = `${window.location.origin}${made.link}`;
+      setLink(absolute);
+      try {
+        await navigator.clipboard.writeText(absolute);
+      } catch {
+        /* the field still holds it */
+      }
+      toast.success(`Vault funded. ${sig.slice(0, 8)}… Link copied.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The gift did not fund.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function claim() {
-    if (!incoming) return;
+  async function reclaim(row: GiftRecord) {
     setBusy(true);
     try {
-      const to = await connectPhantom();
-      const signature = await claimGift({ secret: incoming.secret, expiresAt: incoming.expiresAt, to, usd: incoming.usd });
-      toast.success(`Claimed. ${signature.slice(0, 8)}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The claim did not send.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function reclaim(gift: HeldGift) {
-    setBusy(true);
-    try {
-      const to = await connectPhantom();
-      const signature = await reclaimGift({ secret: gift.secret, to, usd: gift.usd });
-      toast.success(`Reclaimed. ${signature.slice(0, 8)}`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The reclaim did not send.");
+      const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address || (await connectPhantom());
+      const sig = await sweepGift({ secret: secretBytes(row.secret), to: owner });
+      markGift(row.pubkey, "reclaimed");
+      setRows(loadGifts());
+      toast.success(`USDC returned. ${sig.slice(0, 8)}…`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Reclaim did not send.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted">
-        One link. You fund a vault from your wallet, and the gift key pays the network fee. The window is 1 hour, 1 day, or 7 days. The recipient connects a Solana wallet and claims. This page will not claim after the window, and you can reclaim what is left. The link is the vault key. It stays in the address hash and this tab. Senda does not hold it.
+    <div className="px-4 py-4">
+      <h1 className="text-2xl tracking-tight">Gift</h1>
+      <p className="mt-1 max-w-xl text-sm text-muted">
+        One link. You fund a fresh vault with USDC, plus a little SOL so the recipient pays no fee. The secret stays in the link and in this browser. Senda never holds it. The clock is this page, not a program — anyone who has the link can still move the USDC.
       </p>
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-end">
-        <label className="block">
-          <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">USDC</span>
-          <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none" />
-        </label>
-        <div className="flex gap-2">
-          {GIFT_WINDOWS.map((window) => (
-            <button key={window.id} type="button" onClick={() => setHours(window.hours)} className={hours === window.hours ? "min-h-12 rounded-full bg-accent px-3 text-sm font-semibold text-accent-fg" : "min-h-12 rounded-full bg-white/10 px-3 text-sm"}>
-              {window.label}
-            </button>
-          ))}
-        </div>
-        <button type="button" disabled={busy} onClick={() => void fund()} className="min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-40">
-          Fund a gift
-        </button>
+      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_1fr]">
+        <input
+          inputMode="decimal"
+          value={usd}
+          onChange={(e) => setUsd(e.target.value)}
+          placeholder="USDC"
+          className="min-h-12 rounded-2xl bg-elevated px-4 font-mono text-lg outline-none"
+        />
+        <input
+          value={memo}
+          onChange={(e) => setMemo(e.target.value)}
+          placeholder="Note, optional"
+          maxLength={80}
+          className="min-h-12 rounded-2xl bg-elevated px-4 text-sm outline-none"
+        />
       </div>
-      {link ? (
-        <p className="break-all font-mono text-xs text-muted">
-          {link}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {WINDOWS.map((w) => (
           <button
+            key={w.hours}
             type="button"
-            className="ml-2 text-accent"
-            onClick={() => void navigator.clipboard.writeText(link).then(() => toast.success("Link copied."))}
+            onClick={() => setHours(w.hours)}
+            className={hours === w.hours ? "min-h-10 rounded-full bg-fg px-4 text-xs font-semibold text-bg" : "min-h-10 rounded-full bg-elevated px-4 text-xs font-semibold text-muted"}
           >
-            Copy
+            {w.label}
           </button>
-        </p>
+        ))}
+      </div>
+      <button type="button" disabled={busy} onClick={() => void create()} className="mt-4 min-h-12 w-full rounded-full bg-fg text-sm font-semibold text-bg disabled:opacity-50">
+        {busy ? "Waiting for the wallet…" : "Fund the vault and copy the link"}
+      </button>
+      {link ? (
+        <p className="mt-3 break-all rounded-2xl bg-elevated px-4 py-3 font-mono text-[11px] text-subtle">{link}</p>
       ) : null}
-      {incoming ? (
-        <button type="button" disabled={busy} onClick={() => void claim()} className="min-h-12 rounded-full bg-white px-5 text-sm font-semibold text-black disabled:opacity-40">
-          Claim ${incoming.usd.toFixed(2)} into this wallet
-        </button>
-      ) : null}
-      {held.length ? (
-        <ul className="space-y-2">
-          {held.map((gift) => (
-            <li key={gift.vault} className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 px-4 py-3">
-              <span className="font-mono text-xs text-muted">
-                ${gift.usd.toFixed(2)} · {gift.vault.slice(0, 4)}…{gift.vault.slice(-4)}
-              </span>
-              <button type="button" disabled={busy} onClick={() => void reclaim(gift)} className="text-sm font-semibold text-accent">
-                Reclaim
-              </button>
+      {rows.length > 0 ? (
+        <ul className="mt-6 space-y-2">
+          {rows.map((row) => (
+            <li key={row.pubkey} className="rounded-2xl border border-white/10 px-4 py-3">
+              <p className="text-sm font-semibold">
+                ${row.usd.toFixed(2)} · {row.status}
+              </p>
+              <p className="mt-1 font-mono text-[11px] text-subtle">
+                {row.pubkey.slice(0, 6)}…{row.pubkey.slice(-4)} · until {new Date(row.expiresAt).toLocaleString()}
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="min-h-10 rounded-full bg-elevated px-4 text-xs font-semibold"
+                  onClick={() => {
+                    const absolute = `${window.location.origin}${giftLink(secretBytes(row.secret), row.expiresAt, row.usd, row.memo)}`;
+                    void navigator.clipboard.writeText(absolute).then(
+                      () => toast.success("Link copied."),
+                      () => toast.error(absolute),
+                    );
+                  }}
+                >
+                  Copy link
+                </button>
+                {row.status === "open" ? (
+                  <button type="button" disabled={busy} onClick={() => void reclaim(row)} className="min-h-10 rounded-full bg-fg px-4 text-xs font-semibold text-bg">
+                    Reclaim
+                  </button>
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

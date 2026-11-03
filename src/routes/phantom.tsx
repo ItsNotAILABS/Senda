@@ -1,20 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PhantomLane } from "@/components/wallet-lanes";
-import { VaultDesk } from "@/components/vault-desk";
-import { getHouse } from "@/lib/sol-house";
+import { PhantomAccount } from "@/components/phantom-account";
 
 export const Route = createFileRoute("/phantom")({
-  loader: () => getHouse(),
-  component: PhantomPage,
+  component: Page,
 });
 
-function PhantomPage() {
-  const house = Route.useLoaderData();
+function Page() {
   return (
     <AppShell>
-      <PhantomLane />
-      <VaultDesk names={house.filter((h) => h.venue === "prestocks")} />
+      <PhantomAccount />
     </AppShell>
   );
 }

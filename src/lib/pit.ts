@@ -9,11 +9,9 @@ import {
   quoteSpend,
   type Side,
 } from "@/lib/lmsr";
-import { chipCut } from "@/lib/engine";
 import {
   buyInLegs,
   cashOutLegs,
-  feeLegs,
   isFrozen,
   round2,
   tradeLegs,
@@ -775,8 +773,7 @@ export const trade = createServerFn({ method: "POST" })
       return { ok: false, error: message };
     }
 
-    const cut = chipCut(quote.cost);
-    const charge = cut.gross;
+    const charge = Math.max(1, Math.round(quote.cost));
     const userId = context.userId;
     const signedIn = Boolean(userId);
     const bookUser = userId ?? GUEST_USER_ID;
@@ -789,7 +786,7 @@ export const trade = createServerFn({ method: "POST" })
     }
 
     const ref = newRef(`trade:${data.marketId}:${side}`, bookUser);
-    const legs = [...tradeLegs(side, cut.net, quote.shares, ref), ...feeLegs(cut.fee, ref)];
+    const legs = tradeLegs(side, charge, quote.shares, ref);
 
     await sql`
       update market_state

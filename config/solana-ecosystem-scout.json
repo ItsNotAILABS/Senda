@@ -1,0 +1,96 @@
+{
+  "schema": "senda.ecosystem.scout.v1",
+  "policy": "Research candidates only; no auto-trading, no adding token mints without verified registry, no wallet signing, no unapproved deployment",
+  "candidates": [
+    {
+      "id": "jupiter-v2",
+      "name": "Jupiter Swap V2",
+      "lane": "execution",
+      "priority": "P0",
+      "url": "https://developers.jup.ag/docs/swap",
+      "reason": "Meta-aggregator /order and /execute, venue selection and RFQ",
+      "integration": "candidate",
+      "approval": "wallet-signature and fill confirmation"
+    },
+    {
+      "id": "circle-cctp",
+      "name": "Circle CCTP",
+      "lane": "cross-chain-usdc",
+      "priority": "P1",
+      "url": "https://developers.circle.com/cctp",
+      "reason": "Native USDC cross-chain transfers; destination support/fees/attestation required",
+      "integration": "candidate",
+      "approval": "chain and recipient allowlists"
+    },
+    {
+      "id": "solana-payments",
+      "name": "Solana Payments",
+      "lane": "stablecoin-payments",
+      "priority": "P0",
+      "url": "https://solana.com/docs/payments/how-payments-work",
+      "reason": "USDC USDT PYUSD USDG verified mints and token accounts",
+      "integration": "candidate",
+      "approval": "verified mints and issuer risk"
+    },
+    {
+      "id": "raydium",
+      "name": "Raydium",
+      "lane": "amm-liquidity",
+      "priority": "P1",
+      "url": "https://docs.raydium.io/",
+      "reason": "Direct pool depth and spot AMM liquidity checks",
+      "integration": "candidate",
+      "approval": "route quote comparison and pool verification"
+    },
+    {
+      "id": "orca",
+      "name": "Orca",
+      "lane": "amm-liquidity",
+      "priority": "P1",
+      "url": "https://docs.orca.so/",
+      "reason": "Whirlpool liquidity and price impact",
+      "integration": "candidate",
+      "approval": "independent quoter and execution tests"
+    },
+    {
+      "id": "meteora",
+      "name": "Meteora",
+      "lane": "amm-liquidity",
+      "priority": "P1",
+      "url": "https://docs.meteora.ag/",
+      "reason": "Dynamic liquidity pools and token discovery",
+      "integration": "candidate",
+      "approval": "pool age/TVL/liquidity and token-program checks"
+    },
+    {
+      "id": "dflow",
+      "name": "DFlow",
+      "lane": "rfq-liquidity",
+      "priority": "P1",
+      "url": "https://docs.dflow.net/",
+      "reason": "Quote provider comparison, avoid Jupiter double counting",
+      "integration": "candidate",
+      "approval": "commercial access and rate limits"
+    },
+    {
+      "id": "solana-agent-kit",
+      "name": "Solana Agent Kit",
+      "lane": "agent-tools",
+      "priority": "P1",
+      "url": "https://github.com/sendaifun/solana-agent-kit",
+      "reason": "Tool discovery with bounded read-only agent scopes",
+      "integration": "candidate",
+      "approval": "read/execute separation and audits"
+    },
+    {
+      "id": "solana-mcp",
+      "name": "Solana Foundation MCP",
+      "lane": "agent-discovery",
+      "priority": "P1",
+      "url": "https://github.com/solana-foundation/solana-mcp",
+      "reason": "Protocol documentation source inventory",
+      "integration": "candidate",
+      "approval": "no runtime auto-install"
+    }
+  ]
+}

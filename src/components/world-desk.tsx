@@ -1,224 +1,503 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { LiveChart } from "@/components/price-chart";
-import { WORLD, worldPrices, type WorldAsset, type WorldLane, type WorldMark } from "@/lib/world-book";
-import { connectPhantom, mintDecimals } from "@/lib/phantom";
-import { signRoute, PAY, payAsset, payRaw } from "@/lib/jup-sign";
-import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { FillButton } from "@/components/fill-button";
+import { getPrint, type PrintBar } from "@/lib/print";
 import { cn } from "@/lib/utils";
+import { jupTape, worldBook, type TapeRow, type WorldLane, type WorldRow } from "@/lib/world-book";
 
-function px(asset: WorldAsset, mark?: WorldMark) {
-  if (!mark || !(mark.usd > 0)) return "—";
-  if (asset.lane === "fx") return mark.usd.toFixed(4);
-  if (mark.usd >= 1000) return `$${mark.usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  return `$${mark.usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+type LaneId = WorldLane | "tokens";
+
+const LANES: { id: LaneId | "all"; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "fx", label: "FX" },
+  { id: "metals", label: "Metals" },
+  { id: "energy", label: "Energy" },
+  { id: "softs", label: "Softs" },
+  { id: "index", label: "Index" },
+  { id: "crypto", label: "Crypto" },
+  { id: "shares", label: "Shares" },
+  { id: "tokens", label: "Tokens" },
+];
+
+const CHIPS = [1, 5, 25] as const;
+
+function digits(n: number): number {
+  const a = Math.abs(n);
+  if (a >= 100) return 2;
+  if (a >= 10) return 3;
+  if (a >= 1) return 5;
+  return 6;
 }
 
-export function WorldDesk({
-  lane,
-  onLane,
-  picked,
-  onPick,
-  marks,
-}: {
-  lane: WorldLane;
-  onLane: (lane: WorldLane) => void;
-  picked: string;
-  onPick: (id: string) => void;
-  marks: Record<string, WorldMark>;
-}) {
-  const rows = WORLD.filter((a) => a.lane === lane);
+function fmt(n: number | null | undefined, quote?: string): string {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const d = digits(n);
+  const body = n.toLocaleString("en-US", {
+    minimumFractionDigits: Math.min(2, d),
+    maximumFractionDigits: d,
+  });
+  if (!quote || quote === "USD") return `$${body}`;
+  return `${body} ${quote}`;
+}
+
+function basisBps(spot: number | null, mid: number | null): number | null {
+  if (spot == null || mid == null || !(spot > 0) || !(mid > 0)) return null;
+  return ((spot - mid) / mid) * 10000;
+}
+
+function CandleChart({ symbol, bars }: { symbol: string; bars: PrintBar[] }) {
+  const w = 720;
+  const h = 280;
+  const padL = 8;
+  const padR = 68;
+  const padT = 14;
+  const volH = 44;
+  const padB = 18;
+  const chartH = h - padT - volH - padB;
+  const hi = Math.max(...bars.map((b) => b.h));
+  const lo = Math.min(...bars.map((b) => b.l));
+  const span = hi - lo || Math.abs(hi) * 0.01 || 1;
+  const maxVol = Math.max(1, ...bars.map((b) => b.v));
+  const slot = (w - padL - padR) / bars.length;
+  const y = (price: number) => padT + ((hi - price) / span) * chartH;
+  const ticks = [hi, hi - span / 2, lo];
+  const up = bars[bars.length - 1].c >= bars[0].o;
+
   return (
-    <div className="p-3 sm:p-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Book</p>
-          <p className="mt-1 max-w-xl text-sm text-muted">
-            Buy it and it stays in the wallet. Bitcoin and Ether come through Portal. Gold is the ounce. Euro is the rate.
-          </p>
-        </div>
-        <div className="flex gap-1">
-          {(
-            [
-              ["crypto", "Crypto"],
-              ["metals", "Metals"],
-              ["fx", "FX"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => onLane(id)}
-              className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", lane === id ? "bg-white text-black" : "bg-black/40 text-muted")}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="font-mono text-[10px] tracking-[0.14em] text-subtle uppercase">
-            <tr>
-              <th className="px-2 py-2 font-medium">Name</th>
-              <th className="px-2 py-2 font-medium">From</th>
-              <th className="px-2 py-2 font-medium">Door</th>
-              <th className="px-2 py-2 text-right font-medium">Last</th>
-              <th className="px-2 py-2 text-right font-medium">24h</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const mark = marks[row.id];
-              const on = row.id === picked;
-              return (
-                <tr
-                  key={row.id}
-                  onClick={() => onPick(row.id)}
-                  className={cn("cursor-pointer border-t border-white/8", on ? "bg-white/8" : "hover:bg-white/5")}
-                >
-                  <td className="px-2 py-3">
-                    <span className="font-semibold">{row.symbol}</span>
-                    <span className="ml-2 text-muted">{row.name}</span>
-                  </td>
-                  <td className="px-2 py-3 text-muted">{row.chain}</td>
-                  <td className="px-2 py-3 text-muted">{row.via}</td>
-                  <td className="px-2 py-3 text-right font-mono tabular-nums">{px(row, mark)}</td>
-                  <td className={cn("px-2 py-3 text-right font-mono tabular-nums", (mark?.chg ?? 0) < 0 ? "text-down" : "text-accent")}>
-                    {mark ? `${mark.chg >= 0 ? "+" : ""}${mark.chg.toFixed(2)}%` : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {lane === "fx" ? (
-        <p className="mt-3 text-xs text-subtle">Pound, yen, and peso are not on a book that can be filled from here. Euro is.</p>
-      ) : null}
-    </div>
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className="h-64 w-full"
+      role="img"
+      aria-label={`${symbol} pool candles`}
+    >
+      {ticks.map((price) => (
+        <g key={price}>
+          <line
+            x1={padL}
+            x2={w - padR}
+            y1={y(price)}
+            y2={y(price)}
+            stroke="#ffffff"
+            strokeOpacity="0.08"
+          />
+          <text
+            x={w - padR + 8}
+            y={y(price) + 4}
+            fill="#9aa3b5"
+            fontSize="11"
+            fontFamily="ui-monospace, monospace"
+          >
+            {price >= 100 ? price.toFixed(2) : price >= 1 ? price.toFixed(4) : price.toPrecision(3)}
+          </text>
+        </g>
+      ))}
+      {bars.map((b, i) => {
+        const x = padL + i * slot + slot / 2;
+        const color = b.c >= b.o ? "#3dd68c" : "#ff5d73";
+        const top = y(Math.max(b.o, b.c));
+        const bot = y(Math.min(b.o, b.c));
+        const bw = Math.max(2, slot * 0.62);
+        return (
+          <g key={b.t}>
+            <line x1={x} x2={x} y1={y(b.h)} y2={y(b.l)} stroke={color} strokeWidth="1" />
+            <rect x={x - bw / 2} y={top} width={bw} height={Math.max(1, bot - top)} fill={color} />
+            <rect
+              x={x - bw / 2}
+              y={padT + chartH + 8 + (1 - b.v / maxVol) * (volH - 8)}
+              width={bw}
+              height={(b.v / maxVol) * (volH - 8)}
+              fill={color}
+              opacity="0.4"
+            />
+          </g>
+        );
+      })}
+      <text x={padL} y={h - 4} fill="#9aa3b5" fontSize="11" fontFamily="ui-monospace, monospace">
+        {symbol} · 1H · {bars.length} candles · {up ? "up" : "down"} over the window
+      </text>
+    </svg>
   );
 }
 
-/** Spot gold, silver, copper, and the other wallet tokens. Jupiter fills them. */
-export function SpotCards({ lane, only }: { lane: WorldLane | "all"; only?: string[] }) {
-  const wallet = useWallet();
-  const rows = (lane === "all" ? WORLD : WORLD.filter((asset) => asset.lane === lane)).filter((asset) => !only || only.includes(asset.id));
-  const [marks, setMarks] = useState<Record<string, WorldMark>>({});
-  const [usd, setUsd] = useState(25);
-  const [pay, setPay] = useState("USDC");
-  const [busy, setBusy] = useState("");
-  const [pick, setPick] = useState("");
-  const open = rows.find((asset) => asset.id === pick) ?? rows[0];
+export function WorldDesk({ start }: { start?: LaneId | "all" | "comms" }) {
+  const [lane, setLane] = useState<LaneId | "all" | "comms">(
+    start ?? (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("lane") === "energy" ? "energy" : "all"),
+  );
+  const [pick, setPick] = useState("EUR-USD");
+  const [usd, setUsd] = useState<number>(5);
+  const [book, setBook] = useState<WorldRow[]>([]);
+  const [tape, setTape] = useState<TapeRow[]>([]);
+  const [tapeReady, setTapeReady] = useState(false);
+  const [note, setNote] = useState("Loading the prints…");
+  const [bars, setBars] = useState<PrintBar[]>([]);
+  const [barMint, setBarMint] = useState("");
+  const [barNote, setBarNote] = useState("");
+  const [barsReady, setBarsReady] = useState(false);
+
   useEffect(() => {
     let live = true;
-    const pull = () => {
-      worldPrices()
-        .then((next) => live && setMarks(next))
-        .catch(() => undefined);
+    const pullBook = () => {
+      worldBook()
+        .then((rows) => {
+          if (!live) return;
+          setBook((prev) => (rows.some((r) => r.mid != null) || prev.length === 0 ? rows : prev));
+          setNote("");
+        })
+        .catch(() => {
+          if (live) setNote("The prints did not load.");
+        });
     };
-    pull();
-    const id = window.setInterval(pull, 8_000);
+    const pullTape = () => {
+      jupTape()
+        .then((rows) => {
+          if (!live) return;
+          setTape(rows);
+          setTapeReady(true);
+        })
+        .catch(() => {
+          if (!live) return;
+          setTape([]);
+          setTapeReady(true);
+        });
+    };
+    pullBook();
+    pullTape();
+    const bookId = window.setInterval(pullBook, 15_000);
+    const tapeId = window.setInterval(pullTape, 60_000);
     return () => {
       live = false;
-      window.clearInterval(id);
+      window.clearInterval(bookId);
+      window.clearInterval(tapeId);
     };
   }, []);
 
-  async function buy(asset: WorldAsset) {
-    setBusy(asset.id);
-    try {
-      const existing = wallet.w.links.find((link) => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
-      const owner = existing || (await connectPhantom());
-      if (!existing) {
-        const kept = wallet.linkChain(owner, "Phantom", "phantom");
-        if (!kept.ok && kept.error !== "Already linked.") throw new Error(kept.error || "The wallet did not stay.");
-      }
-      const paying = payAsset(pay);
-      if (asset.mint === paying.mint) throw new Error(`That is already ${paying.symbol}. Pick another asset to pay with.`);
-      const dec = await mintDecimals(asset.mint);
-      const mark = marks[asset.id]?.usd ?? 0;
-      const done = await signRoute({
-        owner,
-        inputMint: paying.mint,
-        outputMint: asset.mint,
-        amountRaw: payRaw(paying.symbol, usd, marks.sol?.usd || 0),
-        outDecimals: dec,
-        usd,
-        symbol: asset.symbol,
-        extraMints: [paying.mint],
-      });
-      toast.success(`${asset.symbol} signed. ${done.signature.slice(0, 8)}…`);
-      if (!(mark > 0)) toast.message(`${asset.symbol} is in the wallet after the swap confirms.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The swap did not send.");
-    } finally {
-      setBusy("");
+  useEffect(() => {
+    if (lane === "tokens") {
+      if (tape.length && !tape.some((t) => t.id === pick)) setPick(tape[0].id);
+      return;
     }
-  }
+    const rows = lane === "all" ? book : lane === "comms" ? book.filter((r) => r.lane === "metals" || r.lane === "energy" || r.lane === "softs") : book.filter((r) => r.lane === lane);
+    if (rows.length && !rows.some((r) => r.id === pick)) setPick(rows[0].id);
+  }, [lane, book, tape, pick]);
+
+  const row =
+    lane === "tokens" ? null : (book.find((r) => (lane === "all" || (lane === "comms" && (r.lane === "metals" || r.lane === "energy" || r.lane === "softs")) || r.lane === lane) && r.id === pick) ?? null);
+  const token = lane === "tokens" ? (tape.find((t) => t.id === pick) ?? null) : null;
+  const mint = token?.id || row?.hold?.mint || "";
+
+  useEffect(() => {
+    if (mint.length < 32) {
+      setBars([]);
+      setBarMint("");
+      setBarNote("");
+      setBarsReady(false);
+      return;
+    }
+    let live = true;
+    setBarsReady(false);
+    setBarNote("Loading the pool…");
+    void getPrint({ data: { mint, tf: "1H" } })
+      .then((r) => {
+        if (!live) return;
+        setBars(r.bars);
+        setBarMint(mint);
+        setBarNote(r.note);
+        setBarsReady(true);
+      })
+      .catch(() => {
+        if (!live) return;
+        setBars([]);
+        setBarMint(mint);
+        setBarNote("The print did not load.");
+        setBarsReady(true);
+      });
+    return () => {
+      live = false;
+    };
+  }, [mint]);
+
+  const laneRows = book.filter((r) => r.lane === lane);
+  const bps = row ? basisBps(row.spot, row.mid) : null;
+  const tradeSymbol = token?.symbol || row?.hold?.symbol || "";
+  const tradePrice = token
+    ? token.price != null && token.price > 0
+      ? token.price
+      : undefined
+    : row?.spot != null && row.spot > 0
+      ? row.spot
+      : row?.mid != null && row.mid > 0
+        ? row.mid
+        : undefined;
+  const canSign = Boolean(mint && tradeSymbol);
+  const down = token ? (token.change ?? 0) < 0 : false;
+  const liveBars = barsReady && barMint === mint ? bars : [];
 
   return (
-    <section className="px-3 py-3">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[11px] tracking-[0.14em] text-white/40 uppercase">{lane === "metals" ? "Spot metal" : "Spot"}</p>
-          <p className="mt-1 text-sm text-white/55">Held in the wallet. Not the perpetual.</p>
-        </div>
-        <div className="flex gap-1">
-          {[5, 25, 100].map((n) => (
-            <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-8 rounded-md px-2 text-xs", usd === n ? "bg-white text-black" : "bg-white/5 text-white/60")}>
-              ${n}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mt-2 flex gap-1 overflow-x-auto">
-        {PAY.map((row) => (
-          <button key={row.symbol} type="button" onClick={() => setPay(row.symbol)} className={cn("min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold", pay === row.symbol ? "bg-white text-black" : "bg-white/5 text-white/60")}>
-            {row.symbol}
+    <section className="mx-3 mt-3 mb-6 overflow-hidden rounded-[28px] bg-[#101114]">
+      <div className="flex gap-1.5 overflow-x-auto px-4 pt-4 pb-2">
+        {LANES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setLane(item.id)}
+            className={cn(
+              "min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold",
+              lane === item.id ? "bg-white text-black" : "bg-white/10 text-white/70",
+            )}
+          >
+            {item.label}
           </button>
         ))}
       </div>
-      {open ? (
-        <div className="mt-3 overflow-hidden rounded-2xl bg-black/40">
-          <p className="px-3 pt-3 text-sm font-semibold">{open.symbol} · {open.name}</p>
-          <LiveChart mint={open.mint} symbol={open.symbol} live={marks[open.id]?.usd} />
-        </div>
-      ) : null}
-      <ul className="mt-3 grid gap-2">
-        {rows.map((asset) => {
-          const mark = marks[asset.id];
-          const last = mark && mark.usd > 0 ? (mark.usd >= 1000 ? `$${mark.usd.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${mark.usd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) : "—";
-          return (
-            <li key={asset.id} className={cn("rounded-2xl border bg-[#12141a] px-3 py-3", asset.id === open?.id ? "border-[#d7e36a]" : "border-white/10")}>
-              <button type="button" onClick={() => setPick(asset.id)} className="flex w-full items-start gap-3 text-left">
-                <img
-                  src={`https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/${asset.mint}/logo.png`}
-                  alt=""
-                  className="size-9 shrink-0 rounded-full bg-white object-contain"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold">{asset.symbol}</p>
-                  <p className="truncate text-xs text-white/45">{asset.name} · {asset.via}</p>
-                  <p className="mt-1 text-xs text-white/35">{asset.note}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-mono text-sm tabular-nums">{last}</p>
-                  <p className={cn("font-mono text-[11px]", (mark?.chg ?? 0) < 0 ? "text-[#ff5d73]" : "text-[#3dd68c]")}>
-                    {mark ? `${mark.chg >= 0 ? "+" : ""}${mark.chg.toFixed(2)}%` : ""}
-                  </p>
-                </div>
-              </button>
-              <button type="button" disabled={busy !== ""} onClick={() => void buy(asset)} className="mt-3 min-h-10 w-full rounded-xl bg-[#d7e36a] text-sm font-semibold text-black disabled:opacity-50">
-                {busy === asset.id ? "Signing" : `Buy $${usd} · ${pay}`}
-              </button>
+
+      <div className="grid lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)]">
+        <ul className="order-2 max-h-[640px] overflow-auto border-white/10 lg:order-1 lg:border-r">
+          {lane === "tokens"
+            ? tape.map((t) => {
+                const on = token?.id === t.id;
+                const chg = t.change;
+                return (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPick(t.id)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-4 py-2.5 text-left",
+                        on ? "bg-white/8" : "hover:bg-white/5",
+                      )}
+                    >
+                      <span className="min-w-0 flex-1 truncate font-mono text-xs font-semibold">
+                        {t.symbol}
+                      </span>
+                      <span className="font-mono text-xs tabular-nums">{fmt(t.price)}</span>
+                      <span
+                        className={cn(
+                          "w-16 text-right font-mono text-[11px] tabular-nums",
+                          (chg ?? 0) < 0 ? "text-[#ff8fa0]" : "text-[#3dd68c]",
+                        )}
+                      >
+                        {chg == null ? "—" : `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%`}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })
+            : lane === "all" || lane === "comms"
+              ? (
+                  (lane === "comms"
+                    ? [
+                        ["metals", "Metals"],
+                        ["energy", "Energy"],
+                        ["softs", "Softs"],
+                      ]
+                    : [
+                        ["fx", "FX"],
+                        ["metals", "Metals"],
+                        ["energy", "Energy"],
+                        ["softs", "Softs"],
+                        ["index", "Index"],
+                        ["crypto", "Crypto"],
+                        ["shares", "Shares"],
+                      ]) as readonly (readonly [WorldLane, string])[]
+                ).map(([id, label]) => {
+                  const rows = book.filter((r) => r.lane === id);
+                  if (!rows.length) return null;
+                  return (
+                    <li key={id}>
+                      <p className="px-4 pt-3 text-[11px] tracking-[0.14em] text-white/40 uppercase">{label}</p>
+                      <ul>
+                        {rows.map((r) => {
+                          const on = row?.id === r.id;
+                          return (
+                            <li key={r.id}>
+                              <button type="button" onClick={() => { setLane("all"); setPick(r.id); }} className={cn("flex w-full items-center gap-2 px-4 py-2.5 text-left", on ? "bg-white/8" : "hover:bg-white/5")}>
+                                <span className={cn("size-1.5 shrink-0 rounded-full", r.open ? "bg-[#3dd68c]" : "bg-white/25")} />
+                                <span className="w-20 truncate font-mono text-xs font-semibold">{r.base}</span>
+                                <span className="ml-auto font-mono text-xs tabular-nums">{fmt(r.mid, r.quote)}</span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </li>
+                  );
+                })
+              : laneRows.map((r) => {
+                const on = row?.id === r.id;
+                return (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      onClick={() => setPick(r.id)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-4 py-2.5 text-left",
+                        on ? "bg-white/8" : "hover:bg-white/5",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          r.open ? "bg-[#3dd68c]" : "bg-white/25",
+                        )}
+                      />
+                      <span className="w-20 truncate font-mono text-xs font-semibold">
+                        {r.base}
+                      </span>
+                      <span className="ml-auto font-mono text-xs tabular-nums">
+                        {fmt(r.mid, r.quote)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+          {lane === "tokens" && tape.length === 0 ? (
+            <li className="px-4 py-8 text-sm text-white/45">
+              {tapeReady ? "Jupiter did not return a tape." : "Loading the tape…"}
             </li>
-          );
-        })}
-      </ul>
+          ) : null}
+          {lane !== "tokens" && laneRows.length === 0 ? (
+            <li className="px-4 py-8 text-sm text-white/45">{note || "Loading the prints…"}</li>
+          ) : null}
+        </ul>
+
+        <div className="order-1 flex min-h-[520px] min-w-0 flex-col bg-[#10131a] lg:order-2">
+          <header className="px-4 py-4">
+            {token ? (
+              <>
+                <p className="text-sm text-white/50">
+                  {token.symbol} · {token.name}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 font-mono text-4xl tracking-tight tabular-nums",
+                    down ? "text-[#ff5d73]" : "text-white",
+                  )}
+                >
+                  {fmt(token.price)}
+                </p>
+                <p className="mt-1 font-mono text-sm text-white/55">
+                  {token.change == null
+                    ? "No 24h"
+                    : `${token.change >= 0 ? "+" : ""}${token.change.toFixed(2)}%`}
+                  <span className="text-white/35"> · Jupiter</span>
+                </p>
+              </>
+            ) : row ? (
+              <>
+                <p className="text-sm text-white/50">
+                  {row.base} · {row.id}
+                  {row.open === false ? " · Closed" : row.open ? " · Open" : ""}
+                </p>
+                <p className="mt-1 font-mono text-4xl tracking-tight text-white tabular-nums">
+                  {fmt(row.mid, row.quote)}
+                </p>
+                <p className="mt-1 font-mono text-sm text-white/55">
+                  Bid {fmt(row.bid, row.quote)}
+                  <span className="text-white/35"> · </span>
+                  Ask {fmt(row.ask, row.quote)}
+                  {bps != null ? (
+                    <span className="text-white/70">
+                      {" "}
+                      · hold vs print {bps >= 0 ? "+" : ""}
+                      {bps.toFixed(1)} bps
+                    </span>
+                  ) : null}
+                </p>
+                {row.hold ? (
+                  <p className="mt-2 max-w-md text-sm text-white/50">{row.hold.note}</p>
+                ) : null}
+                {row.hold && row.spot != null ? (
+                  <p className="mt-1 font-mono text-xs text-white/45">
+                    {row.hold.symbol} {fmt(row.spot)}
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="text-sm text-white/50">{note || "Pick a name"}</p>
+            )}
+            {lane === "shares" && row && !row.hold ? (
+              <p className="mt-2 max-w-md text-sm text-white/50">
+                Ostium print. No Solana token for this name yet.
+              </p>
+            ) : null}
+          </header>
+
+          <div className="flex min-h-64 flex-1 flex-col border-t border-white/10">
+            {lane === "tokens" && !token ? (
+              <div className="grid min-h-64 flex-1 place-items-center px-6 text-center text-sm text-white/50">
+                {tapeReady ? "Jupiter did not return a tape." : "Loading the tape…"}
+              </div>
+            ) : !token && !row ? (
+              <div className="grid min-h-64 flex-1 place-items-center px-6 text-center text-sm text-white/50">
+                {note || "Loading the prints…"}
+              </div>
+            ) : mint ? (
+              liveBars.length ? (
+                <CandleChart symbol={tradeSymbol || row?.base || ""} bars={liveBars} />
+              ) : (
+                <div className="grid min-h-64 flex-1 place-items-center px-6 text-center text-sm text-white/50">
+                  {barsReady && barMint === mint
+                    ? barNote || "The pool returned no candles."
+                    : "Loading the pool…"}
+                </div>
+              )
+            ) : (
+              <div className="grid min-h-64 flex-1 place-items-center px-6 text-center text-sm text-white/50">
+                No Solana pool, so no candle. Bid and ask are the print.
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-white/10 p-3">
+            <div className="flex gap-1">
+              {CHIPS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setUsd(n)}
+                  className={cn(
+                    "min-h-8 flex-1 rounded-full font-mono text-[11px]",
+                    usd === n ? "bg-white text-black" : "bg-white/10 text-white/70",
+                  )}
+                >
+                  ${n}
+                </button>
+              ))}
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {canSign ? (
+                <>
+                  <FillButton
+                    mint={mint}
+                    usd={usd}
+                    side="buy"
+                    price={tradePrice}
+                    symbol={tradeSymbol}
+                    label={`Buy $${usd}`}
+                    className="min-h-11 w-full rounded-md bg-[#3dd68c] text-sm font-semibold text-black"
+                  />
+                  <FillButton
+                    mint={mint}
+                    usd={usd}
+                    side="sell"
+                    price={tradePrice}
+                    symbol={tradeSymbol}
+                    label={`Sell $${usd}`}
+                    className="min-h-11 w-full rounded-md bg-[#e23b4a] text-sm font-semibold text-white"
+                  />
+                </>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="col-span-2 min-h-11 w-full rounded-md bg-white/10 text-sm font-semibold text-white/40"
+                >
+                  {lane === "tokens" && !tapeReady ? "Loading the tape…" : "No token to sign"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

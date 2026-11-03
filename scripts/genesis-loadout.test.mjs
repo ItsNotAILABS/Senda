@@ -1,0 +1,6 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {equipGenesisLoadout,loadGenesisLoadout} from "../src/lib/genesis-loadout.mjs";
+const owner="6".repeat(44);const mem=()=>{const m=new Map();return {getItem:k=>m.get(k)||null,setItem:(k,v)=>m.set(k,v)};};
+test("verified ownership enables persisted gear and code capabilities",()=>{const st=mem(),owned=["sen","raven-wing","signal-matrix"];equipGenesisLoadout(st,{owner,characterId:"sen",gear:"raven-wing",code:"signal-matrix",verifiedIds:owned});assert.deepEqual(loadGenesisLoadout(st,owner,"sen",owned),{gear:"raven-wing",code:"signal-matrix"});});
+test("copied browser state never grants utility after ownership disappears",()=>{const st=mem();const owned=["sen","raven-wing","signal-matrix"];equipGenesisLoadout(st,{owner,characterId:"sen",gear:"raven-wing",code:"signal-matrix",verifiedIds:owned});assert.deepEqual(loadGenesisLoadout(st,owner,"sen",["sen"]),{gear:null,code:null});});
+test("does not equip an unminted, unverified or different-character NFT",()=>{const st=mem();assert.throws(()=>equipGenesisLoadout(st,{owner,characterId:"sen",gear:"raven-wing",code:null,verifiedIds:[]}));assert.throws(()=>equipGenesisLoadout(st,{owner,characterId:"sen",gear:"fox-mask",code:null,verifiedIds:["sen","fox-mask"]}));});

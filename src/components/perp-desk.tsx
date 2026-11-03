@@ -1,372 +1,313 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { noteAct, setIntent } from "@/lib/book";
-import { closePerp, fundingRate, loadPerps, openPerp, perpPnl, type PerpPos } from "@/lib/perp";
-import { connectPhantom, sendVersioned, splHolding } from "@/lib/phantom";
-import { runPrestock } from "@/lib/prestock";
 import {
-  JUP_PERPS,
-  jupPerpBook,
-  jupPerpClose,
-  jupPerpOpen,
-  jupPerpPositions,
-  type JupAsset,
-  type JupPerpMarket,
-  type JupPosition,
+  PERP_MARKETS,
+  connectPerpWallet,
+  loadPerpBook,
+  loadPerpPositions,
+  quoteClose,
+  quoteIncrease,
+  signPerpRequest,
+  type PerpAsset,
+  type PerpPool,
+  type PerpPosition,
+  type PerpQuote,
+  type PerpStats,
 } from "@/lib/jup-perps";
-import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
-import { PerpBooks } from "@/components/perp-books";
-import { LiveChart } from "@/components/price-chart";
-import { useWalletCtx as useWallet } from "@/lib/wallet-context";
-import { formatMoney } from "@/lib/wallet";
+import { spendCap } from "@/lib/spend-cap";
 import { cn } from "@/lib/utils";
 
-export function PerpDesk({
-  house,
-}: {
-  house: HouseListing[];
-  cash?: number;
-  onDebit?: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
-  onCredit?: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
-}) {
-  const names = house.filter((h) => h.venue === "prestocks");
-  const wallet = useWallet();
-  const [stockId, setStockId] = useState(names[0]?.id ?? "");
-  const [raw, setRaw] = useState("");
-  const [rows, setRows] = useState(loadPerps);
-  const [busy, setBusy] = useState(false);
-  const [asset, setAsset] = useState<JupAsset>("SOL");
-  const [markets, setMarkets] = useState<JupPerpMarket[]>([]);
-  const [lev, setLev] = useState(2);
-  const [margin, setMargin] = useState(10);
-  const [livePos, setLivePos] = useState<JupPosition[]>([]);
-  const notional = Number(raw) || 0;
-  const stock = names.find((n) => n.id === stockId) ?? names[0];
-  const fund = fundingRate(stock?.premium ?? 0);
+const LEVS = [2, 5, 10, 20] as const;
 
-  async function ownerOf() {
-    const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-    const owner = existing || (await connectPhantom());
-    if (!existing) {
-      const linked = wallet.linkChain(owner, "Phantom", "phantom");
-      if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
-    }
-    return owner;
-  }
+type Book = { stats: PerpStats; pool: PerpPool };
+
+function money(n: number, digits = 2): string {
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: digits, minimumFractionDigits: digits });
+}
+
+export function PerpDesk() {
+  const [asset, setAsset] = useState<PerpAsset>("SOL");
+  const [books, setBooks] = useState<Partial<Record<PerpAsset, Book>>>({});
+  const [bookError, setBookError] = useState("");
+  const [owner, setOwner] = useState("");
+  const [collateral, setCollateral] = useState(50);
+  const [lev, setLev] = useState(5);
+  const [busy, setBusy] = useState("");
+  const [draft, setDraft] = useState<PerpQuote | null>(null);
+  const [positions, setPositions] = useState<PerpPosition[]>([]);
+  const market = PERP_MARKETS.find((m) => m.asset === asset) ?? PERP_MARKETS[0];
+  const book = books[asset];
 
   useEffect(() => {
     let live = true;
-    const pull = () =>
-      jupPerpBook()
-        .then((rows) => live && setMarkets(rows))
+    void Promise.all(
+      PERP_MARKETS.map(async (m) => {
+        const row = await loadPerpBook(m.mint);
+        return [m.asset, row] as const;
+      }),
+    )
+      .then((rows) => {
+        if (!live) return;
+        const next: Partial<Record<PerpAsset, Book>> = {};
+        for (const [k, v] of rows) next[k] = v;
+        setBooks(next);
+        setBookError("");
+      })
+      .catch((e: unknown) => {
+        if (live) setBookError(e instanceof Error ? e.message : "The perp book did not load.");
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!owner) return;
+    let live = true;
+    const pull = () => {
+      void loadPerpPositions(owner)
+        .then((rows) => {
+          if (live) setPositions(rows);
+        })
         .catch(() => undefined);
-    void pull();
+    };
+    pull();
     const id = window.setInterval(pull, 15_000);
     return () => {
       live = false;
       window.clearInterval(id);
     };
-  }, []);
+  }, [owner]);
 
   useEffect(() => {
-    const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-    if (!owner) return;
-    let live = true;
-    jupPerpPositions({ data: { owner } })
-      .then((rows) => live && setLivePos(rows))
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [wallet.w.links, busy]);
+    setDraft(null);
+  }, [asset, collateral, lev]);
 
-  async function signBuilt(b64: string) {
-    const { Buffer } = await import("buffer");
-    if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-    const { VersionedTransaction } = await import("@solana/web3.js");
-    const tx = VersionedTransaction.deserialize(Buffer.from(b64, "base64"));
-    return sendVersioned(tx);
+  async function wallet(): Promise<string> {
+    if (owner) return owner;
+    const addr = await connectPerpWallet();
+    setOwner(addr);
+    return addr;
   }
 
-  async function openLev(side: "long" | "short") {
-    if (margin < 10) {
-      toast.error("Jupiter wants at least $10 of USDC collateral.");
-      return;
-    }
-    setBusy(true);
+  async function review(side: "long" | "short") {
+    setBusy(side);
     try {
-      const owner = await ownerOf();
-      const built = await jupPerpOpen({ data: { owner, asset, side, collateral: margin, leverage: lev } });
-      const sig = await signBuilt(built.tx);
-      noteAct({
-        kind: "swap",
-        title: `${side} ${asset}-USD ${lev}x`,
-        detail: `$${margin.toFixed(0)} collateral · Jupiter Perps`,
-        signature: sig,
+      const cap = spendCap();
+      if (collateral > cap) throw new Error(`Collateral is $${collateral.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
+      const who = await wallet();
+      const q = await quoteIncrease({
+        walletAddress: who,
+        asset,
+        collateralUsd: collateral,
+        leverage: lev,
+        side,
       });
-      const next = await jupPerpPositions({ data: { owner } }).catch(() => livePos);
-      setLivePos(next);
-      toast.success(`${asset}-USD ${side} ${lev}x. ${sig.slice(0, 8)}…`);
+      setDraft(q);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The position did not send.");
+      toast.error(e instanceof Error ? e.message : "Jupiter did not quote.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
-  async function closeLev(position: string, label: string) {
-    setBusy(true);
+  async function signOpen() {
+    if (!draft) return;
+    setBusy("sign");
     try {
-      const built = await jupPerpClose({ data: { position } });
-      const sig = await signBuilt(built.tx);
-      noteAct({ kind: "swap", title: `Close ${label}`, detail: "Jupiter Perps", signature: sig });
-      const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-      if (owner) setLivePos(await jupPerpPositions({ data: { owner } }).catch(() => []));
-      toast.success(`Closed. ${sig.slice(0, 8)}…`);
+      const sig = await signPerpRequest(draft.tx, "increase-position");
+      toast.success(`Request signed. ${sig.slice(0, 8)}… Jupiter’s keeper fills it.`);
+      setDraft(null);
+      if (owner) setPositions(await loadPerpPositions(owner));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The close did not send.");
+      toast.error(e instanceof Error ? e.message : "The wallet did not sign.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
-  const market = markets.find((m) => m.asset === asset) ?? markets[0];
-  const levSize = margin * lev;
-
-  async function open(side: "long" | "short") {
-    if (!stock || !(notional >= 0.5)) {
-      toast.error("Enter at least $0.50.");
-      return;
-    }
-    setBusy(true);
+  async function close(p: PerpPosition) {
+    setBusy(p.pubkey);
     try {
-      const owner = await ownerOf();
-      setIntent("trade");
-      if (side === "short") {
-        const held = await splHolding(owner, stock.mint);
-        const worth = held.ui * stock.last;
-        if (worth + 0.01 < notional) {
-          throw new Error(`A short sells ${stock.symbol} already in this wallet. You hold about $${worth.toFixed(2)}.`);
-        }
-      }
-      const done = await runPrestock({
-        owner,
-        mint: stock.mint,
-        side: side === "long" ? "buy" : "sell",
-        usd: notional,
-        price: stock.last,
-      });
-      setRows(openPerp(rows, stock.id, stock.symbol, side, notional, stock.last));
-      toast.success(`${side === "long" ? "Bought" : "Sold"} ${stock.symbol}. ${done.signature.slice(0, 8)}…`);
+      await wallet();
+      const tx = await quoteClose(p.pubkey);
+      const sig = await signPerpRequest(tx, "decrease-position");
+      toast.success(`Close signed. ${sig.slice(0, 8)}…`);
+      if (owner) setPositions(await loadPerpPositions(owner));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The position did not send.");
+      toast.error(e instanceof Error ? e.message : "The close did not sign.");
     } finally {
-      setBusy(false);
+      setBusy("");
     }
   }
 
-  async function close(p: PerpPos) {
-    const name = names.find((n) => n.id === p.stockId);
-    const last = name?.last ?? p.entry;
-    if (!name) return;
-    setBusy(true);
-    try {
-      const owner = await ownerOf();
-      setIntent("trade");
-      const done = await runPrestock({
-        owner,
-        mint: name.mint,
-        side: p.side === "long" ? "sell" : "buy",
-        usd: p.notional,
-        price: last,
-      });
-      const pnl = perpPnl(p, last);
-      setRows(closePerp(rows, p.id));
-      toast.success(`Closed ${p.symbol}. ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} vs entry. ${done.signature.slice(0, 8)}…`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The close did not send.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const size = collateral * lev;
 
   return (
-    <div className="px-4 pb-8">
-      <div className="pt-3">
-        <PerpBooks />
-      </div>
-      {stock ? (
-        <div className="pt-6">
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {names.slice(0, 8).map((n) => (
-              <button key={n.id} type="button" onClick={() => setStockId(n.id)} className={cn("min-w-[132px] shrink-0 rounded-2xl px-3 py-2 text-left", n.id === stock.id ? "bg-white/10" : "bg-black/20")}>
-                <span className="block text-xs font-semibold">{n.symbol}</span>
-                <span className="font-mono text-sm">{formatUsd(n.last)}</span>
-                <span className={cn("block font-mono text-[11px]", (n.change24h ?? 0) < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>{formatPremium(n.change24h)}</span>
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-[11px] tracking-[0.14em] text-white/40">{stock.symbol} · POOL · 1H</p>
-          <p className="font-mono text-3xl text-[#d7e36a]">{formatUsd(stock.last)}</p>
-          <LiveChart mint={stock.mint} symbol={stock.symbol} live={stock.last} />
-        </div>
-      ) : null}
-      <p className="pt-3 text-sm text-muted">
-        SOL, ETH, and BTC are Jupiter perps. Collateral is USDC. The slider sets leverage, 1.1× to 20×. Phantom signs. A name below is the token itself, at 1×.
-      </p>
-      <div className="mt-3 flex gap-2 overflow-x-auto">
-        {(["SOL", "ETH", "BTC"] as const).map((id) => {
-          const row = markets.find((m) => m.asset === id);
+    <div>
+      <header className="mb-4">
+        <h1 className="text-2xl tracking-tight">Perps</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted">
+          SOL, ETH, and BTC against Jupiter’s pool. Collateral is USDC in your wallet. You sign the request. Their keeper fills it. Senda never holds the position. PreStock names are not on this book. Those are tokens. Buy them on the ticket.
+        </p>
+      </header>
+
+      {bookError ? <p className="mb-3 text-sm text-down">{bookError}</p> : null}
+
+      <div className="grid gap-2 sm:grid-cols-3">
+        {PERP_MARKETS.map((m) => {
+          const row = books[m.asset];
+          const on = m.asset === asset;
+          const chg = row?.stats.change24h ?? 0;
           return (
             <button
-              key={id}
+              key={m.asset}
               type="button"
-              onClick={() => setAsset(id)}
-              className={cn("min-h-12 shrink-0 rounded-full px-4 text-left", asset === id ? "bg-white text-black" : "bg-black/40")}
+              onClick={() => setAsset(m.asset)}
+              className={cn("rounded-2xl border px-4 py-3 text-left", on ? "border-white/30 bg-white/10" : "border-white/10 bg-[#10131c]")}
             >
-              <span className="block text-sm font-semibold">{id}-USD</span>
-              <span className="block font-mono text-[11px]">{row?.price ? `$${row.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : "—"}</span>
+              <p className="text-sm font-semibold">{m.asset}-PERP</p>
+              <p className="mt-1 font-mono text-lg tabular-nums">{row ? money(row.stats.price, row.stats.price >= 1000 ? 0 : 2) : "…"}</p>
+              <p className={cn("font-mono text-xs", chg < 0 ? "text-[#ff8fa0]" : "text-[#3dd68c]")}>
+                {row ? `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%` : ""}
+              </p>
             </button>
           );
         })}
       </div>
-      {(() => {
-        const mint = JUP_PERPS.find((p) => p.asset === asset)?.mint ?? "";
-        return mint ? (
-          <div className="mt-3">
-            <LiveChart mint={mint} symbol={`${asset}-USD`} live={market?.price ?? undefined} />
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="rounded-2xl border border-white/10 bg-[#10131c] p-4">
+          <p className="font-mono text-[11px] tracking-wide text-subtle uppercase">{market.name}</p>
+          <p className="mt-1 font-mono text-4xl tabular-nums">{book ? money(book.stats.price, book.stats.price >= 1000 ? 1 : 2) : "—"}</p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+            <Stat k="24h volume" v={book ? money(book.stats.volume, 0) : "—"} />
+            <Stat k="High" v={book ? money(book.stats.high, 2) : "—"} />
+            <Stat k="Low" v={book ? money(book.stats.low, 2) : "—"} />
+            <Stat k="Long borrow" v={book ? `${book.pool.longBorrow.toFixed(4)}%` : "—"} />
+            <Stat k="Short borrow" v={book ? `${book.pool.shortBorrow.toFixed(4)}%` : "—"} />
+            <Stat k="Open fee" v={book ? `${book.pool.openFee.toFixed(2)}%` : "—"} />
+          </dl>
+          <p className="mt-3 text-xs text-subtle">
+            Long liquidity {book ? money(book.pool.longLiquidity, 0) : "—"}. Short liquidity {book ? money(book.pool.shortLiquidity, 0) : "—"}.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-[#10131c] p-4">
+          <p className="text-[11px] text-subtle">USDC collateral</p>
+          <input
+            inputMode="decimal"
+            value={collateral ? String(collateral) : ""}
+            onChange={(e) => setCollateral(Math.max(0, Number(e.target.value) || 0))}
+            className="mt-1 min-h-12 w-full rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-lg outline-none"
+          />
+          <div className="mt-2 flex gap-1">
+            {[20, 50, 100, 250].map((n) => (
+              <button key={n} type="button" onClick={() => setCollateral(n)} className={cn("min-h-8 flex-1 rounded-full text-xs", collateral === n ? "bg-white/15" : "bg-black/30 text-muted")}>
+                ${n}
+              </button>
+            ))}
           </div>
-        ) : null;
-      })()}
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <p className="font-mono text-3xl tabular-nums">${levSize.toFixed(0)}</p>
-        <p className="text-right text-xs text-subtle">
-          ${margin} margin
-          <span className="block">{lev.toFixed(1)}×</span>
-        </p>
-      </div>
-      <div className="mt-3 flex gap-2">
-        {[10, 25, 50, 100].map((n) => (
-          <button key={n} type="button" onClick={() => setMargin(n)} className={cn("min-h-9 flex-1 rounded-full font-mono text-xs", margin === n ? "bg-accent text-accent-fg" : "border border-white/10")}>
-            ${n}
+          <p className="mt-4 text-[11px] text-subtle">Leverage</p>
+          <div className="mt-1 flex gap-1">
+            {LEVS.map((n) => (
+              <button key={n} type="button" onClick={() => setLev(n)} className={cn("min-h-9 flex-1 rounded-full text-sm font-semibold", lev === n ? "bg-accent text-accent-fg" : "bg-black/30 text-muted")}>
+                {n}×
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 font-mono text-sm">Size about {money(size, 0)}. Cap on this desk is 50×.</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button type="button" disabled={!!busy} onClick={() => void review("long")} className="min-h-11 rounded-full bg-[#3dd68c] text-sm font-semibold text-black disabled:opacity-40">
+              {busy === "long" ? "…" : "Review long"}
+            </button>
+            <button type="button" disabled={!!busy} onClick={() => void review("short")} className="min-h-11 rounded-full bg-[#ff5d73] text-sm font-semibold text-white disabled:opacity-40">
+              {busy === "short" ? "…" : "Review short"}
+            </button>
+          </div>
+          {!owner ? (
+            <button type="button" onClick={() => void wallet().catch((e: unknown) => toast.error(e instanceof Error ? e.message : "No wallet."))} className="mt-3 text-xs text-muted">
+              Connect the wallet that holds the USDC
+            </button>
+          ) : (
+            <p className="mt-3 font-mono text-[11px] text-subtle">{owner.slice(0, 4)}…{owner.slice(-4)}</p>
+          )}
+        </div>
+      </section>
+
+      {draft ? (
+        <section className="mt-4 rounded-2xl border border-white/15 bg-[#141820] p-4">
+          <p className="text-sm font-semibold">
+            {draft.side === "long" ? "Long" : "Short"} {asset}-PERP · {draft.leverage.toFixed(1)}×
+          </p>
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-5">
+            <Stat k="Entry" v={money(draft.entry, draft.entry >= 1000 ? 1 : 2)} />
+            <Stat k="Size" v={money(draft.sizeUsd, 2)} />
+            <Stat k="Collateral" v={money(draft.collateralUsd, 2)} />
+            <Stat k="Open fee" v={money(draft.feeUsd, 2)} />
+            <Stat k="Liquidation" v={money(draft.liq, draft.liq >= 1000 ? 1 : 2)} />
+          </dl>
+          <p className="mt-3 text-xs text-muted">This quote is the request, not the fill. The keeper has about 45 seconds. If it expires, review again.</p>
+          <button type="button" disabled={!!busy} onClick={() => void signOpen()} className="mt-3 min-h-11 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-40">
+            {busy === "sign" ? "Waiting for the wallet…" : `Sign ${draft.side}`}
           </button>
-        ))}
-      </div>
-      <label className="mt-3 block">
-        <span className="text-[11px] tracking-[0.14em] text-subtle">LEVERAGE {lev.toFixed(1)}×</span>
-        <input
-          type="range"
-          min={1.1}
-          max={20}
-          step={0.1}
-          value={lev}
-          onChange={(e) => setLev(Number(e.target.value))}
-          className="mt-2 w-full accent-white"
-        />
-      </label>
-      {market?.price ? (
-        <p className="mt-1 font-mono text-[11px] text-subtle">
-          About ${(market.price * (1 - 0.8 / lev)).toLocaleString("en-US", { maximumFractionDigits: 2 })} long liq · $
-          {(market.price * (1 + 0.8 / lev)).toLocaleString("en-US", { maximumFractionDigits: 2 })} short. Jupiter sets the real price.
-        </p>
+        </section>
       ) : null}
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" disabled={busy} onClick={() => void openLev("long")} className="min-h-12 rounded-full bg-up text-sm font-semibold text-up-fg disabled:opacity-50">
-          Long {asset}
-        </button>
-        <button type="button" disabled={busy} onClick={() => void openLev("short")} className="min-h-12 rounded-full bg-down text-sm font-semibold text-down-fg disabled:opacity-50">
-          Short {asset}
-        </button>
-      </div>
-      {livePos.length > 0 ? (
-        <ul className="mt-4 divide-y divide-border">
-          {livePos.map((p) => (
-            <li key={p.pubkey} className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm font-semibold">
-                  {p.asset}-USD {p.side} {p.leverage ? `${p.leverage.toFixed(1)}×` : ""}
-                </p>
-                <p className="font-mono text-xs text-subtle">
-                  ${p.size.toFixed(0)} · liq {p.liq ? p.liq.toFixed(2) : "—"}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className={cn("font-mono text-sm", p.pnl < 0 ? "text-down" : "text-up")}>
-                  {p.pnl >= 0 ? "+" : ""}
-                  {p.pnl.toFixed(2)}
-                </p>
-                <button type="button" disabled={busy} onClick={() => void closeLev(p.pubkey, `${p.asset}-USD`)} className="text-xs text-muted">
-                  Close
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <p className="mt-8 text-sm text-muted">
-        A name is the token, at 1×. Long buys it. Short sells tokens already in this wallet.
-      </p>
-      <select
-        value={stock?.id ?? ""}
-        onChange={(e) => setStockId(e.target.value)}
-        className="mt-4 min-h-12 w-full rounded-2xl bg-elevated px-4 text-sm outline-none"
-      >
-        {names.map((n) => (
-          <option key={n.id} value={n.id}>
-            {n.symbol} · {formatUsd(n.last)} · {formatPremium(n.premium)} mark
-          </option>
-        ))}
-      </select>
-      {stock ? (
-        <p className="mt-2 font-mono text-xs text-subtle">
-          Funding {fund >= 0 ? "+" : ""}
-          {(fund * 100).toFixed(3)}% / h · mint {stock.mint.slice(0, 8)}…
-        </p>
-      ) : null}
-      <input
-        inputMode="decimal"
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        placeholder="Notional USD"
-        className="mt-3 min-h-12 w-full rounded-2xl bg-elevated px-4 font-mono text-lg outline-none"
-      />
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button type="button" disabled={busy} onClick={() => void open("long")} className="min-h-12 rounded-full bg-up text-sm font-semibold text-up-fg disabled:opacity-50">
-          Long
-        </button>
-        <button type="button" disabled={busy} onClick={() => void open("short")} className="min-h-12 rounded-full bg-down text-sm font-semibold text-down-fg disabled:opacity-50">
-          Short
-        </button>
-      </div>
-      {rows.length === 0 ? (
-        <p className="mt-6 text-sm text-subtle">No perps open.</p>
-      ) : (
-        <ul className="mt-6 divide-y divide-border">
-          {rows.map((p) => {
-            const last = names.find((n) => n.id === p.stockId)?.last ?? p.entry;
-            const pnl = perpPnl(p, last);
-            return (
-              <li key={p.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {p.symbol} {p.side}
-                  </p>
-                  <p className="font-mono text-xs text-subtle">{formatMoney(p.notional)} @ {formatUsd(p.entry)}</p>
-                </div>
-                <div className="text-right">
-                  <p className={cn("font-mono text-sm font-semibold", pnl < 0 ? "text-down" : "text-up")}>
-                    {pnl >= 0 ? "+" : ""}
-                    {pnl.toFixed(2)}
-                  </p>
-                  <button type="button" disabled={busy} onClick={() => void close(p)} className="text-xs text-muted disabled:opacity-50">
-                    Close
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+
+      <section className="mt-6">
+        <h2 className="text-sm font-semibold">Open on Jupiter</h2>
+        {positions.length === 0 ? (
+          <p className="mt-2 text-sm text-subtle">{owner ? "No open perp on this wallet." : "Connect a wallet to read positions."}</p>
+        ) : (
+          <div className="mt-2 overflow-x-auto rounded-2xl border border-white/10">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="text-[11px] text-subtle uppercase">
+                <tr>
+                  <th className="px-3 py-2 font-medium">Market</th>
+                  <th className="px-2 py-2 font-medium">Side</th>
+                  <th className="px-2 py-2 text-right font-medium">Size</th>
+                  <th className="px-2 py-2 text-right font-medium">Entry</th>
+                  <th className="px-2 py-2 text-right font-medium">Mark</th>
+                  <th className="px-2 py-2 text-right font-medium">Liq</th>
+                  <th className="px-2 py-2 text-right font-medium">PnL</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {positions.map((p) => (
+                  <tr key={p.pubkey} className="border-t border-white/10">
+                    <td className="px-3 py-2 font-mono text-xs font-semibold">{p.asset}-PERP</td>
+                    <td className="px-2 py-2 text-xs">{p.side} {p.leverage.toFixed(1)}×</td>
+                    <td className="px-2 py-2 text-right font-mono text-xs">{money(p.sizeUsd)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-xs">{money(p.entry)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-xs">{money(p.mark)}</td>
+                    <td className="px-2 py-2 text-right font-mono text-xs">{money(p.liq)}</td>
+                    <td className={cn("px-2 py-2 text-right font-mono text-xs", p.pnl < 0 ? "text-[#ff8fa0]" : "text-[#3dd68c]")}>
+                      {p.pnl >= 0 ? "+" : ""}
+                      {p.pnl.toFixed(2)}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button type="button" disabled={!!busy} onClick={() => void close(p)} className="text-xs text-muted disabled:opacity-40">
+                        {busy === p.pubkey ? "…" : "Close"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] text-subtle">{k}</dt>
+      <dd className="font-mono text-sm tabular-nums">{v}</dd>
     </div>
   );
 }

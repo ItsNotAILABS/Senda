@@ -1,17 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { MetaMaskLane } from "@/components/wallet-lanes";
-import { WalletsDesk } from "@/components/wallets-desk";
+import { BaseAccount } from "@/components/base-account";
 
 export const Route = createFileRoute("/metamask")({
-  component: MetaMaskPage,
+  component: Page,
 });
 
-function MetaMaskPage() {
+function Page() {
   return (
     <AppShell>
-      <MetaMaskLane />
-      <WalletsDesk />
+      <BaseAccount />
     </AppShell>
   );
 }

@@ -1,18 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { WorkDesk } from "@/components/work-desk";
-import { getHouse } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { WORK_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/work")({
-  loader: () => getHouse(),
-  component: WorkPage,
+  component: Layout,
 });
 
-function WorkPage() {
-  const names = Route.useLoaderData();
+function Layout() {
   return (
     <AppShell>
-      <WorkDesk names={names} />
+      <ProductShell title="Work" pages={WORK_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

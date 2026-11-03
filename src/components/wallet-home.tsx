@@ -231,7 +231,7 @@ export function WalletHome() {
         <section className="pb-5">
           <div className="flex items-baseline justify-between px-5 pb-2">
             <h2 className="text-sm font-medium text-muted">Cards</h2>
-            <Link to="/cards" search={{ spend: 0 }} className="text-sm text-muted">
+            <Link to="/cards" className="text-sm text-muted">
               All
             </Link>
           </div>

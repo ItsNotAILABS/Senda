@@ -1,23 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PaymentsDesk } from "@/components/payments-desk";
-
-type PaySearch = { act?: string; from?: string };
+import { ProductShell } from "@/components/product-shell";
+import { SEND_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/payments")({
-  validateSearch: (raw: Record<string, unknown>): PaySearch => {
-    const act = typeof raw.act === "string" ? raw.act : undefined;
-    const from = typeof raw.from === "string" ? raw.from : undefined;
-    return { ...(act ? { act } : {}), ...(from ? { from } : {}) };
-  },
-  component: PaymentsPage,
+  component: Layout,
 });
 
-function PaymentsPage() {
-  const { act, from } = Route.useSearch();
+function Layout() {
   return (
     <AppShell>
-      <PaymentsDesk initialAct={act} initialFrom={from} />
+      <ProductShell title="Send" pages={SEND_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

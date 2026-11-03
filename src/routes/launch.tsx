@@ -3,10 +3,10 @@ import { AppShell } from "@/components/app-shell";
 import { LaunchDesk } from "@/components/launch-desk";
 
 export const Route = createFileRoute("/launch")({
-  component: LaunchPage,
+  component: Page,
 });
 
-function LaunchPage() {
+function Page() {
   return (
     <AppShell>
       <LaunchDesk />

@@ -1,64 +1,25 @@
 /** Jupiter builds the swap. Phantom signs it. Senda never holds the key. */
 
 import { USDC } from "@/lib/jup-exec";
-import { CASH, USDT } from "@/lib/wallet-engine";
-import { currentIntent, noteAct, recordFill } from "@/lib/book";
-import { stageMove } from "@/lib/moves";
-import { PRESTOCK_MINTS, chainRpc, sendVersioned, splHolding } from "@/lib/phantom";
-import { waitForChainConfirmation } from "@/lib/confirmation-gate.mjs";
-import { spendCap } from "@/lib/spend-cap";
-import { pairAllowed } from "@/lib/trade-book.mjs";
+import { rpc as chainRpc, sendVersioned } from "@/lib/phantom";
 import { verifyStableSpend, verifySwapQuote } from "@/lib/quote-guard.mjs";
+import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
+import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
+import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
+import { spendCap } from "@/lib/spend-cap";
 
-const QUOTE = "https://api.jup.ag/swap/v1/quote";
-const SWAP = "https://api.jup.ag/swap/v1/swap";
+// Keep the quote and transaction builder on Jupiter's official gateway.
+// Lite shuts down October 30, 2026; do not send signed intents to unofficial proxy hosts.
+const QUOTE_URLS = [(qs: string) => `https://api.jup.ag/swap/v1/quote?${qs}`];
+const SWAP_URLS = ["https://api.jup.ag/swap/v1/swap"];
 
 export const SOL = "So11111111111111111111111111111111111111112";
-export const PYUSD = "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo";
 
-/** What a wallet can pay or receive. USDC stays the default. */
-export const PAY = [
-  { symbol: "USDC", mint: USDC, decimals: 6 },
-  { symbol: "SOL", mint: SOL, decimals: 9 },
-  { symbol: "CASH", mint: CASH, decimals: 6 },
-  { symbol: "USDT", mint: USDT, decimals: 6 },
-  { symbol: "PYUSD", mint: PYUSD, decimals: 6 },
-] as const;
-
-export function payAsset(symbol?: string) {
-  return PAY.find((row) => row.symbol === symbol) ?? PAY[0];
-}
-
-export function isPayMint(mint: string) {
-  return PAY.some((row) => row.mint === mint);
-}
-
-/** Dollar size into raw units. SOL needs a live dollar price. Stables are one dollar. */
-export function payRaw(symbol: string, usd: number, solUsd = 0) {
-  const pay = payAsset(symbol);
-  if (!(usd > 0)) return 0;
-  if (pay.symbol === "SOL") {
-    if (!(solUsd > 0)) throw new Error("SOL has no live price, so this size cannot be signed in SOL.");
-    return Math.max(1, Math.floor((usd / solUsd) * 10 ** pay.decimals));
-  }
-  return Math.max(1, Math.round(usd * 10 ** pay.decimals));
-}
-
-/** USDC, SOL, CASH, USDT, or PYUSD against any mint Jupiter can quote. Listed-to-listed still passes. */
-const TESSERA_MINTS = [
-  "TKLSidmLVt3cqGaaodG8tyRzoANfQwoh67AccjmubeZ",
-  "oPAiAikWTaFj9RYoRFD35ccfwhnMcB3ThgBZRHSkjTZ",
-  "TSPXcLV76s6V2zDiZQ18kBfcbnjaE2ZzNT3ga2Pd99v",
-];
-
-export function assertPrestockRoute(inputMint: string, outputMint: string, extraMints: string[] = []) {
-  const listed = PRESTOCK_MINTS.map(([, mint]) => mint);
-  const extra = [inputMint, outputMint].filter(
-    (mint) => /^Pre[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint) || TESSERA_MINTS.includes(mint),
-  );
-  if (!pairAllowed(inputMint, outputMint, [...listed, ...extra, ...extraMints])) {
-    throw new Error("That pair is not on this desk. The wallet was not asked to sign.");
-  }
+/** One side is USDC or SOL. The other side is the mint Jupiter quoted. */
+export function assertPrestockRoute(inputMint: string, outputMint: string) {
+  const cash = new Set([SOL, USDC]);
+  const ok = (cash.has(inputMint) && outputMint.length >= 32) || (cash.has(outputMint) && inputMint.length >= 32);
+  if (!ok) throw new Error("That pair is not USDC or SOL against a mint. The wallet was not asked to sign.");
 }
 
 export type RouteQuote = {
@@ -96,12 +57,12 @@ export async function quoteRoute(input: {
   amountRaw: number;
   outDecimals: number;
 }): Promise<RouteQuote> {
-  if (!Number.isSafeInteger(input.amountRaw) || input.amountRaw <= 0) throw new Error("Enter an exact, positive amount.");
+  if (!Number.isSafeInteger(input.amountRaw) || input.amountRaw <= 0) throw new Error("Enter an exact raw token amount.");
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter did not quote.";
-  for (const base of [QUOTE]) {
-    const res = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+  for (const url of QUOTE_URLS) {
+    const res = await fetch(url(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
     const text = await res.text();
     let quote: RawQuote = {};
     try {
@@ -118,7 +79,7 @@ export async function quoteRoute(input: {
     try {
       checked = verifySwapQuote(quote, input);
     } catch (error) {
-      last = error instanceof Error ? error.message : "Jupiter returned an invalid quote.";
+      last = error instanceof Error ? error.message : "Jupiter returned an unsafe quote.";
       continue;
     }
     return {
@@ -126,7 +87,7 @@ export async function quoteRoute(input: {
       outAmount: checked.outAmount,
       outUi: Number(checked.outAmount) / 10 ** input.outDecimals,
       minUi: Number(checked.minOutAmount) / 10 ** input.outDecimals,
-      impact: checked.impactPercent / 100,
+      impact: checked.impactPercent,
       route: (quote.routePlan ?? []).map((p) => p.swapInfo?.label).filter(Boolean).join(" → ") || "Jupiter",
     };
   }
@@ -140,44 +101,49 @@ export async function signRoute(input: {
   amountRaw: number;
   outDecimals: number;
   usd: number;
-  symbol?: string;
-  qty?: number;
-  extraMints?: string[];
 }): Promise<{ signature: string; outUi: number }> {
+  return withWalletExecutionLock(input.owner, async () => {
   if (!(input.usd > 0) || !Number.isFinite(input.usd)) throw new Error("Enter an amount.");
-  if (!Number.isSafeInteger(input.amountRaw) || input.amountRaw <= 0) throw new Error("Enter an exact, positive amount.");
+  if (!Number.isSafeInteger(input.amountRaw) || input.amountRaw <= 0) throw new Error("Enter an exact raw token amount.");
   if (!Number.isInteger(input.outDecimals) || input.outDecimals < 0 || input.outDecimals > 18) throw new Error("Invalid mint decimals.");
-  assertPrestockRoute(input.inputMint, input.outputMint, input.extraMints ?? []);
+  assertPrestockRoute(input.inputMint, input.outputMint);
   const cap = spendCap();
-  if (input.usd > cap) throw new Error(`That is about USD ${input.usd.toFixed(0)}. Your send cap is USD ${cap}. Raise it on Your money.`);
-  verifyStableSpend({ inputMint: input.inputMint, amountRaw: input.amountRaw, capUsd: cap, stableMints: [USDC, CASH, USDT, PYUSD] });
-  // The exact quote sent to Jupiter's swap builder must pass every guard.
-  // Never validate one quote and build the transaction from a second unchecked quote.
+  if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
+  verifyStableSpend({ inputMint: input.inputMint, amountRaw: input.amountRaw, capUsd: cap, stableMints: [USDC] });
+  const journalDraft = {
+    owner: input.owner,
+    kind: "swap" as const,
+    asset: input.inputMint,
+    destination: input.outputMint,
+    amountRaw: String(input.amountRaw),
+  };
+  // An unknown prior submission must be reconciled before the same action can be signed again.
+  assertNoPendingDuplicate(window.localStorage, journalDraft);
+  // Validate the SAME raw quote that will be passed to /swap, not a preview quote.
   const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${input.amountRaw}&slippageBps=100&restrictIntermediateTokens=true`;
   let quote: RawQuote | null = null;
   let checked: ReturnType<typeof verifySwapQuote> | null = null;
   let lastQuoteError = "Jupiter did not quote.";
-  for (const base of [QUOTE]) {
+  for (const base of QUOTE_URLS) {
     try {
-      const quoteRes = await fetch(`${base}?${qs}`, { headers: { accept: "application/json" } });
+      const quoteRes = await fetch(base(qs), { headers: { accept: "application/json" } });
       const text = await quoteRes.text();
       const parsed = JSON.parse(text) as RawQuote;
       if (!quoteRes.ok || !parsed.outAmount) {
-        lastQuoteError = parsed.error || (quoteRes.status === 429 ? "Jupiter is busy. Wait a moment." : `Jupiter quote ${quoteRes.status}`);
+        lastQuoteError = parsed.error || (quoteRes.status === 429 ? "Jupiter is busy." : `Jupiter quote ${quoteRes.status}`);
         continue;
       }
-      const accepted = verifySwapQuote(parsed, input);
+      checked = verifySwapQuote(parsed, input);
       quote = parsed;
-      checked = accepted;
       break;
     } catch (error) {
-      lastQuoteError = error instanceof Error ? error.message : "Jupiter did not return a valid quote.";
+      lastQuoteError = error instanceof Error ? error.message : "Jupiter returned an unsafe quote.";
     }
   }
   if (!quote || !checked) throw new Error(lastQuoteError);
   let swapTx = "";
   let swapErr = "Jupiter did not build a transaction.";
-  for (const base of [SWAP]) {
+  for (const base of SWAP_URLS) {
     const swapRes = await fetch(base, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
@@ -185,7 +151,6 @@ export async function signRoute(input: {
         quoteResponse: quote,
         userPublicKey: input.owner,
         dynamicComputeUnitLimit: true,
-        // Keep the quote's 100 bps slippage; do not request a builder-side override.
       }),
     });
     const text = await swapRes.text();
@@ -206,58 +171,14 @@ export async function signRoute(input: {
   const { PublicKey, VersionedTransaction } = await import("@solana/web3.js");
   const tx = VersionedTransaction.deserialize(b64ToBytes(swapTx));
   if (!tx.message.staticAccountKeys[0]?.equals(new PublicKey(input.owner))) {
-    throw new Error("Jupiter returned a different transaction payer. The wallet was not asked to sign.");
+    throw new Error("Jupiter returned a different fee payer. The wallet was not asked to sign.");
   }
-  const outUi = Number(checked.outAmount) / 10 ** input.outDecimals;
-  const side = isPayMint(input.inputMint) && !isPayMint(input.outputMint) ? "Bought" : !isPayMint(input.inputMint) && isPayMint(input.outputMint) ? "Sold" : "Swapped";
-  const sideName = input.symbol ? `${side} ${input.symbol}` : "Jupiter swap";
-  stageMove({ usd: input.usd, kind: "swap", title: sideName });
   const signature = await sendVersioned(tx);
-  // An RPC submission or wallet signature is not a fill. Confirm before
-  // creating a portfolio trade record, and do not silently invite duplicate sends.
-  try {
-    await waitForChainConfirmation(signature, async (sig) => {
-      const response = (await chainRpc("getSignatureStatuses", [
-        [sig], { searchTransactionHistory: true },
-      ])) as { value?: Array<{ err?: unknown; confirmationStatus?: string | null } | null> } | null;
-      return response?.value?.[0] ?? null;
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not confirm the submitted transaction.";
-    const failed = message.includes("failed on-chain");
-    noteAct({
-      kind: "swap",
-      title: failed ? "Swap failed on-chain" : "Swap awaiting confirmation",
-      detail: failed ? "No fill recorded; this transaction failed." : "No fill recorded yet. Check the signature on-chain before retrying.",
-      signature,
-      usd: input.usd,
-    });
-    throw error;
-  }
-  const outName = PRESTOCK_MINTS.find(([, mint]) => mint === input.outputMint)?.[0];
-  const inName = PRESTOCK_MINTS.find(([, mint]) => mint === input.inputMint)?.[0];
-  const label = (mint: string, named?: string) =>
-    named || (mint === SOL ? "SOL" : mint === USDC ? "USDC" : mint === CASH ? "CASH" : mint === USDT ? "USDT" : mint === PYUSD ? "PYUSD" : "token");
-  if (outName) {
-    recordFill({ symbol: outName, mint: input.outputMint, side: "buy", bucket: currentIntent(), usd: input.usd, qty: outUi, signature });
-  } else if (inName) {
-    const qty = input.amountRaw / 1e9;
-    recordFill({ symbol: inName, mint: input.inputMint, side: "sell", bucket: currentIntent(), usd: input.usd, qty: qty > 0 ? qty : outUi, signature });
-  } else {
-    const buying = isPayMint(input.inputMint) && !isPayMint(input.outputMint);
-    const selling = isPayMint(input.outputMint) && !isPayMint(input.inputMint);
-    const mint = buying ? input.outputMint : selling ? input.inputMint : input.outputMint;
-    const qty = input.qty && input.qty > 0 ? input.qty : outUi;
-    recordFill({ symbol: input.symbol || label(mint), mint, side: selling ? "sell" : "buy", bucket: currentIntent(), usd: input.usd, qty, signature });
-  }
-  noteAct({
-    kind: "swap",
-    title: input.symbol ? `${isPayMint(input.outputMint) && !isPayMint(input.inputMint) ? "Sold" : "Bought"} ${input.symbol}` : `${label(input.inputMint, inName)} → ${label(input.outputMint, outName)}`,
-    detail: `$${input.usd.toFixed(2)} · Jupiter · ${currentIntent() === "trade" ? "Trade" : "Hold"}`,
-    signature,
-    usd: input.usd,
+  // A signature is a submission acknowledgment; do not report a completed swap until
+  // Solana explicitly confirms success. Unknown status must be reconciled before retrying.
+  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, chainRpc);
+  return { signature, outUi: Number(checked.outAmount) / 10 ** input.outDecimals };
   });
-  return { signature, outUi };
 }
 
 export async function signStockSwap(input: {
@@ -267,43 +188,16 @@ export async function signStockSwap(input: {
   side: "buy" | "sell";
   tokenAmount?: bigint;
   decimals?: number;
-  extraMints?: string[];
-  symbol?: string;
-  /** USDC, SOL, CASH, USDT, or PYUSD. Defaults to USDC. */
-  pay?: string;
-  solUsd?: number;
 }): Promise<{ signature: string; outUi: number }> {
-  const pay = payAsset(input.pay);
   const amount =
-    input.side === "buy" ? payRaw(pay.symbol, input.usd, input.solUsd) : Number(input.tokenAmount ?? 0n);
-  if (!(amount > 0) || !Number.isSafeInteger(amount)) throw new Error("Swap size is zero or exceeds precise raw-unit limits.");
+    input.side === "buy" ? Math.max(1, Math.round(input.usd * 1e6)) : Number(input.tokenAmount ?? 0n);
+  if (!Number.isSafeInteger(amount) || amount <= 0) throw new Error("Swap size is zero or exceeds precise raw-unit limits.");
   return signRoute({
     owner: input.owner,
-    inputMint: input.side === "buy" ? pay.mint : input.mint,
-    outputMint: input.side === "buy" ? input.mint : pay.mint,
+    inputMint: input.side === "buy" ? USDC : input.mint,
+    outputMint: input.side === "buy" ? input.mint : USDC,
     amountRaw: amount,
-    outDecimals: input.decimals ?? (input.side === "buy" ? 9 : pay.decimals),
+    outDecimals: input.decimals ?? (input.side === "buy" ? 9 : 6),
     usd: input.usd,
-    symbol: input.symbol,
-    extraMints: [...(input.extraMints ?? []), pay.mint],
-  });
-}
-
-/** Swap Phantom CASH into USDC when the send is short. Does nothing if USDC already covers it. */
-export async function fundUsdc(owner: string, usd: number): Promise<void> {
-  const have = await splHolding(owner, USDC);
-  if (have.ui + 0.01 >= usd) return;
-  const need = Math.round((usd - have.ui) * 100) / 100;
-  const cash = await splHolding(owner, CASH);
-  if (cash.ui + 0.01 < need) throw new Error("This account does not hold enough USDC or Phantom CASH for that send.");
-  await signRoute({
-    owner,
-    inputMint: CASH,
-    outputMint: USDC,
-    amountRaw: Math.max(1, Math.floor(need * 1e6)),
-    outDecimals: 6,
-    usd: need,
-    symbol: "USDC",
-    extraMints: [CASH],
   });
 }

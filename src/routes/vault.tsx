@@ -1,18 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { VaultDesk } from "@/components/vault-desk";
-import { getHouse } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { PORTFOLIO_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/vault")({
-  loader: () => getHouse(),
-  component: VaultPage,
+  component: Layout,
 });
 
-function VaultPage() {
-  const names = Route.useLoaderData();
+function Layout() {
   return (
     <AppShell>
-      <VaultDesk names={names} />
+      <ProductShell title="Portfolio" pages={PORTFOLIO_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

@@ -39,12 +39,12 @@ export function OptionChain({
         <p className="px-4 py-10 text-center text-sm text-muted">Pick a name.</p>
       ) : (
         <>
-          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] border-b border-white/10 px-2 pb-2 font-mono text-[10px] tracking-[0.14em] text-subtle uppercase">
-            <p className="text-up">Calls</p>
+          <div className="mt-3 grid grid-cols-[1fr_auto_1fr] px-3 pb-1 font-medium text-xs tracking-wide text-subtle uppercase">
+            <p>Call</p>
             <p className="text-center">Strike</p>
-            <p className="text-right text-down">Puts</p>
+            <p className="text-right">Put · insure</p>
           </div>
-          <div>
+          <div className="divide-y divide-border">
             {strikes.map((k) => {
               const call = rows.find((r) => r.strike === k && r.kind === "call");
               const put = rows.find((r) => r.strike === k && r.kind === "put");
@@ -53,27 +53,32 @@ export function OptionChain({
                 <div
                   key={k}
                   className={cn(
-                    "grid grid-cols-[1fr_auto_1fr] items-center border-b border-white/5 px-1",
-                    atm && "bg-accent/10",
+                    "grid grid-cols-[1fr_auto_1fr] items-center px-2 py-1",
+                    atm && "bg-elevated/60",
                   )}
                 >
                   <button
                     type="button"
                     disabled={busy || !call}
                     onClick={() => call && onBuy(call)}
-                    className="min-h-11 rounded-lg px-2 text-left font-mono text-sm font-semibold tabular-nums text-up hover:bg-up/15 disabled:opacity-40"
+                    className="min-h-11 rounded-full px-3 text-left text-sm font-semibold tabular-nums text-up hover:bg-up/10"
                   >
                     {call ? formatDebit(call.ask) : "—"}
                   </button>
-                  <p className={cn("min-w-16 text-center font-mono text-sm font-semibold tabular-nums", atm ? "text-fg" : "text-muted")}>
+                  <p
+                    className={cn(
+                      "min-w-16 text-center text-sm font-semibold tabular-nums",
+                      atm ? "text-fg" : "text-muted",
+                    )}
+                  >
                     {formatStrike(k)}
-                    {atm ? <span className="block text-[9px] font-medium tracking-wide text-accent">ATM</span> : null}
+                    {atm ? <span className="block text-[0.65rem] font-medium text-subtle">ATM</span> : null}
                   </p>
                   <button
                     type="button"
                     disabled={busy || !put}
                     onClick={() => put && onBuy(put)}
-                    className="min-h-11 rounded-lg px-2 text-right font-mono text-sm font-semibold tabular-nums text-down hover:bg-down/15 disabled:opacity-40"
+                    className="min-h-11 rounded-full px-3 text-right text-sm font-semibold tabular-nums text-down hover:bg-down/10"
                   >
                     {put ? formatDebit(put.ask) : "—"}
                   </button>
@@ -82,7 +87,8 @@ export function OptionChain({
             })}
           </div>
           <p className="px-3 pt-2 text-xs leading-snug text-subtle">
-            {stock.symbol} last {formatUsd(stock.last)}. The number is the debit. A call above the strike does not pay a profit. A put below the strike does not pay a profit. Close returns the debit until another wallet posts the payout.
+            Cash-or-nothing on {stock.symbol} last {formatUsd(stock.last)}. σ from the 24h move. Paper.
+            Tap a debit to lift.
           </p>
         </>
       )}

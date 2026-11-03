@@ -6,7 +6,7 @@ import { MarkChart } from "@/components/mark-chart";
 import { NewsWire } from "@/components/news-wire";
 import { avantisOpen, derivBook, type DerivLane, type DerivRow } from "@/lib/deriv-book";
 import { allInBps, basisBps, crossBps, doors, openFeeBps, previewLiq, productCross, ratioCross } from "@/lib/market-engine";
-import { openOstium } from "@/lib/ostium-trade";
+import { openOstiumByName } from "@/lib/ostium-trade";
 import { connectWallet } from "@/lib/wallets";
 import { clearMove, sealMove, stageMove } from "@/lib/moves";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
@@ -177,11 +177,9 @@ export function DerivDesk({ lane: start = "fx", lanes }: { lane?: DerivLane; lan
     if (!row?.ostium || row.mid == null) return;
     setBusy(true);
     try {
-      const existing = wallet.w.links.find((l) => l.kind === "evm")?.address ?? "";
       stageMove({ usd: margin, kind: "swap", title: `${side} ${row.ostium}` });
-      const hash = await openOstium({
+      const hash = await openOstiumByName({
         pair: row.ostium,
-        trader: existing,
         side,
         collateral: margin,
         leverage: lev,

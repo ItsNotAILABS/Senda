@@ -27,9 +27,9 @@ function readPractice() {
 }
 const STAKES = [5, 10, 25, 100] as const;
 
-type GameId = "wheel" | "slots" | "updown" | "race" | "closest" | "crash" | "hilo" | "parlay" | "dice" | "mines";
+export type GameId = "wheel" | "slots" | "updown" | "race" | "closest" | "crash" | "hilo" | "parlay" | "dice" | "mines";
 
-const GAMES: { id: GameId; name: string; pay: string; line: string }[] = [
+export const GAMES: { id: GameId; name: string; pay: string; line: string }[] = [
   { id: "wheel", name: "Wheel", pay: "Field ×", line: "Pick a name. The print stops the wheel." },
   { id: "slots", name: "Slots", pay: "2× / 12×", line: "Three faces from the book. A pair pays." },
   { id: "updown", name: "Up / Down", pay: "2×", line: "Lock a print. Call the next move." },
@@ -56,13 +56,13 @@ function byGap(book: HouseListing[], far: boolean): HouseListing | undefined {
   })[0];
 }
 
-export function PlayFloor({ names }: { names: HouseListing[] }) {
+export function PlayFloor({ names, game }: { names: HouseListing[]; game?: GameId }) {
   const book = names.filter((n) => n.venue === "prestocks" && n.last > 0 && !/xai/i.test(n.symbol));
   const wallet = useWallet();
   const cash = wallet.w.balances.USD || 0;
   const [mode, setMode] = useState<"practice" | "real">("practice");
   const [practice, setPractice] = useState(0);
-  const [game, setGame] = useState<GameId>("wheel");
+  const [picked, setPicked] = useState<GameId>(game ?? "wheel");
   const [stake, setStake] = useState(10);
   const [banner, setBanner] = useState<RoundBanner | null>(null);
   const pot = mode === "practice" ? practice : cash;
@@ -104,10 +104,17 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
     return true;
   }
 
-  const meta = GAMES.find((g) => g.id === game)!;
+  const meta = GAMES.find((g) => g.id === (game ?? picked)) ?? GAMES[0];
+  const active = game ?? picked;
 
   return (
     <div className="px-3 py-3 lg:px-4">
+      {game ? (
+        <header className="mb-3">
+          <h1 className="text-2xl tracking-tight">{meta.name}</h1>
+          <p className="mt-1 text-sm text-muted">{meta.line} Practice cash never touches the wallet.</p>
+        </header>
+      ) : (
       <TabLead
         kicker="Play"
         title="Ten games on the live book."
@@ -116,11 +123,12 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
         live={["Wheel, slots, up/down, furthest, closest, ride, higher, parlay, dice, and mines.", "Practice bankroll on this browser.", "Real stakes leave Senda cash and wins come back."]}
         coming={["A shared table with another wallet.", "A prize that leaves this browser."]}
       />
+      )}
 
       <Felt className="mt-3">
-        <div className="flex gap-2 overflow-x-auto px-3 pt-3 lg:grid lg:grid-cols-10 lg:overflow-visible">
+        <div className={cn("flex gap-2 overflow-x-auto px-3 pt-3 lg:grid lg:grid-cols-10 lg:overflow-visible", game && "hidden")}>
           {GAMES.map((g) => {
-            const on = game === g.id;
+            const on = active === g.id;
             return (
               <button
                 key={g.id}
@@ -128,7 +136,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
                 aria-pressed={on}
                 aria-label={`${g.name}, ${g.pay}. ${g.line}`}
                 onClick={() => {
-                  setGame(g.id);
+                  setPicked(g.id);
                   setBanner(null);
                 }}
                 className={cn(
@@ -187,7 +195,7 @@ export function PlayFloor({ names }: { names: HouseListing[] }) {
           </div>
         </div>
 
-        <Board game={game} book={book} stake={stake} cash={pot} pay={meta.pay} banner={banner} take={take} clear={() => setBanner(null)} />
+        <Board game={active} book={book} stake={stake} cash={pot} pay={meta.pay} banner={banner} take={take} clear={() => setBanner(null)} />
       </Felt>
     </div>
   );

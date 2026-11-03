@@ -1,38 +1,24 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PreDesk } from "@/components/pre-desk";
-import { getClosedPrints } from "@/lib/closed-prints";
-import { getPreRoutes } from "@/lib/prestock";
-import { getHouse } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { PRE_PAGES } from "@/lib/product-pages";
+
+type PreSearch = { q?: string };
 
 export const Route = createFileRoute("/pre")({
-  validateSearch: (search: Record<string, unknown>): { q?: string } => {
+  validateSearch: (search: Record<string, unknown>): PreSearch => {
     const q = typeof search.q === "string" ? search.q : "";
     return q ? { q } : {};
   },
-  loader: async () => {
-    const [house, routes, closed] = await Promise.all([getHouse(), getPreRoutes(), getClosedPrints()]);
-    return { house, routes, closed };
-  },
-  component: PrePage,
-  errorComponent: PreError,
+  component: Layout,
 });
 
-function PrePage() {
-  const { house, routes, closed } = Route.useLoaderData();
-  const { q } = Route.useSearch();
+function Layout() {
   return (
     <AppShell>
-      <PreDesk names={house} routes={routes} query={q ?? ""} closed={closed} />
-    </AppShell>
-  );
-}
-
-function PreError({ error }: { error: unknown }) {
-  const message = error instanceof Error ? error.message : "The book did not load.";
-  return (
-    <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{message}</p>
+      <ProductShell title="PreStocks" pages={PRE_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }
