@@ -31,7 +31,6 @@ export function OstiumBook() {
   const [usd, setUsd] = useState(10);
   const [lev, setLev] = useState(2);
   const [busy, setBusy] = useState("");
-  const [page, setPage] = useState(0);
 
   useEffect(() => {
     let live = true;
@@ -56,9 +55,6 @@ export function OstiumBook() {
       return `${row.id} ${row.base} ${row.hold?.symbol ?? ""}`.toLowerCase().includes(query);
     });
   }, [rows, lane, q]);
-  const pages = Math.max(1, Math.ceil(shown.length / 24));
-  const safe = Math.min(page, pages - 1);
-  const view = shown.slice(safe * 24, safe * 24 + 24);
 
   async function trade(row: WorldRow, buy: boolean) {
     if (row.pairIndex == null || row.mid == null) return;
@@ -86,10 +82,10 @@ export function OstiumBook() {
       <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Ostium</p>
       <h2 className="mt-1 text-2xl font-semibold">{rows.filter((r) => r.pairIndex != null).length || rows.length || "—"} markets</h2>
       <p className="mt-1 text-sm text-white/55">Long and short clear in USDC on Arbitrum. Phantom or MetaMask signs. A Solana token, when there is one, is a separate buy.</p>
-      <input value={q} onChange={(e) => { setQ(e.target.value); setPage(0); }} placeholder="Search the book" className="mt-3 min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the book" className="mt-3 min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
       <div className="mt-3 flex gap-1 overflow-x-auto">
         {LANES.map((item) => (
-          <button key={item.id} type="button" onClick={() => { setLane(item.id); setPage(0); }} className={cn("min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold", lane === item.id ? "bg-white text-black" : "bg-white/10 text-white/70")}>
+          <button key={item.id} type="button" onClick={() => setLane(item.id)} className={cn("min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold", lane === item.id ? "bg-white text-black" : "bg-white/10 text-white/70")}>
             {item.label}
           </button>
         ))}
@@ -106,18 +102,12 @@ export function OstiumBook() {
           </button>
         ))}
       </div>
-      <ul className="mt-3 space-y-2">
-        {view.map((row) => (
-          <li key={row.id} className="rounded-2xl border border-white/10 bg-black px-3 py-3">
+      <ul className="mt-3 divide-y divide-white/10 rounded-[22px] bg-[#101114] px-3">
+        {shown.map((row) => (
+          <li key={row.id} className="py-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase">{row.lane}</span>
-                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">Arbitrum</span>
-                  {row.hold ? <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">Solana hold</span> : null}
-                  <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] text-white/60">{row.open === false ? "Closed" : row.pairIndex != null ? "Signs" : "Price"}</span>
-                </div>
-                <p className="mt-2 font-semibold">{row.base}<span className="text-white/40">/{row.quote}</span></p>
+                <p className="font-semibold">{row.base}</p>
                 <p className="text-xs text-white/45">
                   {row.id}
                   {row.maxLeverage ? ` · up to ${row.maxLeverage}x` : ""}
@@ -128,17 +118,6 @@ export function OstiumBook() {
               <div className="text-right">
                 <p className="font-mono text-sm">{money(row.mid)}</p>
                 <p className="font-mono text-[11px] text-white/40">{money(row.bid)} / {money(row.ask)}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = `${row.base}/${row.quote}\n${row.lane} · Arbitrum · ${row.pairIndex != null ? "signs" : "price"}\n${money(row.mid)}`;
-                    if (typeof navigator.share === "function") void navigator.share({ title: `${row.base}/${row.quote}`, text }).catch(() => undefined);
-                    else void navigator.clipboard.writeText(text).then(() => toast.success("Card copied."));
-                  }}
-                  className="mt-2 text-[11px] font-semibold text-white/70"
-                >
-                  Share
-                </button>
               </div>
             </div>
             {row.pairIndex != null && row.mid != null && row.open !== false ? (
@@ -163,13 +142,6 @@ export function OstiumBook() {
         ))}
         {shown.length === 0 ? <li className="py-8 text-sm text-white/45">{rows.length ? "Nothing matches." : "Loading the Ostium book…"}</li> : null}
       </ul>
-      {shown.length > 24 ? (
-        <div className="mt-3 flex items-center justify-between text-xs text-white/45">
-          <button type="button" disabled={safe <= 0} onClick={() => setPage(Math.max(0, safe - 1))} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Back</button>
-          <span className="font-mono">{shown.length} · {safe + 1} / {pages}</span>
-          <button type="button" disabled={safe + 1 >= pages} onClick={() => setPage(safe + 1)} className="h-9 rounded-full bg-white/10 px-3 disabled:opacity-40">Next</button>
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -1,21 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { JumpStrip } from "@/components/jump-strip";
-import { DeskAudit } from "@/components/money-flow";
-
-import { paper } from "@/content/docs/paper";
-import { pay } from "@/content/docs/pay";
-import { research } from "@/content/docs/research";
-import { useBook } from "@/content/docs/use";
-import { infra } from "@/content/docs/infra";
-import { security } from "@/content/docs/security";
-import { build } from "@/content/docs/build";
-import { moreBooks } from "@/content/docs/more";
-import { outside } from "@/content/docs/outside";
 
 type Page = { id: string; title: string; body: { h: string; p: string[] }[] };
 
-const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
+const BOOKS: { id: string; label: string; lede: string; pages: Page[] }[] = [
   {
     id: "start",
     label: "Start",
@@ -48,7 +36,6 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
             h: "Where to go",
             p: [
               "Home is the money and the book. PreStocks is the names. Convert is the route. Play is the print. Shop is a number and a USDC payment. Agents is the workspace. Send moves cash in this browser. Portfolio is what the wallet holds. Make is work other people can pay for in USDC. Cover is a drop. Docs is this set.",
-              "The chart is one menu. Senda candles, the line, and the volume are drawn here from the pool. Binance is a separate book, and only when that name is listed.",
             ],
           },
         ],
@@ -174,7 +161,6 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
             p: [
               "Phantom Cash spends Bridge’s CASH on Solana. The issuer is Lead Bank. Jupiter spends USDC on a Visa issued through Rain or DCS. KAST spends USDC, USDT, or PYUSD deposited on Solana, custodial, Visa. Solflare’s card paused on 28 Jul 2026 when Kulipa wound down.",
               "The pipes under those cards are Rain and Bridge. Both require a program and KYC. This repo does not have a BIN. Until it does, the payment a Solana merchant can clear is the USDC transfer.",
-              "Shop shows three faces. USDC is the payment. Cash is Phantom’s token, and their Visa stays in the Phantom app. Route is a Mayan move, where this desk can take 8 basis points.",
             ],
           },
         ],
@@ -214,8 +200,7 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "The terms",
             p: [
-              "You lock a print and pay a premium. If that name falls ten percent from the print, the cover pays the size back into cash. The token stays in the wallet. It is not a licensed insurance policy.",
-              "On chain, the premium is a USDC transfer into a cover account whose key stays in this browser, with the terms in a memo. You sign it.",
+              "There is no listed put. The hedge is a Jupiter sell of the token the wallet holds. A premium is not sent to a key stored in this browser.",
             ],
           },
         ],
@@ -292,7 +277,53 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
           {
             h: "Do not read these as done",
             p: [
-              "A brokerage account. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id. Margin on a book this desk matches is not built. A Base perp uses Avantis margin, and the wallet signs their contract. The liquidation on that ticket is a preview.",
+              "A brokerage account. Margin. A bank wire. A Visa or Mastercard BIN. Apple Pay. An agent key. A shift after the tab closes. Limit orders. A login that carries this browser’s cash to another computer. A Senda program. There is no program id.",
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "chains",
+    label: "Chains",
+    lede: "Solana, Bitcoin, Ethereum, Arbitrum, Base, Monad. Nothing else was taken off the desk.",
+    pages: [
+      {
+        id: "map",
+        title: "Where each chain clears",
+        body: [
+          {
+            h: "Solana",
+            p: [
+              "This is the account. Phantom, Solflare, or Backpack signs. Jupiter quotes the route. PreStocks, xStocks, perps, USDC sends, and the coin book all land in that wallet.",
+              "Bitcoin and ether on this desk are the Solana wrappers, WBTC, cbBTC, and portal ETH. Native bitcoin is not signed here.",
+            ],
+          },
+          {
+            h: "Ethereum and its rollups",
+            p: [
+              "Ostium longs and shorts clear in USDC on Arbitrum. Phantom’s Ethereum account or MetaMask signs. The margin stays in the wallet until the contract locks it.",
+              "Base is the Ethereum account already on the Wallets desk. It is not a second Solana buy.",
+            ],
+          },
+          {
+            h: "Monad",
+            p: [
+              "Chain 143. The Chains desk asks the wallet to add it. A Monad token swap is not listed until a router is actually called. The button does not pretend one.",
+            ],
+          },
+        ],
+      },
+      {
+        id: "kept",
+        title: "What stays",
+        body: [
+          {
+            h: "Desks that are not replaced",
+            p: [
+              "Chart, Quotes, Spot, PreStocks, xStocks, Perps, FX and metals, Commodities, Pairs, Ostium, Options, Stakes, Borrow, Cover, Send, and Portfolio each keep their own page.",
+              "A new chain is a row on the Chains desk. It is not a reason to delete a market.",
             ],
           },
         ],
@@ -301,74 +332,77 @@ const CORE: { id: string; label: string; lede: string; pages: Page[] }[] = [
   },
 ];
 
-const BOOKS = [...CORE, paper, pay, research, outside, useBook, infra, security, build, ...moreBooks];
-
-export function DocsDesk() {
-  const [bookId, setBookId] = useState(BOOKS[0].id);
-  const book = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
+export function DocsDesk({ bookId }: { bookId?: string }) {
+  const start = BOOKS.find((b) => b.id === bookId) ?? BOOKS[0];
+  const [bookIdState, setBookId] = useState(start.id);
+  const book = BOOKS.find((b) => b.id === bookIdState) ?? BOOKS[0];
   const [pageId, setPageId] = useState(book.pages[0].id);
   const page = book.pages.find((p) => p.id === pageId) ?? book.pages[0];
 
+  function openBook(id: string) {
+    const next = BOOKS.find((b) => b.id === id) ?? BOOKS[0];
+    setBookId(next.id);
+    setPageId(next.pages[0].id);
+  }
+
+  useEffect(() => {
+    if (!bookId) return;
+    openBook(bookId);
+  }, [bookId]);
+
   return (
-    <main className="grid min-h-[calc(100dvh-88px)] lg:grid-cols-[272px_minmax(0,1fr)]">
-      <aside className="max-h-[40dvh] overflow-y-auto border-b border-white/10 bg-[#050508] lg:sticky lg:top-0 lg:max-h-[calc(100dvh-88px)] lg:border-r lg:border-b-0">
-        <div className="px-4 pt-4 pb-2">
-          <p className="text-[11px] tracking-[0.16em] text-white/35 uppercase">Docs</p>
-          <div className="mt-3"><DeskAudit live="These pages describe the rails." hold="A sentence here does not move USDC." /></div>
-          <div className="mt-3 flex flex-col gap-2">
-            <a href="/senda-submission.pdf" className="inline-flex min-h-9 items-center rounded-full bg-accent px-4 text-[13px] font-semibold text-accent-fg">
-              Submission PDF
-            </a>
-            <a href="/senda-submission.md" className="inline-flex min-h-9 items-center rounded-full border border-white/15 px-4 text-[13px]">
-              Submission note
-            </a>
+    <main className="flex min-h-[calc(100dvh-88px)] flex-col">
+      {bookId ? null : (
+      <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-4">
+        {BOOKS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            onClick={() => openBook(b.id)}
+            className={cn(
+              "shrink-0 border-b-2 px-3 py-3 text-sm",
+              b.id === book.id ? "border-accent text-white" : "border-transparent text-white/45 hover:text-white",
+            )}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      )}
+      <div className="grid flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
+        <aside className="border-white/10 px-3 py-4 lg:border-r">
+          <p className="px-2 text-[11px] tracking-[0.16em] text-white/35 uppercase">{book.label}</p>
+          <nav className="mt-2">
+            {book.pages.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setPageId(p.id)}
+                className={cn("block w-full rounded-xl px-3 py-2 text-left text-sm", p.id === page.id ? "bg-white/8 text-white" : "text-white/50 hover:text-white")}
+              >
+                {p.title}
+              </button>
+            ))}
+          </nav>
+        </aside>
+        <article className="px-6 py-8 lg:px-12 lg:py-10">
+          <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{book.label}</p>
+          <h1 className="mt-2 max-w-3xl font-display text-4xl tracking-tight lg:text-5xl">{page.title}</h1>
+          <p className="mt-3 max-w-2xl text-[15px] text-white/50">{book.lede}</p>
+          <div className="mt-8 max-w-3xl space-y-8">
+            {page.body.map((block) => (
+              <section key={block.h}>
+                <h2 className="text-lg font-medium">{block.h}</h2>
+                {block.p.map((para) => (
+                  <p key={para.slice(0, 32)} className="mt-2 text-[15px] leading-relaxed text-white/70">
+                    {para}
+                  </p>
+                ))}
+              </section>
+            ))}
           </div>
-        </div>
-        <nav className="px-2 pb-6">
-          {BOOKS.map((b) => (
-            <div key={b.id} className="mt-4">
-              <p className="px-3 text-[11px] tracking-[0.14em] text-white/35 uppercase">{b.label}</p>
-              {b.pages.map((p) => {
-                const on = b.id === book.id && p.id === page.id;
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setBookId(b.id);
-                      setPageId(p.id);
-                    }}
-                    className={cn(
-                      "mt-0.5 block w-full rounded-xl px-3 py-2 text-left text-[13px]",
-                      on ? "bg-white/10 text-white" : "text-white/50 hover:bg-white/5 hover:text-white",
-                    )}
-                  >
-                    {p.title}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </aside>
-      <article className="min-w-0 px-6 py-8 lg:px-14 lg:py-12">
-        <JumpStrip />
-        <p className="text-[11px] tracking-[0.16em] text-accent uppercase">{book.label}</p>
-        <h1 className="mt-2 max-w-3xl font-display text-4xl tracking-tight lg:text-5xl">{page.title}</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-white/50">{book.lede}</p>
-        <div className="mt-10 max-w-3xl space-y-10">
-          {page.body.map((block) => (
-            <section key={block.h}>
-              <h2 className="text-xl font-medium tracking-tight">{block.h}</h2>
-              {block.p.map((para) => (
-                <p key={para.slice(0, 48)} className="mt-3 text-[15.5px] leading-[1.7] text-white/75">
-                  {para}
-                </p>
-              ))}
-            </section>
-          ))}
-        </div>
-      </article>
+        </article>
+      </div>
     </main>
   );
 }

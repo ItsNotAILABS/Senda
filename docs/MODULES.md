@@ -97,8 +97,8 @@ There is no Senda program on mainnet. Buys and payments there are Jupiter and SP
 
 ## Agents outside the app
 
-`mcp/server.mjs` is the MCP. It can list prints, quote Jupiter, read a public address, build a pay link, and price a cover. It cannot sign.
+`mcp/server.mjs` is the MCP. `GET /api/agent` and `POST /api/agent` call the same tools. An agent can list prints, see which markets sign, quote Jupiter or LI.FI, read a public address, build a pay link, price a cover, and read the clearing posture. It cannot sign, and the response has no transaction to broadcast.
 
-Turn it on with `node mcp/server.mjs`, or with `.mcp.json` for a client that reads that file.
+Turn the stdio server on with `node mcp/server.mjs`, or with `.mcp.json` for a client that reads that file.
 
 `AGENTS.md` is the manual. The same text is `CLAUDE.md`, `GEMINI.md`, `llms.txt`, `.clinerules`, `.windsurfrules`, and `.github/copilot-instructions.md`.

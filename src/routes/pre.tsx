@@ -1,39 +1,24 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PreDesk } from "@/components/pre-desk";
-import { getPreRoutes } from "@/lib/prestock";
-import { getHouse, HOUSE_FALLBACK } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { PRE_PAGES } from "@/lib/product-pages";
+
+type PreSearch = { q?: string };
 
 export const Route = createFileRoute("/pre")({
-  validateSearch: (search: Record<string, unknown>): { q?: string } => {
+  validateSearch: (search: Record<string, unknown>): PreSearch => {
     const q = typeof search.q === "string" ? search.q : "";
     return q ? { q } : {};
   },
-  loader: async () => {
-    const [house, routes] = await Promise.all([
-      getHouse().catch(() => HOUSE_FALLBACK),
-      getPreRoutes().catch(() => []),
-    ]);
-    return { house, routes };
-  },
-  component: PrePage,
-  errorComponent: PreError,
+  component: Layout,
 });
 
-function PrePage() {
-  const { house, routes } = Route.useLoaderData();
-  const { q } = Route.useSearch();
+function Layout() {
   return (
     <AppShell>
-      <PreDesk names={house} routes={routes} query={q ?? ""} />
-    </AppShell>
-  );
-}
-
-function PreError({ error }: { error: Error }) {
-  return (
-    <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
+      <ProductShell title="PreStocks" pages={PRE_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

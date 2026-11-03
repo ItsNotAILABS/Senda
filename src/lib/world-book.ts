@@ -1,6 +1,7 @@
 /** Ostium prints, and the Jupiter tokens that can actually be signed. */
 
 import { createServerFn } from "@tanstack/react-start";
+import { readJupiterTokenMetrics } from "@/lib/jupiter-token-metrics.mjs";
 
 export type WorldLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
@@ -27,9 +28,14 @@ export type TapeRow = {
   name: string;
   price: number | null;
   change: number | null;
+  /** Exact Jupiter Tokens V2 percentage points, separate from the legacy change field. */
+  changePct?: number | null;
+  liquidityUsd?: number | null;
+  volume24hUsd?: number | null;
+  organicScore?: number | null;
+  verified?: boolean;
+  updatedAt?: string;
   icon?: string;
-  /** Pool depth in dollars, when Jupiter search returned it. */
-  liquidity?: number;
 };
 
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
@@ -41,7 +47,6 @@ const FEEDS = [
   "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
   "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
   "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/recent",
 ];
 
 const BOOK: { lane: WorldLane; ids: string[] }[] = [
@@ -318,7 +323,7 @@ async function contractPairs(): Promise<{ id: number; from: string; to: string; 
   const res = await fetch(GRAPH, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda" },
-    body: JSON.stringify({ query: "{ pairs(first: 500) { id from to maxLeverage } }" }),
+    body: JSON.stringify({ query: "{ pairs(first: 200) { id from to maxLeverage } }" }),
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return [];
@@ -389,12 +394,19 @@ export async function loadTape(): Promise<TapeRow[]> {
       if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
       if (rows.length >= 6000) break;
       seen.add(row.id);
+      const sourceMetrics = readJupiterTokenMetrics(row);
       rows.push({
         id: row.id,
         symbol: row.symbol,
         name: typeof row.name === "string" && row.name ? row.name : row.symbol,
         price: num(row.usdPrice),
         change: num(row.stats24h?.priceChange),
+        changePct: sourceMetrics?.priceChangePct ?? null,
+        liquidityUsd: sourceMetrics?.liquidityUsd ?? null,
+        volume24hUsd: sourceMetrics?.volume24hUsd ?? null,
+        organicScore: sourceMetrics?.organicScore ?? null,
+        verified: sourceMetrics?.verified ?? false,
+        updatedAt: sourceMetrics?.updatedAt ?? undefined,
         icon: typeof row.icon === "string" ? row.icon : undefined,
       });
     }
@@ -412,40 +424,3 @@ export const worldBook = createServerFn({ method: "GET" }).handler(async () => l
 export const ostiumBook = createServerFn({ method: "GET" }).handler(async () => loadOstium());
 
 export const jupTape = createServerFn({ method: "GET" }).handler(async () => loadTape());
-
-/** A ticker Jupiter can quote, including names that are not on the verified list. Deepest pool first. */
-export const searchTape = createServerFn({ method: "POST" })
-  .validator((input: unknown) => {
-    const q = typeof input === "string" ? input : "";
-    return q.trim().slice(0, 44);
-  })
-  .handler(async ({ data }): Promise<TapeRow[]> => {
-    if (data.length < 2) return [];
-    const json = await getJson(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data)}`, 8000).catch(() => []);
-    if (!Array.isArray(json)) return [];
-    const rows: TapeRow[] = [];
-    for (const raw of json) {
-      if (!raw || typeof raw !== "object") continue;
-      const row = raw as {
-        id?: unknown;
-        symbol?: unknown;
-        name?: unknown;
-        usdPrice?: unknown;
-        icon?: unknown;
-        liquidity?: unknown;
-        stats24h?: { priceChange?: unknown };
-      };
-      if (typeof row.id !== "string" || row.id.length < 32 || typeof row.symbol !== "string") continue;
-      rows.push({
-        id: row.id,
-        symbol: row.symbol,
-        name: typeof row.name === "string" && row.name ? row.name : row.symbol,
-        price: num(row.usdPrice),
-        change: num(row.stats24h?.priceChange),
-        icon: typeof row.icon === "string" ? row.icon : undefined,
-        liquidity: num(row.liquidity) ?? undefined,
-      });
-    }
-    rows.sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0));
-    return rows.slice(0, 30);
-  });

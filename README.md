@@ -27,22 +27,30 @@
 
 A brokerage cannot see the mint, and it is closed at midnight. A swap page can fill a route and then leaves you there. Senda is the layer in between: buy the name, hold it in your wallet, cover a drop, pay someone in USDC, play the print, or hand an agent a job it cannot sign.
 
-A payment to someone in Mexico is USDC to their Solana address. The peso line is a Frankfurter quote and the Banxico FIX. It is not a Ria pickup, not a SPEI deposit, and not a CLABE. They cash out themselves, on Bitso’s Solana USDC deposit if they choose, or at a real remitter if they need cash at OXXO.
-
 There is no mainnet Senda program. Buys are a Jupiter swap the wallet signs.
 
-## Charts
+## The book
 
-The trade chart is one menu.
+Counted from the live venues on 21 October 2026. One row is one instrument. A mint on Jupiter is counted once: an xStock, a PreStock, and a staked-SOL token that already sit in the verified set are classified, not added a second time. A perpetual, a Hyperliquid spot pair, and an Ostium pair are their own rows. They are not the Solana token.
 
-- **Senda candles, line, and volume** are drawn here from the Solana pool.
-- **Binance** opens a TradingView book only for names it lists. It is not the pool, and it is not Phantom’s chart.
+**5,105 individual offerings.**
 
-## Shop
+| Family | Count | What it is |
+| --- | ---: | --- |
+| Pre-IPO names | 10 | PreStocks. Jupiter swap. Phantom signs. |
+| Listed shares (xStocks) | 1,374 | Solana xStocks inside the Jupiter verified set. |
+| Staked SOL | 163 | Liquid staking tokens inside the same set. |
+| Solana spot | 2,486 | The rest of Jupiter verified. |
+| Perpetuals | 619 | Hyperliquid, every builder dex, plus Drift and Jupiter perps. |
+| Hyperliquid spot | 337 | Spot pairs. The Ethereum account signs. |
+| Ostium | 83 | Arbitrum. USDC margin. The Ethereum account signs. |
+| EVM tokens | 9 | LiFi. The Ethereum account signs. |
+| Loans | 2 | Against a name or a listed share this wallet holds. |
+| Send USDC | 1 | The wallet signs the transfer. |
+| Native chains | 21 | The chain itself. A wrapper is already in spot. |
+| **Total** | **5,105** | |
 
-USDC moves when the wallet signs. A card you already have can be funded from here.
-
-- **Jupiter, Avici, KAST, and Fuse** take USDC at the address that app shows, up to 200,000. XPlace takes USDT, SOL, wETH, cbBTC, or jitoSOL, and USDC is refused. Phantom Cash is a swap into Bridge’s CASH token, which stays in the wallet that signs.
+The full list, every symbol, is [docs/OFFERINGS.md](docs/OFFERINGS.md). The same rows are [docs/offerings.csv](docs/offerings.csv).
 
 ## Devnet
 

@@ -3,15 +3,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-export type DerivBar = {
-  time: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
-};
-
 export type DerivLane = "fx" | "metals" | "energy" | "softs" | "index" | "crypto" | "shares";
 
 export type DerivPair = {
@@ -142,15 +133,11 @@ export const derivBook = createServerFn({ method: "GET" }).handler(async () => {
       }
     }
   }
-  const knownOst = new Set(DERIVS.map((pair) => pair.ostium).filter((id): id is string => Boolean(id)));
-  const knownAv = new Set(DERIVS.map((pair) => pair.avantis).filter((id): id is string => Boolean(id)));
-  const fill = (pair: DerivPair): DerivRow => {
-    const ostKey = pair.ostium || `${pair.base}-${pair.quote}`;
-    const px = ostium.get(ostKey);
+  return DERIVS.map((pair): DerivRow => {
+    const px = pair.ostium ? ostium.get(pair.ostium) : undefined;
     const av = pair.avantis ? avantis.get(pair.avantis) : undefined;
     return {
       ...pair,
-      ostium: px ? ostKey : pair.ostium,
       mid: px?.mid && px.mid > 0 ? px.mid : null,
       bid: px?.bid && px.bid > 0 ? px.bid : null,
       ask: px?.ask && px.ask > 0 ? px.ask : null,
@@ -161,37 +148,8 @@ export const derivBook = createServerFn({ method: "GET" }).handler(async () => {
       minNotional: av?.minLevPosUSDC ?? av?.pairMinLevPosUSDC ?? null,
       spot: pair.hold ? spot.get(pair.hold.mint) ?? null : null,
     };
-  };
-  const rows = DERIVS.map(fill);
-  const seen = new Set(rows.map((row) => `${row.base}/${row.quote}`));
-  for (const [id, px] of ostium) {
-    if (knownOst.has(id) || seen.has(id.replace("-", "/"))) continue;
-    const [base, quote] = id.split("-");
-    if (!base || !quote) continue;
-    const key = `${base}/${quote}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    rows.push(fill({ id: id.toLowerCase(), base, quote, lane: laneOf(base), ostium: id, avantis: avantis.has(key) ? key : null, hold: null }));
-  }
-  for (const [id, av] of avantis) {
-    if (knownAv.has(id) || seen.has(id) || av.isPairListed === false) continue;
-    const [base, quote] = id.split("/");
-    if (!base || !quote) continue;
-    seen.add(id);
-    rows.push(fill({ id: id.toLowerCase().replace("/", "-"), base, quote, lane: laneOf(base), ostium: null, avantis: id, hold: null }));
-  }
-  return rows;
+  });
 });
-
-function laneOf(base: string): DerivLane {
-  if (["XAU", "XAG", "XPT", "XPD", "XCU"].includes(base)) return "metals";
-  if (["WTI", "BRENT", "NATGAS", "UNG"].includes(base)) return "energy";
-  if (["COCOA", "COFFEE", "SUGAR", "COTTON"].includes(base)) return "softs";
-  if (["US500", "US100", "US30", "GER40", "UK100", "JP225", "HK50", "SPX", "NDX"].includes(base)) return "index";
-  if (["EUR", "GBP", "JPY", "AUD", "NZD", "CAD", "CHF", "MXN", "BRL", "USD"].includes(base)) return "fx";
-  if (base.length <= 5 && base === base.toUpperCase() && !/^[A-Z]{2,5}$/.test(base)) return "crypto";
-  return /^[A-Z]{1,5}$/.test(base) && base.length <= 5 && !["BTC", "ETH", "SOL", "XRP", "DOGE", "BNB", "ADA", "LINK", "AVAX", "HYPE"].includes(base) ? "shares" : "crypto";
-}
 
 export type BuiltTx = { to: string; data: string; chainId: number; description?: string };
 

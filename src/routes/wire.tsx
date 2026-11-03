@@ -1,27 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { WireDesk } from "@/components/wire-desk";
-import { loadCoins } from "@/lib/coin-tape";
-import { getHouse } from "@/lib/sol-house";
-import { loadHeadlines } from "@/lib/wire";
+import { MarketsPage } from "@/components/markets-page";
+import { InstrumentPage } from "@/components/registry-desk";
 
 export const Route = createFileRoute("/wire")({
-  loader: async () => {
-    const [house, coins, news] = await Promise.all([
-      getHouse().catch(() => []),
-      loadCoins().catch(() => []),
-      loadHeadlines().catch(() => []),
-    ]);
-    return { house, coins, news };
+  validateSearch: (search: Record<string, unknown>): { id?: string } => {
+    const id = typeof search.id === "string" ? search.id.slice(0, 80) : "";
+    return id ? { id } : {};
   },
-  component: WirePage,
+  component: Page,
 });
 
-function WirePage() {
-  const data = Route.useLoaderData();
-  return (
-    <AppShell>
-      <WireDesk house={data.house} coins={data.coins} news={data.news} />
-    </AppShell>
-  );
+function Page() {
+  const { id } = Route.useSearch();
+  return <AppShell>{id ? <InstrumentPage id={id} /> : <MarketsPage />}</AppShell>;
 }

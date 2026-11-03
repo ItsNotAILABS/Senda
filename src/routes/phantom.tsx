@@ -1,15 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PhantomDesk } from "@/components/phantom-desk";
+import { PhantomAccount } from "@/components/phantom-account";
 
 export const Route = createFileRoute("/phantom")({
-  component: PhantomPage,
+  component: Page,
 });
 
-function PhantomPage() {
+function Page() {
   return (
     <AppShell>
-      <PhantomDesk />
+      <PhantomAccount />
     </AppShell>
   );
 }

@@ -1,26 +1,17 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { LANE } from "@/lib/explain";
-import { LTV, loadLoans, borrow, repay } from "@/lib/lend";
 import { connectPhantom, splHolding } from "@/lib/phantom";
+import { runPrestock } from "@/lib/prestock";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
-import { formatMoney } from "@/lib/wallet";
 
-export function LendDesk({
-  house,
-  onCredit,
-  onDebit,
-}: {
-  house: HouseListing[];
-  onCredit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
-  onDebit: (amount: number, ref: string) => Promise<{ ok: boolean; error?: string }>;
-}) {
+export function LendDesk({ house }: { house: HouseListing[] }) {
   const wallet = useWallet();
-  const [loans, setLoans] = useState(loadLoans);
+  const [busy, setBusy] = useState("");
   const names = house.filter((h) => h.venue === "prestocks" && h.last > 0);
 
-  async function take(h: HouseListing) {
+  async function sellHalf(h: HouseListing) {
+    setBusy(h.id);
     try {
       const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
       const owner = existing || (await connectPhantom());
@@ -29,75 +20,35 @@ export function LendDesk({
         if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
       }
       const held = await splHolding(owner, h.mint);
-      const full = Math.round(held.ui * h.last * LTV * 100) / 100;
-      const already = loans.find((l) => l.stockId === h.id)?.borrowed ?? 0;
-      const draw = Math.round((full - already) * 100) / 100;
-      if (draw < 1) {
-        toast.error(full < 1 ? `No ${h.symbol} in this wallet.` : `${h.symbol} is already drawn. The token is still there.`);
-        return;
-      }
-      const credited = await onCredit(draw, `borrow ${h.symbol}`);
-      if (!credited.ok) {
-        toast.error(credited.error || "The loan did not credit.");
-        return;
-      }
-      const next = borrow(loans, h.id, h.symbol, held.ui, h.last);
-      if (!Array.isArray(next)) {
-        toast.error(next.error);
-        return;
-      }
-      setLoans(next);
-      toast.success(`$${draw.toFixed(2)} against ${h.symbol}. You still hold it. Spending this does not sell it.`);
+      if (!(held.ui > 0)) throw new Error(`No ${h.symbol} in this wallet. There is no lending pool on this name.`);
+      const usd = Math.max(1, Math.round(held.ui * h.last * 0.5 * 100) / 100);
+      const done = await runPrestock({ owner, mint: h.mint, side: "sell", usd, price: h.last });
+      toast.success(`Sold about half of ${h.symbol} for USDC. ${done.signature.slice(0, 8)}…`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The loan did not open.");
+      toast.error(e instanceof Error ? e.message : "The sell did not send.");
+    } finally {
+      setBusy("");
     }
-  }
-
-  async function pay(id: string) {
-    const loan = loans.find((l) => l.id === id);
-    if (!loan) return;
-    const d = await onDebit(loan.borrowed, `repay ${loan.symbol}`);
-    if (!d.ok) {
-      toast.error(d.error);
-      return;
-    }
-    setLoans(repay(loans, id));
-    toast.success("Repaid.");
   }
 
   return (
     <div className="px-4 pb-8">
       <p className="pt-3 text-sm text-muted">
-        This draw is a note in the browser. It does not lock the token and it does not borrow from a market. A Kamino or Aave loan is on Portfolio, under Loans.
+        There is no lending pool for these names. Raising USDC means selling a slice of what this wallet already holds. You sign the Jupiter swap. The rest of the token stays. Kamino quotes for listed shares are on Listed, and they are not a loan from this page.
       </p>
-      <p className="mt-3 text-xs leading-relaxed text-subtle">{LANE}</p>
       <ul className="mt-4 divide-y divide-border">
         {names.map((h) => (
           <li key={h.id} className="flex items-center justify-between py-3">
             <div>
               <p className="text-sm font-semibold">{h.symbol}</p>
-              <p className="font-mono text-xs text-subtle">{formatUsd(h.last)} · the token stays</p>
+              <p className="font-mono text-xs text-subtle">{formatUsd(h.last)} · sell half</p>
             </div>
-            <button type="button" onClick={() => void take(h)} className="min-h-11 rounded-full bg-elevated px-4 text-xs font-semibold">
-              Borrow against it
+            <button type="button" disabled={busy === h.id} onClick={() => void sellHalf(h)} className="min-h-11 rounded-full bg-elevated px-4 text-xs font-semibold">
+              {busy === h.id ? "Signing…" : "Sell half"}
             </button>
           </li>
         ))}
       </ul>
-      {loans.length > 0 ? (
-        <ul className="mt-6 divide-y divide-border">
-          {loans.map((l) => (
-            <li key={l.id} className="flex items-center justify-between py-3">
-              <p className="text-sm">
-                {l.symbol} · {formatMoney(l.borrowed)}
-              </p>
-              <button type="button" onClick={() => void pay(l.id)} className="text-xs font-semibold text-muted">
-                Repay
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 }

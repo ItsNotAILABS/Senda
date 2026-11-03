@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { FilmBand } from "@/components/film-band";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
-import { ForgeDesk } from "@/components/forge-desk";
 import { WorkJobs } from "@/components/work-jobs";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { readUsing } from "@/lib/using";
@@ -76,7 +75,6 @@ export function WorkDesk({ names, view = "all" }: { names: HouseListing[]; view?
         coming={["A shared sheet on someone else's computer."]}
       />
       <MoneyBar />
-      <ForgeDesk />
       </>
       ) : null}
       {view === "all" || view === "jobs" ? <WorkJobs symbol={name?.symbol ?? ""} /> : null}

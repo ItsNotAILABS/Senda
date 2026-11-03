@@ -1,7 +1,4 @@
-/** Injected wallets. On a phone with no extension, Phantom, Solflare, or Backpack opens this page. */
-
-import { insideWalletApp, isPhoneBrowser, openInWallet, type MobileWallet } from "@/lib/mobile-wallet";
-import { unlockSeal } from "@/lib/seal";
+import { insideWalletApp, isPhoneBrowser, openInsideBackpack, startMobileConnect } from "@/lib/mobile-wallet";
 
 type SolProvider = {
   isPhantom?: boolean;
@@ -18,10 +15,6 @@ type EvmProvider = {
   isRabby?: boolean;
   isCoinbaseWallet?: boolean;
   isBraveWallet?: boolean;
-  isPhantom?: boolean;
-  isOkxWallet?: boolean;
-  isTrust?: boolean;
-  isTrustWallet?: boolean;
 };
 
 export type WalletId =
@@ -33,15 +26,10 @@ export type WalletId =
   | "bitget"
   | "trust"
   | "coinbase-sol"
-  | "nightly"
-  | "exodus"
   | "metamask"
   | "rabby"
   | "coinbase"
-  | "brave"
-  | "phantom-evm"
-  | "okx-evm"
-  | "trust-evm";
+  | "brave";
 
 export type WalletChoice = {
   id: WalletId;
@@ -59,8 +47,6 @@ const SOL: { id: WalletId; name: string; pick: (w: Window) => SolProvider | unde
   { id: "bitget", name: "Bitget", pick: (w) => (w as Win).bitkeep?.solana },
   { id: "trust", name: "Trust", pick: (w) => (w as Win).trustwallet?.solana },
   { id: "coinbase-sol", name: "Coinbase", pick: (w) => (w as Win).coinbaseSolana },
-  { id: "nightly", name: "Nightly", pick: (w) => (w as Win).nightly?.solana },
-  { id: "exodus", name: "Exodus", pick: (w) => (w as Win).exodus?.solana },
 ];
 
 const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] = [
@@ -68,9 +54,6 @@ const EVM: { id: WalletId; name: string; pick: (e: EvmProvider) => boolean }[] =
   { id: "rabby", name: "Rabby", pick: (e) => Boolean(e.isRabby) },
   { id: "coinbase", name: "Coinbase Wallet", pick: (e) => Boolean(e.isCoinbaseWallet) },
   { id: "brave", name: "Brave Wallet", pick: (e) => Boolean(e.isBraveWallet) },
-  { id: "phantom-evm", name: "Phantom", pick: (e) => Boolean(e.isPhantom) },
-  { id: "okx-evm", name: "OKX", pick: (e) => Boolean(e.isOkxWallet) },
-  { id: "trust-evm", name: "Trust", pick: (e) => Boolean(e.isTrust || e.isTrustWallet) },
 ];
 
 type Win = Window & {
@@ -78,25 +61,18 @@ type Win = Window & {
   solflare?: SolProvider;
   backpack?: SolProvider;
   glowSolana?: SolProvider;
-  okxwallet?: { solana?: SolProvider; request?: EvmProvider["request"]; isOkxWallet?: boolean };
+  okxwallet?: { solana?: SolProvider };
   bitkeep?: { solana?: SolProvider };
   trustwallet?: { solana?: SolProvider };
   coinbaseSolana?: SolProvider;
-  nightly?: { solana?: SolProvider };
-  exodus?: { solana?: SolProvider };
   ethereum?: EvmProvider & { providers?: EvmProvider[] };
 };
 
 function ethereumProviders(): EvmProvider[] {
   if (typeof window === "undefined") return [];
-  const w = window as Win;
-  const eth = w.ethereum;
-  const list: EvmProvider[] = eth ? (eth.providers?.length ? [...eth.providers] : [eth]) : [];
-  const okx = w.okxwallet;
-  if (okx?.request && !list.some((p) => p === (okx as EvmProvider))) {
-    list.push({ ...okx, request: okx.request, isOkxWallet: true } as EvmProvider);
-  }
-  return list;
+  const eth = (window as Win).ethereum;
+  if (!eth) return [];
+  return eth.providers?.length ? eth.providers : [eth];
 }
 
 export function detectWallets(): WalletChoice[] {
@@ -153,32 +129,35 @@ function wait(ms: number) {
 async function waitChoice(id: WalletId, ms: number): Promise<WalletChoice | undefined> {
   const started = Date.now();
   const found = () => detectWallets().find((w) => w.id === id);
-  const first = found();
-  if (first?.installed) return first;
+  if (found()?.installed) return found();
   while (Date.now() - started < ms) {
-    await wait(120);
     const row = found();
     if (row?.installed) return row;
+    await wait(120);
   }
   return found();
 }
 
 export async function connectWallet(id: WalletId): Promise<{ address: string; label: string; chain: "solana" | "evm" }> {
   const inApp = insideWalletApp();
-  const canOpen = id === "phantom" || id === "solflare" || id === "backpack";
   let choice = detectWallets().find((w) => w.id === id);
+  const canOpen = id === "phantom" || id === "solflare" || id === "backpack";
   if (!choice?.installed && (inApp || (isPhoneBrowser() && canOpen))) {
     choice = await waitChoice(id, inApp ? 4000 : 600);
   }
-  if (!choice?.installed && !inApp && isPhoneBrowser() && canOpen) {
-    openInWallet(id as MobileWallet);
+  if (!choice?.installed && !inApp && isPhoneBrowser() && (id === "phantom" || id === "solflare")) {
+    startMobileConnect(id);
+    return new Promise(() => {});
+  }
+  if (!choice?.installed && !inApp && isPhoneBrowser() && id === "backpack") {
+    openInsideBackpack();
     return new Promise(() => {});
   }
   if (!choice?.installed) {
     throw new Error(
       inApp
         ? "This page is already inside the wallet. Tap Connect again."
-        : `${choice?.name ?? "That wallet"} is not in this browser. On a phone, Phantom, Solflare, or Backpack opens this page.`,
+        : `${choice?.name ?? "That wallet"} is not in this browser. On a phone, Phantom or Solflare opens as an app.`,
     );
   }
   if (choice.chain === "solana") {
@@ -189,7 +168,6 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
     const address = res?.publicKey?.toString();
     if (!address) throw new Error(`${choice.name} returned no account.`);
     rememberWallet(id);
-    await unlockSeal(address);
     return { address, label: choice.name, chain: "solana" };
   }
   const spec = EVM.find((e) => e.id === id);
@@ -198,6 +176,5 @@ export async function connectWallet(id: WalletId): Promise<{ address: string; la
   const accounts = (await provider.request({ method: "eth_requestAccounts" })) as string[];
   const address = accounts?.[0];
   if (!address) throw new Error(`${choice.name} returned no account.`);
-  rememberWallet(id);
   return { address, label: choice.name, chain: "evm" };
 }

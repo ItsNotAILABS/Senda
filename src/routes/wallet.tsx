@@ -1,25 +1,22 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { WalletDesk } from "@/components/wallet-desk";
-
-type MoneySearch = { buy?: string; lane?: "swap" | "wallets" | "chains" | "pesos" | "stake" };
-
-const LANES = new Set(["swap", "wallets", "chains", "pesos", "stake"]);
+import { ProductShell } from "@/components/product-shell";
+import { CONVERT_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/wallet")({
-  validateSearch: (raw: Record<string, unknown>): MoneySearch => {
+  validateSearch: (raw: Record<string, unknown>): { buy?: string } => {
     const buy = typeof raw.buy === "string" ? raw.buy : undefined;
-    const lane = typeof raw.lane === "string" && LANES.has(raw.lane) ? (raw.lane as MoneySearch["lane"]) : undefined;
-    return { ...(buy ? { buy } : {}), ...(lane ? { lane } : {}) };
+    return buy ? { buy } : {};
   },
-  component: WalletPage,
+  component: Layout,
 });
 
-function WalletPage() {
-  const { buy, lane } = Route.useSearch();
+function Layout() {
   return (
     <AppShell>
-      <WalletDesk buy={buy} lane={lane} />
+      <ProductShell title="Convert" pages={CONVERT_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

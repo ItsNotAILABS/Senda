@@ -1,25 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { PredictDesk } from "@/components/predict-desk";
-import { loadPerpBoard, loadPredEvents } from "@/lib/jup-venues";
+import { ProductShell } from "@/components/product-shell";
+import { PLAY_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/social")({
-  loader: async () => {
-    const [sports, coins, perps] = await Promise.all([
-      loadPredEvents({ data: { category: "sports" } }).catch(() => []),
-      loadPredEvents({ data: { category: "crypto" } }).catch(() => []),
-      loadPerpBoard().catch(() => []),
-    ]);
-    return { sports, coins, perps };
-  },
-  component: SocialPage,
+  component: Layout,
 });
 
-function SocialPage() {
-  const data = Route.useLoaderData();
+function Layout() {
   return (
     <AppShell>
-      <PredictDesk initialEvents={data.sports} initialCoins={data.coins} initialPerps={data.perps} />
+      <ProductShell title="Play" pages={PLAY_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

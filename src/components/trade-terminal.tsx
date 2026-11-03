@@ -21,6 +21,7 @@ export function TradeTerminal({
   onArmed,
   onSide,
   positions,
+  focus = "all",
 }: {
   names: HouseListing[];
   under: HouseListing | null;
@@ -30,8 +31,9 @@ export function TradeTerminal({
   onArmed: (n: number) => void;
   onSide: (s: "buy" | "sell") => void;
   positions: { id: string; symbol: string; shares: number; cost: number; last: number }[];
+  focus?: "all" | "ticket" | "book";
 }) {
-  const [tab, setTab] = useState<"markets" | "book" | "depth">("markets");
+  const [tab, setTab] = useState<"markets" | "book" | "depth">(focus === "book" ? "book" : "markets");
   const [asks, setAsks] = useState<Level[]>([]);
   const [bids, setBids] = useState<Level[]>([]);
   const [bookNote, setBookNote] = useState("Asking Jupiter…");
@@ -159,47 +161,44 @@ export function TradeTerminal({
   }
 
   return (
-    <section className="mx-3 mt-3 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0e13]">
-      <header className="flex flex-wrap items-center gap-4 border-b border-white/10 px-4 py-3">
-        <div>
-          <p className="text-[11px] text-subtle">Last</p>
-          <p className={cn("font-mono text-lg tabular-nums", down ? "text-[#ff5d73]" : "text-[#3dd68c]")}>
-            {under ? formatUsd(under.last) : "—"} {down ? "↓" : "↑"}
-          </p>
+    <section className="mx-3 mt-3 overflow-hidden rounded-[28px] bg-[#101114]">
+      <header className="px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm text-white/50">{under ? `${under.symbol} · ${under.name}` : "Pick a name"}</p>
+            <p className={cn("mt-1 font-mono text-4xl tracking-tight tabular-nums", down ? "text-[#ff5d73]" : "text-white")}>
+              {under ? formatUsd(under.last) : "—"}
+            </p>
+            <p className="mt-1 font-mono text-sm text-white/55">
+              {under?.change24h == null ? "No 24h" : `${under.change24h >= 0 ? "+" : ""}${(under.change24h * 100).toFixed(2)}%`}
+              <span className="text-white/35"> · mark {under ? formatPremium(under.premium) : "—"}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAskOpen(true);
+              const line = `Draft a long on ${under?.symbol || "this name"} from the live print.`;
+              setQ(line);
+              void ask(line);
+            }}
+            className="inline-flex min-h-9 items-center gap-2 rounded-full bg-white/10 px-3 text-sm text-[#c9d4ff]"
+          >
+            <Sparkles className="size-3.5" />
+            Ask
+          </button>
         </div>
-        <div>
-          <p className="text-[11px] text-subtle">Vs mark</p>
-          <p className="font-mono text-sm tabular-nums">{under ? formatPremium(under.premium) : "—"}</p>
-        </div>
-        <div>
-          <p className="text-[11px] text-subtle">24h</p>
-          <p className="font-mono text-sm tabular-nums">
-            {under?.change24h == null ? "—" : `${(under.change24h * 100).toFixed(2)}%`}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAskOpen(true);
-            const line = `Draft a long on ${under?.symbol || "this name"} from the live print.`;
-            setQ(line);
-            void ask(line);
-          }}
-          className="ml-auto inline-flex min-h-9 items-center gap-2 rounded-full border border-white/10 px-3 text-sm text-[#c9d4ff]"
-        >
-          <Sparkles className="size-3.5" />
-          Ask about {under?.symbol || "the print"}
-        </button>
       </header>
 
-      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
+      <div className={cn("flex items-center justify-between gap-2 border-b border-white/10 px-3 py-2", focus === "ticket" && "hidden")}>
         <p className="text-[11px] tracking-wide text-subtle uppercase">{names.length} live names</p>
         <Link to="/equities" className="text-[12px] text-[#9eb6ff]">
           Listed shares
         </Link>
       </div>
 
-      <div className="grid lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]">
+      <div className={cn("grid", focus === "all" && "lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]", focus === "book" && "lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]")}>
+        {focus === "ticket" ? null : (
         <div className="border-white/10 lg:border-r">
           <div className="flex items-center gap-4 px-4 pt-3 text-sm">
             {(["markets", "book", "depth"] as const).map((id) => (
@@ -244,7 +243,9 @@ export function TradeTerminal({
           ) : null}
           {tab === "depth" ? <DepthBars asks={asks} bids={bids} /> : null}
         </div>
+        )}
 
+        {focus === "book" ? null : (
         <div className="flex min-h-[520px] flex-col bg-[#10131a]">
           <div className="flex items-center gap-1 border-b border-white/10 px-3 py-2">
             {(["15m", "1H", "4H", "1D"] as const).map((id) => (
@@ -283,6 +284,11 @@ export function TradeTerminal({
               </div>
               <label className="mt-2 block text-[11px] text-subtle">
                 Size, USDC
+                <div className="mt-1 flex gap-1">
+                  {[1, 5, 25, 100].map((n) => (
+                    <button key={n} type="button" onClick={() => onArmed(n)} className={cn("min-h-8 flex-1 rounded-full font-mono text-[11px]", armed === n ? "bg-white text-black" : "bg-white/10 text-white/70")}>${n}</button>
+                  ))}
+                </div>
                 <input
                   inputMode="decimal"
                   value={armed ? String(armed) : ""}
@@ -367,8 +373,10 @@ export function TradeTerminal({
             </div>
           ) : null}
         </div>
+        )}
       </div>
 
+      {focus === "all" ? (
       <div className="overflow-x-auto border-t border-white/10">
         <table className="w-full min-w-[640px] text-left text-xs">
           <thead className="text-subtle">
@@ -412,6 +420,7 @@ export function TradeTerminal({
           </tbody>
         </table>
       </div>
+      ) : null}
     </section>
   );
 }

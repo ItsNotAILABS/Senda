@@ -7,7 +7,6 @@ artifacts/
 .DS_Store
 pglite.data
 .pglite/
-data/
 dist/
 routeTree.gen.ts
 .cursor/

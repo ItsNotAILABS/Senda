@@ -1,28 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Activity, Binoculars, CalendarClock, CreditCard, Crosshair, Eye, FileText, Lock, Scale, Shield, TrendingDown, TrendingUp } from "lucide-react";
-import { CrewThread } from "@/components/crew-desk";
+import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
+import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
-import { JumpStrip } from "@/components/jump-strip";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
 import { recall, remember } from "@/lib/agent-memory";
 import { JOBS, think, type Job, type Queue } from "@/lib/agent-shift";
+import { ACTIONS, ORDER_TYPES, STRATEGIES, type AgentAction, type OrderType } from "@/lib/agent-book";
 import { createEnvelope, dropEnvelope, listEnvelopes, patchEnvelope, writeLog, type Envelope } from "@/lib/agent-envelope";
 import { loadJobs, saveJobs, todayKey, type AgentJobs } from "@/lib/agents";
-import { bookSignals, sized, type BookSignal } from "@/lib/book-strategies";
-import { setSpendCap, spendCap } from "@/lib/spend-cap";
+import { spendCap } from "@/lib/spend-cap";
 import { quoteRoute, signRoute, SOL } from "@/lib/jup-sign";
 import { USDC } from "@/lib/jup-exec";
+import { payUsdc } from "@/lib/solana-pay";
 import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
+import { assertAgentBox } from "@/lib/agent-box";
+import { approveAgentQueue } from "@/lib/agent-approval.mjs";
+import { guardRoute } from "@/lib/route-guard";
+import { parseIntent } from "@/lib/intent";
 import { runPrestock } from "@/lib/prestock";
-import { shortBook, signMarketShort } from "@/lib/short-market";
-import { RouteProPanel } from "@/components/route-pro-panel";
-import { connectWallet } from "@/lib/wallets";
+import { jupTape, type TapeRow } from "@/lib/world-book";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { readUsing } from "@/lib/using";
 import { cn } from "@/lib/utils";
+
+let signing = false;
 
 type Id = "cheap" | "rich" | "daily";
 
@@ -33,9 +37,6 @@ const JOB_ICON = {
   daily: CalendarClock,
   cover: Shield,
   clerk: FileText,
-  basis: Scale,
-  tape: Activity,
-  signal: Crosshair,
 } as const satisfies Record<Job, unknown>;
 
 const BUILT_ICON = {
@@ -87,16 +88,6 @@ const READY = [
     line: "Writes the book onto the sheet. No money moves.",
     mandate: "Log the book onto the sheet. Do not send.",
   },
-  {
-    id: "cards",
-    title: "Card stacks",
-    job: "clerk",
-    side: "buy",
-    holdCap: false,
-    icon: CreditCard,
-    line: "Rain holds Jupiter, Avici, and KAST after a top-up. Bridge holds Phantom Cash and Fuse. XPlace collateral stays in Kamino. This desk does not keep the card balance.",
-    mandate: "Name the stack before a card send. Rain: Jupiter, Avici, KAST. Bridge: Phantom CASH and Fuse, one way. Kamino: XPlace collateral, never USDC. Do not send. Do not custody.",
-  },
 ] as const;
 
 function readSheet(): Record<string, string> {
@@ -128,6 +119,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     () => names.filter((n) => n.venue === "prestocks" && n.last > 0 && n.mark > 0),
     [names],
   );
+  const [tape, setTape] = useState<TapeRow[]>([]);
   const cheap = [...book].sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0))[0];
   const rich = [...book].sort((a, b) => (b.premium ?? 0) - (a.premium ?? 0))[0];
   const [id, setId] = useState<Id>("cheap");
@@ -136,12 +128,17 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const [made, setMade] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftSay, setDraftSay] = useState("");
+  const [said, setSaid] = useState("");
   const [draftJob, setDraftJob] = useState<Job>("scout");
   const [draftSide, setDraftSide] = useState<"buy" | "sell">("buy");
   const [bring, setBring] = useState("");
   const [usd, setUsd] = useState(25);
   const [symbol, setSymbol] = useState(book[0]?.symbol ?? "");
   const [payWith, setPayWith] = useState<"USDC" | "SOL">("USDC");
+  const [draftOrder, setDraftOrder] = useState<OrderType>("market");
+  const [draftAction, setDraftAction] = useState<AgentAction>("swap");
+  const [draftPx, setDraftPx] = useState("");
+  const [draftTo, setDraftTo] = useState("");
   const [watch, setWatch] = useState<string[]>(() => {
     const u = readUsing();
     return u ? [u.symbol] : [];
@@ -152,9 +149,50 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const wallet = useWallet();
   const picked = book.find((n) => n.symbol === symbol) ?? book[0];
 
+  function watched(env: Envelope): HouseListing[] {
+    const symbols = new Set(env.symbols.map((s) => s.toUpperCase()));
+    const base = symbols.size
+      ? names.filter((n) => n.last > 0 && n.mint && symbols.has(n.symbol.toUpperCase()))
+      : book;
+    if (!symbols.size) return base;
+    const have = new Set(base.map((n) => n.symbol.toUpperCase()));
+    const extra: HouseListing[] = [];
+    for (const row of tape) {
+      if (!symbols.has(row.symbol.toUpperCase()) || have.has(row.symbol.toUpperCase())) continue;
+      if (!(row.price && row.price > 0) || row.id.length < 32) continue;
+      extra.push({
+        id: row.id,
+        venue: "tessera",
+        mint: row.id,
+        symbol: row.symbol,
+        name: row.name,
+        question: "",
+        description: "",
+        last: row.price,
+        mark: row.price,
+        premium: 0,
+        valuation: 0,
+        holders: 0,
+        liquidity: 0,
+        change24h: row.change,
+        url: "",
+        swapUrl: "",
+        sector: "coin",
+        image: row.icon ?? "",
+      });
+    }
+    return [...base, ...extra];
+  }
+
   function put(next: AgentJobs) {
     setJobs(saveJobs(next));
   }
+
+  useEffect(() => {
+    jupTape()
+      .then(setTape)
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     const level = bookLevel(book.map((n) => n.last));
@@ -162,14 +200,14 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   }, [book]);
 
   useEffect(() => {
-    if (!book.length) return;
     const timer = window.setInterval(() => {
       let changed = false;
       for (const e of listEnvelopes()) {
-        const out = think(e, book);
+        const out = think(e, watched(e));
         if (!out) continue;
         changed = true;
-        const raw = out.queue ?? e.queue;
+        // A fresh evaluation with no proposal invalidates any older queued action.
+        const raw = out.queue ?? null;
         const queue = boundQueue(raw);
         writeLog(e.id, out.log);
         if (raw && queue && queue.usd < raw.usd) writeLog(e.id, `Held ${raw.symbol} at the cap. $${raw.usd} is now $${queue.usd}.`);
@@ -181,7 +219,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       }
     }, 20_000);
     return () => window.clearInterval(timer);
-  }, [book]);
+  }, [book, names, tape]);
 
   const focus = id === "rich" ? rich : id === "daily" ? picked : cheap;
   const side = id === "rich" ? "sell" : "buy";
@@ -229,25 +267,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     return who;
   }
 
-  async function signSignal(row: BookSignal) {
-    const amount = sized(usd, spendCap());
-    if (!(amount > 0)) {
-      toast.error("Set an amount under the cap.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const who = await owner();
-      const done = await runPrestock({ owner: who, mint: row.mint, side: row.side, usd: amount, price: row.last });
-      toast.success(`${row.side === "buy" ? "Bought" : "Sold"} ${row.symbol}. ${done.signature.slice(0, 8)}…`);
-      note(row.symbol, row.side, amount, book.find((n) => n.mint === row.mint));
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The strategy did not sign.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function run() {
     setBusy(true);
     try {
@@ -262,10 +281,13 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
           throw new Error(`Today's buy of ${picked.symbol} already went out.`);
         }
         if (!buyMint || !buySymbol) throw new Error("No name to buy.");
+        assertAgentBox({ usd, mint: buyMint, allowed: book.map((n) => n.mint) });
         const px = await quoteRoute({ inputMint: SOL, outputMint: USDC, amountRaw: 1e9, outDecimals: 6 });
         if (!(px.outUi > 0)) throw new Error("No SOL price.");
         const solAmt = usd / px.outUi;
         const dOut = await mintDecimals(buyMint);
+        const depth = await quoteRoute({ inputMint: SOL, outputMint: buyMint, amountRaw: Math.floor(solAmt * 1e9), outDecimals: dOut });
+        if (depth.impact > 5) throw new Error(`Price impact is ${depth.impact.toFixed(1)}%. Nothing was sent.`);
         const done = await signRoute({
           owner: who,
           inputMint: SOL,
@@ -282,27 +304,33 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       }
       if (id === "cheap") {
         if (!cheap) throw new Error("No names on the book.");
+        assertAgentBox({ usd, mint: cheap.mint, allowed: book.map((n) => n.mint) });
+        const preview = await guardRoute({ mint: cheap.mint, side: "buy", usd, price: cheap.last, symbol: cheap.symbol });
         const done = await runPrestock({ owner: who, mint: cheap.mint, side: "buy", usd, price: cheap.last });
         put({ ...jobs, cheap: { usd, under: cheap.premium ?? 0 } });
-        toast.success(`Bought ${cheap.symbol}. ${done.signature.slice(0, 8)}…`);
+        toast.success(`${preview.line}. ${done.signature.slice(0, 8)}…`);
         note(cheap.symbol, "buy", usd, cheap);
       } else if (id === "rich") {
         const snap = await readChain(who);
         const held = book.find((n) => (snap.tokens.find((t) => t.mint === n.mint)?.ui ?? 0) > 0 && (n.premium ?? 0) > 0);
         const target = held ?? null;
         if (!target) throw new Error("Nothing you hold is above its mark.");
+        assertAgentBox({ usd, mint: target.mint, allowed: book.map((n) => n.mint) });
+        const preview = await guardRoute({ mint: target.mint, side: "sell", usd, price: target.last, symbol: target.symbol });
         const done = await runPrestock({ owner: who, mint: target.mint, side: "sell", usd, price: target.last });
         put({ ...jobs, rich: { usd } });
-        toast.success(`Sold ${target.symbol}. ${done.signature.slice(0, 8)}…`);
+        toast.success(`${preview.line}. ${done.signature.slice(0, 8)}…`);
         note(target.symbol, "sell", usd, target);
       } else {
         if (!picked) throw new Error("Pick a name.");
         if (jobs.daily?.mint === picked.mint && jobs.daily.lastDay === todayKey()) {
           throw new Error(`Today's buy of ${picked.symbol} already went out.`);
         }
+        assertAgentBox({ usd, mint: picked.mint, allowed: book.map((n) => n.mint) });
+        const preview = await guardRoute({ mint: picked.mint, side: "buy", usd, price: picked.last, symbol: picked.symbol });
         const done = await runPrestock({ owner: who, mint: picked.mint, side: "buy", usd, price: picked.last });
         put({ ...jobs, daily: { symbol: picked.symbol, mint: picked.mint, usd, lastDay: todayKey() } });
-        toast.success(`Bought ${picked.symbol}. ${done.signature.slice(0, 8)}…`);
+        toast.success(`${preview.line}. ${done.signature.slice(0, 8)}…`);
         note(picked.symbol, "buy", usd, picked);
       }
     } catch (e) {
@@ -315,66 +343,105 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   const env = envs.find((e) => e.id === made) ?? null;
 
   async function runMade(target?: Envelope) {
-    const row = target ?? env;
+    const requested = target ?? env;
+    if (!requested || signing) return;
+    // Reload the freshest mandate: a paused/deleted or edited contract cannot sign
+    // based on a stale render. Only the Sign button invokes this path.
+    const row = listEnvelopes().find((e) => e.id === requested.id);
     if (!row) return;
+    signing = true;
     setMade(row.id);
     setBusy(true);
     try {
+      const approved = approveAgentQueue(row, spendCap(), todayKey());
       const who = await owner();
-      const queued = row.queue ? book.find((n) => n.symbol === row.queue?.symbol) : null;
-      const pool = row.symbols.length ? book.filter((n) => row.symbols.includes(n.symbol)) : book;
-      const pick =
-        queued ??
-        [...pool].sort((a, b) => (row.side === "sell" ? (b.premium ?? 0) - (a.premium ?? 0) : (a.premium ?? 0) - (b.premium ?? 0)))[0];
-      if (!pick) throw new Error("No name inside this envelope.");
-      const queuedSide = row.queue?.side ?? row.side;
-      const side = queuedSide === "short" ? "sell" : queuedSide;
-      const g = review({
-        symbol: pick.symbol,
-        side,
-        usd: Math.min(row.queue?.usd ?? row.maxUsd, spendCap()),
-        premium: pick.premium,
-        change24h: pick.change24h,
-        series,
-        cap: Math.min(row.maxUsd, spendCap()),
-      });
-      if (g.blocked) throw new Error(g.blocked);
-      if (queuedSide === "short") {
-        const venue = shortBook(pick.symbol);
-        if (!venue) throw new Error("No short market on that name.");
-        let trader = "";
-        if (venue.kind === "base") {
-          const evm = wallet.w.links.find((l) => l.kind === "evm")?.address ?? "";
-          trader = evm || (await connectWallet("metamask")).address;
-          if (!evm) {
-            const linked = wallet.linkChain(trader, "MetaMask", "evm");
-            if (!linked.ok && linked.error !== "Already linked.") throw new Error(linked.error || "Could not keep MetaMask.");
-          }
-        }
-        const opened = await signMarketShort({ book: venue, usd: g.usd, owner: who, trader });
-        const line = `short ${pick.symbol} $${g.usd} · ${opened.id.slice(0, 8)} · ${g.tape}`;
-        writeLog(row.id, line);
-        patchEnvelope(row.id, { queue: null });
+      const action = approved.action;
+      const order = approved.order;
+      const px = row.limitPx || 0;
+      const side = approved.side;
+      if (action === "pay") {
+        const to = approved.payTo;
+        const usd = approved.usd;
+        const done = await payUsdc({ owner: who, to, usd, memo: row.name });
+        writeLog(row.id, `Submitted ${usd} USDC · ${done.signature.slice(0, 8)} · verify settlement on-chain`);
+        patchEnvelope(row.id, { queue: null, spentUsd: Math.round(((row.spentUsd ?? 0) + usd) * 100) / 100, signedOn: row.job === "daily" ? new Date().toISOString().slice(0, 10) : row.signedOn });
         setEnvs(listEnvelopes());
-        note(pick.symbol, "sell", g.usd, pick);
-        toast.success(`${row.name} shorted ${pick.symbol}. ${opened.id.slice(0, 8)}…`);
+        toast.success(`${row.name} submitted ${usd}. Check on-chain: ${done.signature.slice(0, 8)}…`);
         return;
       }
+      const scope = watched(row);
+      const queuedSymbol = row.queue?.symbol.toUpperCase() || "";
+      const pool = row.symbols.length ? scope.filter((n) => row.symbols.some((s) => s.toUpperCase() === n.symbol.toUpperCase())) : scope;
+      const pick = pool.find((n) => n.symbol.toUpperCase() === queuedSymbol);
+      if (!pick) throw new Error("The exact queued name is no longer on the approved book. Nothing was signed.");
+      const g = review({
+        symbol: pick!.symbol,
+        side,
+        usd: approved.usd,
+        premium: pick!.premium,
+        change24h: pick!.change24h,
+        series,
+        cap: Math.min(row.maxUsd - (row.spentUsd ?? 0), spendCap()),
+      });
+      if (g.blocked) throw new Error(g.blocked);
+      if (order === "limit" && px > 0) {
+        const ok = side === "buy" ? pick.last <= px : pick.last >= px;
+        if (!ok) throw new Error(`${pick.symbol} is ${pick.last}. The limit is ${px}.`);
+      }
+      if (order === "stop" && px > 0) {
+        const ok = side === "sell" ? pick.last <= px : pick.last >= px;
+        if (!ok) throw new Error(`${pick.symbol} has not traded through ${px}.`);
+      }
+      assertAgentBox({ usd: g.usd, mint: pick.mint, allowed: pool.map((n) => n.mint), cap: Math.min(row.maxUsd - (row.spentUsd ?? 0), spendCap()) });
+      const preview = await guardRoute({ mint: pick.mint, side, usd: g.usd, price: pick.last, symbol: pick.symbol, maxImpact: row.maxImpact });
       const done = await runPrestock({ owner: who, mint: pick.mint, side, usd: g.usd, price: pick.last });
       const line = `${side} ${pick.symbol} $${g.usd} · ${done.signature.slice(0, 8)} · ${g.tape}`;
       writeLog(row.id, line);
-      patchEnvelope(row.id, { queue: null });
+      patchEnvelope(row.id, {
+        queue: null,
+        spentUsd: Math.round(((row.spentUsd ?? 0) + g.usd) * 100) / 100,
+        signedOn: row.job === "daily" ? new Date().toISOString().slice(0, 10) : row.signedOn,
+      });
       setEnvs(listEnvelopes());
       note(pick.symbol, side, g.usd, pick);
-      toast.success(`${row.name} sent ${pick.symbol}. ${done.signature.slice(0, 8)}…`);
+      toast.success(`${preview.line}. ${done.signature.slice(0, 8)}…`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "It did not send.";
       writeLog(row.id, msg);
       setEnvs(listEnvelopes());
       toast.error(msg);
     } finally {
+      signing = false;
       setBusy(false);
     }
+  }
+
+
+  function sayTrade() {
+    const parsed = parseIntent(said, book);
+    if (!parsed.ok) {
+      toast.error(parsed.error);
+      return;
+    }
+    const row = createEnvelope({
+      name: `${parsed.side} ${parsed.symbol}`.slice(0, 40),
+      mandate: said.trim(),
+      symbols: [parsed.symbol],
+      maxUsd: parsed.usd,
+      side: parsed.side,
+      job: "scout",
+      action: "swap",
+      order: "market",
+      maxImpact: parsed.maxImpact ?? undefined,
+    });
+    patchEnvelope(row.id, {
+      queue: { symbol: parsed.symbol, side: parsed.side, usd: parsed.usd, why: parsed.line, action: "swap", order: "market" },
+    });
+    const next = listEnvelopes();
+    setEnvs(next);
+    setMade(row.id);
+    setSaid("");
+    toast.success(parsed.refused ? `${parsed.line} ${parsed.refused}` : `${parsed.line} Review it in the roster, then press Sign.`);
   }
 
   function makeAgent() {
@@ -385,12 +452,53 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
       maxUsd: usd,
       side: draftSide,
       job: draftJob,
+      action: draftAction,
+      order: draftOrder,
+      limitPx: Number(draftPx) || 0,
+      payTo: draftTo.trim(),
     });
     setEnvs(listEnvelopes());
     setMade(row.id);
     setDraftName("");
     setDraftSay("");
     toast.success(`${row.name} is on the roster. Nothing sends until you sign.`);
+  }
+
+  function armStrategy(s: (typeof STRATEGIES)[number]) {
+    const px = Number(draftPx) || 0;
+    if ((s.order === "limit" || s.order === "stop") && !(px > 0)) {
+      toast.error("Set a price first. It sits on the contract.");
+      return;
+    }
+    if (s.action === "pay" && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(draftTo.trim())) {
+      toast.error("Put the Solana address on the contract first.");
+      return;
+    }
+    const fields = {
+      mandate: s.mandate,
+      symbols: s.symbols.length ? s.symbols : watch,
+      maxUsd: Math.max(1, Math.round(usd)),
+      side: s.side,
+      job: s.job,
+      action: s.action,
+      order: s.order,
+      limitPx: px,
+      payTo: draftTo.trim(),
+      strategy: s.id,
+      armed: true,
+      lastTick: "",
+    };
+    const existing = listEnvelopes().find((e) => e.strategy === s.id);
+    const row = existing ? patchEnvelope(existing.id, fields) : createEnvelope({ name: s.title, ...fields });
+    if (!row) return;
+    const out = think({ ...row, lastTick: "" }, book);
+    if (out) {
+      writeLog(row.id, out.log);
+      patchEnvelope(row.id, { lastTick: new Date().toISOString(), queue: out.queue ? boundQueue(out.queue) : null });
+    }
+    setEnvs(listEnvelopes());
+    setMade(row.id);
+    toast.success(`${s.title} is armed. Nothing sends until you sign.`);
   }
 
   function bringOne() {
@@ -515,7 +623,8 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   ];
 
   const capNow = spendCap();
-  const ask = env?.queue ? Math.min(env.queue.usd, capNow) : env ? Math.min(env.maxUsd, capNow) : sendUsd;
+  const remaining = env ? Math.max(0, env.maxUsd - (env.spentUsd ?? 0)) : 0;
+  const ask = env?.queue ? Math.min(env.queue.usd, capNow, remaining) : env ? Math.min(remaining, capNow) : sendUsd;
   const barPct = Math.max(0, Math.min(100, (ask / Math.max(capNow, 1)) * 100));
   const ordered = [...envs].sort((a, b) => Number(Boolean(b.queue)) - Number(Boolean(a.queue)));
   const waiting = ordered.filter((e) => e.queue).length;
@@ -523,55 +632,35 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
 
   return (
     <div className="space-y-3 px-3 py-3 lg:px-4">
-      <JumpStrip />
       <TabLead
         kicker="Agents"
         title="An agent that watches the book"
         accent="You still sign."
-        line="You name it, you bound it, it writes a queue. Close the page and the queue stays on this phone. It does not run while the page is closed, and it cannot sign."
+        line="An armed contract watches and queues within its remaining budget. Nothing opens the wallet automatically; review a queue and press Sign. The daily desk allows only one submission per day."
         live={["Create an envelope", "Arm a ready desk", "The computer log", "You sign the queue"]}
         coming={["An agent you host off this browser", "A key of its own"]}
-        audit={{
-          live: "The agent can queue a buy. It cannot sign.",
-          hold: "The signature is still yours, on the wallet this browser connected.",
-        }}
       />
+      <MoneyBar />
 
-      <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Crew</p>
-        <h2 className="mt-1 text-xl">Work the agent can see</h2>
-        <p className="mt-1 text-sm text-muted">The brief is in the seal. A note stays there. Paying still happens on Contracts, and you sign it.</p>
-        <div className="mt-3">
-          <CrewThread />
-        </div>
-      </section>
-
-      <section className="rounded-[24px] border border-white/10 bg-[#101114] p-4">
-        <p className="text-sm font-semibold">Daily cap. One tap revokes the queue.</p>
-        <p className="mt-1 text-xs text-white/45">An agent can prepare a trade inside this cap, around the clock, while this page is open. It never holds the money. Revoke drops every envelope and every armed job. Nothing stays signed.</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {[25, 100, 500, 2000].map((n) => (
-            <button key={n} type="button" onClick={() => toast.success(`Daily cap $${setSpendCap(n)}. A queued send above that does not go out.`)} className="min-h-10 rounded-full bg-white/10 px-3 font-mono text-xs">
-              ${n}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              for (const row of listEnvelopes()) dropEnvelope(row.id);
-              saveJobs({ cheap: null, rich: null, daily: null });
-              setEnvs([]);
-              setJobs({ cheap: null, rich: null, daily: null });
-              toast.success("Revoked. No envelope is armed. The agent never held the funds.");
-            }}
-            className="min-h-10 rounded-full bg-white px-4 text-xs font-semibold text-black"
-          >
-            Revoke everything
-          </button>
-        </div>
-      </section>
-
-      <RouteProPanel />
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          sayTrade();
+        }}
+        className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-5"
+      >
+        <p className="text-sm font-semibold">Say the trade</p>
+        <p className="mt-1 text-xs text-muted">It reads the size, the name on this book, and a slippage ceiling. Phantom still signs. It does not rotate onto another chain.</p>
+        <textarea
+          value={said}
+          onChange={(e) => setSaid(e.target.value)}
+          placeholder="Buy $25 OpenAI. Refuse it if slippage crosses 1.5%."
+          className={cn(field, "mt-3 min-h-20 py-3")}
+        />
+        <button type="submit" className="mt-3 min-h-11 rounded-full bg-white px-4 text-sm font-semibold text-black">
+          Read it
+        </button>
+      </form>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <div className="space-y-3">
@@ -612,6 +701,29 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 </button>
               ))}
             </div>
+            <label className="mt-3 block text-[11px] tracking-[0.14em] text-subtle uppercase">Action</label>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {ACTIONS.map((a) => (
+                <button key={a.id} type="button" onClick={() => setDraftAction(a.id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", draftAction === a.id ? "bg-white text-black" : "bg-white/[0.06] text-muted")}>
+                  {a.title}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-muted">{ACTIONS.find((a) => a.id === draftAction)?.line}</p>
+            <label className="mt-3 block text-[11px] tracking-[0.14em] text-subtle uppercase">Order</label>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {ORDER_TYPES.map((o) => (
+                <button key={o.id} type="button" onClick={() => setDraftOrder(o.id)} className={cn("min-h-8 rounded-full px-3 text-xs font-semibold", draftOrder === o.id ? "bg-white text-black" : "bg-white/[0.06] text-muted")}>
+                  {o.title}
+                </button>
+              ))}
+            </div>
+            {draftOrder !== "market" ? (
+              <input value={draftPx} onChange={(e) => setDraftPx(e.target.value)} inputMode="decimal" placeholder="Price" className={cn(field, "mt-2")} />
+            ) : null}
+            {draftAction === "pay" ? (
+              <input value={draftTo} onChange={(e) => setDraftTo(e.target.value)} placeholder="Solana address" className={cn(field, "mt-2 font-mono text-xs")} />
+            ) : null}
             <label className="mt-3 block text-[11px] tracking-[0.14em] text-subtle uppercase">Max USD</label>
             <input
               type="number"
@@ -721,15 +833,21 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                         Delete
                       </button>
                     </div>
-                    {e.queue ? (
+                    {e.queue?.action === "lend" ? (
+                      <div className="px-1 pt-2 pb-1">
+                        <a href="/xstocks" className="flex min-h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg">
+                          Open xStocks market
+                        </a>
+                      </div>
+                    ) : e.queue ? (
                       <div className="px-1 pt-2 pb-1">
                         <button
                           type="button"
-                          disabled={busy}
+                          disabled={busy || e.armed === false}
                           onClick={() => void runMade(e)}
                           className="min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg disabled:opacity-50"
                         >
-                          {busy ? "Waiting for the wallet…" : `Sign · $${e.queue.usd}`}
+                          {busy ? "Waiting for the wallet…" : `Sign · ${e.queue.usd}`}
                         </button>
                       </div>
                     ) : (
@@ -751,8 +869,9 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-sm">
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
-                    <dt className="text-[11px] text-subtle">Max</dt>
-                    <dd className="font-mono">${env.maxUsd}</dd>
+                    <dt className="text-[11px] text-subtle">Remaining</dt>
+                    <dd className="font-mono">${remaining.toFixed(2)}</dd>
+                    <dd className="font-mono text-[10px] text-subtle">of ${env.maxUsd}</dd>
                   </div>
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-2">
                     <dt className="text-[11px] text-subtle">Side</dt>
@@ -835,6 +954,35 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             </div>
           );
         })}
+        </div>
+      </section>
+
+      <section>
+        <p className="mb-1 px-1 text-sm font-semibold">Playbook</p>
+        <p className="mb-2 px-1 text-xs text-muted">A contract is the cap, the action, and the order. The agent can ask. You still sign.</p>
+        {(draftOrder !== "market" || true) && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            <input value={draftPx} onChange={(e) => setDraftPx(e.target.value)} inputMode="decimal" placeholder="Limit or stop price" className="min-h-10 flex-1 rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
+            <input value={draftTo} onChange={(e) => setDraftTo(e.target.value)} placeholder="Pay address" className="min-h-10 min-w-0 flex-[1.4] rounded-full bg-[#1c1c1e] px-4 font-mono text-xs outline-none" />
+          </div>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {STRATEGIES.map((s) => {
+            const on = envs.some((e) => e.strategy === s.id && e.armed !== false);
+            return (
+              <div key={s.id} className={cn("rounded-[22px] border border-white/10 bg-[#10131c] p-4", on && "ring-1 ring-accent")}>
+                <p className="text-sm font-semibold">{s.title}</p>
+                <p className="mt-1 text-[11px] leading-snug text-muted">{s.line}</p>
+                <p className="mt-2 font-mono text-[11px] text-subtle">
+                  {s.action} · {s.order}
+                  {s.symbols.length ? ` · ${s.symbols.join(" ")}` : ""}
+                </p>
+                <button type="button" onClick={() => armStrategy(s)} className="mt-3 min-h-11 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
+                  {on ? "Update" : "Arm"}
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -921,24 +1069,6 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
             </button>
           ))}
         </div>
-      </section>
-
-      <section className="rounded-[22px] border border-white/[0.08] bg-[#10131c] p-4">
-        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Strategies</p>
-        <h3 className="mt-1 text-lg">Discount buys. Rich sells.</h3>
-        <p className="mt-1 text-sm text-muted">A name at least 2% under its mark is a buy. A name at least 2% over is a sell. The size is the amount under the cap. Phantom signs. The same cuts live in the Python book.</p>
-        <ul className="mt-3 space-y-2">
-          {bookSignals(book).map((row) => (
-            <li key={`${row.why}:${row.mint}`} className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 px-3 py-2">
-              <span>
-                <span className="block text-sm font-semibold">{row.side === "buy" ? "Buy" : "Sell"} {row.symbol}</span>
-                <span className="font-mono text-[11px] text-muted">{row.why} · {(row.premium * 100).toFixed(1)}% · ${sized(usd, spendCap())}</span>
-              </span>
-              <button type="button" disabled={busy} onClick={() => void signSignal(row)} className="min-h-9 rounded-full bg-accent px-3 text-xs font-semibold text-accent-fg disabled:opacity-40">Sign</button>
-            </li>
-          ))}
-        </ul>
-        {bookSignals(book).length === 0 ? <p className="mt-3 text-sm text-muted">Nothing is 2% through its mark.</p> : null}
       </section>
 
       {!env ? (

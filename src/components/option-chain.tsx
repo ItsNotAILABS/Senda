@@ -1,5 +1,5 @@
 import { chainFor, formatDebit, formatStrike, TENORS, type OptContract, type OptTenor } from "@/lib/option-chain";
-import { type HouseListing } from "@/lib/sol-house";
+import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
 export function OptionChain({
@@ -8,14 +8,12 @@ export function OptionChain({
   onTenor,
   busy,
   onBuy,
-  pickedId,
 }: {
   stock: HouseListing | null;
   tenor: OptTenor;
   onTenor: (t: OptTenor) => void;
   busy?: boolean;
   onBuy: (c: OptContract) => void;
-  pickedId?: string | null;
 }) {
   const rows = stock ? chainFor(stock, tenor) : [];
   const strikes = [...new Set(rows.map((r) => r.strike))];
@@ -63,10 +61,7 @@ export function OptionChain({
                     type="button"
                     disabled={busy || !call}
                     onClick={() => call && onBuy(call)}
-                    className={cn(
-                      "min-h-11 rounded-full px-3 text-left text-sm font-semibold tabular-nums text-up hover:bg-up/10",
-                      pickedId && pickedId === call?.id && "bg-up/15",
-                    )}
+                    className="min-h-11 rounded-full px-3 text-left text-sm font-semibold tabular-nums text-up hover:bg-up/10"
                   >
                     {call ? formatDebit(call.ask) : "—"}
                   </button>
@@ -83,10 +78,7 @@ export function OptionChain({
                     type="button"
                     disabled={busy || !put}
                     onClick={() => put && onBuy(put)}
-                    className={cn(
-                      "min-h-11 rounded-full px-3 text-right text-sm font-semibold tabular-nums text-down hover:bg-down/10",
-                      pickedId && pickedId === put?.id && "bg-down/15",
-                    )}
+                    className="min-h-11 rounded-full px-3 text-right text-sm font-semibold tabular-nums text-down hover:bg-down/10"
                   >
                     {put ? formatDebit(put.ask) : "—"}
                   </button>
@@ -95,7 +87,8 @@ export function OptionChain({
             })}
           </div>
           <p className="px-3 pt-2 text-xs leading-snug text-subtle">
-            Tap a debit to choose it. Sign moves that many cents of each dollar of size, and never less than $0.25. Close returns the debit.
+            Cash-or-nothing on {stock.symbol} last {formatUsd(stock.last)}. σ from the 24h move. Paper.
+            Tap a debit to lift.
           </p>
         </>
       )}

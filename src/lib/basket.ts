@@ -1,4 +1,4 @@
-/** Equal-weight and PRE8-style PreStocks packs. Paper. */
+/** PreStock packs. Legs are quoted live and signed one by one. */
 
 export const PACKS = [
   { id: "pre8", name: "PRE8", symbols: ["OPENAI", "ANTHROPIC", "SPACEX", "ANDURIL", "KALSHI", "NEURALINK", "FIGUREAI", "POLYMARKET"] },

@@ -1,35 +1,18 @@
-import { useEffect, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import { AgentFloor } from "@/components/agent-floor";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { getHouse, type HouseListing } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { AGENT_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/agents")({
-  loader: () => getHouse(),
-  component: AgentsPage,
-  errorComponent: AgentsError,
+  component: Layout,
 });
 
-function AgentsPage() {
-  const seed = Route.useLoaderData();
-  const [house, setHouse] = useState<HouseListing[]>(seed);
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      getHouse().then(setHouse).catch(() => undefined);
-    }, 20_000);
-    return () => window.clearInterval(id);
-  }, []);
+function Layout() {
   return (
     <AppShell>
-      <AgentFloor names={house} />
-    </AppShell>
-  );
-}
-
-function AgentsError({ error }: { error: Error }) {
-  return (
-    <AppShell>
-      <p className="px-6 py-10 text-sm text-down">{error.message}</p>
+      <ProductShell title="Agents" pages={AGENT_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

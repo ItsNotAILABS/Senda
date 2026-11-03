@@ -3,12 +3,10 @@ import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
 import { getMxnDesk, type MxnDesk } from "@/lib/mxn-rate";
 import { loadPayees, savePayee, type MxPayee } from "@/lib/mx-payees";
-import { sendCut } from "@/lib/desk-fee";
 import { payUsdc } from "@/lib/solana-pay";
 import { connectPhantom } from "@/lib/phantom";
-import { rememberClear } from "@/lib/clear-tape";
-import { bumpClears } from "@/components/clear-strip";
-import { SignedReceipt } from "@/components/money-flow";
+import { rememberClear } from "@/lib/clearing";
+import { humanWalletError } from "@/lib/mobile-wallet";
 import { spendCap } from "@/lib/spend-cap";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +34,7 @@ function short(addr: string): string {
   return addr.length > 12 ? `${addr.slice(0, 4)}…${addr.slice(-4)}` : addr;
 }
 
-export function MexicoSend({ owner }: { owner: string }) {
+export function MexicoSend({ owner, onLinked }: { owner: string; onLinked?: (addr: string) => void }) {
   const [step, setStep] = useState<Step>("who");
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
@@ -107,23 +105,22 @@ export function MexicoSend({ owner }: { owner: string }) {
     setSig("");
     try {
       const from = owner || (await connectPhantom());
+      if (!owner) onLinked?.(from);
       const memo = note.trim() || `USDC to ${name.trim()}`;
-      const done = await payUsdc({ owner: from, to: who, usd: sendUsdc, memo, deskFee: true });
+      const done = await payUsdc({ owner: from, to: who, usd: sendUsdc, memo });
       setSig(done.signature);
       setPayees(savePayee({ name, address: who }));
       rememberClear({
+        desk: "send",
+        title: `USDC to ${name.trim() || short(who)}`,
+        legs: [{ side: "out", asset: "USDC", amount: sendUsdc, where: who }],
+        feeUsd: 0,
         sig: done.signature,
-        from,
-        to: who,
-        usd: sendUsdc,
-        memo,
-        kind: "send",
-        status: "pending",
+        status: "signed",
       });
-      bumpClears();
       toast.success("Signed. USDC left your wallet.");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The transfer did not send.");
+      toast.error(humanWalletError(e instanceof Error ? e.message : "The transfer did not send."));
     } finally {
       setBusy(false);
     }
@@ -228,7 +225,7 @@ export function MexicoSend({ owner }: { owner: string }) {
             </div>
             <div className="flex justify-between gap-3 py-1">
               <dt className="text-muted">Fee</dt>
-              <dd className="text-right">{sendCut(sendUsdc).why}</dd>
+              <dd>Senda $0 · SOL network fee</dd>
             </div>
             <div className="flex justify-between gap-3 py-1">
               <dt className="text-muted">Note</dt>
@@ -261,7 +258,9 @@ export function MexicoSend({ owner }: { owner: string }) {
             {busy ? "Waiting on the wallet" : owner ? "Sign transfer" : "Open wallet and sign"}
           </button>
           {sig ? (
-            <SignedReceipt title="Signed" amount={usdc(sendUsdc)} detail={`USDC left your wallet for ${name.trim() || short(who)}. The peso figure was a quote.`} sig={sig} />
+            <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
+              {sig}
+            </a>
           ) : null}
         </div>
       ) : null}

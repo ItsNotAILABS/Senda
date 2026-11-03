@@ -2,6 +2,7 @@
 
 import { EVM_CHAINS, quoteIsSane, type EvmMarket, type LifiQuote } from "@/lib/trade-book.mjs";
 import { spendCap } from "@/lib/spend-cap";
+import { stageMove, sealMove } from "@/lib/moves";
 
 type Eth = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -69,6 +70,7 @@ async function send(tx: { from: string; to: string; data: string; value?: string
   if (tx.gas) body.gas = tx.gas;
   const hash = (await ethereum().request({ method: "eth_sendTransaction", params: [body] })) as string;
   if (!hash) throw new Error("The wallet did not return a transaction.");
+  sealMove(hash);
   return hash;
 }
 
@@ -103,6 +105,7 @@ export async function signLifi(market: EvmMarket, quote: LifiQuote, spend: { tok
   const owner = await account();
   const token = quote.fromToken || spend.token;
   if (quote.approvalAddress) await approve(token, owner, quote.approvalAddress, spend.amount);
+  stageMove({ usd: spend.usd, kind: "swap", title: `Swap $${spend.usd.toFixed(2)}` });
   return send({
     from: owner,
     to: quote.to,

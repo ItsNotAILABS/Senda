@@ -1,29 +1,10 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
+import { MCC } from "@/lib/card-issuing";
 import { AccountDetails } from "@/components/account-details";
-import { BusinessDesk } from "@/components/business-desk";
-import { BatchPay } from "@/components/batch-pay";
-import { CardUse } from "@/components/card-use";
-import { MexicoSend } from "@/components/mexico-send";
-import { SignCall } from "@/components/sign-call";
-import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
-import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
-import { CardTerms } from "@/components/card-terms";
-import { CASH, USDC } from "@/lib/jup-exec";
-import { signRoute } from "@/lib/jup-sign";
-import { humanWalletError } from "@/lib/mobile-wallet";
-import { SignedReceipt, solAddress } from "@/components/money-flow";
+import { MoneyBar } from "@/components/money-bar";
+import { payUsdc } from "@/lib/solana-pay";
 import { TabLead } from "@/components/tab-lead";
-import { BrowserCard } from "@/components/browser-card";
-import { DeskEarn } from "@/components/desk-earn";
-import { FundRails } from "@/components/fund-rails";
-import { JumpStrip } from "@/components/jump-strip";
-import { PrepaidCard } from "@/components/prepaid-card";
-import { connectPhantom } from "@/lib/phantom";
-import { runPrestock } from "@/lib/prestock";
-import { setSpendCap } from "@/lib/spend-cap";
-import { getHouse } from "@/lib/sol-house";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
@@ -35,6 +16,8 @@ const KINDS: { id: CardKind; label: string; line: string }[] = [
   { id: "once", label: "One charge", line: "Then the number dies." },
   { id: "fleet", label: "Fleet", line: "Higher daily cap." },
 ];
+
+const CAPS = [20, 40, 80, 150];
 
 /** Real auths only. Blank merchant stays blank — nothing is named for you. */
 function groupAuths(auths: CardAuth[]) {
@@ -52,19 +35,25 @@ function groupAuths(auths: CardAuth[]) {
   return order.map((merchant) => ({ merchant, rows: map.get(merchant) ?? [] }));
 }
 
-/** What Solana can already settle. A tap fills the card. It does not invent a store. */
-const PAYS: { id: string; label: string; who: string; cap: number; line: string }[] = [
-  { id: "jup", label: "PreStock", who: "Jupiter", cap: 25, line: "USDC into the live name" },
-  { id: "send", label: "USDC", who: "Solana Pay", cap: 20, line: "Their address, your signature" },
-  { id: "sol", label: "SOL", who: "Jupiter", cap: 15, line: "SOL into USDC on Convert" },
-  { id: "cover", label: "Cover", who: "Your wallet", cap: 4, line: "Premium. The token stays." },
-  { id: "agent", label: "Agent", who: "Spend cap", cap: 25, line: "It can ask. You still sign." },
-  { id: "lend", label: "Borrow", who: "Kamino", cap: 50, line: "Only names Kamino already lists" },
-  { id: "wrap", label: "Wrap", who: "Phantom USDC", cap: 25, line: "A claim that stays in the wallet" },
-  { id: "book", label: "The book", who: "PreStocks", cap: 10, line: "The names that are live now" },
+/** Real merchants. A tap only fills this checkout — it does not mint or charge. */
+const STORES: { id: string; label: string; merchant: string; cap: number; mcc: string }[] = [
+  { id: "coffee", label: "Coffee", merchant: "Starbucks", cap: 8, mcc: "5812" },
+  { id: "transit", label: "Transit", merchant: "Uber", cap: 24, mcc: "4121" },
+  { id: "grocery", label: "Grocery", merchant: "Whole Foods", cap: 80, mcc: "5411" },
+  { id: "online", label: "Online", merchant: "Amazon", cap: 45, mcc: "5999" },
+  { id: "fuel", label: "Fuel", merchant: "Shell", cap: 60, mcc: "5541" },
+  { id: "phone", label: "Phone", merchant: "Verizon", cap: 85, mcc: "0000" },
+  { id: "software", label: "Software", merchant: "Adobe", cap: 55, mcc: "5815" },
+  { id: "travel", label: "Travel", merchant: "United Airlines", cap: 240, mcc: "4511" },
 ];
 
-export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
+export function CardsDesk({
+  initialSpend = 0,
+  view = "all",
+}: {
+  initialSpend?: number;
+  view?: "all" | "account" | "pay" | "chain" | "number" | "expenses" | "rails";
+}) {
   const { w, freeze, cardSpend, issue, terminate, replace, setLimit, sealIssued, issueCheckout } = useWallet();
   const [openId, setOpenId] = useState<string | null>(null);
   const [kind, setKind] = useState<CardKind>("virtual");
@@ -72,9 +61,6 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   const [limitRaw, setLimitRaw] = useState("1500");
   const [payId, setPayId] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
-
-  const [payUsd, setPayUsd] = useState("20");
-  const [payTick, setPayTick] = useState(0);
 
   const openCards = w.cards.filter((c) => c.status !== "terminated");
   const expenses = groupAuths(w.cardAuths ?? []);
@@ -86,44 +72,28 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
   }
 
   return (
-    <main className="senda-rise space-y-2 px-3 py-2 lg:px-4">
-      <JumpStrip />
+    <main className="senda-rise space-y-3 px-3 py-3 lg:px-4">
+      {view === "all" ? (
+      <>
       <TabLead
-        kicker="Pay"
-        title="Your pockets."
-        accent="One wallet."
-        line="Dollars, euros, pesos, and the other stables already on this address. A number is a cap on that balance. Phantom signs the send. The card and the wallet are the same money."
-        live={["Pockets", "One-time cap", "Payroll", "Pesos"]}
-        coming={["An agent can queue a send. You still sign."]}
-        audit={{
-          live: "USDC and SOL leave only when Phantom signs. A bad address, an empty account, or a cap stops it. The error stays on the card.",
-          hold: "The number caps a spend of the balance already on this wallet. It is shown once.",
-        }}
+        kicker="Shop"
+        title="A number for the store"
+        accent="not the token."
+        line="The dollar number is a Lead Bank account. Deposits become USDC in the wallet. The Visa is Rain’s, not a number made here."
+        live={["Account details", "USDC address", "One charge"]}
+        coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
-      <CardConnect owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-      <BusinessDesk owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-      <PayOnChain
-        owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
-        usdSeed={payUsd}
-        focus={payTick}
-      />
-      <PrepaidCard owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-      <BatchPay owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-      <MexicoSend owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
-      <BrowserCard />
+      <MoneyBar />
+      </>
+      ) : null}
 
-      {(() => {
-        const shopOwner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-        const shopCard = openCards.find((c) => c.status === "active" && !c.frozen) ?? openCards[0];
-        return shopCard && shopOwner ? <CardUse card={shopCard} owner={shopOwner} /> : null;
-      })()}
+      {view === "all" || view === "account" ? (
+      <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+      ) : null}
 
+      {view === "all" || view === "pay" ? (
       <CheckoutPay
         initialSpend={initialSpend}
-        onRail={(id, usd) => {
-          setPayUsd(String(usd));
-          if (id === "send") setPayTick((n) => n + 1);
-        }}
         onMint={(cap, merchant, name) => issueCheckout(cap, merchant, name)}
         onAuth={(id, amount, merchant, mcc) => {
           const r = cardSpend(amount, merchant || "Checkout", id, mcc);
@@ -132,11 +102,15 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           return r.ok;
         }}
       />
+      ) : null}
 
-      <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+      {view === "all" || view === "chain" ? (
+      <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+      ) : null}
 
-      <CardRails />
+      {view === "all" || view === "rails" ? <CardRails /> : null}
 
+      {view === "all" || view === "expenses" ? (
       <section className={cn(PANEL, "p-4")}>
         <h2 className="text-sm font-semibold">Expenses</h2>
         {expenses.length === 0 ? (
@@ -160,7 +134,10 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
           </ul>
         )}
       </section>
+      ) : null}
 
+      {view === "all" || view === "number" ? (
+      <>
       <div className="flex justify-end">
         <button
           type="button"
@@ -244,13 +221,17 @@ export function CardsDesk({ initialSpend = 0 }: { initialSpend?: number }) {
                 if (!r.ok) toast.error(r.error);
               }}
               onPay={() => setPayId(payId === c.id ? null : c.id)}
-              owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
+              onAuth={(amount, merchant, mcc) => {
+                const r = cardSpend(amount, merchant, c.id, mcc);
+                if (!r.ok) toast.error(r.error);
+                else toast.success(`Approved ${formatMoney(amount)} · ${merchant}`);
+              }}
             />
           ))}
         </section>
       ) : null}
-      <DeskEarn />
-      <FundRails />
+      </>
+      ) : null}
     </main>
   );
 }
@@ -259,7 +240,6 @@ function CheckoutPay({
   initialSpend = 0,
   onMint,
   onAuth,
-  onRail,
 }: {
   initialSpend?: number;
   onMint: (
@@ -268,9 +248,7 @@ function CheckoutPay({
     name: string,
   ) => { ok: true; reveal: { id: string; pan: string; cvv: string; expiry: string; last4: string } } | { ok: false; error: string };
   onAuth: (id: string, amount: number, merchant: string, mcc: string) => boolean;
-  onRail?: (id: string, usd: number) => void;
 }) {
-  const navigate = useNavigate();
   const [cap, setCap] = useState(initialSpend > 0 ? String(initialSpend) : "40");
   const [merchant, setMerchant] = useState("");
   const [name, setName] = useState("SENDA");
@@ -278,98 +256,17 @@ function CheckoutPay({
   const [picked, setPicked] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ id: string; pan: string; cvv: string; expiry: string; last4: string } | null>(null);
   const [spent, setSpent] = useState(false);
-  const [paying, setPaying] = useState(false);
-  const rail = PAYS.find((p) => p.id === picked) ?? null;
-  const store = merchant.trim() || "Solana";
+  const store = merchant.trim() || MCC.find((m) => m.id === mcc)?.label || "Store";
 
-  function pickPay(id: string) {
-    const s = PAYS.find((x) => x.id === id);
+  function pickStore(id: string) {
+    const s = STORES.find((x) => x.id === id);
     if (!s) return;
     setPicked(s.id);
-    setMerchant(s.who);
+    setMerchant(s.merchant);
     setCap(String(s.cap));
-    setReveal(null);
-    setSpent(false);
-    onRail?.(s.id, s.cap);
+    setMcc(s.mcc);
+    setName("SENDA");
   }
-
-  async function settle() {
-    const n = Number(cap) || 0;
-    if (picked === "jup") {
-      setPaying(true);
-      try {
-        const house = await getHouse();
-        const nameOnBook = house
-          .filter((row) => row.venue === "prestocks" && row.last > 0)
-          .sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0))[0];
-        if (!nameOnBook) throw new Error("No live name on the book.");
-        const who = await connectPhantom();
-        const done = await runPrestock({ owner: who, mint: nameOnBook.mint, side: "buy", usd: n || 25, price: nameOnBook.last });
-        toast.success(`${nameOnBook.symbol} is in the wallet. ${done.signature.slice(0, 8)}…`);
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Jupiter did not send.");
-      } finally {
-        setPaying(false);
-      }
-      return;
-    }
-    if (picked === "send") {
-      document.getElementById("solana-pay")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      toast.message("Paste their address. Phantom signs the USDC.");
-      return;
-    }
-    if (picked === "agent") {
-      setSpendCap(n || 25);
-      toast.success(`Agent cap is $${n || 25}. A send above it is refused.`);
-      return;
-    }
-    if (picked === "sol") {
-      void navigate({ to: "/wallet" });
-      return;
-    }
-    if (picked === "cover") {
-      void navigate({ to: "/cover" });
-      return;
-    }
-    if (picked === "lend") {
-      void navigate({ to: "/invest" });
-      return;
-    }
-    if (picked === "wrap") {
-      void navigate({ to: "/vault" });
-      return;
-    }
-    if (picked === "book") {
-      void navigate({ to: "/pre" });
-      return;
-    }
-    if (!reveal) {
-      const r = onMint(n, merchant, name.trim() || "SENDA");
-      if (!r.ok) toast.error(r.error);
-      else {
-        setReveal(r.reveal);
-        setSpent(false);
-      }
-      return;
-    }
-    const ok = onAuth(reveal.id, n, store, mcc);
-    if (ok) setSpent(true);
-  }
-
-  const button =
-    picked === "jup"
-      ? paying
-        ? "Waiting on the wallet"
-        : "Buy on Jupiter"
-      : picked === "send"
-        ? "Pay in USDC"
-        : picked === "agent"
-          ? "Set the cap"
-          : picked
-            ? "Open it"
-            : reveal
-              ? "Charge"
-              : "Make the number";
 
   return (
     <section className="grid items-stretch gap-3 lg:grid-cols-[minmax(280px,0.82fr)_minmax(0,1.18fr)]">
@@ -380,7 +277,7 @@ function CheckoutPay({
           <McMark />
         </div>
         <div className="relative mt-6">
-          {reveal && !picked ? (
+          {reveal ? (
             <>
               <p className="font-mono text-xl tracking-[0.14em] sm:text-2xl">{reveal.pan}</p>
               <p className="mt-3 font-mono text-sm tabular-nums">
@@ -391,7 +288,7 @@ function CheckoutPay({
           ) : (
             <p className="font-mono text-xl tracking-[0.18em] text-white/35">•••• •••• •••• ••••</p>
           )}
-          <p className="mt-3 text-sm">{rail ? rail.who : store}</p>
+          <p className="mt-3 text-sm">{store}</p>
           <label className="mt-2 block">
             <span className="sr-only">Amount</span>
             <input
@@ -405,38 +302,64 @@ function CheckoutPay({
           {spent ? <p className="text-sm text-accent">Used</p> : null}
         </div>
         <div className="relative mt-4 flex flex-wrap gap-2">
+          {reveal ? (
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(reveal.pan.replace(/\s/g, ""));
+                toast.success("Number copied. It is still not saved.");
+              }}
+              className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold"
+            >
+              Copy number
+            </button>
+          ) : null}
           {!spent ? (
             <button
               type="button"
-              disabled={paying}
-              onClick={() => void settle()}
-              className="min-h-11 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+              onClick={() => {
+                if (!reveal) {
+                  const r = onMint(Number(cap) || 0, merchant, name.trim() || "SENDA");
+                  if (!r.ok) toast.error(r.error);
+                  else {
+                    setReveal(r.reveal);
+                    setSpent(false);
+                  }
+                  return;
+                }
+                const ok = onAuth(reveal.id, Number(cap) || 0, store, mcc);
+                if (ok) setSpent(true);
+              }}
+              className="min-h-11 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg"
             >
-              {button}
-              {reveal && !picked ? <span className="font-mono"> ${Number(cap) || 0}</span> : null}
+              {reveal ? (
+                <>
+                  Charge <span className="font-mono">${Number(cap) || 0}</span>
+                </>
+              ) : (
+                "Make the number"
+              )}
             </button>
           ) : null}
         </div>
       </div>
 
       <div className={cn(PANEL, "p-3 sm:p-4")}>
-        <p className="px-1 pb-2 text-[11px] tracking-[0.14em] text-subtle uppercase">Solana already settles these</p>
-        <div className="grid grid-cols-2 gap-2">
-          {PAYS.map((s) => {
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {STORES.map((s) => {
             const on = picked === s.id;
             return (
               <button
                 key={s.id}
                 type="button"
-                onClick={() => pickPay(s.id)}
+                onClick={() => pickStore(s.id)}
                 className={cn(
                   "rounded-[22px] border border-white/10 px-3 py-3 text-left",
                   on ? "border-transparent bg-accent text-accent-fg" : "bg-black/30",
                 )}
               >
                 <span className="block text-sm font-semibold">{s.label}</span>
-                <span className={cn("mt-1 block truncate text-xs", on ? "text-accent-fg/80" : "text-muted")}>{s.who}</span>
-                <span className={cn("mt-1 block truncate text-[11px]", on ? "text-accent-fg/70" : "text-subtle")}>{s.line}</span>
+                <span className={cn("mt-1 block truncate text-xs", on ? "text-accent-fg/80" : "text-muted")}>{s.merchant}</span>
                 <span className="mt-2 block font-mono text-sm tabular-nums">${s.cap}</span>
               </button>
             );
@@ -457,190 +380,66 @@ function ChipMark() {
   );
 }
 
-function CardConnect({ owner }: { owner: string }) {
-  const [where, setWhere] = useState<"jupiter" | "avici" | "kast" | "xplace" | "phantom" | "fuse">("jupiter");
-  const [asset, setAsset] = useState("USDC");
+function PayOnChain({ owner }: { owner: string }) {
   const [to, setTo] = useState("");
-  const [usd, setUsd] = useState("10");
-  const [busy, setBusy] = useState(false);
-  const book = CARD_BOOK[where];
-  const note: Record<typeof where, string> = {
-    jupiter: "USDC only. Up to 200,000.",
-    avici: "USDC only, to the escrow they show. Up to 200,000.",
-    kast: "USDC only. They hold the deposit. Up to 200,000.",
-    xplace: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.",
-    phantom: "Swaps USDC into Bridge’s CASH token, in this wallet. Their Visa spends that token.",
-    fuse: "USDC only. Up to 200,000.",
-  };
-
-  async function send() {
-    const n = Number(usd);
-    if (!(n > 0)) {
-      toast.error("Enter an amount.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const who = owner || (await connectPhantom());
-      if (where === "phantom") {
-        const done = await signRoute({
-          owner: who,
-          inputMint: USDC,
-          outputMint: CASH,
-          amountRaw: Math.round(n * 1e6),
-          outDecimals: 6,
-          inDecimals: 6,
-          usd: n,
-          symbol: "CASH",
-        });
-        toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
-      } else {
-        const bound = bindCardSend({ program: where, symbol: asset, dest: to, amount: n });
-        const sigOut = bound.asset.native
-          ? await paySol({ owner: who, to: bound.dest, sol: n })
-          : bound.asset.symbol === "USDC"
-            ? (await payUsdc({ owner: who, to: bound.dest, usd: n, memo: where, deskFee: false })).signature
-            : (await payToken({ owner: who, to: bound.dest, mint: bound.asset.mint, symbol: bound.asset.symbol, amount: n, decimals: bound.asset.decimals })).signature;
-        const prior = (() => {
-          try {
-            return JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") as Record<string, string>;
-          } catch {
-            return {} as Record<string, string>;
-          }
-        })();
-        prior[where] = bound.dest;
-        localStorage.setItem("senda.cardfund.v2", JSON.stringify(prior));
-        toast.success(`${n} ${bound.asset.symbol} sent. solscan.io/tx/${sigOut}`);
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "The wallet did not send.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
-      <h2 className="text-lg font-semibold">Fund a card you already have</h2>
-      <label className="mt-3 block text-[12px] text-white/45">
-        Where it goes
-        <select value={where} onChange={(e) => { const next = e.target.value as typeof where; setWhere(next); setAsset(CARD_BOOK[next]?.assets[0].symbol ?? "USDC"); }} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
-          <option value="jupiter">Jupiter</option>
-          <option value="avici">Avici</option>
-          <option value="kast">KAST</option>
-          <option value="xplace">XPlace</option>
-          <option value="phantom">Phantom</option>
-          <option value="fuse">Fuse</option>
-        </select>
-      </label>
-      {where === "phantom" ? null : (
-        <>
-          {book && book.assets.length > 1 ? (
-            <label className="mt-3 block text-[12px] text-white/45">
-              Asset
-              <select value={asset} onChange={(e) => setAsset(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
-                {book.assets.map((row) => (
-                  <option key={row.symbol} value={row.symbol}>{row.symbol}</option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <label className="mt-3 block text-[12px] text-white/45">
-            Their address
-            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
-          </label>
-        </>
-      )}
-      <label className="mt-3 block text-[12px] text-white/45">
-        USDC
-        <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white" />
-      </label>
-      <p className="mt-3 text-[13px] leading-snug text-white/50">{note[where]}</p>
-      <CardTerms id={where} />
-      <button type="button" disabled={busy} onClick={() => void send()} className="mt-3 h-12 w-full rounded-full bg-[#d7e36a] text-[15px] font-semibold text-black disabled:opacity-50">
-        {busy ? "Waiting on the wallet" : where === "phantom" ? "Swap into CASH" : where === "fuse" ? "Send one way" : "Sign and send"}
-      </button>
-    </section>
-  );
-}
-
-function PayOnChain({ owner, usdSeed, focus }: { owner: string; usdSeed: string; focus: number }) {
-  const [asset, setAsset] = useState<"USDC" | "SOL">("USDC");
-  const [to, setTo] = useState("");
-  const [usd, setUsd] = useState(usdSeed || "20");
-  const [ref, setRef] = useState("");
+  const [usd, setUsd] = useState("20");
   const [sig, setSig] = useState("");
-  const [fail, setFail] = useState("");
   const [busy, setBusy] = useState(false);
-  const [call, setCall] = useState(false);
-  const dest = solAddress(to);
-  const amount = Number(usd);
-
-  useEffect(() => {
-    if (focus > 0) setUsd(usdSeed);
-  }, [focus, usdSeed]);
-
-  async function sign() {
-    if (!owner) return toast.error("Connect Phantom.");
-    if (!dest) return toast.error("That is not a Solana address.");
-    if (!(amount > 0)) return toast.error("Enter the amount.");
-    setBusy(true);
-    setFail("");
-    setSig("");
-    try {
-      const signature = asset === "USDC"
-        ? (await payUsdc({ owner, to: dest, usd: amount, memo: ref.trim() || "wire", deskFee: true })).signature
-        : await paySol({ owner, to: dest, sol: amount });
-      setSig(signature);
-      setCall(false);
-      toast.success(asset === "USDC" ? "Signed. USDC left this wallet." : "Signed. SOL left this wallet.");
-    } catch (e) {
-      const message = humanWalletError(e instanceof Error ? e.message : "The chain rejected it.");
-      setFail(message);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
-    <section id="solana-pay" className={cn(PANEL, "p-4")}>
-      <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Wire</p>
-      <h2 className="mt-1 text-2xl tracking-tight">One signature. It can fail.</h2>
-      <p className="mt-1 max-w-xl text-sm text-muted">USDC is a Solana Pay transfer with a reference. SOL is the native coin. Phantom signs. A bad address, no USDC account, or a size over the cap is a reject. There is no bank in the middle.</p>
-      <div className="mt-3 flex gap-1">
-        {(["USDC", "SOL"] as const).map((id) => (
-          <button key={id} type="button" onClick={() => { setAsset(id); setSig(""); setFail(""); }} className={cn("min-h-9 rounded-full px-3 text-xs font-semibold", asset === id ? "bg-white text-black" : "bg-white/10")}>{id}</button>
-        ))}
+    <section className={cn(PANEL, "grid gap-3 p-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end")}>
+      <div>
+        <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Solana Pay</p>
+        <h2 className="mt-1 text-lg">Pay the address in USDC</h2>
+        <p className="mt-1 max-w-xl text-sm text-muted">
+          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number above is a cap on this browser. This one moves on mainnet.
+        </p>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <input value={usd} onChange={(e) => { setUsd(e.target.value); setSig(""); setFail(""); }} inputMode="decimal" aria-label="Amount" className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none" />
-        <input value={to} onChange={(e) => { setTo(e.target.value); setSig(""); setFail(""); }} placeholder="Their Solana address" spellCheck={false} className="min-h-12 rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none" />
+      <div className="grid gap-2">
+        <input
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="Merchant Solana address"
+          spellCheck={false}
+          className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
+        />
+        <div className="flex gap-2">
+          <input
+            value={usd}
+            onChange={(e) => setUsd(e.target.value)}
+            inputMode="decimal"
+            aria-label="USDC"
+            className="min-h-12 w-28 rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              if (!owner) {
+                toast.error("Connect a Solana wallet.");
+                return;
+              }
+              setBusy(true);
+              setSig("");
+              void payUsdc({ owner, to, usd: Number(usd) })
+                .then((r) => {
+                  setSig(r.signature);
+                  toast.success("Signed. USDC is on the way.");
+                })
+                .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The transfer did not send."))
+                .finally(() => setBusy(false));
+            }}
+            className="min-h-12 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
+          >
+            {busy ? "Waiting on the wallet" : owner ? "Sign USDC" : "Connect a wallet first"}
+          </button>
+        </div>
+        {sig ? (
+          <a className="truncate font-mono text-xs text-accent" href={`https://solscan.io/tx/${sig}`} target="_blank" rel="noreferrer">
+            {sig}
+          </a>
+        ) : null}
       </div>
-      {asset === "USDC" ? (
-        <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Reference, optional" className="mt-2 min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm outline-none" />
-      ) : (
-        <p className="mt-2 text-xs text-subtle">SOL has no memo on this wire. The signature is the reference.</p>
-      )}
-      <button type="button" disabled={busy || !owner} onClick={() => setCall(true)} className="mt-3 min-h-12 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-40">
-        {owner ? `Review ${amount || 0} ${asset}` : "Connect Phantom first"}
-      </button>
-      {fail ? <p key={fail} className="senda-shake mt-3 rounded-2xl bg-down/15 px-3 py-2 text-sm text-down">{fail}</p> : null}
-      {sig ? <SignedReceipt title="Signed" amount={`${amount} ${asset}`} detail={ref.trim() && asset === "USDC" ? `Reference ${ref.trim()}. The chain has it.` : "The chain has it. No issuer."} sig={sig} /> : null}
-      <SignCall
-        open={call}
-        wallet="Phantom"
-        title={`Wire ${amount || 0} ${asset}`}
-        account={owner}
-        waiting={busy}
-        lines={[
-          dest ? `To ${dest}` : "The address is not a Solana address yet.",
-          asset === "USDC" ? `Reference: ${ref.trim() || "wire"}.` : "Native SOL. No reference field.",
-          "Reject here and Phantom is not asked.",
-        ]}
-        onReject={() => { if (!busy) setCall(false); }}
-        onSign={() => void sign()}
-      />
     </section>
   );
 }
@@ -683,32 +482,11 @@ const RAILS: { name: string; spend: string; holds: string; clears: string; here:
     here: "Not ours. The card lives in Jupiter.",
   },
   {
-    name: "Avici",
-    spend: "USDC in their escrow",
-    holds: "Avici’s card contract",
-    clears: "Their Visa.",
-    here: "Paste the address they show. The wallet sends USDC.",
-  },
-  {
     name: "KAST",
     spend: "USDC, USDT, or PYUSD, deposited on Solana",
     holds: "KAST. Custodial.",
     clears: "Visa, including a Solana-branded physical card.",
-    here: "Paste the address they show. This send is USDC.",
-  },
-  {
-    name: "XPlace",
-    spend: "Collateral they name",
-    holds: "Their Solana contract",
-    clears: "Their Visa, against a credit line.",
-    here: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused.",
-  },
-  {
-    name: "Fuse",
-    spend: "USDC on Solana",
-    holds: "The Fuse card account",
-    clears: "Their Visa. United States, except New York and Alaska.",
-    here: "Paste the address they show.",
+    here: "Not ours. KYC in the KAST app.",
   },
   {
     name: "Solflare",
@@ -729,7 +507,7 @@ function CardRails() {
         </div>
         <div>
           <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">2 · Charge</p>
-          <p className="mt-1 text-sm text-muted">Receive copies the wallet. Spend signs USDC out to a send, a PreStock, or cover. The card ledger writes the signature. It does not invent a balance.</p>
+          <p className="mt-1 text-sm text-muted">The charge debits Senda cash on this browser. It does not ask a bank, and a terminal will decline it.</p>
         </div>
         <div>
           <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">3 · A real swipe</p>
@@ -775,7 +553,7 @@ function CardFace({
   onSeal,
   onLimit,
   onPay,
-  owner,
+  onAuth,
 }: {
   card: Card;
   revealed: boolean;
@@ -787,9 +565,12 @@ function CardFace({
   onSeal: () => void;
   onLimit: (n: number) => void;
   onPay: () => void;
-  owner: string;
+  onAuth: (amount: number, merchant: string, mcc: string) => void;
 }) {
   const masked = card.sealed || !card.pan;
+  const [merchant, setMerchant] = useState("");
+  const [amt, setAmt] = useState("25");
+  const [mcc, setMcc] = useState("5999");
   const [lim, setLim] = useState(String(card.dailyLimit));
   const status = card.frozen ? "Frozen" : masked ? "Sealed" : card.disposable ? "One charge" : "Live";
 
@@ -843,7 +624,7 @@ function CardFace({
             {revealed ? "Hide" : "Show"}
           </button>
           <button type="button" onClick={onPay} className="min-h-11 rounded-full bg-accent px-4 text-xs font-semibold text-accent-fg">
-            {paying ? "Close" : "Use"}
+            Charge
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -871,7 +652,57 @@ function CardFace({
             </button>
           </form>
         </div>
-        {paying ? <CardUse card={card} owner={owner} /> : null}
+        {paying ? (
+          <div className="rounded-[18px] border border-white/10 bg-black/30 p-3">
+            <input
+              value={merchant}
+              onChange={(e) => setMerchant(e.target.value)}
+              placeholder="Store"
+              className="min-h-11 w-full rounded-xl bg-[#10131c] px-3 text-sm outline-none"
+            />
+            <div className="mt-2 flex gap-2">
+              {CAPS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setAmt(String(n))}
+                  className={cn(
+                    "grid size-10 flex-1 place-items-center rounded-full font-mono text-[11px] font-semibold",
+                    Number(amt) === n ? "bg-accent text-accent-fg" : "bg-[#10131c] text-muted",
+                  )}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <input
+              value={amt}
+              onChange={(e) => setAmt(e.target.value)}
+              inputMode="decimal"
+              aria-label="Charge amount"
+              className="mt-2 min-h-11 w-full rounded-xl bg-[#10131c] px-3 font-mono text-sm outline-none"
+            />
+            <div className="mt-2 flex flex-wrap gap-1">
+              {MCC.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setMcc(m.id)}
+                  className={cn("min-h-8 rounded-full px-2.5 text-[11px] font-semibold", mcc === m.id ? "bg-accent text-accent-fg" : "text-muted")}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => onAuth(Number(amt) || 0, merchant.trim() || "Store", mcc)}
+              className="mt-3 min-h-11 w-full rounded-full bg-accent text-xs font-semibold text-accent-fg"
+            >
+              Charge {formatMoney(Number(amt) || 0)}
+            </button>
+          </div>
+        ) : null}
       </div>
     </article>
   );

@@ -3,8 +3,6 @@
  * Kalshi private keys stay in this tab only — never written to the ledger.
  */
 
-import { connectPhantom } from "@/lib/phantom";
-
 export type SolLink = {
   address: string;
   linkedAt: number;
@@ -110,7 +108,24 @@ export function shortAddress(addr: string): string {
 }
 
 export async function requestSolanaWallet(): Promise<string> {
-  return connectPhantom();
+  const w = window as unknown as {
+    solana?: {
+      connect: () => Promise<{ publicKey?: { toString: () => string } }>;
+    };
+    phantom?: {
+      solana?: {
+        connect: () => Promise<{ publicKey?: { toString: () => string } }>;
+      };
+    };
+  };
+  const provider = w.phantom?.solana ?? w.solana;
+  if (!provider) {
+    throw new Error("No Phantom in this browser. Open in a window with Phantom.");
+  }
+  const res = await provider.connect();
+  const addr = res?.publicKey?.toString();
+  if (!addr) throw new Error("Wallet returned no account.");
+  return addr;
 }
 
 export async function requestPolyWallet(): Promise<string> {

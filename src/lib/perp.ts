@@ -1,6 +1,4 @@
-/** Perp mark on a PreStock print. Margin and funding come from that print. */
-
-import { fundingPerHour } from "@/lib/market-math";
+/** Perps on PreStocks last. Funding from premium-to-mark. Paper. */
 
 const KEY = "senda.perp.v1";
 
@@ -11,8 +9,6 @@ export type PerpPos = {
   side: "long" | "short";
   notional: number;
   entry: number;
-  mark: number;
-  margin: number;
   createdAt: string;
 };
 
@@ -22,7 +18,7 @@ export function loadPerps(): PerpPos[] {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return [];
     const p = JSON.parse(raw) as PerpPos[];
-    return Array.isArray(p) ? p.map((row) => ({ ...row, mark: row.mark || 0, margin: row.margin || 0 })) : [];
+    return Array.isArray(p) ? p : [];
   } catch {
     return [];
   }
@@ -43,19 +39,15 @@ export function openPerp(
   side: "long" | "short",
   notional: number,
   entry: number,
-  mark: number,
-  margin: number,
 ): PerpPos[] {
   const next = [
     {
-      id: `pp${Date.now().toString(36)}`,
+      id: `pp${Math.random().toString(36).slice(2, 8)}`,
       stockId,
       symbol,
       side,
       notional,
       entry,
-      mark,
-      margin,
       createdAt: new Date().toISOString(),
     },
     ...rows,
@@ -71,22 +63,12 @@ export function closePerp(rows: PerpPos[], id: string): PerpPos[] {
 }
 
 export function perpPnl(p: PerpPos, last: number): number {
-  if (!(p.entry > 0) || !(last > 0)) return 0;
+  if (!(p.entry > 0)) return 0;
   const ret = (last - p.entry) / p.entry;
   return (p.side === "long" ? ret : -ret) * p.notional;
 }
 
-/** Longs pay when last is rich to the mark. The rate is the average of entry and now. */
-export function fundingPnL(p: PerpPos, last: number, mark: number, now = Date.now()): number {
-  const opened = Date.parse(p.createdAt);
-  if (!Number.isFinite(opened)) return 0;
-  const hours = Math.max(0, (now - opened) / 3_600_000);
-  const entryMark = p.mark > 0 ? p.mark : mark;
-  const avg = (fundingPerHour(p.entry, entryMark) + fundingPerHour(last, mark)) / 2;
-  const paid = p.notional * avg * hours;
-  return p.side === "long" ? -paid : paid;
-}
-
-export function perpMark(p: PerpPos, last: number, mark: number, now = Date.now()): number {
-  return perpPnl(p, last) + fundingPnL(p, last, mark, now);
+export function fundingRate(premium: number | null): number {
+  if (premium == null) return 0;
+  return premium / 24;
 }

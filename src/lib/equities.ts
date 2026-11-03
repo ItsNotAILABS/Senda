@@ -1,12 +1,57 @@
 /** Listed tokenized equities (xStocks) and the Kamino market that lends against them. */
 
 import { createServerFn } from "@tanstack/react-start";
-import { fetchStockFlow } from "@/lib/stock-flow";
 
 export const XSTOCKS_MARKET = "5wJeMrUYECGq41fxRESKALVcHnNX26TAWy4W98yULsua";
 export const KAMINO_MARKET = `https://kamino.com/markets/${XSTOCKS_MARKET}`;
 const ASSETS = "https://api.xstocks.fi/api/v2/public/assets";
 const METRICS = `https://api.kamino.finance/kamino-market/${XSTOCKS_MARKET}/reserves/metrics`;
+const LIST_TTL_MS = 5 * 60 * 1000;
+
+type AssetNode = {
+  symbol?: string;
+  name?: string;
+  isTradingHalted?: boolean;
+  trading?: { tradingHoursMode?: string; openNow?: boolean; currentPeriod?: string };
+  deployments?: Array<{ network?: string; address?: string }>;
+};
+
+let listCache: { at: number; rows: ListedStock[] } | null = null;
+
+function solAddress(node: AssetNode): string {
+  const row = (node.deployments ?? []).find((d) => d.network === "Solana" && (d.address?.length ?? 0) >= 32);
+  return row?.address ?? "";
+}
+
+/** One paged catalog. Do not request each symbol. Those calls 404. */
+export async function listSolanaXStocks(): Promise<ListedStock[]> {
+  if (listCache && Date.now() - listCache.at < LIST_TTL_MS) return listCache.rows;
+  const rows: ListedStock[] = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= 20; page++) {
+    const res = await fetch(`${ASSETS}?page=${page}`, { headers: { accept: "application/json", "user-agent": "Senda" } });
+    if (!res.ok) break;
+    const body = (await res.json()) as { nodes?: AssetNode[]; page?: { hasNextPage?: boolean } };
+    for (const node of body.nodes ?? []) {
+      const mint = solAddress(node);
+      const symbol = node.symbol || "";
+      if (!mint || !symbol || seen.has(mint)) continue;
+      seen.add(mint);
+      rows.push({
+        symbol,
+        name: node.name || symbol,
+        mint,
+        open: Boolean(node.trading?.openNow),
+        halted: Boolean(node.isTradingHalted),
+        hours: hoursLabel(node.trading?.tradingHoursMode),
+        period: node.trading?.currentPeriod || "",
+      });
+    }
+    if (!body.page?.hasNextPage) break;
+  }
+  if (rows.length) listCache = { at: Date.now(), rows };
+  return rows;
+}
 
 export type ListedStock = {
   symbol: string;
@@ -16,9 +61,8 @@ export type ListedStock = {
   halted: boolean;
   hours: string;
   period: string;
-  kind: "etf" | "stock";
-  /** Jupiter 24h pool volume, in dollars. Zero means it was not in the live flow. */
-  volume: number;
+  impactPct?: number;
+  route?: string;
 };
 
 export type StockReserve = {
@@ -37,63 +81,6 @@ function hoursLabel(mode: string | undefined): string {
   if (mode === "TwentyFourFive") return "24/5";
   if (mode === "TwentyFourSeven") return "24/7";
   return mode || "session";
-}
-
-function kindOf(name: string, symbol: string): "etf" | "stock" {
-  if (/ETF|Fund|Trust|Index|iShares|SPDR|Invesco|Vanguard|ProShares|Direxion|GraniteShares|Roundhill|Global X|Sprott|Leverage Shares|2X|3X|Ultra/i.test(name)) return "etf";
-  if (/^(SPY|QQQ|SQQQ|TQQQ|IWM|DIA|VTI|VOO|GLD|SLV|TLT|USO|EEM|ARKK|XBI|EWZ|EWJ|EWT)/.test(symbol.replace(/x$/i, ""))) return "etf";
-  return "stock";
-}
-
-type CatalogNode = {
-  symbol?: string;
-  name?: string;
-  isTradingHalted?: boolean;
-  trading?: { tradingHoursMode?: string; openNow?: boolean; currentPeriod?: string };
-  deployments?: { network?: string; address?: string }[];
-};
-
-async function solanaCatalog(): Promise<ListedStock[]> {
-  const out: ListedStock[] = [];
-  const seen = new Set<string>();
-  let page = 0;
-  while (page < 40) {
-    const batch = await Promise.all(
-      Array.from({ length: 4 }, (_, i) =>
-        fetch(`${ASSETS}?page=${page + i}`, { headers: { accept: "application/json", "user-agent": "Senda" } })
-          .then(async (res) => (res.ok ? ((await res.json()) as { nodes?: CatalogNode[]; page?: { hasNextPage?: boolean } }) : null))
-          .catch(() => null),
-      ),
-    );
-    let more = false;
-    let empty = true;
-    for (const body of batch) {
-      if (!body) continue;
-      empty = false;
-      if (body.page?.hasNextPage) more = true;
-      for (const n of body.nodes || []) {
-        const sol = n.deployments?.find((d) => d.network === "Solana" && d.address);
-        if (!sol?.address || seen.has(sol.address)) continue;
-        seen.add(sol.address);
-        const symbol = n.symbol || sol.address.slice(0, 4);
-        const name = n.name || symbol;
-        out.push({
-          symbol,
-          name,
-          mint: sol.address,
-          open: Boolean(n.trading?.openNow),
-          halted: Boolean(n.isTradingHalted),
-          hours: hoursLabel(n.trading?.tradingHoursMode),
-          period: n.trading?.currentPeriod || "",
-          kind: kindOf(name, symbol),
-          volume: 0,
-        });
-      }
-    }
-    if (empty || !more) break;
-    page += 4;
-  }
-  return out;
 }
 
 export async function fetchEquityBook(): Promise<EquityBook> {
@@ -120,47 +107,8 @@ export async function fetchEquityBook(): Promise<EquityBook> {
       borrowUsd: Number(m.totalBorrowUsd) || 0,
     }));
 
-  const names = reserves.filter((r) => r.symbol !== "USDC");
-  const listed = await solanaCatalog();
-  const bySymbol = new Set(listed.map((s) => s.symbol));
-  const extra = names
-    .filter((r) => !bySymbol.has(r.symbol))
-    .map((r): ListedStock => ({
-      symbol: r.symbol,
-      name: r.symbol,
-      mint: r.mint,
-      open: false,
-      halted: false,
-      hours: "24/5",
-      period: "",
-      kind: kindOf(r.symbol, r.symbol),
-      volume: 0,
-    }));
-  const flow = await fetchStockFlow().catch(() => []);
-  const vol = new Map(flow.map((row) => [row.mint, row.volume]));
-  const have = new Set(listed.map((s) => s.mint));
-  for (const row of flow) {
-    if (have.has(row.mint)) continue;
-    listed.push({
-      symbol: row.symbol,
-      name: row.name,
-      mint: row.mint,
-      open: true,
-      halted: false,
-      hours: "24/5",
-      period: "",
-      kind: row.kind,
-      volume: row.volume,
-    });
-  }
-  const stocks = [...listed, ...extra]
-    .map((s) => ({ ...s, volume: vol.get(s.mint) || s.volume || 0 }))
-    .sort((a, b) => {
-      if (a.halted !== b.halted) return a.halted ? 1 : -1;
-      if (b.volume !== a.volume) return b.volume - a.volume;
-      if (a.open !== b.open) return a.open ? -1 : 1;
-      return a.symbol.localeCompare(b.symbol);
-    });
+  const stocks = await listSolanaXStocks();
+
   return { stocks, reserves };
 }
 

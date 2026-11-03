@@ -1,18 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { CoverDesk } from "@/components/cover-desk";
-import { getHouse } from "@/lib/sol-house";
+import { ProductShell } from "@/components/product-shell";
+import { COVER_PAGES } from "@/lib/product-pages";
 
 export const Route = createFileRoute("/cover")({
-  loader: () => getHouse(),
-  component: CoverPage,
+  component: Layout,
 });
 
-function CoverPage() {
-  const names = Route.useLoaderData();
+function Layout() {
   return (
     <AppShell>
-      <CoverDesk names={names} />
+      <ProductShell title="Cover" pages={COVER_PAGES}>
+        <Outlet />
+      </ProductShell>
     </AppShell>
   );
 }

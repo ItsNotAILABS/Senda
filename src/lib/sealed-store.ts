@@ -6,7 +6,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { PublicKey } from "@solana/web3.js";
 import { z } from "zod";
-import { b64d } from "@/lib/b64";
 
 const SLOT = /^(senda|the-pit)\.[a-z0-9._-]{1,80}$/;
 const SKIP = new Set(["senda.seen.v1", "senda.howto.v1"]);
@@ -35,7 +34,7 @@ async function verify(owner: string, message: string, signature: string): Promis
     false,
     ["verify"],
   );
-  const raw = b64d(signature);
+  const raw = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
   return crypto.subtle.verify({ name: "Ed25519" } as AlgorithmIdentifier, key, raw as BufferSource, new TextEncoder().encode(message));
 }
 

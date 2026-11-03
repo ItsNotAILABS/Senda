@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { SOLANA_MORE, mapChains, mapSolana } from "../src/lib/chain-tape-map.mjs";
+import { CHAINS, SOLANA_DECIMALS, SOLANA_MORE, mapChains, mapSolana } from "../src/lib/chain-tape-map.mjs";
 
 const BONK = SOLANA_MORE.find((row) => row[0] === "BONK")[2];
 
@@ -27,4 +27,12 @@ test("a defillama percent is stored as a fraction and a coin without a price is 
   assert.equal(rows[0].change24h, -0.025);
   assert.equal(rows[0].href, null);
   assert.equal(rows[0].venue, "Bitcoin");
+});
+
+test("wrapped MON on Solana is 8 decimals and native Monad is a price row", () => {
+  const wrapped = SOLANA_MORE.find((row) => row[0] === "WMON");
+  assert.ok(wrapped);
+  assert.equal(SOLANA_DECIMALS[wrapped[2]], 8);
+  const native = CHAINS.find((row) => row[0] === "MON");
+  assert.deepEqual(native, ["MON", "Monad", "Monad", "monad"]);
 });

@@ -1,5 +1,4 @@
 import { finishGrant, listBlobs, openNonce, putBlob } from "@/lib/sealed-store";
-import { b64d, b64e } from "@/lib/b64";
 
 /**
  * The wallet is the account. What the desk remembers is ciphertext.
@@ -54,10 +53,6 @@ export function sealOpen(): boolean {
   return aes != null;
 }
 
-export function sealState(): { open: boolean; owner: string } {
-  return { open: aes != null, owner: who };
-}
-
 function tell() {
   window.dispatchEvent(new Event(EVENT));
 }
@@ -72,7 +67,7 @@ async function pack(value: string): Promise<string> {
   const iv = new Uint8Array(12);
   crypto.getRandomValues(iv);
   const box = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, new TextEncoder().encode(value));
-  return `${MARK}${b64e(iv)}.${b64e(new Uint8Array(box))}`;
+  return `${MARK}${b64(iv)}.${b64(new Uint8Array(box))}`;
 }
 
 async function unpack(stored: string): Promise<string | null> {
@@ -80,8 +75,8 @@ async function unpack(stored: string): Promise<string | null> {
   const cut = stored.indexOf(".", MARK.length);
   if (cut < 0) return null;
   try {
-    const iv = b64d(stored.slice(MARK.length, cut));
-    const box = b64d(stored.slice(cut + 1));
+    const iv = unb64(stored.slice(MARK.length, cut));
+    const box = unb64(stored.slice(cut + 1));
     const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, aes, box as BufferSource);
     return new TextDecoder().decode(clear);
   } catch {
@@ -116,7 +111,7 @@ async function authorize(owner: string) {
   const out = await provider.signMessage(new TextEncoder().encode(`senda-grant:v1:${owner}:${opened.nonce}`), "utf8");
   const sig = out instanceof Uint8Array ? out : out.signature;
   if (!(sig instanceof Uint8Array)) return;
-  const done = await finishGrant({ data: { wallet: owner, nonce: opened.nonce, sig: b64e(sig) } });
+  const done = await finishGrant({ data: { wallet: owner, nonce: opened.nonce, sig: b64(sig) } });
   if (done.ok) grant = opened.nonce;
 }
 
@@ -195,7 +190,6 @@ function walletProvider(): {
 
 export async function unlockSeal(owner: string): Promise<void> {
   install();
-  if (who === owner && aes) return;
   who = owner;
   grant = "";
   aes = await aesFrom(await signVault(owner));
@@ -228,6 +222,19 @@ export async function unlockSeal(owner: string): Promise<void> {
     /* local seal still holds. the database is the copy, not the door. */
   }
   tell();
+}
+
+function b64(bytes: Uint8Array): string {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s);
+}
+
+function unb64(value: string): Uint8Array {
+  const raw = atob(value);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i += 1) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
 install();
