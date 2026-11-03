@@ -121,7 +121,7 @@ export function GenesisDesk() {
       gear:owns&&ownGear?loadout.gear:null,code:owns&&ownCode?loadout.code:null},
    });
    toast.success(worker.name+" created in your agent studio.");
-   void nav({href:"/agents"});
+   void nav({to:"/agents"});
   }catch(e){toast.error(e instanceof Error?e.message:"Agent could not be created.");}
  }
  return (

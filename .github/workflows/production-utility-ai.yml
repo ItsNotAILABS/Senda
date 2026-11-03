@@ -1,23 +1,23 @@
-name: Senda Genesis runtime validation
+name: SENDA Utility AI verification
 on:
   pull_request:
   push:
     branches:
-      - feature/genesis-character-runtimes-20261026
+      - feature/production-utility-ai-20261028
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  genesis-units:
+  evidence-unit:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Genesis runtime, manifest and ownership contracts
-        run: node --test scripts/genesis-catalog.test.mjs scripts/genesis-runtime.test.mjs scripts/genesis-ownership.test.mjs scripts/genesis-loadout.test.mjs scripts/genesis-build-metadata.test.mjs
+      - name: Test financial source and model-evidence policy
+        run: node --test scripts/utility-ai-core.test.mjs
   app:
     runs-on: ubuntu-latest
     timeout-minutes: 15

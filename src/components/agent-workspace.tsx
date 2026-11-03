@@ -22,9 +22,11 @@ import {
 import { toast } from "sonner";
 import { think } from "@/lib/agent-shift";
 import { remember } from "@/lib/agent-memory";
-import { readGenesisOwnership } from "@/lib/genesis-chain";
 import { getPrint } from "@/lib/print";
-import { runGenesisResearch } from "@/lib/genesis-runtime.mjs";
+import { evaluateMatrix } from "@/lib/matrix-engine.mjs";
+import { authorizeWorkerTrade } from "@/lib/worker-trade-authorization.mjs";
+import { spendCap } from "@/lib/spend-cap";
+import { guardRoute } from "@/lib/route-guard";
 import {
   TOOLS,
   createWorker,
@@ -62,7 +64,7 @@ const STARTERS: Starter[] = [
     category: "markets",
     purpose: "Watch my selected names and give me a clean market brief.",
     instructions: "Call out the cheapest and richest names versus their marks. Keep the brief short.",
-    tools: ["planner", "book", "memory"],
+    tools: ["planner", "book", "matrix", "memory"],
     trigger: "on_open",
     autonomy: "draft",
     side: "buy",
@@ -72,7 +74,7 @@ const STARTERS: Starter[] = [
     category: "markets",
     purpose: "Watch for a bounded opportunity and prepare the next action for my approval.",
     instructions: "Never exceed the cap. Queue at most one action per run. Never sign.",
-    tools: ["book", "memory", "trade"],
+    tools: ["book", "matrix", "memory", "trade"],
     trigger: "manual",
     autonomy: "queue",
     side: "buy",
@@ -158,6 +160,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
   const [symbols, setSymbols] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const automated = useRef(new Set<string>());
+  const signing = useRef(false);
   const selected = rows.find((row) => row.id === id) ?? null;
   const visibleRows = rows.filter((row) => {
     const needle = query.trim().toLowerCase();
@@ -172,6 +175,34 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     if (nextId !== undefined) setId(nextId);
     else if (id && all.some((row) => row.id === id)) setId(id);
     else setId(all[0]?.id ?? null);
+  }
+
+  function exportAgentLogs() {
+    const receipts = listWorkers().flatMap((worker) =>
+      worker.log.map((entry) => JSON.stringify({
+        at: entry.at,
+        agentId: worker.id,
+        agentName: worker.name,
+        kind: entry.kind || "info",
+        message: entry.text,
+        source: "senda.browser-agent-workspace",
+      })),
+    );
+    if (!receipts.length) {
+      toast.message("No agent run receipts to export yet.");
+      return;
+    }
+    // Explicit local export only. Never upload browser logs or secrets in the background.
+    const body = receipts.join("\n") + "\n";
+    const url = URL.createObjectURL(new Blob([body], { type: "application/x-ndjson" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `senda-agent-logs-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Run receipts exported locally. Review sensitive text before adding them to any repository.");
   }
 
   function resetBuilder() {
@@ -253,6 +284,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
     const lines: { text: string; kind?: "info" | "action" | "success" }[] = [];
     let queue = row.queue;
     let checklist = row.checklist;
+    const matrixBySymbol = new Map<string, ReturnType<typeof evaluateMatrix>>();
 
     if (row.tools.includes("planner")) {
       checklist = buildChecklist(row);
@@ -275,6 +307,26 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
         lines.push({ text: "Live book — " + tape, kind: "action" });
       }
     }
+    if (row.tools.includes("matrix")) {
+      const candidates = pool.filter((item) => item.mint && item.last > 0).slice(0, 3);
+      if (!candidates.length) lines.push({ text: "Matrix held: no eligible live token pool." });
+      for (const item of candidates) {
+        try {
+          const print = await getPrint({ data: { mint: item.mint, tf: "1H" } });
+          const matrix = evaluateMatrix({
+            bars: print.bars,
+            source: print.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
+          });
+          matrixBySymbol.set(item.symbol, matrix);
+          lines.push({
+            text: `Matrix ${item.symbol}: ${matrix.market} · volume ${matrix.volumeRatio == null ? "unavailable" : matrix.volumeRatio.toFixed(2) + "x"} · RSI ${matrix.rsi?.toFixed(1) ?? "—"} · ATR ${matrix.atrPct?.toFixed(2) ?? "—"}% · ${print.note}. Research only.`,
+            kind: matrix.volumeReliable ? "action" : "info",
+          });
+        } catch (error) {
+          lines.push({ text: `Matrix ${item.symbol}: feed unavailable; no signal (${error instanceof Error ? error.message : "source error"}).` });
+        }
+      }
+    }
     if (row.tools.includes("trade") && row.autonomy === "queue") {
       const output = think(
         {
@@ -294,18 +346,29 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
       );
       if (output?.log) lines.push({ text: output.log });
       if (output?.queue) {
-        queue = output.queue;
-        lines.push({
-          text:
-            "Queued " +
-            output.queue.side +
-            " " +
-            output.queue.symbol +
-            " for $" +
-            output.queue.usd +
-            ". Waiting for your signature.",
-          kind: "action",
-        });
+        const matrix = matrixBySymbol.get(output.queue.symbol);
+        // Matrix-enabled mandates require a genuine pool-volume confirmation.
+        // Missing/mixed data cannot authorize even a draft financial queue.
+        const wanted = output.queue.side === "buy" ? "bullish-watch" : "bearish-watch";
+        const eligible = !row.tools.includes("matrix") ||
+          (matrix?.market === wanted && (matrix.volumeRatio ?? 0) >= 1.1 &&
+            (matrix.atrPct ?? Infinity) <= 8 && matrix.confidence >= 45);
+        if (!eligible) {
+          queue = null;
+          lines.push({
+            text: `Queue held for ${output.queue.symbol}: requires ${wanted}, real volume ≥1.1x, ATR ≤8%, and alignment ≥45. No signing proposal.`,
+            kind: "info",
+          });
+        } else {
+          queue = output.queue;
+          lines.push({
+            text: "Queued " + output.queue.side + " " + output.queue.symbol +
+              " for $" + output.queue.usd + ". Review the market and sign explicitly.",
+            kind: "action",
+          });
+        }
+      } else {
+        queue = null;
       }
     }
     if (row.tools.includes("memory")) {
@@ -321,39 +384,6 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
           drawdown: 0,
         });
         lines.push({ text: "Saved the latest " + item.symbol + " observation to local memory." });
-      }
-    }
-    if (row.genesis) {
-      const liveName = pool.find(item => item.mint && item.mint.length >= 32 && item.last > 0);
-      if (!liveName) {
-        lines.push({ text: "Genesis runtime held: no accessible live Solana market." });
-      } else {
-        try {
-          const print = await getPrint({data:{mint:liveName.mint,tf:"1H"}});
-          // Revalidate against the public on-chain ownership registry on every run.
-          // Local storage bindings cannot grant a premium capability.
-          let owned: string[] = [];
-          const bound = row.genesis;
-          const connectedOwner = wallet.w.links.find(link => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
-          if (bound.owner && bound.owner === connectedOwner) {
-            const verified = await readGenesisOwnership({data:{owner:bound.owner}});
-            if (verified.state === "verified" && verified.ownedIds.includes(bound.characterId)) {
-              owned = [bound.characterId,
-                ...(bound.gear && verified.ownedIds.includes(bound.gear) ? [bound.gear] : []),
-                ...(bound.code && verified.ownedIds.includes(bound.code) ? [bound.code] : []),
-              ];
-            }
-          }
-          const report = runGenesisResearch({
-            characterId:bound.characterId,symbol:liveName.symbol,bars:print.bars,
-            source:print.note.startsWith("Pool OHLCV")?"gecko-pool":"price-only",
-            verifiedAssetIds:owned,
-          });
-          lines.push({text:`Genesis ${report.characterId.toUpperCase()} / ${report.runtime} · ${liveName.symbol}: ${report.lines.join(" | ")}`,kind:"action"});
-          lines.push({text:`Proof: ${report.data.barCount} candles · volume ${report.data.sourceVerified?"pool-verified":"unverified"} · gear ${report.enabled.gear?"on":"off"} · code ${report.enabled.code?"on":"off"} · no execution.`,kind:"info"});
-        } catch(error) {
-          lines.push({text:`Genesis research unavailable: ${error instanceof Error?error.message:"market error"}. No action queued.`,kind:"info"});
-        }
       }
     }
     if (!lines.length) lines.push({ text: "No enabled tool produced work on this run." });
@@ -379,35 +409,58 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
   }, [book]);
 
   async function sign(row: Worker) {
-    if (!row.queue) return toast.error("Nothing is queued.");
-    const listing = book.find((item) => item.symbol === row.queue?.symbol);
-    if (!listing) return toast.error("That name is not on the live book.");
+    if (signing.current) return;
+    signing.current = true;
     setBusy(true);
     try {
+      // Reload mutable user permissions and queue before ANY wallet prompt.
+      const current = listWorkers().find((worker) => worker.id === row.id);
+      if (!current) throw new Error("This worker no longer exists.");
+      const requestedSymbol = current.queue?.symbol || "";
+      const intent = authorizeWorkerTrade(current, spendCap(), requestedSymbol);
+      const listing = book.find((item) => item.symbol === intent.symbol && item.mint && item.last > 0);
+      if (!listing) throw new Error("The exact queued token is not available on the current live book.");
+      if (current.tools.includes("matrix")) {
+        const print = await getPrint({ data: { mint: listing.mint, tf: "1H" } });
+        const matrix = evaluateMatrix({
+          bars: print.bars,
+          source: print.note.startsWith("Pool OHLCV") ? "gecko-pool" : "price-only",
+        });
+        const wanted = intent.side === "buy" ? "bullish-watch" : "bearish-watch";
+        if (matrix.market !== wanted || (matrix.volumeRatio ?? 0) < 1.1 ||
+            (matrix.atrPct ?? Infinity) > 8 || matrix.confidence < 45) {
+          throw new Error("The matrix no longer validates this queued strategy. Re-run the agent before signing.");
+        }
+      }
+      await guardRoute({mint: listing.mint, side: intent.side, usd: intent.usd,
+        price: listing.last, symbol: listing.symbol});
       const existing = wallet.w.links.find((link) => link.kind === "phantom" || link.kind === "solana")?.address ?? "";
       const owner = existing || (await connectPhantom());
       if (!existing) {
         const linked = wallet.linkChain(owner, "Phantom", "phantom");
         if (!linked.ok) throw new Error(linked.error || "Could not keep the wallet address.");
       }
+      const latest = listWorkers().find((worker) => worker.id === row.id);
+      if (!latest) throw new Error("Worker was removed while the wallet connected.");
+      const again = authorizeWorkerTrade(latest, spendCap(), intent.symbol);
+      if (again.side !== intent.side || again.usd !== intent.usd)
+        throw new Error("Worker mandate changed during approval. Re-run it before signing.");
       const done = await runPrestock({
-        owner,
-        mint: listing.mint,
-        side: row.queue.side,
-        usd: row.queue.usd,
-        price: listing.last,
+        owner, mint: listing.mint, side: again.side, usd: again.usd, price: listing.last,
       });
       logWorker(
         row.id,
-        "Wallet signed " + row.queue.side + " " + listing.symbol + " for $" + row.queue.usd + ". " + done.signature.slice(0, 8) + ".",
+        "Wallet submitted " + again.side + " " + listing.symbol +
+        " for $" + again.usd + ". Signature " + done.signature + ". Verify settlement on-chain.",
         "success",
       );
       patchWorker(row.id, { queue: null });
       refresh(row.id);
-      toast.success("Signed. " + done.signature.slice(0, 8) + "…");
+      toast.success("Submitted. Verify " + done.signature.slice(0, 8) + "… on-chain.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The wallet did not sign.");
     } finally {
+      signing.current = false;
       setBusy(false);
     }
   }
@@ -430,6 +483,9 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
             <MiniStat label="Agents" value={String(rows.length)} />
             <MiniStat label="Active" value={String(activeCount)} />
             <MiniStat label="Runs" value={String(runCount)} />
+            <button type="button" onClick={exportAgentLogs} className="min-h-10 rounded-xl border border-white/15 px-3 text-xs font-semibold text-white/70">
+              Export run logs
+            </button>
             <button type="button" onClick={resetBuilder} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-accent-fg">
               <Plus className="size-4" />
               New agent
