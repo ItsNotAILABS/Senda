@@ -6,6 +6,8 @@ import bs58 from "bs58";
 import {Buffer} from "buffer";
 import {PublicKey,VersionedTransaction} from "@solana/web3.js";
 import {phantomProvider,waitForInjected,sendVersioned} from "@/lib/phantom";
+import {sealOpen} from "@/lib/seal";
+import nacl from "tweetnacl";
 import {withWalletExecutionLock} from "@/lib/wallet-execution-lock.mjs";
 import {prepareDflowPredictionOrder,getDflowPredictionStatus} from "@/lib/dflow-predictions";
 import {ensureNoDuplicatePrediction,recordDflowSubmitted,observeDflowReceipt} from "@/lib/dflow-prediction-receipt.mjs";
@@ -35,7 +37,6 @@ export async function startDflowProofVerification(wallet:string):Promise<void>{
  const signed=await p.signMessage(new TextEncoder().encode("Proof KYC verification: "+timestamp),"utf8");
  const signature=Uint8Array.from(signed.signature);
  const key=bs58.decode(wallet);
- const {default:nacl}=await import("tweetnacl");
  if(key.length!==32||signature.length!==64||!nacl.sign.detached.verify(new TextEncoder().encode("Proof KYC verification: "+timestamp),signature,key))
   throw Error("Phantom Proof KYC signature did not verify.");
  const url=new URL("https://dflow.net/proof");
@@ -49,6 +50,7 @@ export async function signDflowPrediction({wallet,ticker,side,amountUsd,order}:{
  wallet:string;ticker:string;side:"yes"|"no";amountUsd:number;order:DflowOrder;
 }):Promise<{signature:string;status:string;filled:boolean;amountUsd:number}>{
  if(typeof window==="undefined"||!MINT.test(wallet)||!(amountUsd>=1&&amountUsd<=250))throw Error("Invalid execution request");
+ if(!sealOpen())throw Error("Unlock Senda with Phantom first so your signed transaction can be kept in the recovery journal.");
  const owner=await connectPhantomForDflow();
  if(owner!==wallet)throw Error("Wallet switched since the DFlow quote was prepared.");
  const amountRaw=String(Math.round(amountUsd*1e6));
