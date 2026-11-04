@@ -39,6 +39,7 @@ export async function signPhantomPredictionResearch({ticker,side,contracts,gross
  try{key=bs58.decode(wallet)}catch{throw Error("Phantom returned an invalid Solana public key.");}
  if(key.length!==32||!nacl.sign.detached.verify(message,signature,key))
   throw Error("Could not verify the Phantom wallet signature.");
+ if(Date.now()-quotedAt>30000)throw Error("Kalshi research quote expired while waiting for the signature. Refresh the market.");
  if(!validatePredictionAcknowledgement(built.record,Date.now()))
   throw Error("Research acknowledgement expired before verification.");
  return {record:built.record,signature:bs58.encode(signature),wallet,verified:true,
