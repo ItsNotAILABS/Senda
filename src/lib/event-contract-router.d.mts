@@ -3,5 +3,6 @@ export type EventQuote={available:boolean;reason:string;side?:string;contracts?:
 export declare const EVENT_TEMPLATES:Array<{id:string;name:string;subject:string;product:string;caution:string}>;
 export declare function normalizeEventBook(ticker:string,raw:unknown,asOf?:number):EventBook;
 export declare function planEventSide(book:EventBook|null,side:"yes"|"no",contracts:number,now?:number):EventQuote;
-export declare function evaluateEventProduct(input:{templateId:string;book:EventBook|null;side:"yes"|"no";contracts:number;budgetUsd:number;now?:number}):{ready:boolean;reason:string;quote?:EventQuote;template?:typeof EVENT_TEMPLATES[number];budgetRemainingBeforeFees?:number;execution?:string;legalForm?:string};
+export declare function eventTemplateFit(templateId:string,title?:string,category?:string):{matched:boolean;reason:string};
+export declare function evaluateEventProduct(input:{templateId:string;book:EventBook|null;side:"yes"|"no";contracts:number;budgetUsd:number;marketTitle?:string;marketCategory?:string;now?:number}):{ready:boolean;reason:string;quote?:EventQuote;template?:typeof EVENT_TEMPLATES[number];budgetRemainingBeforeFees?:number;execution?:string;legalForm?:string};
 export declare function eventMarketUrl(ticker:string):string|null;
