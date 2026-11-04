@@ -56,11 +56,27 @@ export const EVENT_TEMPLATES=[
  {id:"macro",name:"Macro purchasing power",subject:"Inflation, interest rate and FX events",product:"Business budget planning and portfolio research",caution:"Not a direct FX hedge, deposit, or investment advice."},
  {id:"tech",name:"Technology milestones",subject:"AI releases, product launches and availability",product:"Procurement and demand forecast scenario planning",caution:"Event definitions and sources must be reviewed before relying on them."}
 ];
-export function evaluateEventProduct({templateId,book,side,contracts,budgetUsd,now=Date.now()}){
+const EVENT_KEYWORDS={
+ weather:["rain","weather","storm","temperature","snow","hurricane","tornado","flood"],
+ shipping:["shipping","port","hurricane","supply","cargo","freight","canal"],
+ energy:["energy","power","oil","natural gas","gasoline","electricity"],
+ macro:["inflation","cpi","interest","fed","rate","gdp","currency","forex"],
+ tech:["ai","artificial intelligence","technology","launch","software","chip","device"]
+};
+export function eventTemplateFit(templateId,title="",category=""){
+ const words=EVENT_KEYWORDS[templateId];
+ if(!words)return {matched:false,reason:"Unknown product template."};
+ const text=(String(title)+" "+String(category)).toLowerCase();
+ const matched=words.some(word=>text.includes(word));
+ return {matched,reason:matched?"Theme match only; inspect exact market contract and settlement rules.":"No apparent theme match. Select a relevant event rather than inferring protection."};
+}
+export function evaluateEventProduct({templateId,book,side,contracts,budgetUsd,marketTitle="",marketCategory="",now=Date.now()}){
  const template=EVENT_TEMPLATES.find(x=>x.id===templateId);
  if(!template)return {ready:false,reason:"Unsupported event-product research template."};
  if(typeof budgetUsd!=="number"||!Number.isFinite(budgetUsd)||budgetUsd<=0||budgetUsd>100000)
   return {ready:false,reason:"A finite positive research budget is required."};
+ const fit=eventTemplateFit(templateId,marketTitle,marketCategory);
+ if(!fit.matched)return {ready:false,template,fit,reason:fit.reason};
  const quote=planEventSide(book,side,contracts,now);
  if(!quote.available)return {ready:false,template,quote,reason:quote.reason};
  if(quote.grossCostUsd>budgetUsd)return {ready:false,template,quote,reason:"Gross quote exceeds research budget before exchange/platform fees."};
