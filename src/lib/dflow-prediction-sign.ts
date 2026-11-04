@@ -4,7 +4,6 @@
  */
 import bs58 from "bs58";
 import {Buffer} from "buffer";
-import {PublicKey,VersionedTransaction} from "@solana/web3.js";
 import {phantomProvider,waitForInjected,sendVersioned} from "@/lib/phantom";
 import {sealOpen} from "@/lib/seal";
 import nacl from "tweetnacl";
@@ -61,11 +60,12 @@ export async function signDflowPrediction({wallet,ticker,side,amountUsd,order}:{
   ensureNoDuplicatePrediction(window.localStorage,{wallet,ticker,side,amountRaw});
   const raw=Buffer.from(order.transaction,"base64");
   if(raw.length>1232||raw.length<64)throw Error("DFlow transaction is outside Solana packet-size limits.");
+  if(!globalThis.Buffer)globalThis.Buffer=Buffer;
+  const {PublicKey,VersionedTransaction}=await import("@solana/web3.js");
   const tx=VersionedTransaction.deserialize(raw);
   if(tx.message.header.numRequiredSignatures!==1||
      !tx.message.staticAccountKeys[0]?.equals(new PublicKey(wallet)))
     throw Error("DFlow returned a transaction with an unexpected fee payer or additional signers.");
-  if(!globalThis.Buffer)globalThis.Buffer=Buffer;
   // Phantom presents this real transaction for explicit approval.
   const signature=await sendVersioned(tx);
   try{recordDflowSubmitted(window.localStorage,{
