@@ -53,3 +53,8 @@ npm run build:dev
 ## Source-separated quote ranking
 
 The `rankEquivalentPredictionQuotes` pure function intentionally refuses to compare Kalshi, World and Polymarket public snapshots as if those were live executable DFlow orders. It needs two independently authorized venue adapters, reviewed contract equivalence proof, fresh matching contract quantities, total fee disclosures, and budget checks. Until additional commercial adapters are implemented, it cannot claim a best executable cross-venue price. This is by design: don't populate it with synthetic quotes to produce attractive demo spreads.
+
+
+## Additional real Polymarket CLOB depth
+
+After selecting an actual Polymarket Gamma market, the Senda desk can request `GET https://clob.polymarket.com/book?token_id={outcome token id}` for each listed outcome. The server validates that the exact `asset_id` matches the chosen token ID, normalizes and sorts public CLOB bids/asks independently (do not rely on provider order), and calculates the cost to buy a bounded whole share quantity from actual asks. It fails closed for missing or stale depth, missing outcome IDs or insufficient book size. Prices are **observed public depth**, not a protected price or a signer-authorized order. Fees and jurisdiction remain unknown until an authenticated trading adapter is added. The market display never presents this as a Kalshi quote or a Phantom Cash fill. Test with `node --test scripts/polymarket-depth.test.mjs`. Source: https://clob.polymarket.com/book?token_id=... and https://institute.polymarket.com/data.
