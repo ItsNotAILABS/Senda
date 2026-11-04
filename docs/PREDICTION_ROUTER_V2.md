@@ -48,3 +48,8 @@ node --test scripts/prediction-venues.test.mjs scripts/polymarket-catalog.test.m
 npm run typecheck
 npm run build:dev
 ```
+
+
+## Source-separated quote ranking
+
+The `rankEquivalentPredictionQuotes` pure function intentionally refuses to compare Kalshi, World and Polymarket public snapshots as if those were live executable DFlow orders. It needs two independently authorized venue adapters, reviewed contract equivalence proof, fresh matching contract quantities, total fee disclosures, and budget checks. Until additional commercial adapters are implemented, it cannot claim a best executable cross-venue price. This is by design: don't populate it with synthetic quotes to produce attractive demo spreads.
