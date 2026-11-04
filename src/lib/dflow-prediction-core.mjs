@@ -49,3 +49,21 @@ export function terminalDflowStatus(value){
  if(!allowed.has(value))return {terminal:false,success:false,unknown:true};
  return {terminal:["closed","expired","failed"].includes(value),success:value==="closed",unknown:false};
 }
+
+const BASIC_PROGRAMS=new Set([
+ "11111111111111111111111111111111", // System
+ "ComputeBudget111111111111111111111111111111", // Compute budget
+ "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", // SPL token
+ "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", // Token-2022
+ "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL" // ATA
+]);
+export function validateDflowPrograms(approved,observed){
+ if(!Array.isArray(approved)||!approved.length||!approved.every(x=>MINT.test(x)))
+  throw Error("No independently reviewed DFlow program allowlist configured");
+ if(!Array.isArray(observed)||!observed.length||!observed.every(x=>MINT.test(x)))
+  throw Error("Prediction transaction contains no verifiable program IDs");
+ const allowed=new Set([...BASIC_PROGRAMS,...approved]);
+ if(!observed.some(x=>approved.includes(x)))throw Error("No approved DFlow program executed by transaction");
+ for(const id of observed)if(!allowed.has(id))throw Error("Unreviewed program in prediction transaction: "+id);
+ return true;
+}
