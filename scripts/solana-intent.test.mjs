@@ -27,7 +27,7 @@ test("unsupported requests fail closed",()=>{
 });
 test("half SOL to USDC requires live balance and quote",()=>{
  const r=parseSolanaIntent("swap half my SOL to USDC");
- assert.equal(r.status,"unsupported");
+ assert.equal(r.status,"draft");
  const p=parseSolanaIntent("swap half SOL to USDC");
  assert.equal(p.kind,"swap");assert.equal(p.portion,"0.5");
  assert.equal(p.requiresLiveQuote,true);assert.equal(p.canSign,false);
