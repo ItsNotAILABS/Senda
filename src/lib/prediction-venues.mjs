@@ -82,7 +82,7 @@ export function evaluatePredictionRoute(input){
  if(!walletConnected)return {ready:false,state:"wallet-required",reason:"Connect Phantom for on-chain signature.",phase:"wallet"};
  if(!settlementSupported)return {ready:false,state:"settlement-unverified",reason:"Outcome-token and settlement/redemption support is not confirmed.",phase:"settlement"};
  if(!bookDepth||bookDepth.ok!==true||!(bookDepth.observedUsd>0)||
-  !Number.isSafeInteger(bookDepth.quotedAt)||Date.now()-bookDepth.quotedAt>15000)
+  !Number.isSafeInteger(bookDepth.quotedAt)||bookDepth.quotedAt>Date.now()||Date.now()-bookDepth.quotedAt>15000)
   return {ready:false,state:"no-route",reason:"No fresh executable venue quote.",phase:"quote"};
  if(typeof feesUsd!=="number"||!Number.isFinite(feesUsd)||feesUsd<0)
   return {ready:false,state:"fee-unknown",reason:"Total costs/fees must be disclosed before signing.",phase:"fee"};
