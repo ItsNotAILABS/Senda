@@ -198,3 +198,7 @@ Senda's /social/events workspace supports an actual Phantom signMessage approval
 Eligible U.S. Phantom mobile users can open Phantom > Predict and confirm their own Kalshi orders there. Phantom's U.S. Kalshi flow includes its own account/KYC, fees, funding and exchange execution. No public Phantom Predictions third-party trading SDK is integrated in Senda. Outcome tokens created by Phantom should **not** be burned or re-routed using ordinary SPL cleanup or swap tools.
 
 Code: src/lib/phantom-prediction-sign.ts, src/lib/phantom-prediction-intent.mjs and src/components/phantom-predict-bridge.tsx. See docs/PHANTOM_PREDICT_BRIDGE.md. Phase 2 (authenticated Kalshi order entry/portfolio): issue #32, currently NOT live.
+
+### DFlow outcome-token routing with Phantom (approval-gated)
+
+The event-market desk now contains **two distinct Phantom surfaces**: a real signMessage acknowledgement of read-only research, and an independently guarded on-chain **DFlow prediction trade lane**. DFlow's provider-verified outcome mints, hosted Proof verification, configured jurisdiction approval and fresh Trade API transaction are required before any real signing CTA is enabled. A signed transaction is recorded as **pending** until DFlow confirms its async order is **closed**; a Solana signature is never treated as a fill. This is not the same as connecting to your Phantom U.S. Kalshi mobile account. Production provider credentials and compliance gates are not configured by this source branch. See docs/PHANTOM_PREDICT_BRIDGE.md.
