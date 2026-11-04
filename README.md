@@ -202,3 +202,10 @@ Code: src/lib/phantom-prediction-sign.ts, src/lib/phantom-prediction-intent.mjs 
 ### DFlow outcome-token routing with Phantom (approval-gated)
 
 The event-market desk now contains **two distinct Phantom surfaces**: a real signMessage acknowledgement of read-only research, and an independently guarded on-chain **DFlow prediction trade lane**. DFlow's provider-verified outcome mints, hosted Proof verification, configured jurisdiction approval and fresh Trade API transaction are required before any real signing CTA is enabled. A signed transaction is recorded as **pending** until DFlow confirms its async order is **closed**; a Solana signature is never treated as a fill. This is not the same as connecting to your Phantom U.S. Kalshi mobile account. Production provider credentials and compliance gates are not configured by this source branch. See docs/PHANTOM_PREDICT_BRIDGE.md.
+
+
+### Prediction Markets — one Senda desk, multiple real venues
+
+**Senda Predications isn't just Kalshi.** The Predictions / Liquify venue router in `/social/events` presents five distinct venue families: **Kalshi public books**, **Phantom Predict U.S.**, **DFlow on-chain outcome tokens**, **World Prediction Markets**, and **Polymarket**. The Kalshi public feed and independent Polymarket Gamma feed use actual source data, not invented odds; World and Phantom U.S. use official mobile account routes, and DFlow has a separate approval-gated Phantom-signed Solana transaction implementation. No venue is silently claimed live, funded or equivalent to another.
+
+Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket Polygon collateral must be modeled **separately**. Senda only compares executable venue pricing when a reviewed proof establishes identical contract rules, outcomes, cutoff, settlement and payout; similar titles are not enough. Read [Prediction Router v2](docs/PREDICTION_ROUTER_V2.md), `src/lib/prediction-venues.mjs`, and `src/lib/polymarket-catalog.ts`. This is source work awaiting PR merge and deployment.
