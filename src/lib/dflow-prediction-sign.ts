@@ -10,7 +10,7 @@ import nacl from "tweetnacl";
 import {withWalletExecutionLock} from "@/lib/wallet-execution-lock.mjs";
 import {prepareDflowPredictionOrder,getDflowPredictionStatus} from "@/lib/dflow-predictions";
 import {ensureNoDuplicatePrediction,recordDflowSubmitted,observeDflowReceipt} from "@/lib/dflow-prediction-receipt.mjs";
-import type {DflowOrder} from "@/lib/dflow-prediction-core.mjs";
+import {validateDflowPrograms,type DflowOrder} from "@/lib/dflow-prediction-core.mjs";
 const MINT=/^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 type SolanaSignMessageProvider={
  isPhantom?:boolean;
@@ -63,9 +63,18 @@ export async function signDflowPrediction({wallet,ticker,side,amountUsd,order}:{
   if(!globalThis.Buffer)globalThis.Buffer=Buffer;
   const {PublicKey,VersionedTransaction}=await import("@solana/web3.js");
   const tx=VersionedTransaction.deserialize(raw);
+  if(tx.version!==0||!("addressTableLookups" in tx.message)||
+     tx.message.addressTableLookups.length>0)
+    throw Error("DFlow returned an unverified legacy or address-lookup transaction. Program review required.");
   if(tx.message.header.numRequiredSignatures!==1||
      !tx.message.staticAccountKeys[0]?.equals(new PublicKey(wallet)))
     throw Error("DFlow returned a transaction with an unexpected fee payer or additional signers.");
+  const programIds=tx.message.compiledInstructions.map(instruction=>{
+    const key=tx.message.staticAccountKeys[instruction.programIdIndex];
+    if(!key)throw Error("DFlow transaction references an unresolved program ID.");
+    return key.toBase58();
+  });
+  validateDflowPrograms(order.allowedProgramIds||[],programIds);
   // Phantom presents this real transaction for explicit approval.
   const signature=await sendVersioned(tx);
   try{recordDflowSubmitted(window.localStorage,{
