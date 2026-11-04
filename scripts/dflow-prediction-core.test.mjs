@@ -34,3 +34,12 @@ test("only closed asynchronous orders become fills",()=>{
  assert.equal(terminalDflowStatus("closed").success,true);
  assert.equal(terminalDflowStatus("failed").success,false);
 });
+
+test("only reviewed DFlow programs and standard Solana instructions are permitted",async()=>{
+ const {validateDflowPrograms}=await import("../src/lib/dflow-prediction-core.mjs");
+ const approved=["6".repeat(44)],compute="ComputeBudget111111111111111111111111111111";
+ assert.equal(validateDflowPrograms(approved,[compute,approved[0]]),true);
+ assert.throws(()=>validateDflowPrograms([], [approved[0]]));
+ assert.throws(()=>validateDflowPrograms(approved,["7".repeat(44),approved[0]]));
+ assert.throws(()=>validateDflowPrograms(approved,[compute]));
+});
