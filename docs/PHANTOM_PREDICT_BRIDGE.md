@@ -24,6 +24,7 @@ Set the following **server-side only** and deploy with private configuration:
 - SENDA_DFLOW_API_KEY — DFlow production API key from the provider. Never check into Git or put in the browser bundle.
 - SENDA_DFLOW_EXECUTION_ENABLED=true — separate production release switch. Defaults disabled.
 - SENDA_DFLOW_PARTNER_APPROVED=true — enable only after documented partner/business/commercial approval, not based on automatic public API reachability.
+- SENDA_DFLOW_ALLOWED_PROGRAM_IDS — comma-separated, independently reviewed DFlow/CLP program IDs that are explicitly permitted in wallet-bound orders. No configured IDs means execution is unavailable.
 - SENDA_DFLOW_ELIGIBILITY_API_URL — HTTPS origin of a Senda-controlled compliance provider delivering an independently verified wallet-specific eligibility verdict.
 - SENDA_DFLOW_ELIGIBILITY_API_KEY — private credential for that eligibility provider.
 
@@ -36,7 +37,7 @@ Production trade order: https://quote-api.dflow.net/order
 Async order status: https://quote-api.dflow.net/order-status
 Never use the DFlow dev hostname to claim a testnet trade: their unauthenticated dev API also executes mainnet-beta transactions.
 
-The MVP limits buys to $1–$250 USDC, slippageBps=100, predictionMarketSlippageBps=100, small priority fee and a 15-second order preview. It requires exact raw inAmount and output mint mapping to market metadata. Orders with missing positive minimum outputs, invalid serialization or unexpected fee payer are rejected before signature. Further program-ID/instruction-level review, address lookup resolution, venue transaction authenticity attestation and independent simulation reconciliation should be added before turning on production. The release gate must remain OFF until then.
+The MVP limits buys to $1–$250 USDC, slippageBps=100, predictionMarketSlippageBps=100, small priority fee and a 15-second order preview. It requires exact raw inAmount and output mint mapping to market metadata. Orders with missing positive minimum outputs, invalid serialization or unexpected fee payer are rejected before signature. The signer rejects any program ID outside reviewed DFlow IDs plus basic Solana system/token/compute programs, and rejects legacy or address-lookup transactions that cannot be fully inspected with this adapter. This is a conservative initial guard; additional independent program-audit evidence, resolution of legitimate address lookup tables, provider response authenticity and simulation reconciliation are still required before turning on production. The release gate must remain OFF until then.
 
 ## Important user experiences
 
