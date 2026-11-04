@@ -4,6 +4,7 @@ import {Link} from "@tanstack/react-router";
 import {PhantomPredictBridge} from "@/components/phantom-predict-bridge";
 import {DflowPhantomPrediction} from "@/components/dflow-phantom-prediction";
 import {PredictionVenueRouter} from "@/components/prediction-venue-router";
+import {PolymarketPublicDiscovery} from "@/components/polymarket-public-discovery";
 import {kalshiPage,type KalshiRow} from "@/lib/kalshi-book";
 import {getKalshiDepth} from "@/lib/kalshi-depth";
 import {EVENT_TEMPLATES,planEventSide,evaluateEventProduct,eventMarketUrl,type EventBook} from "@/lib/event-contract-router.mjs";
@@ -59,7 +60,9 @@ export function EventMarketsDesk(){
   <div className="mt-4 flex flex-wrap gap-2"><Link to="/liquify" className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-cyan-300 px-4 text-xs font-bold text-[#091622]">Liquify Global <ArrowRight className="size-4"/></Link><Link to="/payments" className="inline-flex min-h-10 items-center rounded-xl border border-white/20 px-4 text-xs">Pay & Send</Link></div>
  </header>
  <PredictionVenueRouter selected={venue} onChange={setVenue}/>
- <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)]">
+ {venue==="polymarket"?<PolymarketPublicDiscovery/>:null}
+ {venue==="world"?<section className="rounded-[22px] border border-white/10 bg-[#0c1524] p-5"><h2 className="text-lg font-semibold">World Prediction Markets · Phantom mobile</h2><p className="mt-2 text-xs leading-relaxed text-white/55">World's eligible-market inventory and order signing run in Phantom's separate mobile prediction flow. There is no connected Senda World quote or position API; Senda will not recycle Kalshi catalog prices as World liquidity. Review your real market, fees and outcome inside Phantom.</p></section>:null}
+ <div className={venue==="polymarket"||venue==="world"?"hidden":"grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)]"}>
   <section className={box}>
    <div className="flex flex-wrap items-center justify-between gap-2"><div><p className="font-mono text-[10px] uppercase tracking-widest text-cyan-300">VENUE DISCOVERY</p><h2 className="mt-1 text-xl font-semibold">Kalshi source markets</h2></div><button type="button" onClick={()=>setStamp(x=>x+1)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/15 px-3 text-xs"><RefreshCw className="size-4"/>Refresh</button></div>
    <label className="relative mt-4 block"><Search className="absolute left-3 top-3 size-4 text-white/40"/><input value={query} onChange={e=>{setQuery(e.target.value);setMore(0)}} className="min-h-10 w-full rounded-xl border border-white/15 bg-[#15243a] pl-10 pr-3 text-sm outline-none" placeholder="Weather, technology, sports, rates, events…"/></label>
