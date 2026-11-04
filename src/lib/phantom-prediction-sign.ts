@@ -3,7 +3,7 @@
  */
 import bs58 from "bs58";
 import nacl from "tweetnacl";
-import {connectPhantom,phantomProvider,waitForInjected} from "@/lib/phantom";
+import {phantomProvider,waitForInjected} from "@/lib/phantom";
 import {makePredictionAcknowledgement,validatePredictionAcknowledgement,type PredictionResearchRecord} from "@/lib/phantom-prediction-intent.mjs";
 
 type PhantomMessageProvider={
@@ -21,8 +21,9 @@ export async function signPhantomPredictionResearch({ticker,side,contracts,gross
   throw Error("Open Senda inside the Phantom app or connect the Phantom extension first. A Solana wallet connection alone is not a Kalshi trading account.");
  }
  if(!injected.signMessage)throw Error("This Phantom provider does not expose a supported message-signing method.");
- const wallet=await connectPhantom();
- if(wallet!==injected.publicKey?.toString())throw Error("Phantom account changed during connection.");
+ const connection=await injected.connect();
+ const wallet=connection.publicKey?.toString()||injected.publicKey?.toString()||"";
+ if(!wallet||wallet!==injected.publicKey?.toString())throw Error("Phantom account changed during connection.");
  const nonceBytes=new Uint8Array(16);
  window.crypto.getRandomValues(nonceBytes);
  const nonce=Array.from(nonceBytes,byte=>byte.toString(16).padStart(2,"0")).join("");
