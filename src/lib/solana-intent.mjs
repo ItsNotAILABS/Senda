@@ -23,7 +23,7 @@ export function parseSolanaIntent(text) {
    return { status:"draft", kind:"transfer", asset, amount:decimal, amountMinor, destination:to,
      network:"solana-mainnet-beta", canSign:false, requiresExplicitReview:true, requiresWalletSignature:true };
  }
- const swap=s.match(/^swap\s+(half|50%|all|100%|[0-9]+(?:\.[0-9]+)?)\s*(SOL|USDC)\s+(?:to|for|into)\s+(SOL|USDC)$/i);
+ const swap=s.match(/^swap\s+(half|50%|all|100%|[0-9]+(?:\.[0-9]+)?)\s*(?:my\s+)?(SOL|USDC)\s+(?:to|for|into)\s+(SOL|USDC)$/i);
  if(swap){
    const [,quant,fromRaw,toRaw]=swap, from=fromRaw.toUpperCase(),to=toRaw.toUpperCase();
    if(from===to)return deny("SAME_ASSET");
