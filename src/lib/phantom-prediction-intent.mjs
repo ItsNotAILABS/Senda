@@ -8,7 +8,7 @@ export function makePredictionAcknowledgement({wallet,ticker,side,contracts,gros
  if(!Number.isInteger(contracts)||contracts<1||contracts>1000)throw Error("Invalid contract count");
  if(!Number.isFinite(grossUsd)||grossUsd<=0||grossUsd>100000)throw Error("Invalid gross research estimate");
  if(!Number.isSafeInteger(quotedAt)||quotedAt>createdAt||createdAt-quotedAt>30000)throw Error("Research quote expired");
- if(!/^https:\/\/[a-z0-9.-]+(?::\d{1,5})?$/.test(origin)||new URL(origin).hostname!==PREDICTION_ACK_DOMAIN)throw Error("Only the Senda production origin may create an acknowledgement");
+ if(origin!=="https://"+PREDICTION_ACK_DOMAIN)throw Error("Only the Senda production origin may create an acknowledgement");
  if(typeof nonce!=="string"||!/^[0-9a-f]{32}$/.test(nonce))throw Error("A new 128-bit random challenge is required");
  if(!Number.isSafeInteger(createdAt)||createdAt<=0)throw Error("Invalid timestamp");
  const record={
