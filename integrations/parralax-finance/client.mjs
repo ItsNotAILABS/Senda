@@ -3,7 +3,8 @@ const ENDPOINTS=Object.freeze({
  "market.research":"/v1/market/research",
  "risk.evaluate":"/v1/risk/evaluate",
  "execution.plan":"/v1/execution/plan",
- "execution.exit-plan":"/v1/execution/exit-plan"
+ "execution.exit-plan":"/v1/execution/exit-plan",
+ "agents.budget-evaluate":"/v1/agents/budget-evaluate"
 });
 export function createFinanceClient({ origin, token, fetchImpl=globalThis.fetch, timeoutMs=8000 }={}) {
  if(!origin||!token||token.length<32)throw Error("Private PARRALAX origin and strong service credential required");
@@ -31,6 +32,7 @@ export function createFinanceClient({ origin, token, fetchImpl=globalThis.fetch,
   research:(requestId,payload)=>call("market.research",requestId,payload),
   risk:(requestId,payload)=>call("risk.evaluate",requestId,payload),
   plan:(requestId,payload)=>call("execution.plan",requestId,payload),
-  exitPlan:(requestId,payload)=>call("execution.exit-plan",requestId,payload)
+  exitPlan:(requestId,payload)=>call("execution.exit-plan",requestId,payload),
+  budgetEvaluate:(requestId,payload)=>call("agents.budget-evaluate",requestId,payload)
  });
 }
