@@ -5,3 +5,5 @@ export declare function normalizePredictionListing(input:{venueId:string;marketI
 export declare function equivalenceGate(a:any,b:any,proof:any,now?:number):{comparable:boolean;reason:string};
 export declare function evaluatePredictionRoute(input:any):{ready:boolean;state:string;reason:string;phase:string};
 export declare function predictionFundingPaths():Array<{source:string;target:string;mode:string;available:string;note:string}>;
+
+export declare function rankEquivalentPredictionQuotes(input:{listings:any[];quotes:any[];proof:any;budgetUsd:number;now?:number}):{ready:boolean;reason:string;ranked:Array<{venueId:string;marketId:string;contracts:number;totalWorstCaseUsd:number;quotedAt:number}>};
