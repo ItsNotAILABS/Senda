@@ -13,6 +13,7 @@ const config=()=>({
  approved:process.env.SENDA_DFLOW_PARTNER_APPROVED==="true",
  eligibilityUrl:process.env.SENDA_DFLOW_ELIGIBILITY_API_URL||"",
  eligibilityKey:process.env.SENDA_DFLOW_ELIGIBILITY_API_KEY||"",
+ allowedProgramIds:(process.env.SENDA_DFLOW_ALLOWED_PROGRAM_IDS||"").split(",").map(x=>x.trim()).filter(x=>MINT.test(x)),
 });
 const requestSlot=new Map<string,number>();
 function throttle(wallet:string){
@@ -52,7 +53,7 @@ async function checkPartnerJurisdiction(wallet:string,c:ReturnType<typeof config
 }
 async function capability(wallet:string,ticker:string){
  const c=config();
- if(!c.key||!c.enabled||!c.approved)return {ready:false,market:null,proofVerified:false,
+ if(!c.key||!c.enabled||!c.approved||!c.allowedProgramIds.length)return {ready:false,market:null,proofVerified:false,
   reason:"Senda DFlow production credentials/authorization are not enabled."};
  const [proof,approved,market]=await Promise.all([
    checkProof(wallet),checkPartnerJurisdiction(wallet,c),marketFromDflow(ticker,c.key).catch(()=>null)
@@ -80,7 +81,7 @@ export const prepareDflowPredictionOrder=createServerFn({method:"POST"})
   const c=config();
   try{
    const raw=await fetchJSON("https://quote-api.dflow.net/order?"+query.toString(),{"x-api-key":c.key},7000);
-   const order=validateDflowOrder({raw,wallet:data.wallet,inputMint:USDC,outputMint:mint,amountRaw:amount});
+   const order={...validateDflowOrder({raw,wallet:data.wallet,inputMint:USDC,outputMint:mint,amountRaw:amount}),allowedProgramIds:c.allowedProgramIds};
    return {ready:true,order,market:cap.market,reason:"DFlow produced a live, short-lived, wallet-specific transaction. Approval in Phantom is still required."};
   }catch(e){return {ready:false,order:null,market:cap.market,reason:e instanceof Error?e.message:"DFlow could not prepare a verified transaction."};}
  });
