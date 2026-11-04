@@ -8,7 +8,7 @@ export const getPolymarketPublicMarkets=createServerFn({method:"POST"})
  .handler(async({data})=>{
   if(!cached||cached.until<Date.now()){
    if(!pending)pending=(async()=>{
-    const q=new URLSearchParams({active:"true",closed:"false",limit:"40",offset:"0",order:"volume24hr",ascending:"false"});
+    const q=new URLSearchParams({active:"true",closed:"false",limit:"40",offset:"0",order:"volume",ascending:"false"});
     const response=await fetch("https://gamma-api.polymarket.com/markets?"+q.toString(),{
      headers:{accept:"application/json"},signal:AbortSignal.timeout(7000),redirect:"error"
     });
