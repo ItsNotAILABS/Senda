@@ -39,3 +39,13 @@ test("DFlow requires every production execution gate",()=>{
  assert.equal(evaluatePredictionRoute({...base,feesUsd:undefined}).state,"fee-unknown");
  assert.equal(evaluatePredictionRoute({...base,feesUsd:4}).state,"budget-exceeded");
 });
+
+test("no quote ranking without authenticated adapters and exact contract proof",async()=>{
+ const {rankEquivalentPredictionQuotes}=await import("../src/lib/prediction-venues.mjs");
+ const a=mk("kalshi-public","KXRAIN-A"),b=mk("dflow","DFLOW-A");
+ const quotes=[{venueId:"kalshi-public",marketId:a.marketId,authorized:true,takerBound:true,source:"provider-executable",quotedAt:Date.now(),baseCostUsd:2,totalFeesUsd:0.1,slippageBufferUsd:0.1,contracts:5},
+  {venueId:"dflow",marketId:b.marketId,authorized:true,takerBound:true,source:"provider-executable",quotedAt:Date.now(),baseCostUsd:2.1,totalFeesUsd:0.1,slippageBufferUsd:0.1,contracts:5}];
+ assert.equal(rankEquivalentPredictionQuotes({listings:[a,b],quotes,proof:null,budgetUsd:10}).ready,false);
+ const proof={approved:true,marketKey:a.marketKey,venueMarkets:[{venueId:a.venueId,marketId:a.marketId},{venueId:b.venueId,marketId:b.marketId}],rulesHash:"f".repeat(64),identicalPayoff:true,identicalSettlement:true,identicalCutoff:true,verifiedAt:Date.now()};
+ assert.equal(rankEquivalentPredictionQuotes({listings:[a,b],quotes,proof,budgetUsd:10}).ready,false);
+});
