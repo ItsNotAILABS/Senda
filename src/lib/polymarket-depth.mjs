@@ -26,6 +26,10 @@ export function planPolymarketBuy(book,shares,at=Date.now()){
   return {available:false,reason:"Select a sourced outcome token and 1–1000 whole shares."};
  if(!Number.isSafeInteger(book.asOf)||at<book.asOf||at-book.asOf>30000)
   return {available:false,reason:"Polymarket depth is stale. Refresh before research."};
+ const venueAt=Number(book.exchangeAt);
+ const venueMs=venueAt<1e12?venueAt*1000:venueAt;
+ if(!Number.isSafeInteger(venueAt)||venueAt<=0||venueMs>at+5000||at-venueMs>60000)
+  return {available:false,reason:"Venue timestamp is missing or stale; do not use this order book for a cost estimate."};
  if(!Array.isArray(book.asks)||!book.asks.length)
   return {available:false,reason:"No observed sell orders for this outcome token."};
  let remaining=shares,filled=0,cost=0;
