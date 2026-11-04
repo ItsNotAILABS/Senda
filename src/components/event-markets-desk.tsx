@@ -22,6 +22,8 @@ export function EventMarketsDesk(){
  const [loading,setLoading]=useState(false);
  const [depthLoading,setDepthLoading]=useState(false);
  const [stamp,setStamp]=useState(0);
+ const [clock,setClock]=useState(Date.now());
+ useEffect(()=>{const timer=window.setInterval(()=>setClock(Date.now()),10000);return()=>window.clearInterval(timer)},[]);
  const [note,setNote]=useState("Loading public Kalshi markets…");
  const [depthNote,setDepthNote]=useState("");
  const [more,setMore]=useState(0);
@@ -42,8 +44,8 @@ export function EventMarketsDesk(){
     .finally(()=>{if(active)setDepthLoading(false);});
   return()=>{active=false};
  },[market?.ticker,stamp]);
- const planned=useMemo(()=>book?planEventSide(book,side,contracts,Date.now()):null,[book,side,contracts,stamp]);
- const product=useMemo(()=>book?evaluateEventProduct({templateId:template,book,side,contracts,budgetUsd:budget,now:Date.now()}):null,[template,book,side,contracts,budget,stamp]);
+ const planned=useMemo(()=>book?planEventSide(book,side,contracts,clock):null,[book,side,contracts,clock]);
+ const product=useMemo(()=>book?evaluateEventProduct({templateId:template,book,side,contracts,budgetUsd:budget,marketTitle:[market?.title,market?.yes].filter(Boolean).join(" "),marketCategory:market?.category||"",now:clock}):null,[template,book,side,contracts,budget,market?.ticker,clock]);
  const selected=EVENT_TEMPLATES.find(x=>x.id===template)!;
  return <div className="mx-auto max-w-[1510px] space-y-4 p-4 text-white sm:p-6">
  <header className="rounded-[26px] border border-cyan-300/20 bg-[radial-gradient(circle_at_top_right,#164956,#0b1728_45%,#090d17)] p-5 sm:p-8">
