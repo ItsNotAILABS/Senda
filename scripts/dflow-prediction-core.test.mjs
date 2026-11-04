@@ -1,0 +1,36 @@
+import test from "node:test";import assert from "node:assert/strict";
+import {USDC,parseDflowMarket,validateDflowOrder,evaluateDflowEligibility,terminalDflowStatus} from "../src/lib/dflow-prediction-core.mjs";
+const ticker="KXRAIN-26NOV03-A",yes="6".repeat(44),no="7".repeat(44),wallet="8".repeat(44);
+const market={ticker,status:"active",closeTime:2000000000,accounts:{[USDC]:{yesMint:yes,noMint:no}}};
+const at=1800000000000;
+test("market mints always originate in matching DFlow contract",()=>{
+ const m=parseDflowMarket(ticker,market,at);assert.equal(m.yesMint,yes);assert.equal(m.noMint,no);
+ assert.throws(()=>parseDflowMarket(ticker,{...market,ticker:"another"},at));
+ assert.throws(()=>parseDflowMarket(ticker,{...market,status:"determined"},at));
+});
+test("missing or matching mints fail closed",()=>{
+ assert.throws(()=>parseDflowMarket(ticker,{...market,accounts:{}},at));
+ assert.throws(()=>parseDflowMarket(ticker,{...market,accounts:{[USDC]:{yesMint:yes,noMint:yes}}},at));
+});
+const raw={inputMint:USDC,outputMint:yes,inAmount:"2500000",outAmount:"2000000",minOutAmount:"1990000",executionMode:"async",transaction:"A".repeat(200),lastValidBlockHeight:22000000,priceImpactPct:"0.01"};
+const input={raw,wallet,inputMint:USDC,outputMint:yes,amountRaw:"2500000",at};
+test("requires exact DFlow values and a short signed quote window",()=>{
+ const p=validateDflowOrder(input);
+ assert.equal(p.quoteExpiry,at+15000);assert.equal(p.executionMode,"async");
+ assert.throws(()=>validateDflowOrder({...input,raw:{...raw,outputMint:no}}));
+ assert.throws(()=>validateDflowOrder({...input,raw:{...raw,inAmount:"2500001"}}));
+ assert.throws(()=>validateDflowOrder({...input,raw:{...raw,minOutAmount:"3000000"}}));
+});
+test("requires proof, approved commercial access and jurisdiction",()=>{
+ const base={proof:{verified:true},enabled:true,partnerApproved:true,regionApproved:true,market:parseDflowMarket(ticker,market,at)};
+ assert.equal(evaluateDflowEligibility(base).ready,true);
+ assert.equal(evaluateDflowEligibility({...base,proof:{verified:false}}).ready,false);
+ assert.equal(evaluateDflowEligibility({...base,partnerApproved:false}).ready,false);
+ assert.equal(evaluateDflowEligibility({...base,regionApproved:false}).ready,false);
+});
+test("only closed asynchronous orders become fills",()=>{
+ assert.equal(terminalDflowStatus("open").success,false);
+ assert.equal(terminalDflowStatus("pendingClose").terminal,false);
+ assert.equal(terminalDflowStatus("closed").success,true);
+ assert.equal(terminalDflowStatus("failed").success,false);
+});
