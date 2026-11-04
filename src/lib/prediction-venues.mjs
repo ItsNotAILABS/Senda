@@ -102,3 +102,42 @@ export function predictionFundingPaths(){
    note:"Distinct Polygon account/collateral, API and local eligibility."}
  ];
 }
+
+/** Strict future-adapter quote comparator. Never ranks indicative market probabilities. */
+export function rankEquivalentPredictionQuotes({listings,quotes,proof,budgetUsd,now=Date.now()}){
+ if(!Array.isArray(listings)||!Array.isArray(quotes)||!Number.isFinite(budgetUsd)||budgetUsd<=0)
+  return {ready:false,reason:"No valid funded quote comparison.",ranked:[]};
+ if(listings.length<2 || listings.length!==quotes.length)
+  return {ready:false,reason:"At least two distinct venue contracts and their actual quotes are required.",ranked:[]};
+ const anchor=listings[0];
+ for(let i=1;i<listings.length;i++){
+  const eq=equivalenceGate(anchor,listings[i],proof,now);
+  if(!eq.comparable)return {ready:false,reason:eq.reason,ranked:[]};
+ }
+ const ranked=[];
+ const seen=new Set();
+ for(let i=0;i<listings.length;i++){
+  const l=listings[i],q=quotes[i],venue=venueById(l.venueId);
+  if(seen.has(l.venueId)||!venue||venue.order==="phantom-app-only"||
+    venue.order==="requires-separate-venue-auth"||venue.order==="not-configured")
+   return {ready:false,reason:"The selected venue does not have an authorized Senda execution adapter.",ranked:[]};
+  seen.add(l.venueId);
+  if(!q||q.venueId!==l.venueId||q.marketId!==l.marketId||
+    !q.authorized||!q.takerBound||q.source!=="provider-executable"||
+    !Number.isSafeInteger(q.quotedAt)||q.quotedAt>now||now-q.quotedAt>15000||
+    !Number.isFinite(q.baseCostUsd)||q.baseCostUsd<=0||
+    !Number.isFinite(q.totalFeesUsd)||q.totalFeesUsd<0||
+    !Number.isFinite(q.slippageBufferUsd)||q.slippageBufferUsd<0||
+    !Number.isInteger(q.contracts)||q.contracts<=0)
+   return {ready:false,reason:"An execution quote is stale, unauthenticated or missing fees.",ranked:[]};
+  const worstCost=q.baseCostUsd+q.totalFeesUsd+q.slippageBufferUsd;
+  if(worstCost>budgetUsd)
+   return {ready:false,reason:"At least one offer exceeds the authorized budget.",ranked:[]};
+  ranked.push({venueId:l.venueId,marketId:l.marketId,contracts:q.contracts,
+    totalWorstCaseUsd:Math.round(worstCost*10000)/10000,quotedAt:q.quotedAt});
+ }
+ if(new Set(ranked.map(q=>q.contracts)).size!==1)
+  return {ready:false,reason:"Quote amounts are not contract-equivalent.",ranked:[]};
+ ranked.sort((a,b)=>a.totalWorstCaseUsd-b.totalWorstCaseUsd);
+ return {ready:true,reason:"Reviewed equivalent venue contracts, authorized quote sizes and known worst-case fees only.",ranked};
+}
