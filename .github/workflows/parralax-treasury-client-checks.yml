@@ -1,0 +1,25 @@
+name: parralax-treasury-client-checks
+on:
+  pull_request:
+    paths:
+      - "integrations/parralax-treasury/**"
+      - ".github/workflows/parralax-treasury-client-checks.yml"
+  workflow_dispatch:
+jobs:
+  treasury-client:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Test treasury client and receipt contracts
+        run: |
+          node --test integrations/parralax-treasury/treasury-intent.test.mjs
+          node --test integrations/parralax-treasury/chain-client.test.mjs
+      - name: Typecheck Senda
+        run: npm run typecheck
