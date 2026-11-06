@@ -2,11 +2,10 @@
  * This is NOT the U.S. Phantom/Kalshi mobile account order flow.
  * Requires approved DFlow API, Proof KYC, independent jurisdiction verdict, user review.
  */
-import bs58 from "bs58";
+import {toBase58,verifyWalletEd25519,decodeBase64} from "@/lib/ed25519-wallet.mjs";
 import {Buffer} from "buffer";
 import {phantomProvider,waitForInjected,sendVersioned} from "@/lib/phantom";
 import {sealOpen} from "@/lib/seal";
-import nacl from "tweetnacl";
 import {withWalletExecutionLock} from "@/lib/wallet-execution-lock.mjs";
 import {prepareDflowPredictionOrder,getDflowPredictionStatus} from "@/lib/dflow-predictions";
 import {ensureNoDuplicatePrediction,recordDflowSubmitted,observeDflowReceipt} from "@/lib/dflow-prediction-receipt.mjs";
@@ -35,12 +34,11 @@ export async function startDflowProofVerification(wallet:string):Promise<void>{
  const timestamp=Date.now().toString();
  const signed=await p.signMessage(new TextEncoder().encode("Proof KYC verification: "+timestamp),"utf8");
  const signature=Uint8Array.from(signed.signature);
- const key=bs58.decode(wallet);
- if(key.length!==32||signature.length!==64||!nacl.sign.detached.verify(new TextEncoder().encode("Proof KYC verification: "+timestamp),signature,key))
+ if(!await verifyWalletEd25519(wallet,new TextEncoder().encode("Proof KYC verification: "+timestamp),signature))
   throw Error("Phantom Proof KYC signature did not verify.");
  const url=new URL("https://dflow.net/proof");
  url.searchParams.set("wallet",wallet);
- url.searchParams.set("signature",bs58.encode(signature));
+ url.searchParams.set("signature",toBase58(signature));
  url.searchParams.set("timestamp",timestamp);
  url.searchParams.set("redirect_uri","https://senda.pocketnova.app/social/events");
  window.location.assign(url.toString());
@@ -58,7 +56,7 @@ export async function signDflowPrediction({wallet,ticker,side,amountUsd,order}:{
   throw Error("DFlow quote expired or does not match this wallet/amount. Request a fresh order.");
  return withWalletExecutionLock(wallet,async()=>{
   ensureNoDuplicatePrediction(window.localStorage,{wallet,ticker,side,amountRaw});
-  const raw=Buffer.from(order.transaction,"base64");
+  const raw=decodeBase64(order.transaction);
   if(raw.length>1232||raw.length<64)throw Error("DFlow transaction is outside Solana packet-size limits.");
   if(!globalThis.Buffer)globalThis.Buffer=Buffer;
   const {PublicKey,VersionedTransaction}=await import("@solana/web3.js");
