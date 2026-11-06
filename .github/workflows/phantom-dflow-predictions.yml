@@ -12,6 +12,9 @@ on:
       - 'src/components/event-markets-desk.tsx'
       - 'scripts/dflow-prediction-*.test.mjs'
       - 'scripts/phantom-prediction-*.test.mjs'
+      - 'scripts/ed25519-wallet.test.mjs'
+      - 'package.json'
+      - 'package-lock.json'
       - 'docs/PHANTOM_PREDICT_BRIDGE.md'
   workflow_dispatch:
 permissions:
@@ -27,7 +30,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Pure safety and ledger tests
-        run: node --test scripts/phantom-prediction-intent.test.mjs scripts/dflow-prediction-core.test.mjs scripts/dflow-prediction-receipt.test.mjs scripts/event-contract-router.test.mjs
+        run: node --test scripts/ed25519-wallet.test.mjs scripts/phantom-prediction-intent.test.mjs scripts/dflow-prediction-core.test.mjs scripts/dflow-prediction-receipt.test.mjs scripts/event-contract-router.test.mjs
       - name: Install app dependencies
         run: npm ci
       - name: Typecheck
