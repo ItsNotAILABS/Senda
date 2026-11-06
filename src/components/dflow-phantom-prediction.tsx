@@ -1,7 +1,7 @@
 import {useEffect,useState} from "react";
 import {CheckCircle2,ExternalLink,ShieldAlert,Wallet,RefreshCw,ArrowRight} from "lucide-react";
 import {connectPhantomForDflow,startDflowProofVerification,signDflowPrediction} from "@/lib/dflow-prediction-sign";
-import {getDflowPredictionCapability,prepareDflowPredictionOrder,getDflowPredictionStatus} from "@/lib/dflow-predictions";
+import {getDflowPredictionCapability,prepareDflowPredictionOrder,getDflowPredictionStatus,getDflowProofStatus} from "@/lib/dflow-predictions";
 import {readDflowReceipts,observeDflowReceipt,type DflowReceipt} from "@/lib/dflow-prediction-receipt.mjs";
 import {openWalletBrowser,insideWalletApp,isPhoneBrowser} from "@/lib/mobile-wallet";
 import type {DflowMarket,DflowOrder} from "@/lib/dflow-prediction-core.mjs";
@@ -12,6 +12,7 @@ const money=(x:number)=>"$"+x.toLocaleString("en-US",{minimumFractionDigits:2,ma
 export function DflowPhantomPrediction({ticker}:{ticker:string}){
  const [wallet,setWallet]=useState("");
  const [cap,setCap]=useState<Capability|null>(null);
+ const [proof,setProof]=useState<boolean|null>(null);
  const [side,setSide]=useState<"yes"|"no">("yes");
  const [amount,setAmount]=useState(5);
  const [quote,setQuote]=useState<DflowOrder|null>(null);
@@ -35,13 +36,13 @@ export function DflowPhantomPrediction({ticker}:{ticker:string}){
  async function connect(){
   const address=await connectPhantomForDflow();
   setWallet(address);setQuote(null);
-  const result=await getDflowPredictionCapability({data:{wallet:address,ticker}});
-  setCap(result);
+  const [identity,result]=await Promise.all([getDflowProofStatus({data:{wallet:address}}),getDflowPredictionCapability({data:{wallet:address,ticker}})]);
+  setProof(identity.verified);setCap(result);
  }
  async function refresh(){
   if(!wallet)throw Error("Connect Phantom first.");
-  const result=await getDflowPredictionCapability({data:{wallet,ticker}});
-  setCap(result);setQuote(null);
+  const [identity,result]=await Promise.all([getDflowProofStatus({data:{wallet}}),getDflowPredictionCapability({data:{wallet,ticker}})]);
+  setProof(identity.verified);setCap(result);setQuote(null);
  }
  async function build(){
   if(!wallet||!cap?.ready)throw Error("DFlow KYC, approved partner access and jurisdiction eligibility are required.");
@@ -70,8 +71,8 @@ export function DflowPhantomPrediction({ticker}:{ticker:string}){
     {phone&&!insideWalletApp()?<button type="button" onClick={()=>openWalletBrowser("phantom")} className="inline-flex min-h-11 items-center rounded-xl border border-white/15 px-3 text-xs">Open Senda in Phantom</button>:null}
   </div>
   {wallet?<p className="mt-2 break-all font-mono text-[10px] text-white/45">Wallet: {wallet}</p>:null}
-  {cap?<div className={`mt-3 rounded-xl border p-3 text-xs ${cap.ready?"border-emerald-300/25 bg-emerald-300/5 text-emerald-100":"border-amber-300/20 bg-amber-300/5 text-amber-100"}`}><p className="font-semibold">{cap.ready?"Verified DFlow execution availability":"DFlow trading not yet available"}</p><p className="mt-1 leading-relaxed">{cap.reason}</p><p className="mt-1 text-[11px]">DFlow Proof: {cap.proofVerified?"Verified":"Not verified or not checked"}</p></div>:null}
-  {wallet&&cap?.market&&cap.proofVerified===false?<button type="button" disabled={!!busy} onClick={()=>void run("kyc",()=>startDflowProofVerification(wallet))} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-300/30 px-4 text-xs text-amber-200 disabled:opacity-40">Verify your wallet through DFlow Proof <ExternalLink className="size-3"/></button>:null}
+  {cap?<div className={`mt-3 rounded-xl border p-3 text-xs ${cap.ready?"border-emerald-300/25 bg-emerald-300/5 text-emerald-100":"border-amber-300/20 bg-amber-300/5 text-amber-100"}`}><p className="font-semibold">{cap.ready?"Verified DFlow execution availability":"DFlow trading not yet available"}</p><p className="mt-1 leading-relaxed">{cap.reason}</p><p className="mt-1 text-[11px]">DFlow Proof: {proof===true?"Verified":proof===false?"Not verified":"Not checked"}</p></div>:null}
+  {wallet&&proof===false?<button type="button" disabled={!!busy} onClick={()=>void run("kyc",()=>startDflowProofVerification(wallet))} className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-xl border border-amber-300/30 px-4 text-xs text-amber-200 disabled:opacity-40">Verify your wallet through DFlow Proof <ExternalLink className="size-3"/></button>:null}
   {cap?.ready?<div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
     <p className="text-xs font-semibold">Select a funded outcome</p>
     <div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={()=>setSide("yes")} className={`min-h-10 rounded-xl border text-xs ${side==="yes"?"border-emerald-300 bg-emerald-300/10":"border-white/10"}`}>YES</button><button type="button" onClick={()=>setSide("no")} className={`min-h-10 rounded-xl border text-xs ${side==="no"?"border-emerald-300 bg-emerald-300/10":"border-white/10"}`}>NO</button></div>
