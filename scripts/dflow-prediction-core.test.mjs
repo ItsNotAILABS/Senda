@@ -43,3 +43,20 @@ test("only reviewed DFlow programs and standard Solana instructions are permitte
  assert.throws(()=>validateDflowPrograms(approved,["7".repeat(44),approved[0]]));
  assert.throws(()=>validateDflowPrograms(approved,[compute]));
 });
+
+test("accepts documented DFlow accounts.usdc metadata and ISO market closes",()=>{
+ const asUsdc={...market,closeTime:"2034-01-01T00:00:00.000Z",accounts:{usdc:{yesMint:yes,noMint:no}}};
+ const parsed=parseDflowMarket(ticker,asUsdc,at);
+ assert.equal(parsed.yesMint,yes);
+ assert.equal(parsed.noMint,no);
+ assert.throws(()=>parseDflowMarket(ticker,{...asUsdc,closeTime:"not-a-date"},at));
+});
+test("refuses provider-required submission and additional signers until implemented",()=>{
+ for(const patch of [
+  {transactionVersion:"legacy"},
+  {submitEndpointRequired:true},
+  {predictionMarketInitPayerMustSign:true},
+  {destinationWalletMustSign:true},
+  {addressLookupTables:[{address:wallet}]}
+ ])assert.throws(()=>validateDflowOrder({...input,raw:{...raw,...patch}}));
+});
