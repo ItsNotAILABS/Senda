@@ -212,3 +212,8 @@ Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket 
 
 
 **Polymarket depth upgrade:** choose a real Gamma-listed market, inspect the outcome token's live CLOB bids/asks, and calculate a bounded research-only buy cost from observed asks. It is not an authenticated order; fee and jurisdiction approval must be completed separately. See `src/lib/polymarket-depth.mjs` and `docs/PREDICTION_ROUTER_V2.md`.
+
+
+### Prediction venue reliability hardening (Nov 6)
+
+The stacked provider-hardening branch fixes DFlow's documented `accounts.usdc` mint shape, explicitly locks crypto dependencies used by Phantom mobile, adds browser-native Ed25519 verification for Senda research signatures, and rejects unsupported DFlow submit/multi-signature/lookup-table transactions before wallet signing. It also unlocks Senda's encrypted recovery journal on the DFlow Phantom connect path. Read [provider hardening notes](docs/PREDICTION_PROVIDER_HARDENING.md). These are source fixes pending successful full CI and authorized production wallet tests; not a claim that all live venue orders now work.
