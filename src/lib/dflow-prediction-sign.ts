@@ -5,7 +5,7 @@
 import {toBase58,verifyWalletEd25519,decodeBase64} from "@/lib/ed25519-wallet.mjs";
 import {Buffer} from "buffer";
 import {phantomProvider,waitForInjected,sendVersioned} from "@/lib/phantom";
-import {sealOpen} from "@/lib/seal";
+import {sealOpen,unlockSeal} from "@/lib/seal";
 import {withWalletExecutionLock} from "@/lib/wallet-execution-lock.mjs";
 import {prepareDflowPredictionOrder,getDflowPredictionStatus} from "@/lib/dflow-predictions";
 import {ensureNoDuplicatePrediction,recordDflowSubmitted,observeDflowReceipt} from "@/lib/dflow-prediction-receipt.mjs";
@@ -23,6 +23,7 @@ export async function connectPhantomForDflow():Promise<string>{
  const c=await p.connect();
  const wallet=c.publicKey?.toString()||p.publicKey?.toString()||"";
  if(!MINT.test(wallet)||wallet!==p.publicKey?.toString())throw Error("Phantom wallet identity mismatch.");
+ await unlockSeal(wallet); // canonical wallet-bound encrypted recovery state
  return wallet;
 }
 export async function startDflowProofVerification(wallet:string):Promise<void>{
