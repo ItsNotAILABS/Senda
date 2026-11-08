@@ -1,0 +1,3 @@
+export type PolymarketBook={tokenId:string;source:string;asOf:number;exchangeAt:number|null;bids:Array<{price:number;size:number}>;asks:Array<{price:number;size:number}>;bestBid:number|null;bestAsk:number|null;quoteOnly:boolean};
+export declare function normalizePolymarketDepth(tokenId:string,raw:unknown,readAt?:number):PolymarketBook;
+export declare function planPolymarketBuy(book:PolymarketBook|null,shares:number,at?:number):{available:boolean;reason:string;filled?:number;remaining?:number;shares?:number;grossCostUsd?:number;averagePriceUsd?:number;quotedAt?:number;maxBinaryPayoutUsd?:number;fees?:string;notExecutable?:boolean};
