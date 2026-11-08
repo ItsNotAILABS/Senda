@@ -199,7 +199,7 @@ func main(){
  srv:=NewServer("https://api.jup.ag",key,secret)
  srv.solscanKey=os.Getenv("SENDA_SOLSCAN_PRO_API_KEY")
  server:=&http.Server{Addr:addr,Handler:srv.mux(),ReadHeaderTimeout:5*time.Second,
-  ReadTimeout:8*time.Second,WriteTimeout:20*time.Second,IdleTimeout:30*time.Second}
+  ReadTimeout:8*time.Second,WriteTimeout:40*time.Second,IdleTimeout:30*time.Second}
  log.Printf("Senda Liquify read-only router listening on %s (key configured: %t)",addr,key!="")
  log.Fatal(server.ListenAndServe())
 }
