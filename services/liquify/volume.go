@@ -226,7 +226,11 @@ func (s *Server) volume(w http.ResponseWriter,r *http.Request){
  pageCap:=configuredSolscanPageCap()
  for page:=1;page<=pageCap;page++{
   data,e:=s.getSolscanPage(ctx,mint,start,now,page)
-  if e!=nil{writeJSON(w,503,map[string]string{"error":"Solscan index unavailable: "+e.Error()});return}
+  if e!=nil{
+   if page==1{writeJSON(w,503,map[string]string{"error":"Solscan index unavailable: "+e.Error()});return}
+   // Preserve observed prefix without claiming completeness when later pages fail.
+   break
+  }
   events=append(events,data...)
   pagesFetched++
   if len(data)<solscanPageSize{completed=true;break}
