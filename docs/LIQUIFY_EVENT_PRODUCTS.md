@@ -45,3 +45,10 @@ npm run build:dev
 ```
 
 Then perform a real external-source verification: check one known Kalshi ticker's price levels against its published orderbook, verify YES and NO complement mathematics, manually test stale/empty/closed markets, and inspect the desktop/mobile interface. No live trading or automatic protection products should be claimed until the applicable venue and regulated-partner requirements are satisfied.
+
+
+## Signed Phantom research acknowledgement (new)
+
+The research UI optionally requests a real injected Phantom wallet signature over a fresh market **research preview**. It verifies Ed25519 locally using tweetnacl and the wallet public key with no secret transmission. The structured record explicitly states tradingAuthority: NONE, execution: NOT_SUBMITTED and fundsMoved: false; the signature neither pays a prediction stake nor submits a Kalshi order. Research acknowledgements expire, are not stored server-side and are not authorized trading intents. A production web origin is required.
+
+The supported mobile flow opens **Senda inside Phantom** for signMessage, not Phantom's native Predict tab. A user must separately open Phantom > Predict to make real bets. Phantom's U.S. Kalshi integration is a regulated account experience subject to eligibility and verification; outside the U.S., World Prediction Markets is a separate protocol and must not be interchanged with Kalshi. Do not send outcome tokens through Senda's normal Jupiter trading route without explicit product support. References: https://help.phantom.com/articles/56546828429587 and https://phantom.com/us-prediction-markets-disclosures.
