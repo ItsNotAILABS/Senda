@@ -1,6 +1,7 @@
 /** Server-only Liquify V2 pass-through. No browser origin/token exposure or signing. */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { authMiddleware } from "@/lib/auth/middleware";
 
 const mint = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
 const amount = z.string().regex(/^[1-9][0-9]{0,19}$/);
@@ -17,8 +18,11 @@ export type LiquifyV2Comparison={
  observedAt:string;executionEnabled:false;note:string;
 };
 export const compareLiquifyRoutes=createServerFn({method:"POST"})
+ .middleware([authMiddleware])
  .validator((input:unknown)=>inputSchema.parse(input))
  .handler(async({data}):Promise<LiquifyV2Comparison>=>{
+  if(process.env.SENDA_LIQUIFY_V2_ENABLED!=="true")
+   throw Error("Senda Liquify V2 comparison is disabled until the private router is approved.");
   const base=process.env.SENDA_LIQUIFY_ORIGIN;
   const token=process.env.SENDA_ROUTER_INTERNAL_KEY;
   if(!base||!token)throw Error("Private Liquify V2 service not configured");
