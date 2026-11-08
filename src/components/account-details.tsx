@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Copy, Landmark } from "lucide-react";
 import { toast } from "sonner";
 import { openReceiveAccount, type IssuedAccount } from "@/lib/receive-account";
+import { phantomProvider, waitForInjected } from "@/lib/phantom";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 type Ccy = "usd" | "eur" | "mxn" | "usdc";
@@ -36,6 +38,7 @@ function Row({ label, value, onCopy }: { label: string; value: string; onCopy: (
 }
 
 export function AccountDetails({ owner }: { owner: string }) {
+  const {user,isPending}=useCurrentUserState();
   const [ccy, setCcy] = useState<Ccy>("usd");
   const [lane, setLane] = useState<Lane>("local");
   const [busy, setBusy] = useState(false);
@@ -59,9 +62,26 @@ export function AccountDetails({ owner }: { owner: string }) {
       toast.error("Connect the wallet. The dollars are sent there as USDC.");
       return;
     }
+    if(isPending||!user||user.isDevFallback){
+      toast.error("Sign in to your verified account to request bank details.");
+      return;
+    }
     setBusy(true);
     try {
-      const res = await openReceiveAccount({ data: { wallet: owner, currency: ccy } });
+      type MessageSigner={isPhantom?:boolean;publicKey?:{toString:()=>string};connect:()=>Promise<{publicKey?:{toString:()=>string}}>;signMessage?:(message:Uint8Array,display?:"utf8"|"hex")=>Promise<{signature:Uint8Array|number[]}>};
+      const provider=(phantomProvider()??await waitForInjected(3000)) as MessageSigner|null;
+      if(!provider?.isPhantom||!provider.signMessage)throw Error("Connect Phantom to authorize your bank receive account.");
+      const connection=await provider.connect();
+      if((connection.publicKey?.toString()||provider.publicKey?.toString())!==owner)throw Error("The linked receiving wallet and the Phantom signing wallet differ.");
+      const signedAt=Date.now();
+      const nonceBytes=new Uint8Array(16);window.crypto.getRandomValues(nonceBytes);
+      const nonce=Array.from(nonceBytes,v=>v.toString(16).padStart(2,"0")).join("");
+      const message=new TextEncoder().encode(`senda.receive-account:v1:${owner}:${ccy}:${signedAt}:${user.id}:${nonce}`);
+      const signed=await provider.signMessage(message,"utf8");
+      const signature=Uint8Array.from(signed.signature);
+      if(signature.length!==64)throw Error("Phantom did not return a valid wallet signature.");
+      const base64=btoa(String.fromCharCode(...signature));
+      const res = await openReceiveAccount({ data: { wallet: owner, currency: ccy, signedAt, nonce, signature:base64 } });
       if (!res.ok) toast.error(res.error);
       else {
         setBook((prev) => ({ ...prev, [ccy]: res }));
