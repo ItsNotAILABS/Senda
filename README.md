@@ -217,3 +217,12 @@ Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket 
 ### Prediction venue reliability hardening (Nov 6)
 
 The stacked provider-hardening branch fixes DFlow's documented `accounts.usdc` mint shape, explicitly locks crypto dependencies used by Phantom mobile, adds browser-native Ed25519 verification for Senda research signatures, and rejects unsupported DFlow submit/multi-signature/lookup-table transactions before wallet signing. It also unlocks Senda's encrypted recovery journal on the DFlow Phantom connect path. Read [provider hardening notes](docs/PREDICTION_PROVIDER_HARDENING.md). These are source fixes pending successful full CI and authorized production wallet tests; not a claim that all live venue orders now work.
+
+
+## Senda Money — pay friends in dollars
+
+Senda is becoming a genuine everyday money interface as well as a trading desk. In the new money feature branch, **Send** uses a dollars-first UI with an actual **Phantom-signed native Solana USDC transfer** to a recipient's verified wallet; the receipt comes from Senda's chain-confirmation and recovery code. Senda never labels a local browser balance transfer as completed payment. `/payments/request` issues a real Solana Pay request link; asking does not credit money. `/payments/activity` shows wallet and network transaction evidence.
+
+**Bank and debit-card money** is a multi-stage integration, not a balance trick: PCI-hosted funding tokenization -> issuer authorization -> real settlement -> treasury USDC conversion (where permitted) -> wallet payment or licensed bank payout -> provider-verified receipt. The state machine is in `src/lib/money-settlement-core.mjs` but **no card charges or bank payouts are connected** by this branch. Legacy generated card numbers, paper balances and simulated credits are disabled in public builds. Bank receive-account provisioning, when actually configured with Bridge, requires a signed-in authorized customer and Phantom-signed ownership of the destination. See [Senda Money launch architecture](docs/SENDA_MONEY_PUBLIC_LAUNCH.md).
+
+Four coordinated products remain **Trade · Pay & Send · Agents · Liquify**, with Predictions using a multi-venue Liquify routing architecture. Phantom signs real compatible on-chain transactions inside Senda. Phantom U.S. Kalshi account trading is a different authorization lane from DFlow on-chain outcome tokens; neither is implied by connecting a wallet. The native DFlow prediction bridge is under separate security review in PR #34/#37/#38, not claimed live here.
