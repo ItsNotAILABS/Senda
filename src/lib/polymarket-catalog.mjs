@@ -13,7 +13,12 @@ export function normalizePolymarketCatalog(raw,asOf=Date.now()){
      typeof row.question!=="string"||row.question.trim().length<8)continue;
   if(row.closed===true||row.active===false)continue;
   const outcomes=list(row.outcomes).filter(v=>typeof v==="string"&&v.trim());
-  const prices=list(row.outcomePrices).map(v=>{const n=Number(v);return Number.isFinite(n)&&n>=0&&n<=1?n:null;});
+  const prices=list(row.outcomePrices).map(v=>{
+   if(typeof v!=="string"&&typeof v!=="number")return null;
+   const text=String(v);
+   if(!/^(?:0|1|0\\.\\d{1,8}|1\\.0{1,8})$/.test(text))return null;
+   const n=Number(text);return Number.isFinite(n)&&n>=0&&n<=1?n:null;
+  });
   const tokens=list(row.clobTokenIds).map(v=>String(v));
   const urlslug=String(row.slug||"");
   if(!slug.test(urlslug)||outcomes.length<2||prices.length!==outcomes.length)continue;

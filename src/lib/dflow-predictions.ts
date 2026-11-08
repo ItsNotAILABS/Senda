@@ -38,6 +38,10 @@ async function checkProof(wallet:string){
  try{const proof=await fetchJSON("https://proof.dflow.net/verify/"+wallet,{},5500);
   return {verified:proof.verified===true};}catch{return {verified:false};}
 }
+// Proof is public and independent of Senda's production trade credentials.
+export const getDflowProofStatus=createServerFn({method:"POST"})
+ .validator((raw:unknown)=>z.object({wallet:z.string().regex(MINT)}).parse(raw))
+ .handler(async({data}):Promise<{verified:boolean}>=>checkProof(data.wallet));
 async function checkPartnerJurisdiction(wallet:string,c:ReturnType<typeof config>){
  if(!c.eligibilityUrl||!c.eligibilityKey)return false;
  try{

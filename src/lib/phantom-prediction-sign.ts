@@ -1,8 +1,7 @@
 /** Phantom wallet signing for an on-device Senda research acknowledgement.
  * Does NOT sign an exchange order, fund Kalshi or authorize Phantom Predict.
  */
-import bs58 from "bs58";
-import nacl from "tweetnacl";
+import {toBase58,verifyWalletEd25519} from "@/lib/ed25519-wallet.mjs";
 import {phantomProvider,waitForInjected} from "@/lib/phantom";
 import {makePredictionAcknowledgement,validatePredictionAcknowledgement,type PredictionResearchRecord} from "@/lib/phantom-prediction-intent.mjs";
 
@@ -35,13 +34,11 @@ export async function signPhantomPredictionResearch({ticker,side,contracts,gross
  if(signature.length!==64)throw Error("Phantom returned an invalid Ed25519 signature.");
  const returned=response.publicKey?.toString();
  if(returned&&returned!==wallet)throw Error("Phantom signed with another wallet.");
- let key:Uint8Array;
- try{key=bs58.decode(wallet)}catch{throw Error("Phantom returned an invalid Solana public key.");}
- if(key.length!==32||!nacl.sign.detached.verify(message,signature,key))
+ if(!await verifyWalletEd25519(wallet,message,signature))
   throw Error("Could not verify the Phantom wallet signature.");
  if(Date.now()-quotedAt>30000)throw Error("Kalshi research quote expired while waiting for the signature. Refresh the market.");
  if(!validatePredictionAcknowledgement(built.record,Date.now()))
   throw Error("Research acknowledgement expired before verification.");
- return {record:built.record,signature:bs58.encode(signature),wallet,verified:true,
+ return {record:built.record,signature:toBase58(signature),wallet,verified:true,
   authority:"research-only",notice:"Phantom verified that this wallet signed Senda research data. No Kalshi order, funds transfer or Phantom Predict session was authorized."};
 }

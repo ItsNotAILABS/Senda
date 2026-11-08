@@ -15,3 +15,9 @@ test("venue links cannot use arbitrary hosts",()=>{
  assert.equal(polymarketMarketUrl(normalizePolymarketCatalog([market])[0]),"https://polymarket.com/event/fed-cut-rates-this-year");
  assert.equal(polymarketMarketUrl({slug:"https://evil.example"}),null);
 });
+
+test("missing and blank Gamma prices never become a quoted zero percent",()=>{
+ const base={...market,outcomePrices:JSON.stringify([null,""])};
+ const rows=normalizePolymarketCatalog([base]);
+ assert.deepEqual(rows[0].indicativePrices,[null,null]);
+});

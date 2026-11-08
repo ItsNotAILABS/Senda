@@ -8,9 +8,15 @@ export function parseDflowMarket(ticker,raw,now=Date.now()){
  const m=raw?.market&&typeof raw.market==="object"?raw.market:raw;
  if(!m||m.ticker!==ticker)throw Error("DFlow market ticker mismatch");
  if(m.status!=="active"&&m.status!=="open")throw Error("DFlow event is not open");
- const close=Number(m.closeTime??0);
- if(close>0 && (close<1e12?close*1000:close)<=now)throw Error("Prediction market has closed");
- const accounts=m.accounts?.[USDC];
+ const rawClose=m.closeTime??m.close_time??null;
+ let close=0;
+ if(rawClose!=null){
+  close=typeof rawClose==="string"&&/[^0-9]/.test(rawClose)?Date.parse(rawClose):Number(rawClose);
+  if(!Number.isFinite(close)||close<=0)throw Error("Invalid DFlow market close time");
+  if(close<1e12)close*=1000;
+  if(close<=now)throw Error("Prediction market has closed");
+ }
+ const accounts=m.accounts?.usdc??m.accounts?.[USDC];
  if(!accounts||!MINT.test(accounts.yesMint)||!MINT.test(accounts.noMint)||accounts.yesMint===accounts.noMint)
   throw Error("DFlow did not provide two verified USDC outcome mints");
  return {ticker,yesMint:accounts.yesMint,noMint:accounts.noMint,status:m.status,closeTime:close,
@@ -26,6 +32,12 @@ export function validateDflowOrder({raw,wallet,inputMint,outputMint,amountRaw,at
  if(!RAW.test(String(raw.outAmount??""))||!RAW.test(String(raw.minOutAmount??"")))throw Error("DFlow quote has no positive minimum outcome");
  if(BigInt(raw.minOutAmount)>BigInt(raw.outAmount))throw Error("DFlow min output exceeds quote");
  if(!["async","sync"].includes(raw.executionMode))throw Error("Unknown DFlow execution mode");
+ if(raw.transactionVersion!=null && raw.transactionVersion!=="v0")throw Error("Unsupported DFlow transaction version");
+ if(raw.submitEndpointRequired===true)throw Error("DFlow order needs an authenticated submit endpoint not yet integrated");
+ if(raw.predictionMarketInitPayerMustSign===true||raw.destinationWalletMustSign===true)
+  throw Error("DFlow order requires extra signers not yet supported");
+ if(Array.isArray(raw.addressLookupTables)&&raw.addressLookupTables.length>0)
+  throw Error("DFlow lookup tables require independent instruction resolution before signing");
  if(typeof raw.transaction!=="string"||raw.transaction.length<60||raw.transaction.length>3000||
     !/^[A-Za-z0-9+/]+={0,2}$/.test(raw.transaction))throw Error("Missing or malformed DFlow unsigned transaction");
  if(!Number.isSafeInteger(raw.lastValidBlockHeight)||raw.lastValidBlockHeight<=0)throw Error("No transaction block expiry bound");
