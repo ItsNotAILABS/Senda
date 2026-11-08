@@ -1,0 +1,40 @@
+name: Liquify V2 source and app gates
+on:
+  pull_request:
+    paths:
+      - "services/liquify/**"
+      - "src/lib/liquify-v2.ts"
+      - "src/components/liquify-route-compare.tsx"
+      - "src/routes/invest/routes.tsx"
+      - ".github/workflows/liquify-v2-gates.yml"
+  workflow_dispatch:
+jobs:
+  liquify-go:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/liquify/go.mod
+          cache-dependency-path: services/liquify/go.sum
+      - name: Unit and contract tests
+        run: cd services/liquify && go test -count=1 ./...
+      - name: Race gate
+        run: cd services/liquify && go test -race ./...
+      - name: Go vet
+        run: cd services/liquify && go vet ./...
+  senda-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:dev
