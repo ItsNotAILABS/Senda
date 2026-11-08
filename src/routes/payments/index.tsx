@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { SendView } from "@/components/desk-views";
+import { FriendsMoneyDesk } from "@/components/friends-money-desk";
 export const Route = createFileRoute("/payments/")({
-  component: Page,
+ component: Page,
 });
-
-function Page() {
-  return <SendView page="send" />;
+function Page(){
+ return <FriendsMoneyDesk />;
 }
