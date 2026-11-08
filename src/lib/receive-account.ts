@@ -61,7 +61,7 @@ export const openReceiveAccount = createServerFn({ method: "POST" })
     // A single configured Bridge customer belongs to exactly one verified Senda user.
     // Never allow arbitrary signed-in users to open accounts against the same KYC identity.
     const authorizedUser = process.env.BRIDGE_ALLOWED_USER_ID?.trim();
-    if(!authorizedUser||authorizedUser!==context.userId) {
+    if(context.userId==="dev-user"||!authorizedUser||authorizedUser!==context.userId) {
       return {ok:false,error:"Bank account provisioning is not available to this verified customer."};
     }
     if(process.env.SENDA_BRIDGE_RECEIVE_ENABLED!=="true")
