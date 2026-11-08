@@ -373,6 +373,8 @@ export function formatPan(raw: string): string {
 }
 
 export function sendaDeposit(tag: string): { bank: string; routing: string; account: string } {
+  // Only a licensed provider can issue real bank receiving instructions.
+  if(!allowPaperLedger())return {bank:"Not connected",routing:"",account:""};
   let h = 2166136261;
   for (let i = 0; i < tag.length; i += 1) h = Math.imul(h ^ tag.charCodeAt(i), 16777619);
   const acc = String(10000000 + ((h >>> 0) % 90000000));
@@ -386,6 +388,7 @@ export function addPayCard(
   cvv: string,
   nameOn: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const d = digitsOnly(pan);
   if (!luhnOk(d)) return { error: "Card number doesn’t check out." };
   const exp = expiry.replace(/\s/g, "");
@@ -415,6 +418,7 @@ export function addMaskedCard(
   nameOn: string,
   token: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (!/^\d{4}$/.test(last4)) return { error: "Could not mask that card." };
   const exp = expiry.replace(/\s/g, "");
   if (!/^\d{2}\/\d{2}$/.test(exp)) return { error: "Expiry is MM/YY." };
@@ -490,6 +494,7 @@ export function addPayBank(
   routing: string,
   account: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const name = bank.trim();
   const rt = digitsOnly(routing);
   const ac = digitsOnly(account);
@@ -839,6 +844,7 @@ export function terminateCard(w: Wallet, cardId: string): Wallet {
 }
 
 export function replaceCard(w: Wallet, cardId: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const card = w.cards.find((c) => c.id === cardId);
   if (!card) return { error: "No card." };
   if (card.status === "terminated") return { error: "Terminated. Issue a new one." };
@@ -847,6 +853,7 @@ export function replaceCard(w: Wallet, cardId: string): Wallet | { error: string
 }
 
 export function setCardLimit(w: Wallet, cardId: string, dailyLimit: number): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const n = roundCcy(dailyLimit, "USD");
   if (!(n > 0)) return { error: "Enter a limit." };
   return {
@@ -1215,6 +1222,7 @@ export function issueNearby(
   amount: number,
   ccy: Ccy,
 ): { wallet: Wallet; note: NearbyNote } | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, ccy);
   if (!(amt > 0)) return { error: "Enter an amount." };
   if (w.balances[ccy] < amt) return { error: `Not enough ${ccy}.` };
