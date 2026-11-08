@@ -19,7 +19,12 @@ export function parseSolanaIntent(text) {
  if(payment){
    const [, decimal, assetRaw, to]=payment;
    const asset=assetRaw.toUpperCase(), amountMinor=minor(decimal,asset==="USDC"?6:9);
-   if(!amountMinor || !ADDRESS_RE.test(to)) return deny("INVALID_AMOUNT_OR_ADDRESS");
+   // The current payUsdc() implementation rounds to cents. Refuse a different
+   // precision rather than showing one amount and signing another amount.
+   if(asset==="USDC" && (decimal.split(".")[1]||"").length>2)
+     return deny("USDC_PAYMENT_SUPPORTS_CENTS_ONLY");
+   if(!amountMinor || !ADDRESS_RE.test(to) || Number(decimal)>(asset==="USDC"?100000:1000))
+     return deny("INVALID_AMOUNT_OR_ADDRESS");
    return { status:"draft", kind:"transfer", asset, amount:decimal, amountMinor, destination:to,
      network:"solana-mainnet-beta", canSign:false, requiresExplicitReview:true, requiresWalletSignature:true };
  }
