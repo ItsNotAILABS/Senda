@@ -156,7 +156,7 @@ export function AccountDetails({ owner }: { owner: string }) {
       <div className="flex gap-3 rounded-[22px] border border-white/10 bg-[#141414] px-4 py-4">
         <Landmark className="mt-0.5 size-5 shrink-0 text-subtle" />
         <p className="text-[13px] leading-snug text-muted">
-          When the number is open, the dollars sit at Lead Bank, Member FDIC, the same partner bank Revolut uses in the US. Insurance is the bank’s, up to $250,000. Senda does not hold the deposit. Bridge turns it into USDC and sends it to the wallet. A Visa, if you add one, is issued by Rain against that USDC. A one-time card is a scoped Rain card: one merchant, one amount, then the number dies. This screen does not paint either number.
+          Bank account details are only valid if an approved provider has actually issued them to your verified account. Funding, conversion, custody, deposit insurance and debit-card availability depend on the provider's real terms and eligibility. Senda cannot create a bank balance or issuer-backed card from a locally generated number. Wallet USDC transfers remain separate.
         </p>
       </div>
     </section>
