@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/liquify/go.mod
-          cache-dependency-path: services/liquify/go.sum
+          cache: false
       - name: Unit and contract tests
         run: cd services/liquify && go test -count=1 ./...
       - name: Race gate
