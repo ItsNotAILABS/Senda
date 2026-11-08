@@ -41,3 +41,8 @@ npm run build:dev
 Inspect `/liquify` on desktop/mobile and confirm primary navigation works, research links are safe, no fiat claim is displayed as a live executable route and existing Pay/Trade pages are unchanged.
 
 **Deployment state:** this document describes source code in a GitHub feature branch until merged and deployed; never confuse this with live `senda.pocketnova.app` state.
+
+
+### Prediction-market research adapter
+
+Real Kalshi market discovery and read-only orderbook depth are available in the integration source under `/social/events`. The public provider is **not a swap/USDC route** and must be excluded from Jupiter DEX liquidity totals or Solscan swap-volume bars. See `docs/LIQUIFY_EVENT_PRODUCTS.md`. User-facing research uses event outcome odds and bounded research budgets. Phantom's own Kalshi experience is not a reusable trading session for Senda and does not grant order placement authority.
