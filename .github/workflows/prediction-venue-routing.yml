@@ -1,0 +1,36 @@
+name: SENDA prediction venue routing
+on:
+  pull_request:
+    paths:
+      - 'src/lib/prediction-venues.mjs'
+      - 'src/lib/prediction-venues.d.mts'
+      - 'src/components/prediction-venue-router.tsx'
+      - 'src/lib/polymarket-catalog.*'
+      - 'src/lib/polymarket-depth.*'
+      - 'src/components/polymarket-public-discovery.tsx'
+      - 'src/components/event-markets-desk.tsx'
+      - 'scripts/prediction-venues.test.mjs'
+      - 'scripts/polymarket-catalog.test.mjs'
+      - 'scripts/polymarket-depth.test.mjs'
+      - 'docs/PREDICTION_ROUTER_V2.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  venue-router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify venue truth, mapping, eligibility and Polymarket source normalization
+        run: node --test scripts/prediction-venues.test.mjs scripts/polymarket-catalog.test.mjs scripts/polymarket-depth.test.mjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: App build
+        run: npm run build:dev
