@@ -33,3 +33,15 @@ test("half SOL to USDC requires live balance and quote",()=>{
  assert.equal(p.requiresLiveQuote,true);assert.equal(p.canSign,false);
 });
 test("swap to same asset denied",()=>assert.equal(parseSolanaIntent("swap 2 SOL to SOL").error,"SAME_ASSET"));
+
+test("USDC displayed amount must equal cents that Senda can sign",()=>{
+ const valid=parseSolanaIntent("send 1.23 USDC to "+addr);
+ assert.equal(valid.status,"draft");assert.equal(valid.amountMinor,"1230000");
+ const impossible=parseSolanaIntent("send 1.234 USDC to "+addr);
+ assert.equal(impossible.status,"unsupported");
+ assert.equal(impossible.error,"USDC_PAYMENT_SUPPORTS_CENTS_ONLY");
+});
+test("intent size is bounded before wallet confirmation",()=>{
+ assert.equal(parseSolanaIntent("send 100001 USDC to "+addr).status,"unsupported");
+ assert.equal(parseSolanaIntent("send 1001 SOL to "+addr).status,"unsupported");
+});
