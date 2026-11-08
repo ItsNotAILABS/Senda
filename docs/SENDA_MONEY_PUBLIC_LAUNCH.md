@@ -50,3 +50,10 @@ npm run build:dev
 ```
 
 This is review-branch source until merged/deployed. No actual card authorization, bank payout, prediction bet or money movement was initiated while building it.
+
+
+### Bridge single-customer pilot configuration
+
+Existing Senda Bridge virtual-account creation may be enabled for **one approved customer identity** only when all server-side values are set: `BRIDGE_API_KEY`, `BRIDGE_CUSTOMER_ID`, `BRIDGE_ALLOWED_USER_ID`, and `SENDA_BRIDGE_RECEIVE_ENABLED=true`. The signed-in user ID must exactly equal the allowed customer ID; the shared development fallback account is always rejected. For each account-open request, Phantom signs a short-lived, random-challenge message binding the wallet, fiat currency, timestamp and Senda session user ID. The server verifies Ed25519 before contacting Bridge. Browser callers cannot select the customer ID, choose another destination wallet, or bypass signature verification through a UI route.
+
+This remains a **single-customer pilot** rather than production multitenant banking. For general public launch, map each verified Senda user to their own approved Bridge customer, enforce provider-side idempotency and region/eligibility, bind account instructions to that customer, and implement audit-friendly provider receipt reconciliation and revocation. Never store a private Bridge key in frontend configuration.
