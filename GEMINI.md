@@ -70,6 +70,15 @@ The desk is on port 8080. Do not move it. Do not commit `.env`, secrets, `node_m
 
 Four primary Senda products: Trade, Pay & Send, Agents, Liquify (`/liquify`). Read `docs/LIQUIFY_GLOBAL.md` and `src/lib/liquify-global.mjs` before implementing regional markets, stablecoin spending, fiat transfers, merchant/card products, Solana/other-chain swaps or liquidity adapters. Eleven researched market groups are not eleven licensed live payout markets. `code-present` is not tested-live; `candidate` and `not-connected` must never show a transaction success. Preserve wallet signatures, verified mints, complete transaction receipts, user eligibility, partner KYC/AML and no synthetic liquidity. Agents can submit research and reviewed proposals but cannot auto-sign trades or silently enable region-specific payouts.
 
+## Phantom / DFlow prediction integration — November 3, 2026
+
+Read docs/PHANTOM_PREDICT_BRIDGE.md before changing the predictions desk. The user may sign a read-only Senda market acknowledgement with Phantom, but that is NOT a bet or an approval to access Phantom's Kalshi mobile session. A separate DFlow on-chain outcome-token order adapter is implemented, and the only wallet order-signing path uses the real Phantom Solana transaction provider. This lane is DISABLED by default until DFlow production API authorization, verified market outcome mints, DFlow Proof verification, wallet-specific jurisdiction and age approval, instruction/program safety review, full tests and settlement reconciliation. Never claim a Solana submission equals a filled prediction: DFlow asynchronous orders close separately. Never burn outcome tokens. Do not use dev APIs or fictional quote levels as real production routes. Never auto-execute wagers or copy private keys, PEM credentials or sensitive identity data into prompts, logs or public files.
+
+
+## Senda Predictions five-venue doctrine — November 2026
+
+Predictions is a multi-venue financial desk: Kalshi public catalogs, Phantom U.S. Kalshi mobile experience, separately approved DFlow Solana outcome tokens, Phantom World mobile prediction markets and independent Polymarket public Gamma markets. Do not collapse the five into one exchange, one wallet balance, one settlement model, or a fictitious shared execution quote. Read docs/PREDICTION_ROUTER_V2.md and src/lib/prediction-venues.mjs. Phantom Cash and Kalshi account balances are not generic USDC balances; Polygon collateral is independent. Never claim a public quote is executable or that a Phantom wallet signature grants Kalshi API access. Market title similarity is not proof of equivalent trigger/rules/payout/cutoff/settlement. Keep venue-specific KYC, jurisdiction, wallet signing and asynchronous receipts. DFlow is disabled by default. Only independently approved eligible trading adapters can execute. No fake trading volume, fills, odds, or account import.
+
 
 ## Everyday Senda Money / pre-public financial security (November 2026)
 

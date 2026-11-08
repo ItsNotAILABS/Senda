@@ -10,12 +10,14 @@ import (
  "io"
  "net/http"
  "net/url"
+ "os"
  "regexp"
  "strconv"
  "time"
 )
 const solscanEndpoint="https://pro-api.solscan.io/v2.0/token/defi/activities"
-const solscanPageCap=5
+const solscanDefaultPageCap=10
+const solscanHardPageCap=30
 const solscanPageSize=100
 const wrappedSol="So11111111111111111111111111111111111111112"
 var solscanSignature=regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{32,100}$`)
@@ -198,6 +200,12 @@ func (s *Server) getSolscanPage(ctx context.Context,mint string,from,to int64,pa
  if !payload.Success||payload.Data==nil{return nil,errors.New("Solscan did not verify the response page")}
  return payload.Data,nil
 }
+func configuredSolscanPageCap() int {
+ n,e:=strconv.Atoi(os.Getenv("SENDA_SOLSCAN_PAGE_CAP"))
+ if e!=nil||n<1{return solscanDefaultPageCap}
+ if n>solscanHardPageCap{return solscanHardPageCap}
+ return n
+}
 func (s *Server) volume(w http.ResponseWriter,r *http.Request){
  if !s.authorized(w,r){return}
  if r.Method!="GET"{writeJSON(w,405,map[string]string{"error":"GET only"});return}
@@ -206,7 +214,7 @@ func (s *Server) volume(w http.ResponseWriter,r *http.Request){
  if !mintPattern.MatchString(mint)||mint==usdc||!ok{writeJSON(w,400,map[string]string{"error":"Valid token and timeframe required"});return}
  if s.solscanKey==""{writeJSON(w,503,map[string]string{"error":"Server Solscan Pro API token not configured"});return}
  select{case s.slots<-struct{}{}:defer func(){<-s.slots}();case <-r.Context().Done():return}
- ctx,cancel:=context.WithTimeout(r.Context(),20*time.Second);defer cancel()
+ ctx,cancel:=context.WithTimeout(r.Context(),34*time.Second);defer cancel()
  now:=time.Now().Unix()
  end:=((now/step)+1)*step
  lookback:=step*48
@@ -214,13 +222,20 @@ func (s *Server) volume(w http.ResponseWriter,r *http.Request){
  start:=end-lookback
  var events []solscanActivity
  completed:=false
- for page:=1;page<=solscanPageCap;page++{
+ pagesFetched:=0
+ pageCap:=configuredSolscanPageCap()
+ for page:=1;page<=pageCap;page++{
   data,e:=s.getSolscanPage(ctx,mint,start,now,page)
-  if e!=nil{writeJSON(w,503,map[string]string{"error":"Solscan index unavailable: "+e.Error()});return}
+  if e!=nil{
+   if page==1{writeJSON(w,503,map[string]string{"error":"Solscan index unavailable: "+e.Error()});return}
+   // Preserve observed prefix without claiming completeness when later pages fail.
+   break
+  }
   events=append(events,data...)
+  pagesFetched++
   if len(data)<solscanPageSize{completed=true;break}
  }
  writeJSON(w,200,map[string]any{"state":"ready","snapshot":indexSolscan(mint,r.URL.Query().Get("tf"),start,end,now,completed,events),
-  "pages":min(solscanPageCap,(len(events)+solscanPageSize-1)/solscanPageSize),
+  "pages":pagesFetched,"pageCap":pageCap,"rowsFetched":len(events),"pageLimitReached":!completed,
   "reason":"Go-indexed Solscan receipts; not exchange depth, and no keys or orders are held."})
 }

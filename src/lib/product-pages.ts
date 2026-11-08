@@ -34,6 +34,7 @@ export const PRE_PAGES: ProductPage[] = [
 ];
 
 export const PLAY_PAGES: ProductPage[] = [
+  { href: "/social/events", label: "Real event markets", hint: "Public Kalshi depth and event-based planning; official venue executes" },
   { href: "/social", label: "Lobby", hint: "Pick a game" },
   { href: "/social/wheel", label: "Wheel", hint: "The print stops it" },
   { href: "/social/slots", label: "Slots", hint: "Three faces from the book" },

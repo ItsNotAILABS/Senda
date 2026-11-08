@@ -184,6 +184,41 @@ The recorded Solana [devnet cover program](chain/devnet.json) stores policy term
 The product links to the existing on-chain route and payment screens; it does not issue cards or execute regional payouts automatically. Source of truth: [Liquify global operating notes](docs/LIQUIFY_GLOBAL.md), `src/lib/liquify-global.mjs`. Run `node --test scripts/liquify-global.test.mjs` before review. Wallet execution and settlement remain separately authorized. This feature is not live until the GitHub PR is merged and deployed.
 
 
+## Liquify × real event markets (Kalshi public research)
+
+Senda now has a **read-only event-market research workspace** at `/social/events` (after merge/deployment), linked from Liquify. It reads the existing public Kalshi market catalog and fetches fresh public Kalshi binary-contract orderbook bids for the selected ticker. It computes a **gross-only** buy-YES or buy-NO cost from actual opposing bids, capped to 1–1000 whole contracts and a user-specified research budget. The planner fails closed on stale, empty, unpriced or insufficient depth and includes five scenario families: weather, shipping, energy, macro and technology. It does **not** fake bids or simulate account balances.
+
+Phantom's availability of Kalshi markets for eligible U.S. customers does **not** mean Senda can create Kalshi orders from a Phantom connection. Senda's integration **does not authenticate or trade on that Phantom/Kalshi session**. Trading from the research desk requires going to the official venue and using its own approved flow. A Kalshi event contract is not an insurance policy or automatic rain-out reimbursement; exact event terms and regulatory status must be checked separately. See `docs/LIQUIFY_EVENT_PRODUCTS.md` and `src/lib/event-contract-router.mjs`. 
+
+
+### Phantom Predict: real wallet signature vs event order
+
+Senda's /social/events workspace supports an actual Phantom signMessage approval for a short-lived, quote-bound **research acknowledgement**. The signature is verified in the browser against the Solana wallet public key. This is a verifiable off-chain record of reviewing an event quote, **not** a Kalshi order, deposit, fill, insurance or authorization to access Phantom's predictions session.
+
+Eligible U.S. Phantom mobile users can open Phantom > Predict and confirm their own Kalshi orders there. Phantom's U.S. Kalshi flow includes its own account/KYC, fees, funding and exchange execution. No public Phantom Predictions third-party trading SDK is integrated in Senda. Outcome tokens created by Phantom should **not** be burned or re-routed using ordinary SPL cleanup or swap tools.
+
+Code: src/lib/phantom-prediction-sign.ts, src/lib/phantom-prediction-intent.mjs and src/components/phantom-predict-bridge.tsx. See docs/PHANTOM_PREDICT_BRIDGE.md. Phase 2 (authenticated Kalshi order entry/portfolio): issue #32, currently NOT live.
+
+### DFlow outcome-token routing with Phantom (approval-gated)
+
+The event-market desk now contains **two distinct Phantom surfaces**: a real signMessage acknowledgement of read-only research, and an independently guarded on-chain **DFlow prediction trade lane**. DFlow's provider-verified outcome mints, hosted Proof verification, configured jurisdiction approval and fresh Trade API transaction are required before any real signing CTA is enabled. A signed transaction is recorded as **pending** until DFlow confirms its async order is **closed**; a Solana signature is never treated as a fill. This is not the same as connecting to your Phantom U.S. Kalshi mobile account. Production provider credentials and compliance gates are not configured by this source branch. See docs/PHANTOM_PREDICT_BRIDGE.md.
+
+
+### Prediction Markets — one Senda desk, multiple real venues
+
+**Senda Predictions isn't just Kalshi.** The Predictions / Liquify venue router in `/social/events` presents five distinct venue families: **Kalshi public books**, **Phantom Predict U.S.**, **DFlow on-chain outcome tokens**, **World Prediction Markets**, and **Polymarket**. The Kalshi public feed, Polymarket Gamma market discovery and independent Polymarket CLOB token-specific depth use actual source data, not invented odds; World and Phantom U.S. use official mobile account routes, and DFlow has a separate approval-gated Phantom-signed Solana transaction implementation. No venue is silently claimed live, funded or equivalent to another.
+
+Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket Polygon collateral must be modeled **separately**. Senda only compares executable venue pricing when a reviewed proof establishes identical contract rules, outcomes, cutoff, settlement and payout; similar titles are not enough. Read [Prediction Router v2](docs/PREDICTION_ROUTER_V2.md), `src/lib/prediction-venues.mjs`, and `src/lib/polymarket-catalog.ts`. This is source work awaiting PR merge and deployment.
+
+
+**Polymarket depth upgrade:** choose a real Gamma-listed market, inspect the outcome token's live CLOB bids/asks, and calculate a bounded research-only buy cost from observed asks. It is not an authenticated order; fee and jurisdiction approval must be completed separately. See `src/lib/polymarket-depth.mjs` and `docs/PREDICTION_ROUTER_V2.md`.
+
+
+### Prediction venue reliability hardening (Nov 6)
+
+The stacked provider-hardening branch fixes DFlow's documented `accounts.usdc` mint shape, explicitly locks crypto dependencies used by Phantom mobile, adds browser-native Ed25519 verification for Senda research signatures, and rejects unsupported DFlow submit/multi-signature/lookup-table transactions before wallet signing. It also unlocks Senda's encrypted recovery journal on the DFlow Phantom connect path. Read [provider hardening notes](docs/PREDICTION_PROVIDER_HARDENING.md). These are source fixes pending successful full CI and authorized production wallet tests; not a claim that all live venue orders now work.
+
+
 ## Senda Money — pay friends in dollars
 
 Senda is becoming a genuine everyday money interface as well as a trading desk. In the new money feature branch, **Send** uses a dollars-first UI with an actual **Phantom-signed native Solana USDC transfer** to a recipient's verified wallet; the receipt comes from Senda's chain-confirmation and recovery code. Senda never labels a local browser balance transfer as completed payment. `/payments/request` issues a real Solana Pay request link; asking does not credit money. `/payments/activity` shows wallet and network transaction evidence.

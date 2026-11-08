@@ -69,7 +69,7 @@ func NewServer(upstream,key,secret string)*Server{
   apiKey:key,internalSecret:secret,slots:make(chan struct{},3)}
 }
 func validPair(in,out string)bool{
- return mintPattern.MatchString(in)&&mintPattern.MatchString(out)&&in!=out&&(in==usdc||out==usdc)
+ return mintPattern.MatchString(in)&&mintPattern.MatchString(out)&&in!=out
 }
 func writeJSON(w http.ResponseWriter,status int,value any){
  w.Header().Set("Content-Type","application/json; charset=utf-8")
@@ -100,7 +100,7 @@ func (s *Server) pacing(ctx context.Context)error{
  select{case <-ctx.Done():return ctx.Err();case <-timer.C:return nil}
 }
 func (s *Server) quote(ctx context.Context,input,output,amount string)(*Quote,error){
- if !validPair(input,output)||!digits.MatchString(amount){return nil,errors.New("invalid pair or raw input")}
+ if !validAnyPair(input,output,amount){return nil,errors.New("invalid pair or raw input")}
  n,e:=strconv.ParseUint(amount,10,64)
  if e!=nil||n==0||n>1000000000000{return nil,errors.New("raw amount exceeds quote limits")}
  select {case s.slots<-struct{}{}:defer func(){<-s.slots}();case <-ctx.Done():return nil,ctx.Err()}
@@ -138,7 +138,7 @@ func (s *Server) routes(w http.ResponseWriter,r *http.Request){
  input:=r.URL.Query().Get("inputMint")
  output:=r.URL.Query().Get("outputMint")
  amount:=r.URL.Query().Get("amount")
- if !validPair(input,output)||!digits.MatchString(amount){writeJSON(w,400,map[string]string{"error":"Valid USDC pair and raw amount required"});return}
+ if !validAnyPair(input,output,amount){writeJSON(w,400,map[string]string{"error":"Distinct Solana mints and bounded raw amount required"});return}
  ctx,cancel:=context.WithTimeout(r.Context(),12*time.Second);defer cancel()
  q,e:=s.quote(ctx,input,output,amount)
  if e!=nil{writeJSON(w,503,map[string]string{"error":"No verified route: "+e.Error()});return}
@@ -179,6 +179,11 @@ func (s *Server) mux()*http.ServeMux{
  m.HandleFunc("/v1/quote",s.routes)
  m.HandleFunc("/v1/ladder",s.ladder)
  m.HandleFunc("/v1/volume",s.volume)
+ venues,err:=configuredVenues()
+ if err!=nil{panic("invalid SENDA_LIQUIFY_VENUES_JSON: "+err.Error())}
+ federation:=newQuoteFederation(s,venues)
+ m.HandleFunc("/v2/compare",federation.handler)
+ m.HandleFunc("/v2/pool/impact",s.poolImpact)
  return m
 }
 func main(){
@@ -194,7 +199,7 @@ func main(){
  srv:=NewServer("https://api.jup.ag",key,secret)
  srv.solscanKey=os.Getenv("SENDA_SOLSCAN_PRO_API_KEY")
  server:=&http.Server{Addr:addr,Handler:srv.mux(),ReadHeaderTimeout:5*time.Second,
-  ReadTimeout:8*time.Second,WriteTimeout:20*time.Second,IdleTimeout:30*time.Second}
+  ReadTimeout:8*time.Second,WriteTimeout:40*time.Second,IdleTimeout:30*time.Second}
  log.Printf("Senda Liquify read-only router listening on %s (key configured: %t)",addr,key!="")
  log.Fatal(server.ListenAndServe())
 }
