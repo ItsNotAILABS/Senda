@@ -129,6 +129,7 @@ export function useWallet() {
       addBank: (bank: string, routing: string, account: string) =>
         commit(addPayBank(w, bank, routing, account)),
       addApple: () => {
+        if (!canUsePaperLedger()) return {ok:false as const,error:UNSETTLED_PAYMENT_MESSAGE};
         const next = addPayApple(w);
         setW(next);
         saveWallet(next);
