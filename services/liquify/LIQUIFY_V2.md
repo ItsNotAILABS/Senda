@@ -61,3 +61,7 @@ npm run build:dev
 ```
 
 Run the tests in CI with real logs. Check provider contract integration, tail latency, malformed quotes, RPC vault data validation, Solscan pagination, chain reorganizations, stale quote detection, address parsing, and frontend wallet simulation. Do not claim routing is production-ready until checks and integration receipts pass.
+
+## Senda app access gate
+
+The Senda web server's `compareLiquifyRoutes` endpoint now requires an authenticated Senda session and explicit `SENDA_LIQUIFY_V2_ENABLED=true`. It is OFF by default, even when the private Go process is reachable. This prevents anonymous clients from turning the comparison endpoint into a billable venue-quote proxy. Production enablement remains subject to independently verified venue credentials, IP allowlists, Go race checks and wallet E2E.
