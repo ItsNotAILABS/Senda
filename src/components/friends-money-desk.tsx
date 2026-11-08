@@ -3,10 +3,12 @@ import {ArrowRight,CheckCircle2,Copy,ExternalLink,LockKeyhole,ShieldAlert,Wallet
 import {toast} from "sonner";
 import {connectPhantom} from "@/lib/phantom";
 import {payUsdc} from "@/lib/solana-pay";
+import {useWalletCtx} from "@/lib/wallet-context";
 import {quoteFriendPayment,validateFriendDestination,FRIEND_RAILS} from "@/lib/friend-payments.mjs";
 
 const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
 export function FriendsMoneyDesk(){
+ const walletApi=useWalletCtx();
  const [wallet,setWallet]=useState("");
  const [destination,setDestination]=useState("");
  const [amount,setAmount]=useState("");
@@ -24,7 +26,7 @@ export function FriendsMoneyDesk(){
  useEffect(()=>{setReview(false);setSignature("");},[amount,note,wallet]);
  async function connect(){
   setBusy(true);setError("");
-  try{const address=await connectPhantom();setWallet(address);}
+  try{const address=await connectPhantom();setWallet(address);if(!walletApi.w.links.some(x=>x.address===address))walletApi.linkChain(address,"Phantom","phantom");}
   catch(e){setError(e instanceof Error?e.message:"Could not connect wallet.");}
   finally{setBusy(false);}
  }
