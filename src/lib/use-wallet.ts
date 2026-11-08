@@ -54,7 +54,10 @@ import {
   type Wallet,
 } from "@/lib/wallet";
 import { decodeNote } from "@/lib/nearby";
+import { paperLedgerEnabled, UNSETTLED_PAYMENT_MESSAGE } from "@/lib/paper-money-policy.mjs";
 import "@/lib/seal";
+
+const canUsePaperLedger = () => paperLedgerEnabled(import.meta.env?.MODE,import.meta.env?.VITE_SENDA_ENABLE_PAPER_MONEY);
 
 export function useWallet() {
   const blank: Wallet = {
@@ -151,6 +154,7 @@ export function useWallet() {
         return contact;
       },
       receive: (amount: number, ccy: Ccy, from: string, note: string) => {
+        if (!canUsePaperLedger()) return {ok:false as const,error:UNSETTLED_PAYMENT_MESSAGE};
         const next = receiveFrom(w, amount, ccy, from, note);
         setW(next);
         saveWallet(next);
@@ -190,6 +194,7 @@ export function useWallet() {
       payCover: (amount: number, title: string) => commit(payCover(w, amount, title)),
       playStake: (amount: number, note: string) => commit(playStake(w, amount, note)),
       playWin: (amount: number, note: string) => {
+        if (!canUsePaperLedger()) return {ok:false as const,error:UNSETTLED_PAYMENT_MESSAGE};
         const next = playWin(w, amount, note);
         setW(next);
         saveWallet(next);
@@ -200,6 +205,7 @@ export function useWallet() {
       investFromVault: (vaultId: string, amount: number, name: string) =>
         commit(investFromVault(w, vaultId, amount, name)),
       investIn: (amount: number, name: string) => {
+        if (!canUsePaperLedger()) return {ok:false as const,error:UNSETTLED_PAYMENT_MESSAGE};
         const next = investCredit(w, amount, name);
         setW(next);
         saveWallet(next);
