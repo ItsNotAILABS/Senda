@@ -22,6 +22,11 @@ export function IntentPaymentDesk() {
   if(!approved||!draft||draft.status!=="draft"||draft.kind!=="transfer"||review?.status!=="ready-for-confirmation")return;
   setBusy(true);setError("");setResult("");
   try {
+   // Reconfirm the wallet at submission time; the reviewed sender must still
+   // match the connected Phantom account immediately before invoking pay*().
+   const currentWallet=await connectPhantom();
+   if(currentWallet!==owner||transferReview(draft,currentWallet).status!=="ready-for-confirmation")
+     throw new Error("Phantom wallet changed since review. Review the transfer again.");
    if(draft.asset==="USDC") {
     const tx=await payUsdc({owner,to:draft.destination,usd:Number(draft.amount),memo:"Senda intent approved payment"});
     setResult("Confirmed USDC transfer: "+tx.signature);
