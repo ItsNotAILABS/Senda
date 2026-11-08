@@ -73,15 +73,18 @@ export function CardsDesk({
 
   return (
     <main className="senda-rise space-y-3 px-3 py-3 lg:px-4">
+      <div className="rounded-xl border border-amber-300/25 bg-amber-300/[.06] px-4 py-3 text-xs leading-relaxed text-amber-100">
+        <strong>Public money safety:</strong> Senda's locally generated card numbers and card authorization examples are not issuer-backed debit cards and cannot clear a merchant charge. Card issuance and bank settlement stay disabled until verified issuer and processing integrations are in place. Wallet-to-wallet USDC remains a separate, signed on-chain payment.
+      </div>
       {view === "all" ? (
       <>
       <TabLead
         kicker="Shop"
         title="A number for the store"
         accent="not the token."
-        line="The dollar number is a Lead Bank account. Deposits become USDC in the wallet. The Visa is Rain’s, not a number made here."
-        live={["Account details", "USDC address", "One charge"]}
-        coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
+        line="Real spending uses your wallet's USDC. Bank account funding and card-network issuing require approved partners."
+        live={["Wallet-owned USDC transfers"]}
+        coming={["Verified bank-account settlement", "Authorized issuer-backed debit card"]}
       />
       <MoneyBar />
       </>
