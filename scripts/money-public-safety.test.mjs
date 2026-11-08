@@ -18,8 +18,9 @@ test("request path creates a Solana Pay URI, not a synthetic receive",()=>{
 });
 test("legacy fake settlements cannot be called by public build",()=>{
  const source=read("src/lib/wallet.ts");
- for(const name of ["addMoney","withdraw","sendTo","convert","issueCard","issueCheckout","spendCard","payCover"])
+ for(const name of ["addMoney","withdraw","sendTo","convert","issueCard","issueCheckout","spendCard","payCover","addPayCard","addMaskedCard","addPayBank","replaceCard","setCardLimit","issueNearby"])
    assert.match(source,new RegExp("export function "+name+"\\([\\s\\S]{0,280}?if \\(!allowPaperLedger\\(\\)\\) return paperError\\(\\);"),name);
+ assert.match(source,/if\(!allowPaperLedger\(\)\)return \{bank:"Not connected",routing:"",account:""\};/);
  const hook=read("src/lib/use-wallet.ts");
  assert.match(hook,/if \(!canUsePaperLedger\(\)\) return \{ok:false as const,error:UNSETTLED_PAYMENT_MESSAGE\};/);
 });
