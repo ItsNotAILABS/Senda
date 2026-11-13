@@ -107,3 +107,15 @@ Prediction is a core Senda product surface, not an exclusive single Kalshi adapt
 ### Prediction provider compatibility and wallet cryptography
 
 Read docs/PREDICTION_PROVIDER_HARDENING.md. Phantom's mobile bridge uses tweetnacl, bs58 and buffer, which must be explicit locked dependencies. Senda's research-signature verification uses src/lib/ed25519-wallet.mjs and WebCrypto Ed25519. DFlow metadata uses accounts.usdc and its quote/transaction can require submitEndpointRequired, extra signers or address lookup tables. The current signer must fail closed on unimplemented provider requirements. Do not force these transactions through sendVersioned or treat a simulated route as a fill. Recovery state must be wallet-specific and unlocked before signing. Keep the production execution feature flag OFF pending audited transaction fixtures, API credentials, jurisdiction eligibility, full build and mobile wallet tests.
+
+
+## Events V3 / Contingency Lab production doctrine (Nov 13, 2026)
+
+Canonical UI: `src/components/event-markets-desk.tsx`; dedicated route `/social/contingency` uses the **same** canonical component, not a competing mock implementation. Before modifying it, read `docs/KALSHI_CONTINGENCY_STUDIO.md`.
+
+- Use only provider-grounded public Kalshi catalog, market rules, opposing bid depth, and candlestick price/volume. `kalshi-history-core.mjs` treats unreported price/volume as `null`, never synthetic zero; a public bid-depth estimate is never an authorized order.
+- Prediction topic categories in `event-market-discovery.mjs` are UX heuristics, not Kalshi official taxonomy. No cross-venue equivalence absent exact market/rule proof.
+- Keep Phantom U.S. Kalshi mobile accounts, DFlow Solana outcome tokens, World Phantom and Polymarket flows independent; do not elevate a wallet `signMessage()` into order authority.
+- `contingency-analysis.mjs` models event win/loss and real-world expense occurrence independently for both YES and NO. The separate self-funded reserve calculation has no financial-execution authority. Never label an event contract as insurer-backed coverage, protection payout, indemnity, policy or guaranteed hedge.
+- No regulated parametric insurance sale without appropriately authorized partners and jurisdiction-specific legal/insurance review.
+- Validate with `node --test scripts/contingency-analysis.test.mjs scripts/kalshi-history.test.mjs`, `npm run typecheck`, `npm run build:dev`, Phantom mobile/browser QA and provider-source receipts. Do not claim CI success when runner jobs never executed.
