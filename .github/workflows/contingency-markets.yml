@@ -7,6 +7,9 @@ on:
       - "src/lib/contingency-analysis.*"
       - "src/lib/kalshi-book.ts"
       - "src/lib/kalshi-market-detail.ts"
+      - "src/lib/kalshi-history*" 
+      - "src/components/kalshi-history-chart.tsx"
+      - "scripts/kalshi-history.test.mjs"
       - "src/routes/social/**"
       - "scripts/contingency-analysis.test.mjs"
       - ".github/workflows/contingency-markets.yml"
@@ -23,6 +26,7 @@ jobs:
         with:
           node-version: "22"
       - run: node --test scripts/contingency-analysis.test.mjs
+      - run: node --test scripts/kalshi-history.test.mjs
       - run: node --test scripts/event-contract-router.test.mjs
   full-app:
     runs-on: ubuntu-latest
