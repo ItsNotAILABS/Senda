@@ -217,3 +217,14 @@ Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket 
 ### Prediction venue reliability hardening (Nov 6)
 
 The stacked provider-hardening branch fixes DFlow's documented `accounts.usdc` mint shape, explicitly locks crypto dependencies used by Phantom mobile, adds browser-native Ed25519 verification for Senda research signatures, and rejects unsupported DFlow submit/multi-signature/lookup-table transactions before wallet signing. It also unlocks Senda's encrypted recovery journal on the DFlow Phantom connect path. Read [provider hardening notes](docs/PREDICTION_PROVIDER_HARDENING.md). These are source fixes pending successful full CI and authorized production wallet tests; not a claim that all live venue orders now work.
+
+
+## Events V3 — Kalshi terminal & Senda Contingency Lab
+
+Senda's native `/social/events` experience now includes a rebuilt market terminal, sourced Kalshi contract rules, YES/NO public bid-depth research, real 24H/7D/30D Kalshi candlestick history with original **reported contract-volume bars**, topic discovery, sortable market views, and a browser-local watchlist.
+
+`/social/contingency` offers event-contract risk scenarios and independent cash-reserve planning: weather, freight, energy, macro and technology cases. The calculator uses only a fresh public-book estimate for four independent combinations of real-world loss and market settlement; it never assumes that a prediction contract pays someone's expense. **This is not insurance.** No licensed policy, premium, insurer, reimbursement guarantee or claims processing is offered.
+
+**Phantom execution rules:** Phantom's U.S. Kalshi account is operated inside Phantom's native app; a Senda `signMessage` acknowledgement authorizes research only. The separate DFlow Solana outcome-token transaction path uses Phantom signing but remains partner/KYC/jurisdiction/program-gated and disabled by default. Senda does not reuse Kalshi public prices as guaranteed executable DFlow quotes.
+
+Code and release rules: [docs/KALSHI_CONTINGENCY_STUDIO.md](docs/KALSHI_CONTINGENCY_STUDIO.md). Source changes are not a production activation. Require GitHub CI, browser/mobile QA, official-source verification and external approval before launch.
