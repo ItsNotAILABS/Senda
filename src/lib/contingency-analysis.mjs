@@ -29,16 +29,18 @@ export function contingencyScenario({quote,possibleLossUsd,budgetUsd,marketTicke
  if(typeof marketTicker!=="string"||!/^([A-Z0-9][A-Z0-9._-]{2,119})$/.test(marketTicker))
   return fail("A valid market ticker is required.");
  const cost=round(quote.grossCostUsd),payout=round(quote.maximumPayoutUsd),loss=round(possibleLossUsd);
- const eventYes=round(payout-cost),eventNo=round(-cost);
+ const side=quote.side==="no"?"no":"yes";
+ const opposite=side==="yes"?"no":"yes";
+ const win=round(payout-cost),lose=round(-cost);
  const rows=[
-  {id:"yes-loss",marketResolves:"yes",realWorldLoss:true,contractNetBeforeFees:eventYes,overallNetBeforeFees:round(eventYes-loss)},
-  {id:"yes-no-loss",marketResolves:"yes",realWorldLoss:false,contractNetBeforeFees:eventYes,overallNetBeforeFees:eventYes},
-  {id:"no-loss",marketResolves:"no",realWorldLoss:true,contractNetBeforeFees:eventNo,overallNetBeforeFees:round(eventNo-loss)},
-  {id:"no-no-loss",marketResolves:"no",realWorldLoss:false,contractNetBeforeFees:eventNo,overallNetBeforeFees:eventNo}
+  {id:"win-loss",marketResolves:side,realWorldLoss:true,contractNetBeforeFees:win,overallNetBeforeFees:round(win-loss)},
+  {id:"win-no-loss",marketResolves:side,realWorldLoss:false,contractNetBeforeFees:win,overallNetBeforeFees:win},
+  {id:"lose-loss",marketResolves:opposite,realWorldLoss:true,contractNetBeforeFees:lose,overallNetBeforeFees:round(lose-loss)},
+  {id:"lose-no-loss",marketResolves:opposite,realWorldLoss:false,contractNetBeforeFees:lose,overallNetBeforeFees:lose}
  ];
  return {ready:true,source:"Kalshi public opposing bids",marketTicker,observedAt:asOf||new Date(quote.quotedAt).toISOString(),
   execution:"disabled",insurance:false,quoteExecutable:false,feesKnown:false,probabilityEstimate:null,
-  contractCount:quote.contracts,grossCostBeforeFees:cost,maximumEventPayoutBeforeFees:payout,
+  chosenSide:side,contractCount:quote.contracts,grossCostBeforeFees:cost,maximumEventPayoutBeforeFees:payout,
   possibleIndependentRealWorldLoss:loss,researchBudget:round(budgetUsd),
   events:rows,
   risks:[
@@ -49,4 +51,18 @@ export function contingencyScenario({quote,possibleLossUsd,budgetUsd,marketTicke
   ],
   advisory:"Research only. Confirm contract rules, venue permissions, liquidity, quote, settlement terms and legal eligibility before trading."
  };
+}
+
+/** An independent cash reserve planning tool: no betting, borrowing or insurance. */
+export function contingencyReservePlan({potentialExpenseUsd,availableCashUsd=0,targetCoveragePct=100}={}){
+ if(!validAmount(potentialExpenseUsd)||!validAmount(availableCashUsd)||typeof targetCoveragePct!=="number"||
+  !Number.isFinite(targetCoveragePct)||targetCoveragePct<0||targetCoveragePct>100)
+  return {ready:false,reason:"Enter non-negative cash amounts and a target between 0 and 100 percent."};
+ const target=round(potentialExpenseUsd*targetCoveragePct/100),available=round(availableCashUsd);
+ return {ready:true,potentialExpenseUsd:round(potentialExpenseUsd),targetCoveragePct,
+  targetCashReserveUsd:target,availableCashUsd:available,
+  additionalCashRequiredUsd:round(Math.max(0,target-available)),
+  excessCashAgainstTargetUsd:round(Math.max(0,available-target)),
+  source:"User-supplied planning assumptions",execution:"disabled",insurance:false,
+  note:"A cash buffer is independent of an event contract. This calculation does not recommend investing cash or purchasing a contract."};
 }
