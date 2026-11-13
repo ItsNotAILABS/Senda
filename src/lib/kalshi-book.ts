@@ -9,6 +9,7 @@ const HOST = "https://external-api.kalshi.com/trade-api/v2/events";
 export type KalshiRow = {
   ticker: string;
   event: string;
+  seriesTicker?:string;
   title: string;
   yes: string;
   category: string;
@@ -52,6 +53,7 @@ function flatten(events: Array<Record<string, unknown>>): KalshiRow[] {
       out.push({
         ticker,
         event,
+        seriesTicker: String(e.series_ticker??"").slice(0,120),
         title: title || yes || ticker,
         yes: yes && yes !== title ? yes : "",
         category,
