@@ -42,6 +42,7 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
  const [savedOnly,setSavedOnly]=useState(false);
  const [watchlist,setWatchlist]=useState<string[]>([]);
  const [watchlistReady,setWatchlistReady]=useState(false);
+ const watchlistKey=watchlist.join("|");
  const [rows,setRows]=useState<KalshiRow[]>([]);
  const [market,setMarket]=useState<KalshiRow|null>(null);
  const [book,setBook]=useState<EventBook|null>(null);
@@ -72,20 +73,21 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
   setWatchlistReady(true);
  },[]);
  useEffect(()=>{if(!watchlistReady)return;try{window.localStorage.setItem("senda.kalshi.watchlist.v1",JSON.stringify(watchlist.slice(0,70)));}catch{/* no browser storage: research remains available */}},[watchlist,watchlistReady]);
- useEffect(()=>{setPage(0);setRows([]);setMarket(null);setBook(null);setContract(null);},[debouncedQuery,lane,sort]);
+ useEffect(()=>{setPage(0);setRows([]);setMarket(null);setBook(null);setContract(null);},[debouncedQuery,lane,sort,savedOnly,watchlistKey]);
  useEffect(()=>{
   let active=true;setLoading(true);
-  void kalshiPage({data:{q:debouncedQuery,category:"",lane,sort,offset:page,limit:40}})
+  void kalshiPage({data:{q:debouncedQuery,category:"",lane,sort,watchlist:savedOnly?watchlist:undefined,offset:page,limit:40}})
    .then(result=>{
     if(!active)return;
     setRows(prev=>page===0?result.rows:[...prev.filter(x=>!result.rows.some(v=>v.ticker===x.ticker)),...result.rows]);
+    if(page===0&&result.rows.length)setMarket(current=>current||result.rows[0]);
     setTotal(result.total);setLoaded(result.loaded);setDone(result.done);setObservedAt(result.observedAt);
     setNote(result.loaded?result.total.toLocaleString()+" matches in the currently indexed public feed":
      "Kalshi market index is unavailable or still loading. No fallback contracts are shown.");
    }).catch(()=>{if(active){if(page===0)setRows([]);setNote("Public market data unavailable. Retry when Kalshi responds.");}})
    .finally(()=>{if(active)setLoading(false)});
   return()=>{active=false;};
- },[debouncedQuery,lane,sort,page,stamp]);
+ },[debouncedQuery,lane,sort,page,stamp,savedOnly,watchlistKey]);
  useEffect(()=>{
   if(!market){setBook(null);setContract(null);return;}
   let active=true;setBook(null);setContract(null);setLoadingDepth(true);setLoadingRules(true);
@@ -100,7 +102,7 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
    .finally(()=>{if(active)setLoadingRules(false);});
   return()=>{active=false;};
  },[market?.ticker,stamp]);
- const displayed=useMemo(()=>savedOnly?rows.filter(r=>watchlist.includes(r.ticker)):rows,[rows,savedOnly,watchlist]);
+ const displayed=rows;
  const planned=useMemo<EventQuote|null>(()=>book?planEventSide(book,side,contracts,clock):null,[book,side,contracts,clock]);
  const sourceReady=Boolean(book&&clock>=book.asOf&&clock-book.asOf<=30000);
  const totalVolume=useMemo(()=>rows.reduce((acc,r)=>acc+(r.reportedVolume??0),0),[rows]);
@@ -175,7 +177,7 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
      </div>)}
      {!displayed.length&&!loading?<div className="px-6 py-12 text-center"><Compass className="mx-auto size-7 text-white/25"/><p className="mt-3 text-sm font-semibold">No sourced markets in this view</p><p className="mt-2 text-xs leading-5 text-white/45">{savedOnly?"Save some real tickers first.":"Try another topic, remove filters or let the public index finish scanning."}</p></div>:null}
     </div>
-    {rows.length<total&&!savedOnly?<button type="button" disabled={loading} onClick={()=>setPage(p=>p+40)} className="flex min-h-12 w-full items-center justify-center gap-2 border-t border-white/10 text-xs text-cyan-200 disabled:opacity-40">{loading?<LoaderCircle className="size-4 animate-spin"/>:<ArrowRight className="size-4"/>}Load more indexed contracts</button>:null}
+    {rows.length<total?<button type="button" disabled={loading} onClick={()=>setPage(p=>p+40)} className="flex min-h-12 w-full items-center justify-center gap-2 border-t border-white/10 text-xs text-cyan-200 disabled:opacity-40">{loading?<LoaderCircle className="size-4 animate-spin"/>:<ArrowRight className="size-4"/>}Load more indexed contracts</button>:null}
     <p className="border-t border-white/10 px-4 py-3 text-[10px] leading-4 text-white/35">Topic groupings are Senda discovery heuristics, not Kalshi's official market taxonomy. Missing prices or volumes are never substituted with demo values.</p>
    </section>
    <section className={cn(pane,"min-w-0 space-y-4 p-4 sm:p-5")}>
