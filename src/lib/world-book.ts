@@ -41,12 +41,12 @@ export type TapeRow = {
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
 const JUP = "https://api.jup.ag/price/v3?ids=";
 const FEEDS = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/tag?query=stocks",
+  "https://api.jup.ag/tokens/v2/tag?query=verified",
+  "https://api.jup.ag/tokens/v2/tag?query=lst",
+  "https://api.jup.ag/tokens/v2/toptraded/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
 ];
 
 const BOOK: { lane: WorldLane; ids: string[] }[] = [
@@ -228,7 +228,7 @@ async function getJson(url: string, ms: number): Promise<unknown> {
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { accept: "application/json", "user-agent": "Senda" },
+      headers: { accept: "application/json", "user-agent": "Senda", ...(url.startsWith("https://api.jup.ag/") && process.env.SENDA_JUPITER_API_KEY ? { "x-api-key": process.env.SENDA_JUPITER_API_KEY } : {}) },
     });
     if (!res.ok) throw new Error(String(res.status));
     return await res.json();
