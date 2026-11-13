@@ -41,3 +41,17 @@ This change preserves Senda's existing Jupiter spot/perps, Phantom signing, LI.F
 Senda remains the **BYOW user experience and transaction signer**. PARRALAX owns reusable research/risk/agent budget and financial backend policy. Vaults or machine-payments rails only become live when deployed, audited, configured and verified. Solana's wallet and program layer is the ultimate fund movement authority.
 
 Do not use this release to claim that Senda is a licensed bank, custodian, token issuer or guaranteed anti-rug service.
+
+## Compatibility sweep and test evidence — November 13, 2026
+
+- src/lib/hold-marks.ts: one Jupiter Tokens V2 batch for up to 24 holding mints, exact mint matching.
+- src/lib/chain-tape.ts and src/lib/world-book.ts: official Price V3/Tokens V2 host and private Jupiter API key.
+- src/lib/pools/read.ts: retired Lite fallback removed; official research quote endpoint only.
+- src/lib/table-pot.ts: read-only SOL price updated. **Device-local stored secret keys remain a high-risk custody design; unmodified.**
+- mcp/tools.mjs: read-only MCP Jupiter quote/price endpoint modernization.
+- scripts/jupiter-endpoint-regression.test.mjs: guard against retired hosts and sign-capable preview imports.
+
+### Production status
+GitHub Actions for Solana ecosystem 2026 upgrade gates returned **failure** after the first workflow run. Job-step summaries were empty and logs inaccessible (404) through the connector, so the root cause could not be attributed to compilation, tests, or runner provisioning. Do not claim a PASS. Cloning the repository in the available runtime also failed due DNS.
+
+Release still requires npm ci, node --test scripts/ecosystem-upgrade.test.mjs scripts/jupiter-endpoint-regression.test.mjs, npm run typecheck, npm test, npm run build:dev, and connected Phantom wallet QA. The sell quote uses a USDC-to-mint-to-USDC round-trip estimate, not the actual connected wallet holding. The signer still uses Jupiter Swap V1; migrate it only through a separately verified approval-gated V2 execution path.
