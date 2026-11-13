@@ -25,15 +25,37 @@ export function bookStat(n?: number) {
   return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
+// Jupiter 2026: API gateway is api.jup.ag. Keep server credentials off the browser.
+// Keyless requests have a shared 0.5 RPS limit; a fanout burst would silently lose most lists.
+let keylessNextAt = 0;
+let keylessTail = Promise.resolve();
+async function jupFetch(url: string, timeoutMs = 8000): Promise<Response> {
+  const key = process.env.SENDA_JUPITER_API_KEY;
+  if (!key) {
+    const pending = keylessTail.then(async () => {
+      const wait = Math.max(0,keylessNextAt - Date.now());
+      if (wait > 0) await new Promise(resolve => setTimeout(resolve,wait));
+      keylessNextAt = Date.now() + 2100;
+    });
+    keylessTail = pending.catch(() => undefined);
+    await pending;
+  }
+  return fetch(url, {
+    headers: { accept: "application/json", ...(key ? { "x-api-key": key } : {}) },
+    signal: AbortSignal.timeout(timeoutMs),
+    redirect: "error",
+  });
+}
+
 const LISTS = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptraded/6h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
-  "https://lite-api.jup.ag/tokens/v2/recent",
+  "https://api.jup.ag/tokens/v2/tag?query=verified",
+  "https://api.jup.ag/tokens/v2/tag?query=lst",
+  "https://api.jup.ag/tokens/v2/tag?query=stocks",
+  "https://api.jup.ag/tokens/v2/toptraded/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptraded/6h?limit=100",
+  "https://api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/toptrending/24h?limit=100",
+  "https://api.jup.ag/tokens/v2/recent",
 ];
 
 type RawToken = {
@@ -78,9 +100,9 @@ export const loadTape = createServerFn({ method: "GET" }).handler(async (): Prom
   const seen = new Set<string>();
   const rows: TapeCoin[] = [];
   const pages = await Promise.all(
-    LISTS.map(async (url) => {
+    (process.env.SENDA_JUPITER_API_KEY ? LISTS : [LISTS[0], LISTS[3], LISTS[6]]).map(async (url) => {
       try {
-        const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Senda" }, signal: AbortSignal.timeout(20000) });
+        const r = await jupFetch(url, 20000);
         if (!r.ok) return [];
         return rowsOf(await r.json());
       } catch {
@@ -101,10 +123,7 @@ export const loadTape = createServerFn({ method: "GET" }).handler(async (): Prom
 export const liveMarks = createServerFn({ method: "POST" })
   .validator((input: unknown) => z.array(z.string().min(32).max(48)).max(40).parse(input))
   .handler(async ({ data }) => {
-    const r = await fetch(`https://lite-api.jup.ag/price/v3?ids=${data.join(",")}`, {
-      headers: { accept: "application/json", "user-agent": "Senda" },
-      signal: AbortSignal.timeout(8000),
-    });
+    const r = await jupFetch(`https://api.jup.ag/price/v3?ids=${data.join(",")}`);
     if (!r.ok) return {} as Record<string, { usd: number; chg: number }>;
     const raw = (await r.json()) as Record<string, { usdPrice?: number; priceChange24h?: number }>;
     const out: Record<string, { usd: number; chg: number }> = {};
@@ -119,10 +138,7 @@ export const liveMarks = createServerFn({ method: "POST" })
 export const searchTape = createServerFn({ method: "GET" })
   .validator((input: unknown) => z.object({ q: z.string().trim().min(1).max(32) }).parse(input))
   .handler(async ({ data }): Promise<TapeCoin[]> => {
-    const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data.q)}`, {
-      headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
-    });
+    const r = await jupFetch(`https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data.q)}`);
     if (!r.ok) return [];
     const body = rowsOf(await r.json());
     const seen = new Set<string>();
