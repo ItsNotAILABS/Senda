@@ -45,7 +45,7 @@ async function verifiedMintDecimals(mint:string):Promise<number>{
  const decimals=account?.data?.parsed?.type==="mint"?account.data.parsed.info?.decimals:undefined;
  if(!["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
    "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].includes(program||"") ||
-   !Number.isInteger(decimals)||decimals!<0||decimals!>18)
+   !Number.isInteger(decimals)||decimals! < 0 || decimals! > 18)
   throw Error("Token mint decimals could not be verified");
  decimalsCache.set(mint,{value:decimals!,expires:Date.now()+120000});
  return decimals!;
