@@ -2,6 +2,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { deriveRoundTripSellRaw } from "@/lib/ecosystem-upgrade-core.mjs";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 // Official Jupiter gateway; the legacy Lite hostname retires October 30, 2026.
@@ -84,7 +85,7 @@ export async function fetchQuote(mint:string,usd:number,side:"buy"|"sell"):Promi
    // Discover an indicative mint-sized position from a $25 *buy* observation,
    // then quote the exact raw mint amount back to USDC.
    const reverse=await quoteExact(USDC,mint,usdcRaw);
-   inputRaw=String(reverse.outAmount);
+   inputRaw=deriveRoundTripSellRaw(reverse,usdcRaw,mint);
    inputDecimals=await verifiedMintDecimals(mint);
    inputMint=mint;outputMint=USDC;
   }
