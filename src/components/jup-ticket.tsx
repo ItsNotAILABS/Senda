@@ -13,10 +13,9 @@ export function JupBoard({ names }: { names: HouseListing[] }) {
     <div className="pb-8">
       <header className="px-4 pt-2">
         <p className="text-sm text-muted">Spot · Jupiter</p>
-        <h2 className="mt-1 font-display text-3xl tracking-tight">Fill on the live book</h2>
+        <h2 className="mt-1 font-display text-3xl tracking-tight">Preview live wallet routes</h2>
         <p className="mt-2 text-sm text-muted">
-          Senda is agent. Quote from Jupiter, swap USDC ↔ the PreStock mint. We don’t take the other side. Fee is the
-          DEX’s.
+          Jupiter provides indicative routing between USDC and supported tokens. Your wallet reviews and signs a fresh order; the quote is not a completed fill.
         </p>
       </header>
       <div className="mt-3 flex gap-1 px-4">
@@ -92,7 +91,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
           <div className="rounded-lg bg-elevated px-3 py-2">
             <dt className="text-[11px] text-subtle">You pay</dt>
             <dd className="mt-1 font-mono text-sm tabular-nums">
-              {!q ? "—" : "error" in q ? "—" : side === "buy" ? `$${inUi(q).toFixed(2)}` : out.toFixed(4)}
+              {!q ? "—" : "error" in q ? "—" : side === "buy" ? `${inUi(q).toFixed(2)}` : inUi(q).toFixed(4)}
             </dd>
           </div>
           <div className="rounded-lg bg-elevated px-3 py-2">
@@ -106,6 +105,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
             <dd className="mt-1 font-mono text-sm tabular-nums">{ok ? `${impact.toFixed(2)}%` : "—"}</dd>
           </div>
         </dl>
+        {side === "sell" && ok ? <p className="mt-2 px-6 text-[11px] text-subtle">Indicative token size inferred from a round-trip USDC quote, not your wallet balance. Final sale size is reviewed separately.</p> : null}
         {ok ? (
           <p className="mt-3 px-6 font-mono text-[11px] text-subtle">
             {q.route[0] || "Jupiter"}
@@ -115,7 +115,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
         <div className="px-6">
           <FillButton
             mint={stock.mint}
-            usd={25}
+            usd={usd}
             side={side}
             price={stock.last}
             label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
@@ -167,10 +167,11 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
           </>
         ) : (
           <>
-            {inUi(q).toFixed(4)} {stock.symbol} → <span className="font-semibold tabular-nums">${out.toFixed(2)}</span> USDC
+            ~{inUi(q).toFixed(4)} {stock.symbol} → <span className="font-semibold tabular-nums">${out.toFixed(2)}</span> USDC
           </>
         )}
       </p>
+      {side === "sell" && ok ? <p className="mt-2 text-[11px] text-subtle">Estimated token size for this dollar budget, not connected wallet holdings.</p> : null}
       {ok ? (
         <p className="mt-1 font-mono text-[11px] text-subtle">
           {(q.route[0] || "Jupiter")}
@@ -179,7 +180,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
       ) : null}
       <FillButton
         mint={stock.mint}
-        usd={25}
+        usd={usd}
         side={side}
         price={stock.last}
         label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
