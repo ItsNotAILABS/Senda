@@ -2,6 +2,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { deriveRoundTripSellRaw } from "@/lib/ecosystem-upgrade-core.mjs";
 
 export const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 // Official Jupiter gateway; the legacy Lite hostname retires October 30, 2026.
@@ -18,6 +19,8 @@ export type JupQuote = {
   inMint: string;
   outMint: string;
   side: "buy" | "sell";
+  /** Required for true mint-denominated sell previews. */
+  inputDecimals?: number;
 };
 
 function routeLabels(raw: unknown): string[] {
@@ -27,42 +30,83 @@ function routeLabels(raw: unknown): string[] {
   return plan.map((p) => p.swapInfo?.label || "DEX").filter(Boolean);
 }
 
-export async function fetchQuote(mint: string, usd: number, side: "buy" | "sell"): Promise<JupQuote | { error: string }> {
-  const amount = Math.max(1, Math.round(usd * 1e6));
-  const inputMint = side === "buy" ? USDC : mint;
-  const outputMint = side === "buy" ? mint : USDC;
-  const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
-  let last = "Jupiter unreachable.";
-  for (const url of QUOTE_URLS) {
-    try {
-      const r = await fetch(url(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
-      const text = await r.text();
-      if (!r.ok) {
-        last = r.status === 429 ? "Jupiter is busy. Wait a moment." : `Jupiter ${r.status}`;
-        continue;
-      }
-      const j = JSON.parse(text) as Record<string, unknown>;
-      if (!j.outAmount) {
-        last = "No route.";
-        continue;
-      }
-      return {
-        inAmount: String(j.inAmount ?? amount),
-        outAmount: String(j.outAmount),
-        otherAmountThreshold: String(j.otherAmountThreshold ?? j.outAmount),
-        priceImpactPct: String(j.priceImpactPct ?? "0"),
-        slippageBps: Number(j.slippageBps ?? 100),
-        route: routeLabels(j),
-        swapUsdValue: j.swapUsdValue != null ? String(j.swapUsdValue) : null,
-        inMint: String(j.inputMint ?? inputMint),
-        outMint: String(j.outputMint ?? outputMint),
-        side,
-      };
-    } catch {
-      last = "Jupiter unreachable.";
-    }
+const rawDigits = /^[1-9][0-9]{0,19}$/;
+const decimalsCache = new Map<string,{value:number;expires:number}>();
+async function verifiedMintDecimals(mint:string):Promise<number>{
+ const hit=decimalsCache.get(mint);
+ if(hit&&hit.expires>Date.now())return hit.value;
+ const rpc=process.env.SENDA_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+ const genesisResponse=await fetch(rpc,{method:"POST",headers:{"content-type":"application/json"},
+   body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getGenesisHash"}),
+   signal:AbortSignal.timeout(4500),redirect:"error"});
+ if(!genesisResponse.ok)throw Error("Could not verify mainnet RPC");
+ const genesis=await genesisResponse.json() as {result?:string};
+ if(genesis.result!=="5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
+  throw Error("RPC cluster mismatch for sell token decimals");
+ const r=await fetch(rpc,{method:"POST",headers:{"content-type":"application/json"},
+   body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getAccountInfo",
+    params:[mint,{encoding:"jsonParsed",commitment:"confirmed"}]}),
+   signal:AbortSignal.timeout(6500),redirect:"error"});
+ if(!r.ok)throw Error("Mint precision verification unavailable");
+ const body=await r.json() as {result?:{value?:{owner?:string;data?:{parsed?:{type?:string;info?:{decimals?:number}}}}}};
+ const account=body.result?.value,program=account?.owner;
+ const decimals=account?.data?.parsed?.type==="mint"?account.data.parsed.info?.decimals:undefined;
+ if(!["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].includes(program||"") ||
+   !Number.isInteger(decimals)||decimals! < 0 || decimals! > 18)
+  throw Error("Token mint decimals could not be verified");
+ decimalsCache.set(mint,{value:decimals!,expires:Date.now()+120000});
+ return decimals!;
+}
+async function quoteExact(inputMint:string,outputMint:string,amount:string):Promise<Record<string,unknown>>{
+ if(!rawDigits.test(amount))throw Error("Invalid exact raw amount");
+ const qs=new URLSearchParams({inputMint,outputMint,amount,slippageBps:"100",restrictIntermediateTokens:"true"});
+ let last="Jupiter unreachable.";
+ for(const makeUrl of QUOTE_URLS){
+  try{
+   const key=process.env.SENDA_JUPITER_API_KEY;
+   const response=await fetch(makeUrl(qs.toString()),{
+    headers:{accept:"application/json",...(key?{"x-api-key":key}:{})},
+    signal:AbortSignal.timeout(8500),redirect:"error"
+   });
+   if(!response.ok){last=response.status===429?"Jupiter rate limit reached":`Jupiter HTTP ${response.status}`;continue;}
+   const body=await response.json() as Record<string,unknown>;
+   if(body.inputMint!==inputMint||body.outputMint!==outputMint||body.inAmount!==amount||
+     typeof body.outAmount!=="string"||!rawDigits.test(body.outAmount)||
+     typeof body.otherAmountThreshold!=="string"||!rawDigits.test(body.otherAmountThreshold)||
+     BigInt(body.otherAmountThreshold)>BigInt(body.outAmount))
+     throw Error("Jupiter quote pair, amount or minimum output mismatch");
+   return body;
+  }catch(e){last=e instanceof Error?e.message:"Jupiter quote unavailable";}
+ }
+ throw Error(last);
+}
+export async function fetchQuote(mint:string,usd:number,side:"buy"|"sell"):Promise<JupQuote|{error:string}>{
+ try{
+  if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)||!Number.isFinite(usd)||usd<=0||usd>1000000)
+   throw Error("Invalid quote amount or mint");
+  const usdcRaw=String(Math.round(usd*1e6));
+  let inputMint=USDC,outputMint=mint,inputRaw=usdcRaw,inputDecimals=6;
+  if(side==="sell"){
+   // A $25 sell is NOT 25,000,000 raw units of an arbitrary token.
+   // Discover an indicative mint-sized position from a $25 *buy* observation,
+   // then quote the exact raw mint amount back to USDC.
+   const reverse=await quoteExact(USDC,mint,usdcRaw);
+   inputRaw=deriveRoundTripSellRaw(reverse,usdcRaw,mint);
+   inputDecimals=await verifiedMintDecimals(mint);
+   inputMint=mint;outputMint=USDC;
   }
-  return { error: last };
+  const body=await quoteExact(inputMint,outputMint,inputRaw);
+  return {
+   inAmount:inputRaw,outAmount:String(body.outAmount),
+   otherAmountThreshold:String(body.otherAmountThreshold),
+   priceImpactPct:String(body.priceImpactPct??"0"),
+   slippageBps:Number(body.slippageBps??100),
+   route:routeLabels(body),
+   swapUsdValue:body.swapUsdValue!=null?String(body.swapUsdValue):null,
+   inMint:inputMint,outMint:outputMint,side,inputDecimals
+  };
+ }catch(e){return {error:e instanceof Error?e.message:"Jupiter quote unavailable"};}
 }
 
 export const quoteJup = createServerFn({ method: "POST" })
@@ -82,7 +126,7 @@ export function outUi(q: JupQuote, decimals = 6): number {
 }
 
 export function inUi(q: JupQuote, decimals = 6): number {
-  return Number(q.inAmount) / 10 ** decimals;
+  return Number(q.inAmount) / 10 ** (q.inputDecimals ?? decimals);
 }
 
 export function jupFillUrl(mint: string, side: "buy" | "sell"): string {

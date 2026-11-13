@@ -3,7 +3,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CHAINS, SOLANA_MORE, mapChains, mapSolana, type TapeRow } from "@/lib/chain-tape-map.mjs";
 
-const JUP = "https://lite-api.jup.ag/price/v3?ids=";
+const JUP = "https://api.jup.ag/price/v3?ids=";
 const LLAMA = "https://coins.llama.fi";
 
 export type ChainTape = {
@@ -20,7 +20,7 @@ async function getJson(url: string, ms = 8000): Promise<unknown> {
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
-      headers: { accept: "application/json", "user-agent": "Senda" },
+      headers: { accept: "application/json", "user-agent": "Senda", ...(url.startsWith("https://api.jup.ag/") && process.env.SENDA_JUPITER_API_KEY ? { "x-api-key": process.env.SENDA_JUPITER_API_KEY } : {}) },
     });
     if (!res.ok) throw new Error(String(res.status));
     return await res.json();
