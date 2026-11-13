@@ -27,9 +27,8 @@ export const SPEND_DEFAULT = 100;
 export const SPEND_MAX = 5000;
 
 const PRESTOCKS = "https://prestocks.com/api/prestocks";
-const QUOTE = "https://lite-api.jup.ag/swap/v1/quote";
 const QUOTE_API = "https://api.jup.ag/swap/v1/quote";
-const PRICE = "https://lite-api.jup.ag/price/v3?ids=";
+const PRICE = "https://api.jup.ag/price/v3?ids=";
 const LIFI = "https://li.quest/v1/quote";
 const LLAMA = "https://coins.llama.fi";
 const RPCS = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
@@ -183,7 +182,7 @@ async function getJson(url, ms = 8000) {
   try {
     const r = await fetch(url, {
       signal: ctrl.signal,
-      headers: { accept: "application/json", "user-agent": "Senda/1.0 (no custody)" },
+      headers: { accept: "application/json", "user-agent": "Senda/1.0 (no custody)", ...(url.startsWith("https://api.jup.ag/") && process.env.SENDA_JUPITER_API_KEY ? {"x-api-key":process.env.SENDA_JUPITER_API_KEY}:{}) },
     });
     if (!r.ok) throw new Error(`${url} ${r.status}`);
     return r.json();
@@ -217,9 +216,9 @@ export async function listPrints() {
 async function jupQuote(inputMint, outputMint, amount) {
   const qs = `inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=100&restrictIntermediateTokens=true`;
   let last = "Jupiter unreachable.";
-  for (const base of [QUOTE_API, QUOTE]) {
+  for (const base of [QUOTE_API]) {
     try {
-      const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json", "user-agent": "Senda/1.0 (no custody)" } });
+      const r = await fetch(`${base}?${qs}`, { headers: { accept: "application/json", "user-agent": "Senda/1.0 (no custody)", ...(process.env.SENDA_JUPITER_API_KEY ? { "x-api-key": process.env.SENDA_JUPITER_API_KEY } : {}) }, signal:AbortSignal.timeout(8500),redirect:"error" });
       const text = await r.text();
       if (!r.ok) {
         last = r.status === 429 ? "Jupiter is busy. Wait a moment." : `Jupiter ${r.status}`;
