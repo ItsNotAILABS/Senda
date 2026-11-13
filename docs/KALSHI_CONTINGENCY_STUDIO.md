@@ -7,6 +7,10 @@
 - **Venue routes** — Phantom U.S. Kalshi mobile handoff; public Kalshi research; approval-gated DFlow Solana-native outcome token transactions signed by Phantom; independent Phantom World and Polymarket public discovery.
 - **Local watchlist** — ticker-only browser storage. No positions, balances, funds or orders are imported or fabricated.
 
+## Native price and volume history
+
+The terminal includes a new source-backed chart on each Kalshi market with 24-hour, 7-day, and 30-day ranges using the official [Get Market Candlesticks](https://docs.kalshi.com/api-reference/market/get-market-candlesticks) endpoint. Series tickers originate in the public Kalshi events catalog. The server only fetches the requested exact series/market pair on fixed Kalshi infrastructure. Contract close prices and native period volume are normalized independently; source-null or missing prices/volumes are never replaced with fake candles. The SVG chart leaves gaps across missing observations rather than interpolating them. Actual zero is displayed only when the venue explicitly reports zero.
+
 ## Data architecture and provenance
 
 `src/lib/kalshi-book.ts` uses the documented Kalshi public Events API (`GET /trade-api/v2/events?status=open&with_nested_markets=true`) and a bounded index walk. `event-market-discovery.mjs` classifies public titles into Senda-owned discovery categories; these are NOT official Kalshi series taxonomy and do not prove related contracts are equivalent.
@@ -33,6 +37,7 @@ A legitimate future regulated parametric insurance product requires licensed ins
 
 ```bash
 node --test scripts/contingency-analysis.test.mjs
+node --test scripts/kalshi-history.test.mjs
 npm ci
 npm run typecheck
 npm run build:dev
