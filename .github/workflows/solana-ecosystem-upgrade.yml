@@ -1,0 +1,37 @@
+name: Solana ecosystem 2026 upgrade gates
+on:
+  pull_request:
+    paths:
+      - "src/lib/jup-tape.ts"
+      - "src/lib/jup-exec.ts"
+      - "src/lib/jupiter-v2-preview.ts"
+      - "src/lib/token-safety.ts"
+      - "src/lib/ecosystem-upgrade-core.mjs"
+      - "src/components/jup-ticket.tsx"
+      - "src/components/jupiter-v2-preview.tsx"
+      - "src/components/token-safety-panel.tsx"
+      - "src/routes/invest/routes.tsx"
+      - "scripts/ecosystem-upgrade.test.mjs"
+      - "config/solana-ecosystem-scout.json"
+      - ".github/workflows/solana-ecosystem-upgrade.yml"
+  workflow_dispatch:
+jobs:
+  ecosystem-checks:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Ecosystem quote, token and agent payment contracts
+        run: node --test scripts/ecosystem-upgrade.test.mjs
+      - name: Senda typecheck
+        run: npm run typecheck
+      - name: Existing Senda tests
+        run: npm test
+      - name: App compilation
+        run: npm run build:dev
