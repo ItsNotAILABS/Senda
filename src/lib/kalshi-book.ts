@@ -118,6 +118,7 @@ export const kalshiPage = createServerFn({ method: "POST" })
         q: z.string().max(80).optional(),
         category: z.string().max(48).optional(),
         lane: z.enum(["all","sports","economy","crypto","weather","world","technology","culture"]).optional(),
+        watchlist:z.array(z.string().regex(/^[A-Z0-9][A-Z0-9._-]{2,119}$/)).max(70).optional(),
         sort: z.enum(["activity","closing","tight-spread"]).optional(),
         offset: z.number().int().min(0).max(250_000).optional(),
         limit: z.number().int().min(1).max(60).optional(),
@@ -133,6 +134,7 @@ export const kalshiPage = createServerFn({ method: "POST" })
     const category = (data.category ?? "").trim();
     let rows = cache.rows;
     if (category) rows = rows.filter((r) => r.category === category);
+    if(data.watchlist)rows=rows.filter(r=>data.watchlist!.includes(r.ticker));
     rows=selectMarkets(rows,{q,lane:data.lane??"all",sort:data.sort??"activity"});
     const offset = data.offset ?? 0;
     const limit = data.limit ?? 40;
