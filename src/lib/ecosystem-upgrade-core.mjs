@@ -87,3 +87,16 @@ export function classifySolanaMintAccount(value) {
     transferRisks:blockers, canSign:false, executionAuthorized:false
   };
 }
+
+/** A dollar-denominated SELL preview must derive token-raw quantity from a real buy quote. */
+export function deriveRoundTripSellRaw(buyQuote, expectedUsdcRaw, targetMint) {
+ if (!buyQuote || !mint.test(targetMint||"") ||
+  buyQuote.inputMint!==MAINNET_USDC || buyQuote.outputMint!==targetMint ||
+  buyQuote.inAmount!==expectedUsdcRaw ||
+  !validRawAmount(expectedUsdcRaw,uint64) ||
+  !validRawAmount(String(buyQuote.outAmount??""),uint64) ||
+  !validRawAmount(String(buyQuote.otherAmountThreshold??""),uint64) ||
+  BigInt(buyQuote.otherAmountThreshold)>BigInt(buyQuote.outAmount))
+  throw Error("REVERSE_BUY_QUOTE_UNVERIFIED");
+ return String(buyQuote.outAmount);
+}
