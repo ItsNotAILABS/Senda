@@ -1,0 +1,38 @@
+name: Senda event markets and contingency QA
+on:
+  pull_request:
+    paths:
+      - "src/components/event-*.tsx"
+      - "src/lib/event-market-discovery.*"
+      - "src/lib/contingency-analysis.*"
+      - "src/lib/kalshi-book.ts"
+      - "src/lib/kalshi-market-detail.ts"
+      - "src/routes/social/**"
+      - "scripts/contingency-analysis.test.mjs"
+      - ".github/workflows/contingency-markets.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contingency-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test scripts/contingency-analysis.test.mjs
+      - run: node --test scripts/event-contract-router.test.mjs
+  full-app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:dev
