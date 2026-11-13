@@ -91,6 +91,66 @@
       "reason": "Protocol documentation source inventory",
       "integration": "candidate",
       "approval": "no runtime auto-install"
+    },
+    {
+      "id": "jupiter-token-v2",
+      "name": "Jupiter Tokens V2",
+      "lane": "token-security",
+      "priority": "P0",
+      "url": "https://developers.jup.ag/docs/tokens",
+      "reason": "Verified mint metadata, organic score, audits, liquidity and Token-2022 program type",
+      "integration": "read-only-code-added",
+      "approval": "Compare metadata with trusted RPC mint state; never treat organic score as an audit"
+    },
+    {
+      "id": "solana-payment-channels",
+      "name": "Solana Payment Channels",
+      "lane": "agentic-micropayments",
+      "priority": "P1",
+      "url": "https://solana.com/news/payment-channels-1-million-payments-per-second",
+      "reason": "Preauthorized metered x402/MPP sessions; signed vouchers and on-chain settlement",
+      "integration": "candidate",
+      "approval": "Audited channel program, secure tenant signer, replay and unused-funds recovery"
+    },
+    {
+      "id": "solana-x402-v2",
+      "name": "Solana x402 V2",
+      "lane": "agentic-micropayments",
+      "priority": "P0",
+      "url": "https://solana.com/docs/payments/agentic-payments/x402",
+      "reason": "Versioned CAIP-2 exact pay-per-call with verified payment challenge binding",
+      "integration": "policy-precheck-added",
+      "approval": "Reference SDK/facilitator settlement, atomic replay store and verified receipts"
+    },
+    {
+      "id": "solana-mpp",
+      "name": "Solana MPP",
+      "lane": "agentic-micropayments",
+      "priority": "P1",
+      "url": "https://solana.com/docs/payments/agentic-payments/mpp",
+      "reason": "HTTP Payment authentication, charge and capped session semantics",
+      "integration": "policy-precheck-added",
+      "approval": "Separate verified MPP SDK, no silent signing or unfunded sessions"
+    },
+    {
+      "id": "solana-token-extensions",
+      "name": "Solana Token-2022 Extensions",
+      "lane": "token-security",
+      "priority": "P0",
+      "url": "https://solana.com/docs/tokens/extensions",
+      "reason": "Transfer fee, hook, nontransferable, confidential and permanent delegate compatibility",
+      "integration": "read-only-inspector-added",
+      "approval": "Program-aware wallet transaction builder and mint account verification"
+    },
+    {
+      "id": "jupiter-v2-tx-v1",
+      "name": "Jupiter V2 Solana Transaction V1",
+      "lane": "execution",
+      "priority": "P1",
+      "url": "https://developers.jup.ag/docs/swap/advanced/transaction-versions",
+      "reason": "Larger transaction format with wallet compatibility gating for V2 builds",
+      "integration": "candidate",
+      "approval": "Versioned wallet adapter tests and exact account/instruction simulation"
     }
   ]
 }
