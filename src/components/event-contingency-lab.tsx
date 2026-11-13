@@ -40,7 +40,7 @@ export function EventContingencyLab({market,planned,chosenSide,budget,clock,onBu
    <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-3xl">Plan for a real-world risk.<br/><span className="text-cyan-200">Never confuse a bet with protection.</span></h2>
    <p className="mt-3 max-w-2xl text-xs leading-6 text-white/55">Explore event-market outcomes alongside possible business or personal expenses. Event resolution, insurance claims and actual cash losses are separate events. No policy is issued, no claim is paid, and no market position is opened here.</p>
    <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-    {CONTINGENCY_USE_CASES.map((x,i)=>{const Icon=cases[i];return <button type="button" key={x.id} onClick={()=>setType(x.id)} aria-pressed={type===x.id}
+    {CONTINGENCY_USE_CASES.map((x,i)=>{const Icon=cases[i]??CloudRain;return <button type="button" key={x.id} onClick={()=>setType(x.id)} aria-pressed={type===x.id}
      className={`rounded-2xl border p-3 text-left transition ${type===x.id?"border-cyan-300/40 bg-cyan-300/10":"border-white/10 bg-white/[.025] hover:border-white/25"}`}>
       <Icon className={`size-5 ${type===x.id?"text-cyan-300":"text-white/40"}`}/><p className="mt-2 text-[12px] font-semibold">{x.name}</p><p className="mt-1 text-[10px] leading-4 text-white/45">{x.detail}</p>
      </button>})}
