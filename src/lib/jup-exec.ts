@@ -36,6 +36,13 @@ async function verifiedMintDecimals(mint:string):Promise<number>{
  const hit=decimalsCache.get(mint);
  if(hit&&hit.expires>Date.now())return hit.value;
  const rpc=process.env.SENDA_SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+ const genesisResponse=await fetch(rpc,{method:"POST",headers:{"content-type":"application/json"},
+   body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getGenesisHash"}),
+   signal:AbortSignal.timeout(4500),redirect:"error"});
+ if(!genesisResponse.ok)throw Error("Could not verify mainnet RPC");
+ const genesis=await genesisResponse.json() as {result?:string};
+ if(genesis.result!=="5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
+  throw Error("RPC cluster mismatch for sell token decimals");
  const r=await fetch(rpc,{method:"POST",headers:{"content-type":"application/json"},
    body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getAccountInfo",
     params:[mint,{encoding:"jsonParsed",commitment:"confirmed"}]}),
