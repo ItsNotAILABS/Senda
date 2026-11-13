@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   MAINNET_USDC, SOLANA_MAINNET_CAIP2, SOLANA_DEVNET_CAIP2,
   TOKEN_PROGRAM, TOKEN_2022_PROGRAM, validateSwapV2Preview,
-  evaluateAgentPaymentRequirement, classifySolanaMintAccount, validRawAmount
+  evaluateAgentPaymentRequirement, classifySolanaMintAccount, validRawAmount, deriveRoundTripSellRaw
 } from "../src/lib/ecosystem-upgrade-core.mjs";
 const sol="So11111111111111111111111111111111111111112";
 const recipient="7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs";
@@ -40,4 +40,12 @@ test("Token2022 unknown extensions fail closed and hooks are exposed",()=>{
  assert.equal(r.requiresExtensionAwareExecution,true);assert.equal(r.transferRisks[0],"transferHook");
  const legacy=classifySolanaMintAccount({owner:TOKEN_PROGRAM,data:{parsed:{type:"mint",info:{decimals:6}}}});
  assert.equal(legacy.decision,"READ_ONLY_INSPECTED");
+});
+
+test("round-trip sell preview uses token raw units rather than USDC raw units",()=>{
+ const quote={inputMint:MAINNET_USDC,outputMint:sol,inAmount:"25000000",
+   outAmount:"100000000",otherAmountThreshold:"99000000"};
+ assert.equal(deriveRoundTripSellRaw(quote,"25000000",sol),"100000000");
+ for(const patch of [{inAmount:"100"},{outputMint:recipient},{outAmount:"0"},{otherAmountThreshold:"100000001"}])
+  assert.throws(()=>deriveRoundTripSellRaw({...quote,...patch},"25000000",sol));
 });
