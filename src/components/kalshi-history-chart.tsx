@@ -75,7 +75,7 @@ export function KalshiHistoryChart({ticker,seriesTicker,refreshKey=0}:{ticker:st
       {chart.segments.map((segment,i)=>segment.length<2?segment.map((p,j)=><circle key={i+"-"+j} cx={p.x} cy={p.y} r="2.6" fill="#82ebff"/>):
        <polyline key={i} points={segment.map(p=>p.x+","+p.y).join(" ")} fill="none" stroke="#82ebff" strokeWidth="2.7" strokeLinejoin="round" strokeLinecap="round"/>)}
       <text x="27" y="24" fill="#7499b3" fontSize="11">YES close price</text>
-      <text x="27" y="207" fill="#7499b3" fontSize="11">24h / interval volume</text>
+      <text x="27" y="207" fill="#7499b3" fontSize="11">Period volume (contracts)</text>
      </svg>
     </div>
     <p className="mt-2 text-[10px] leading-5 text-white/35">Volume bars are exactly sourced period observations; missing periods/prices are left blank, not interpolated. A zero volume bar is only zero when the source explicitly reports zero. History is not a quote.</p>
