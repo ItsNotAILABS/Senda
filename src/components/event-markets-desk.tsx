@@ -32,8 +32,8 @@ const timestamp=(text:string|null|undefined)=>{
 const pane="rounded-[24px] border border-white/10 bg-[#0c1523] shadow-[0_10px_34px_#03070e35]";
 const stat="rounded-xl border border-white/[.075] bg-black/20 p-3";
 
-export function EventMarketsDesk(){
- const [workspace,setWorkspace]=useState<Workspace>("markets");
+export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?:Workspace}={}){
+ const [workspace,setWorkspace]=useState<Workspace>(initialWorkspace);
  const [venue,setVenue]=useState<VenueId>("kalshi-public");
  const [query,setQuery]=useState("");
  const [debouncedQuery,setDebouncedQuery]=useState("");
