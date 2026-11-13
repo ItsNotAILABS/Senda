@@ -26,6 +26,7 @@ type Cache = { at: number; rows: KalshiRow[]; cursor: string; done: boolean };
 
 let cache: Cache = { at: 0, rows: [], cursor: "", done: false };
 let walking: Promise<void> | null = null;
+let nextReadAt=0;
 
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
@@ -87,14 +88,16 @@ function walk() {
   walking = (async () => {
     let cursor = cache.cursor;
     const rows = cache.rows.slice();
+    const seen = new Set(rows.map(r=>r.ticker));
     for (let i = 0; i < 30; i += 1) {
       try {
         const page = await pullPage(cursor);
-        rows.push(...page.rows);
+        for(const row of page.rows){if(!seen.has(row.ticker)){seen.add(row.ticker);rows.push(row);}}
         cursor = page.cursor;
         cache = { at: Date.now(), rows, cursor, done: !cursor };
         if (!cursor) break;
       } catch {
+        nextReadAt=Date.now()+20_000;
         cache = { at: Date.now(), rows, cursor, done: false };
         break;
       }
@@ -106,6 +109,7 @@ function walk() {
 }
 
 function ensure() {
+  if(Date.now()<nextReadAt)return;
   if ((cache.rows.length === 0 || !cache.done) && !walking) void walk();
   else if (cache.done && Date.now() - cache.at > 5 * 60_000 && !walking) {
     cache = { at: Date.now(), rows: [], cursor: "", done: false };
@@ -129,7 +133,7 @@ export const kalshiPage = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     ensure();
-    if (cache.rows.length < 40) {
+    if (cache.rows.length < 40 && Date.now()>=nextReadAt) {
       await Promise.race([walk(), new Promise((resolve) => setTimeout(resolve, 8000))]);
     }
     const q = (data.q ?? "").trim().toLowerCase();
