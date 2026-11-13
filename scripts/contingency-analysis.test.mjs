@@ -1,6 +1,6 @@
 import test from "node:test";import assert from "node:assert/strict";
 import {classifyMarket,marketSpread,selectMarkets,MARKET_LANES} from "../src/lib/event-market-discovery.mjs";
-import {contingencyScenario,CONTINGENCY_USE_CASES} from "../src/lib/contingency-analysis.mjs";
+import {contingencyScenario,contingencyReservePlan,CONTINGENCY_USE_CASES} from "../src/lib/contingency-analysis.mjs";
 const now=1800000000000;
 const quote={available:true,notExecutable:true,quotedAt:now,contracts:10,grossCostUsd:3.5,maximumPayoutUsd:10};
 test("category navigation never invents official venue categories",()=>{
@@ -39,4 +39,16 @@ test("budget, staleness, missing depth and invented claims fail closed",()=>{
 test("scenario products remain explicitly non-insurance",()=>{
  assert.equal(CONTINGENCY_USE_CASES.length,5);
  assert.ok(CONTINGENCY_USE_CASES.every(x=>x.caution&&x.detail));
+});
+
+test("chosen NO side properly inverts settlement outcomes",()=>{
+ const r=contingencyScenario({quote:{...quote,side:"no"},possibleLossUsd:1000,budgetUsd:20,marketTicker:"KXRAIN-26NOV03-A",now:now+1000});
+ assert.equal(r.ready,true);assert.equal(r.chosenSide,"no");
+ assert.equal(r.events[0].marketResolves,"no");assert.equal(r.events[2].marketResolves,"yes");
+});
+test("cash reserve planning never assumes a market payout",()=>{
+ const p=contingencyReservePlan({potentialExpenseUsd:1000,availableCashUsd:150,targetCoveragePct:60});
+ assert.equal(p.ready,true);assert.equal(p.targetCashReserveUsd,600);
+ assert.equal(p.additionalCashRequiredUsd,450);assert.equal(p.insurance,false);
+ assert.equal(contingencyReservePlan({potentialExpenseUsd:-1}).ready,false);
 });
