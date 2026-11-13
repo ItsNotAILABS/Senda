@@ -226,12 +226,12 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
     {market&&planned?.available&&typeof planned.grossCostUsd==="number"&&typeof book?.asOf==="number"?<PhantomPredictBridge key={market.ticker+side+contracts} ticker={market.ticker} side={side} contracts={contracts} grossUsd={planned.grossCostUsd} quotedAt={book.asOf}/>:null}
     <section className={cn(pane,"p-4 sm:p-5")}>
      <h3 className="flex items-center gap-2 text-sm font-semibold"><Layers3 className="size-4 text-cyan-300"/>The Senda money stack</h3>
-     <div className="mt-3 space-y-2">{[
+     <div className="mt-3 space-y-2">{([
       {href:"/liquify",name:"Liquify",about:"Venue-by-venue liquidity research"},
       {href:"/payments",name:"Pay & Send",about:"Wallet-approved transfers"},
       {href:"/agents/intelligence",name:"Utility AI",about:"Public-source market and risk analysis"},
       {href:"/pre/cover",name:"PreStock Cover",about:"Separate token downside feature"}
-     ].map(x=><Link key={x.href} to={x.href} className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[.025] px-3 text-xs hover:border-cyan-300/30"><span><strong className="block">{x.name}</strong><span className="mt-1 block text-[10px] text-white/40">{x.about}</span></span><ArrowRight className="size-3 text-cyan-200"/></Link>)}</div>
+     ] as const).map(x=><Link key={x.href} to={x.href} className="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[.025] px-3 text-xs hover:border-cyan-300/30"><span><strong className="block">{x.name}</strong><span className="mt-1 block text-[10px] text-white/40">{x.about}</span></span><ArrowRight className="size-3 text-cyan-200"/></Link>)}</div>
     </section>
     <p className="rounded-xl border border-amber-300/15 bg-amber-300/[.04] p-4 text-[11px] leading-5 text-white/55"><Info className="mr-1 inline size-3.5 text-amber-200"/>Senda is not offering insurance, indemnity, insurance claims, guaranteed settlement or third-party Kalshi account execution. All event-price research is non-custodial and fee-incomplete.</p>
    </aside>
