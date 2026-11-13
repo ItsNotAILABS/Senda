@@ -2,8 +2,9 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import {selectMarkets} from "@/lib/event-market-discovery.mjs";
 
-const HOST = "https://api.elections.kalshi.com/trade-api/v2/events";
+const HOST = "https://external-api.kalshi.com/trade-api/v2/events";
 
 export type KalshiRow = {
   ticker: string;
@@ -15,7 +16,9 @@ export type KalshiRow = {
   ask: number | null;
   last: number | null;
   vol: number;
+  reportedVolume?:number|null;
   close: string;
+  closeFull?:string;
 };
 
 type Cache = { at: number; rows: KalshiRow[]; cursor: string; done: boolean };
@@ -42,7 +45,10 @@ function flatten(events: Array<Record<string, unknown>>): KalshiRow[] {
       const ticker = String(m.ticker ?? "");
       if (!ticker) continue;
       const yes = String(m.yes_sub_title ?? "").trim();
-      const vol = Number(m.volume_24h_fp ?? m.volume_fp ?? 0) || 0;
+      const rawVolume=m.volume_24h_fp??m.volume_fp;
+      const parsedVolume=rawVolume===null||rawVolume===undefined?null:Number(rawVolume);
+      const reportedVolume=parsedVolume!==null&&Number.isFinite(parsedVolume)&&parsedVolume>=0?parsedVolume:null;
+      const vol=reportedVolume??0;
       out.push({
         ticker,
         event,
@@ -53,7 +59,9 @@ function flatten(events: Array<Record<string, unknown>>): KalshiRow[] {
         ask: num(m.yes_ask_dollars),
         last: num(m.last_price_dollars),
         vol,
+        reportedVolume,
         close: String(m.close_time ?? "").slice(0, 10),
+        closeFull: String(m.close_time ?? ""),
       });
     }
   }
@@ -66,7 +74,7 @@ async function pullPage(cursor: string): Promise<{ rows: KalshiRow[]; cursor: st
   u.searchParams.set("status", "open");
   u.searchParams.set("with_nested_markets", "true");
   if (cursor) u.searchParams.set("cursor", cursor);
-  const res = await fetch(u, { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
+  const res = await fetch(u, { headers: { accept: "application/json", "user-agent": "Senda/1.0" },redirect:"error",signal:AbortSignal.timeout(8000) });
   if (!res.ok) throw new Error(`Kalshi ${res.status}`);
   const j = (await res.json()) as { events?: Array<Record<string, unknown>>; cursor?: string };
   return { rows: flatten(j.events ?? []), cursor: String(j.cursor ?? "") };
@@ -77,7 +85,7 @@ function walk() {
   walking = (async () => {
     let cursor = cache.cursor;
     const rows = cache.rows.slice();
-    for (let i = 0; i < 25; i += 1) {
+    for (let i = 0; i < 30; i += 1) {
       try {
         const page = await pullPage(cursor);
         rows.push(...page.rows);
@@ -109,6 +117,8 @@ export const kalshiPage = createServerFn({ method: "POST" })
       .object({
         q: z.string().max(80).optional(),
         category: z.string().max(48).optional(),
+        lane: z.enum(["all","sports","economy","crypto","weather","world","technology","culture"]).optional(),
+        sort: z.enum(["activity","closing","tight-spread"]).optional(),
         offset: z.number().int().min(0).max(250_000).optional(),
         limit: z.number().int().min(1).max(60).optional(),
       })
@@ -123,8 +133,7 @@ export const kalshiPage = createServerFn({ method: "POST" })
     const category = (data.category ?? "").trim();
     let rows = cache.rows;
     if (category) rows = rows.filter((r) => r.category === category);
-    if (q) rows = rows.filter((r) => `${r.ticker} ${r.title} ${r.yes} ${r.event}`.toLowerCase().includes(q));
-    else rows = rows.slice().sort((a, b) => b.vol - a.vol);
+    rows=selectMarkets(rows,{q,lane:data.lane??"all",sort:data.sort??"activity"});
     const offset = data.offset ?? 0;
     const limit = data.limit ?? 40;
     const cats = new Map<string, number>();
@@ -134,6 +143,8 @@ export const kalshiPage = createServerFn({ method: "POST" })
       total: rows.length,
       loaded: cache.rows.length,
       done: cache.done,
+      observedAt:cache.at?new Date(cache.at).toISOString():null,
+      source:"Kalshi public events index",
       categories: [...cats.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n })),
     };
   });
