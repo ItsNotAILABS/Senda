@@ -29,6 +29,18 @@ export const inspectSolanaToken=createServerFn({method:"POST"})
   const root=new URL(rpc);
   if(root.protocol!=="https:"||root.username||root.password||root.hash)
    return empty(data.mint,"Unsafe RPC origin configured.");
+  // Quotes use mainnet token identity. Devnet/testnet RPCs cannot satisfy
+  // a mainnet mint-risk check, even if an account happens to share the address.
+  try{
+   const network=await fetch(rpc,{
+    method:"POST",headers:{"content-type":"application/json"},
+    body:JSON.stringify({jsonrpc:"2.0",id:1,method:"getGenesisHash"}),
+    signal:AbortSignal.timeout(4500),redirect:"error"
+   });
+   const result=(await network.json()) as {result?:string};
+   if(!network.ok||result.result!=="5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d")
+    return empty(data.mint,"RPC is not verified as Solana mainnet.");
+  }catch{return empty(data.mint,"Could not verify Solana mainnet RPC.");}
   let rpcJson:unknown;
   try{
    const r=await fetch(rpc,{
