@@ -48,7 +48,8 @@
     -webkit-font-smoothing: antialiased;
     background: var(--color-bg);
     color: var(--color-fg);
-    overflow-x: hidden;
+    overflow-x: clip;
+    scrollbar-gutter: stable;
   }
   body {
     min-height: 100dvh;
@@ -83,6 +84,11 @@
   }
 }
 
+@keyframes senda-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.senda-in { animation: senda-in 0.18s ease-out both; }
 @keyframes senda-rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
@@ -101,6 +107,11 @@
 }
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
+@keyframes coin-tape {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.coin-tape { animation: coin-tape 70s linear infinite; }
 
 /* Content type only. The side column is outside this box, so it stays as it is.
    Phone and laptop use the same steps. A wider window does not jump back to poster size. */

@@ -1,9 +1,21 @@
-import { useEffect, useState } from "react";
-import { MarketMatrix } from "@/components/market-matrix";
+import { useEffect, useMemo, useState } from "react";
 import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
 import { cn } from "@/lib/utils";
 
-const TFS: PrintTf[] = ["15m", "1H", "4H", "1D"];
+const TFS: PrintTf[] = ["1m", "3m", "5m", "15m", "30m", "1H", "2H", "4H", "8H", "12H"];
+const BOOKS = [
+  ["desk", "Desk"],
+  ["price", "Price"],
+  ["mark", "Mark"],
+] as const;
+type Book = (typeof BOOKS)[number][0];
+const SPANS: { id: string; tf: PrintTf; ms: number }[] = [
+  { id: "1D", tf: "15m", ms: 86_400_000 },
+  { id: "1W", tf: "1H", ms: 7 * 86_400_000 },
+  { id: "1M", tf: "4H", ms: 30 * 86_400_000 },
+  { id: "YTD", tf: "1D", ms: 0 },
+  { id: "All", tf: "1D", ms: 0 },
+];
 const KINDS = ["candles", "bars", "hollow", "heikin", "line", "area", "baseline", "columns"] as const;
 type Kind = (typeof KINDS)[number];
 const STUDIES = [
@@ -136,6 +148,8 @@ export function LiveChart({
   page?: boolean;
 }) {
   const [tf, setTf] = useState<PrintTf>("1H");
+  const [book, setBook] = useState<Book>("desk");
+  const [span, setSpan] = useState("1D");
   const [kind, setKind] = useState<Kind>("candles");
   const [on, setOn] = useState<Set<Study>>(() => new Set(["sma", "volume"]));
   const [bars, setBars] = useState<PrintBar[]>([]);
@@ -158,8 +172,10 @@ export function LiveChart({
       return;
     }
     let alive = true;
+    const frame = book === "price" ? (SPANS.find((row) => row.id === span)?.tf ?? "15m") : tf;
+    const source = book === "mark" ? "mark" : "pool";
     const pull = () => {
-      getPrint({ data: { mint, tf } })
+      getPrint({ data: { mint, tf: frame, source } })
         .then((out) => {
           if (!alive) return;
           setBars(out.bars);
@@ -173,10 +189,38 @@ export function LiveChart({
       alive = false;
       window.clearInterval(id);
     };
-  }, [mint, tf]);
+  }, [mint, tf, book, span]);
 
-  // Never fabricate candles or rewrite a historical candle using a different live-price feed.
-  const shown = bars;
+  const shown = useMemo(() => {
+    if (bars.length >= 2) {
+      let next = bars;
+      if (book === "price") {
+        const picked = SPANS.find((row) => row.id === span);
+        const start = span === "YTD" ? new Date(new Date().getFullYear(), 0, 1).getTime() : picked && picked.ms > 0 ? Date.now() - picked.ms : 0;
+        const cut = start > 0 ? bars.filter((b) => b.t >= start) : bars;
+        if (cut.length >= 2) next = cut;
+      }
+      if (!(live && live > 0)) return next;
+      const painted = next.slice();
+      const bar = { ...painted[painted.length - 1] };
+      bar.c = live;
+      bar.h = Math.max(bar.h, live);
+      bar.l = Math.min(bar.l, live);
+      painted[painted.length - 1] = bar;
+      return painted;
+    }
+    if (!(live && live > 0)) return bars;
+    const now = Date.now();
+    return Array.from({ length: 32 }, (_, i) => ({
+      t: now - (31 - i) * 3_600_000,
+      o: live,
+      h: live,
+      l: live,
+      c: live,
+      v: 0,
+    }));
+  }, [bars, live, book, span]);
+
   const px = closes(shown);
   const sma20 = sma(px, 20);
   const ema20 = ema(px, 20);
@@ -191,30 +235,53 @@ export function LiveChart({
     on.has("volume") && !shown.some((b) => b.v > 0) ? "Volume not on this feed" : "",
   ].filter(Boolean);
 
+  const drawKind: Kind = book === "desk" ? kind : "area";
   const controls = (
     <>
-      <div className="mb-1 flex gap-1 overflow-x-auto">
-        {TFS.map((id) => (
-          <button key={id} type="button" onClick={() => setTf(id)} className={cn("min-h-7 shrink-0 rounded-md px-2 font-mono text-[11px]", tf === id ? "bg-white/10 text-white" : "text-white/40")}>
-            {id}
-          </button>
-        ))}
-        {(compact ? (["candles", "line", "area", "heikin"] as const) : KINDS).map((id) => (
-          <button key={id} type="button" onClick={() => setKind(id)} className={cn("min-h-7 shrink-0 rounded-md px-2 text-[11px] capitalize", kind === id ? "bg-white/10 text-white" : "text-white/40")}>
-            {id}
-          </button>
-        ))}
-        <button type="button" onClick={() => setScreen(true)} className="min-h-7 shrink-0 rounded-md bg-[#d7e36a] px-2 text-[11px] font-semibold text-black">
-          Full chart
+      <label className="mb-2 flex items-center gap-2">
+        <span className="shrink-0 text-[12px] text-white/45">Chart</span>
+        <select
+          value={book}
+          onChange={(e) => setBook(e.target.value as Book)}
+          className="h-11 min-w-0 flex-1 rounded-lg border border-white/10 bg-black px-2 text-[14px] text-white"
+        >
+          <option value="desk">Senda candles — we draw the pool</option>
+          <option value="price">Senda line — the same pool</option>
+          <option value="mark">DefiLlama mark — a second price</option>
+        </select>
+        <button type="button" onClick={() => setScreen(true)} className="h-11 shrink-0 rounded-lg bg-[#d7e36a] px-3 text-[13px] font-semibold text-black">
+          Big
         </button>
-      </div>
-      <div className="mb-1 flex gap-1 overflow-x-auto">
-        {STUDIES.map(([id, label]) => (
-          <button key={id} type="button" onClick={() => toggle(id)} className={cn("min-h-7 shrink-0 rounded-md px-2 text-[11px]", on.has(id) ? "bg-white/10 text-white" : "text-white/35")}>
-            {label}
-          </button>
-        ))}
-      </div>
+      </label>
+      {book === "desk" ? (
+        <>
+          <div className="mb-2 grid grid-cols-2 gap-2">
+            <select value={tf} onChange={(e) => setTf(e.target.value as PrintTf)} className="h-11 rounded-lg border border-white/10 bg-black px-2 text-[14px] text-white">
+              {TFS.map((id) => (
+                <option key={id} value={id}>{id}</option>
+              ))}
+            </select>
+            <select value={kind} onChange={(e) => setKind(e.target.value as Kind)} className="h-11 rounded-lg border border-white/10 bg-black px-2 text-[14px] capitalize text-white">
+              {(compact ? (["candles", "line", "area", "heikin"] as const) : KINDS).map((id) => (
+                <option key={id} value={id}>{id}</option>
+              ))}
+            </select>
+          </div>
+          <div className="mb-1 flex gap-1 overflow-x-auto">
+            {STUDIES.map(([id, label]) => (
+              <button key={id} type="button" onClick={() => toggle(id)} className={cn("min-h-7 shrink-0 rounded-md px-2 text-[11px]", on.has(id) ? "bg-white/10 text-white" : "text-white/35")}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <select value={span} onChange={(e) => setSpan(e.target.value)} className="mb-2 h-11 w-full rounded-lg border border-white/10 bg-black px-2 text-[14px] text-white">
+          {SPANS.map((row) => (
+            <option key={row.id} value={row.id}>{row.id}</option>
+          ))}
+        </select>
+      )}
     </>
   );
 
@@ -224,41 +291,55 @@ export function LiveChart({
       bars={shown}
       note={note}
       tf={tf}
-      kind={kind}
+      kind={drawKind}
       short={compact && !screen}
       tall={screen || page}
-      sma={on.has("sma") ? sma20 : null}
-      ema={on.has("ema") ? ema20 : null}
-      upper={on.has("bb") ? bb.upper : null}
-      lower={on.has("bb") ? bb.lower : null}
-      volume={on.has("volume")}
-      rsi={on.has("rsi") ? rsi14 : null}
-      macd={on.has("macd") ? macd : null}
+      sma={book === "desk" && on.has("sma") ? sma20 : null}
+      ema={book === "desk" && on.has("ema") ? ema20 : null}
+      upper={book === "desk" && on.has("bb") ? bb.upper : null}
+      lower={book === "desk" && on.has("bb") ? bb.lower : null}
+      volume={book === "desk" && on.has("volume")}
+      rsi={book === "desk" && on.has("rsi") ? rsi14 : null}
+      macd={book === "desk" && on.has("macd") ? macd : null}
     />
   );
 
   return (
     <div>
       {controls}
+      <p className="mb-1 px-1 text-[11px] text-white/40">
+        {book === "desk" ? "Desk is this pool, with the studies." : book === "price" ? "Price is the same pool, as a line. Phantom draws its own chart inside its app. This is not that chart." : "Mark is DefiLlama. It is a second price, not the pool and not Phantom."}
+      </p>
       {board}
-      <p className="px-1 py-1 font-mono text-[10px] text-white/35">{note} {live && live > 0 ? ` · Live quote ${money(live)} (separate feed)` : ""}</p>
-      {!compact ? <MarketMatrix bars={bars} note={note} symbol={symbol} /> : null}
       {read.length ? <p className="px-1 pt-1 font-mono text-[10px] text-white/45">{read.join("  ·  ")}</p> : null}
       {screen ? (
-        <div className="fixed inset-0 z-[80] flex flex-col overflow-auto bg-[#07070f] px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-lg font-semibold">{symbol}</p>
-              {read.length ? <p className="truncate font-mono text-[11px] text-white/45">{read.join("  ·  ")}</p> : null}
-            </div>
-            <button type="button" onClick={() => setScreen(false)} className="min-h-10 shrink-0 rounded-full bg-white px-4 text-sm font-semibold text-black">
-              Close
+        <div className="fixed inset-0 z-[80] flex flex-col bg-black">
+          <div className="flex items-center gap-1 overflow-x-auto px-2 pt-[max(0.35rem,env(safe-area-inset-top))]">
+            {TFS.map((id) => (
+              <button key={id} type="button" onClick={() => setTf(id)} className={cn("h-9 shrink-0 rounded-full px-2.5 text-[13px]", tf === id ? "bg-white/15 font-semibold text-white" : "text-white/45")}>
+                {id}
+              </button>
+            ))}
+            <button type="button" onClick={() => setScreen(false)} aria-label="Close chart" className="ml-auto grid size-9 shrink-0 place-items-center text-lg text-white/70">
+              ×
             </button>
           </div>
-          <div className="py-2">
-            {controls}
-            {board}
-            <MarketMatrix bars={bars} note={note} symbol={symbol} />
+          <div className="min-h-0 flex-1 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+            <Board
+              symbol={symbol}
+              bars={shown}
+              note={note}
+              tf={tf}
+              kind="candles"
+              tall
+              sma={null}
+              ema={null}
+              upper={null}
+              lower={null}
+              volume
+              rsi={null}
+              macd={null}
+            />
           </div>
         </div>
       ) : null}
@@ -311,10 +392,10 @@ function Board({
   }
   const drawn = kind === "heikin" ? heikin(bars) : bars;
   const w = 360;
-  const volH = volume && drawn.some((b) => b.v > 0) ? 36 : 0;
+  const volH = volume && drawn.some((b) => b.v > 0) ? (tall ? 110 : 36) : 0;
   const rsiH = rsiLine ? 52 : 0;
   const macdH = macd ? 56 : 0;
-  const priceH = short ? 120 : tall ? 280 : 188;
+  const priceH = short ? 120 : tall ? 460 : 188;
   const h = priceH + volH + rsiH + macdH + 8;
   const pad = 8;
   const extras = [smaLine, emaLine, upper, lower].flatMap((row) => (row ? row.filter((v): v is number => v != null) : []));
@@ -332,7 +413,10 @@ function Board({
   const maxVol = Math.max(1, ...drawn.map((b) => b.v));
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className={tall ? "h-[70vh] w-full" : "h-auto w-full"} role="img" aria-label={`${symbol} ${kind} ${tf}`}>
+    <svg viewBox={`0 0 ${w} ${h}`} className={tall ? "h-full w-full" : "h-auto w-full"} role="img" aria-label={`${symbol} ${kind} ${tf}`}>
+      {[0.25, 0.5, 0.75].map((p) => (
+        <line key={p} x1={pad} x2={w - 54} y1={pad + p * (priceH - pad * 2)} y2={pad + p * (priceH - pad * 2)} stroke="#ffffff" strokeOpacity="0.08" />
+      ))}
       {kind === "area" ? <polygon points={`${x(0)},${y(lo)} ${line} ${x(drawn.length - 1)},${y(lo)}`} fill={color} opacity="0.16" /> : null}
       {kind === "baseline"
         ? drawn.map((b, i) => {
@@ -375,7 +459,9 @@ function Board({
       {emaLine ? <polyline fill="none" stroke="#e6c15a" strokeWidth="1.2" points={pathOf(emaLine, x, y)} /> : null}
       {upper ? <polyline fill="none" stroke="#c084fc" strokeWidth="1" strokeDasharray="3 2" points={pathOf(upper, x, y)} /> : null}
       {lower ? <polyline fill="none" stroke="#c084fc" strokeWidth="1" strokeDasharray="3 2" points={pathOf(lower, x, y)} /> : null}
-      <text x={w - 4} y={y(last.c)} fill={color} fontSize="10" textAnchor="end" fontFamily="ui-monospace, monospace">
+      <line x1={pad} x2={w - 58} y1={y(last.c)} y2={y(last.c)} stroke="#ffffff" strokeDasharray="2 3" strokeOpacity="0.85" />
+      <rect x={w - 54} y={y(last.c) - 9} width={50} height={18} rx={4} fill="#ffffff" />
+      <text x={w - 29} y={y(last.c) + 4} fill="#111111" fontSize="10" textAnchor="middle" fontFamily="ui-monospace, monospace">
         {money(last.c)}
       </text>
       {volH

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LiveChart } from "@/components/price-chart";
-import { jupTape, type TapeRow } from "@/lib/world-book";
+import { jupTape, searchTape, type TapeRow } from "@/lib/world-book";
 import { quoteRoute, signRoute } from "@/lib/jup-sign";
 import { useHouse } from "@/lib/use-house";
 import { connectPhantom, mintDecimals } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -47,6 +48,7 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
   const wallet = useWallet();
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [rows, setRows] = useState<TapeRow[]>([]);
+  const [hits, setHits] = useState<TapeRow[]>([]);
   const [pick, setPick] = useState<string>("");
   const [usd, setUsd] = useState(25);
   const [out, setOut] = useState<string>("");
@@ -56,15 +58,16 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
   const [q, setQ] = useState("");
   const book = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return bookOf(rows, house).filter((r) => {
-      if (query && !`${r.symbol} ${r.name}`.toLowerCase().includes(query)) return false;
+    const base = query.length < 2 ? rows : [...hits, ...rows.filter((r) => !hits.some((h) => h.id === r.id))];
+    return bookOf(base, house).filter((r) => {
+      if (query && !`${r.symbol} ${r.name} ${r.id}`.toLowerCase().includes(query)) return false;
       if (lens === "pre") return r.kind === "pre";
       if (lens === "x") return r.kind === "x";
       if (lens === "spot") return r.kind === "coin";
       if (lens === "movers") return Math.abs(pct(r.change) ?? 0) >= 3;
       return true;
     });
-  }, [rows, house, q, lens]);
+  }, [rows, hits, house, q, lens]);
   const coin = book.find((r) => r.id === pick) ?? book[0] ?? null;
 
   useEffect(() => {
@@ -80,6 +83,24 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    const query = q.trim();
+    if (query.length < 2) {
+      setHits([]);
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      searchTape({ data: query })
+        .then((list) => live && setHits(list))
+        .catch(() => live && setHits([]));
+    }, 280);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [q]);
 
   useEffect(() => {
     if (!coin || !(usd > 0)) return;
@@ -183,11 +204,9 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
           const on = coin?.id === r.id;
           return (
             <button key={r.id} type="button" onClick={() => setPick(r.id)} className="text-center">
-              {r.icon ? (
-                <img src={r.icon} alt="" className={cn("mx-auto size-14 rounded-full object-cover", on && "ring-2 ring-[#d7e36a]")} />
-              ) : (
-                <span className={cn("mx-auto grid size-14 place-items-center rounded-full bg-white text-xs font-semibold text-black", on && "bg-[#d7e36a]")}>{r.symbol.slice(0, 4)}</span>
-              )}
+              <span className={cn("mx-auto block w-fit rounded-full", on && "ring-2 ring-[#d7e36a]")}>
+                <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={56} />
+              </span>
               <span className="mt-1 block text-xs font-semibold">{r.symbol.slice(0, 5)}</span>
               <span className={cn("block text-[11px]", n != null && n < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>{n == null ? "" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`}</span>
             </button>
@@ -201,7 +220,7 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
           return (
             <li key={r.id} className="rounded-[22px] bg-[#101114] p-3">
               <button type="button" onClick={() => setPick(r.id)} className="flex w-full items-center gap-3 text-left">
-                {r.icon ? <img src={r.icon} alt="" className="size-11 rounded-full object-cover" /> : <span className="grid size-11 place-items-center rounded-full bg-white text-[10px] font-semibold text-black">{r.symbol.slice(0, 2)}</span>}
+                <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={44} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{r.symbol}</span>
                   <span className="block truncate text-xs text-white/45">{r.kind === "pre" ? "PreStock" : r.kind === "x" ? "xStock" : "Spot"} · {r.name}</span>

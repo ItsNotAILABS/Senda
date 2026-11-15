@@ -2,7 +2,6 @@
 
 import { EVM_CHAINS, quoteIsSane, type EvmMarket, type LifiQuote } from "@/lib/trade-book.mjs";
 import { spendCap } from "@/lib/spend-cap";
-import { stageMove, sealMove } from "@/lib/moves";
 
 type Eth = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -70,7 +69,6 @@ async function send(tx: { from: string; to: string; data: string; value?: string
   if (tx.gas) body.gas = tx.gas;
   const hash = (await ethereum().request({ method: "eth_sendTransaction", params: [body] })) as string;
   if (!hash) throw new Error("The wallet did not return a transaction.");
-  sealMove(hash);
   return hash;
 }
 
@@ -95,17 +93,31 @@ async function approve(token: string, owner: string, spender: string, amount: bi
 }
 
 export async function signLifi(market: EvmMarket, quote: LifiQuote, spend: { token: string; amount: bigint; usd: number }): Promise<string> {
+  return signLifiChain(market.chainId, quote, spend);
+}
+
+/** The chain on the quote is the one the wallet must be on. Senda never holds the key. */
+export async function signLifiChain(
+  chainId: number,
+  quote: LifiQuote,
+  spend: { token: string; amount: bigint; usd: number },
+  expectedFrom?: string,
+): Promise<string> {
   if (!(spend.usd > 0) || spend.amount <= 0n) throw new Error("Enter an amount.");
   if (spend.usd > spendCap()) throw new Error(`That is about $${spend.usd.toFixed(0)}. Your send cap is $${spendCap()}. Raise it on Your money.`);
   if (!quote.ready || !quote.to || !quote.data) throw new Error("Quote again from this wallet. LI.FI has not built the transaction.");
   if (quote.fromAmountUSD && quote.toAmountUSD && !quoteIsSane(quote.fromAmountUSD, quote.toAmountUSD)) {
     throw new Error("The quote is more than 5% under the dollars in. The wallet was not asked to sign.");
   }
-  await onChain(market.chainId);
+  const on = quote.chainId || chainId;
+  if (!on) throw new Error("LI.FI did not name the chain. Nothing was signed.");
+  await onChain(on);
   const owner = await account();
+  if (expectedFrom && owner.toLowerCase() !== expectedFrom.toLowerCase()) {
+    throw new Error("Quote again. This wallet is not the address on the quote.");
+  }
   const token = quote.fromToken || spend.token;
   if (quote.approvalAddress) await approve(token, owner, quote.approvalAddress, spend.amount);
-  stageMove({ usd: spend.usd, kind: "swap", title: `Swap $${spend.usd.toFixed(2)}` });
   return send({
     from: owner,
     to: quote.to,

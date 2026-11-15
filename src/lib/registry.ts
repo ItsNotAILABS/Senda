@@ -9,9 +9,10 @@ import { PAIR_MARKETS } from "@/lib/market-catalog";
 import { fetchHouse } from "@/lib/sol-house";
 import { loadHlMarkets } from "@/lib/hl-book";
 import { loadKaminoVaults, VAULT_RECEIPTS } from "@/lib/vault-book";
+import { loadIssued } from "@/lib/issuer-book";
 import { loadTape } from "@/lib/world-book";
 
-export type RegFamily = "coin" | "xstock" | "name" | "stake" | "vault" | "perp" | "ostium" | "hl" | "network" | "desk";
+export type RegFamily = "coin" | "xstock" | "security" | "name" | "stake" | "vault" | "perp" | "ostium" | "hl" | "network" | "desk";
 
 export type RegRow = {
   id: string;
@@ -34,7 +35,7 @@ export type RegRow = {
   maxLev?: number;
 };
 
-const RANK: Record<RegFamily, number> = { name: 0, xstock: 1, stake: 2, vault: 3, perp: 4, coin: 5, ostium: 6, hl: 7, network: 8, desk: 9 };
+const RANK: Record<RegFamily, number> = { name: 0, security: 1, xstock: 2, stake: 3, vault: 4, perp: 5, coin: 6, ostium: 7, hl: 8, network: 9, desk: 10 };
 const GRAPH = "https://api.subgraph.ormilabs.com/api/public/67a599d5-c8d2-4cc4-9c4d-2975a97bc5d8/subgraphs/ost-prod/live/gn";
 const TTL = 3 * 60 * 1000;
 
@@ -49,6 +50,8 @@ function add(map: Map<string, RegRow>, row: RegRow) {
     if (prev) {
       if (next.price == null) next.price = prev.price;
       if (next.change == null) next.change = prev.change;
+      if (next.liquidity == null) next.liquidity = prev.liquidity;
+      if (next.holders == null) next.holders = prev.holders;
       next.perp = next.perp || prev.perp;
     }
     map.set(id, next);
@@ -56,6 +59,8 @@ function add(map: Map<string, RegRow>, row: RegRow) {
   }
   if (prev.price == null && next.price != null) prev.price = next.price;
   if (prev.change == null && next.change != null) prev.change = next.change;
+  if (prev.liquidity == null && next.liquidity != null) prev.liquidity = next.liquidity;
+  if (prev.holders == null && next.holders != null) prev.holders = next.holders;
   prev.perp = prev.perp || next.perp;
 }
 
@@ -63,7 +68,7 @@ async function ostiumPairs(): Promise<RegRow[]> {
   const res = await fetch(GRAPH, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda/1.0" },
-    body: JSON.stringify({ query: "{ pairs(first: 200) { id from to maxLeverage } }" }),
+    body: JSON.stringify({ query: "{ pairs(first: 1000) { id from to maxLeverage } }" }),
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return [];
@@ -94,13 +99,14 @@ async function ostiumPairs(): Promise<RegRow[]> {
 }
 
 async function build(): Promise<RegRow[]> {
-  const [tape, house, shares, vaults, ostium, hl] = await Promise.all([
+  const [tape, house, shares, vaults, ostium, hl, issued] = await Promise.all([
     loadTape().catch(() => []),
     fetchHouse().catch(() => []),
     listSolanaXStocks().catch(() => []),
     loadKaminoVaults().catch(() => []),
     ostiumPairs().catch(() => []),
     loadHlMarkets().catch(() => []),
+    loadIssued().catch(() => []),
   ]);
   const map = new Map<string, RegRow>();
   const shareMints = new Set(shares.map((row) => row.mint));
@@ -312,6 +318,29 @@ async function build(): Promise<RegRow[]> {
       perp: false,
     });
   }
+  for (const row of issued) {
+    add(map, {
+      id: row.mint,
+      symbol: row.symbol,
+      name: row.name,
+      family: row.family,
+      venue: row.venue,
+      chain: "Solana",
+      mint: row.mint,
+      price: row.price,
+      change: row.change,
+      sign: "jupiter",
+      note: row.family === "security"
+        ? `${row.venue}. ${row.liquid ? "Liquid pool." : "Thin pool."} Jupiter quotes it. The wallet signs.`
+        : row.liquid
+          ? "Jupiter listed it. The pool can hold a small size. The wallet signs."
+          : "Jupiter listed it. The pool is under $25,000. The wallet signs.",
+      liquidity: row.liquidity > 0 ? row.liquidity : null,
+      holders: row.holders > 0 ? row.holders : null,
+      fdv: null,
+      perp: false,
+    });
+  }
   return [...map.values()].sort((a, b) => a.family.localeCompare(b.family) || a.symbol.localeCompare(b.symbol));
 }
 
@@ -341,7 +370,7 @@ export const registryPage = createServerFn({ method: "POST" })
     z
       .object({
         q: z.string().max(80).optional(),
-        family: z.enum(["coin", "xstock", "name", "stake", "vault", "perp", "ostium", "hl", "network", "desk", "all"]).optional(),
+        family: z.enum(["coin", "xstock", "security", "name", "stake", "vault", "perp", "ostium", "hl", "network", "desk", "all"]).optional(),
         offset: z.number().int().min(0).max(20_000).optional(),
         limit: z.number().int().min(1).max(100).optional(),
       })
@@ -358,7 +387,8 @@ export const registryPage = createServerFn({ method: "POST" })
     });
     const offset = data.offset ?? 0;
     const limit = data.limit ?? 60;
-    return { total: all.length, matched: matched.length, families: counts(all), rows: matched.slice(offset, offset + limit) };
+    const liquid = all.filter((row) => (row.liquidity ?? 0) >= 25_000).length;
+    return { total: all.length, matched: matched.length, families: counts(all), liquid, rows: matched.slice(offset, offset + limit) };
   });
 
 export const registryOne = createServerFn({ method: "POST" })

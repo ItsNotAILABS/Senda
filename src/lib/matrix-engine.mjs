@@ -70,3 +70,7 @@ export function evaluateMatrix(input) {
     volumeScore:active?Math.min(100,Math.round(ratio*40)):null,market,confidence,cells,
     reason:active?"Research-only matrix; execution still requires live Jupiter quote and explicit wallet approval.":insufficient };
 }
+
+export function matrixClears(matrix) {
+  return matrix?.volumeReliable === true && matrix?.market === "bullish-watch" && (matrix?.atrPct == null || matrix.atrPct <= 8);
+}

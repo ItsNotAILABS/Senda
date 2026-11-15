@@ -3,7 +3,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-const HOST = "https://api.elections.kalshi.com/trade-api/v2/events";
+const EVENTS = "https://api.elections.kalshi.com/trade-api/v2/events";
+const MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets";
 
 export type KalshiRow = {
   ticker: string;
@@ -14,14 +15,40 @@ export type KalshiRow = {
   bid: number | null;
   ask: number | null;
   last: number | null;
+  noAsk: number | null;
   vol: number;
   close: string;
 };
 
-type Cache = { at: number; rows: KalshiRow[]; cursor: string; done: boolean };
+type EventMeta = { title: string; category: string };
+type Cache = {
+  at: number;
+  rows: KalshiRow[];
+  seen: Set<string>;
+  meta: Map<string, EventMeta>;
+  marketCursor: string;
+  eventCursor: string;
+  marketsDone: boolean;
+  eventsDone: boolean;
+  done: boolean;
+};
 
-let cache: Cache = { at: 0, rows: [], cursor: "", done: false };
+let cache: Cache = empty();
 let walking: Promise<void> | null = null;
+
+function empty(): Cache {
+  return {
+    at: 0,
+    rows: [],
+    seen: new Set(),
+    meta: new Map(),
+    marketCursor: "",
+    eventCursor: "",
+    marketsDone: false,
+    eventsDone: false,
+    done: false,
+  };
+}
 
 function num(v: unknown): number | null {
   const n = typeof v === "number" ? v : Number(v);
@@ -29,66 +56,109 @@ function num(v: unknown): number | null {
   return n;
 }
 
-function flatten(events: Array<Record<string, unknown>>): KalshiRow[] {
-  const out: KalshiRow[] = [];
-  for (const e of events) {
-    const title = String(e.title ?? "").trim();
-    const event = String(e.event_ticker ?? "");
-    const category = String(e.category ?? "Other");
-    const markets = Array.isArray(e.markets) ? e.markets : [];
-    for (const raw of markets) {
-      if (!raw || typeof raw !== "object") continue;
-      const m = raw as Record<string, unknown>;
-      const ticker = String(m.ticker ?? "");
-      if (!ticker) continue;
-      const yes = String(m.yes_sub_title ?? "").trim();
-      const vol = Number(m.volume_24h_fp ?? m.volume_fp ?? 0) || 0;
-      out.push({
-        ticker,
-        event,
-        title: title || yes || ticker,
-        yes: yes && yes !== title ? yes : "",
-        category,
-        bid: num(m.yes_bid_dollars),
-        ask: num(m.yes_ask_dollars),
-        last: num(m.last_price_dollars),
-        vol,
-        close: String(m.close_time ?? "").slice(0, 10),
-      });
-    }
-  }
-  return out;
+async function getJson(url: string): Promise<Record<string, unknown>> {
+  const res = await fetch(url, { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
+  if (!res.ok) throw new Error(`Kalshi ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
 }
 
-async function pullPage(cursor: string): Promise<{ rows: KalshiRow[]; cursor: string }> {
-  const u = new URL(HOST);
+async function pullEvents(cursor: string): Promise<{ cursor: string }> {
+  const u = new URL(EVENTS);
   u.searchParams.set("limit", "200");
   u.searchParams.set("status", "open");
-  u.searchParams.set("with_nested_markets", "true");
+  u.searchParams.set("with_nested_markets", "false");
   if (cursor) u.searchParams.set("cursor", cursor);
-  const res = await fetch(u, { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
-  if (!res.ok) throw new Error(`Kalshi ${res.status}`);
-  const j = (await res.json()) as { events?: Array<Record<string, unknown>>; cursor?: string };
-  return { rows: flatten(j.events ?? []), cursor: String(j.cursor ?? "") };
+  const j = await getJson(u.toString());
+  const events = Array.isArray(j.events) ? j.events : [];
+  for (const raw of events) {
+    if (!raw || typeof raw !== "object") continue;
+    const e = raw as Record<string, unknown>;
+    const ticker = String(e.event_ticker ?? "");
+    if (!ticker) continue;
+    cache.meta.set(ticker, {
+      title: String(e.title ?? "").trim(),
+      category: String(e.category ?? "Markets"),
+    });
+  }
+  return { cursor: String(j.cursor ?? "") };
+}
+
+function fromMarket(raw: Record<string, unknown>): KalshiRow | null {
+  const ticker = String(raw.ticker ?? "");
+  if (!ticker || raw.mve_collection_ticker) return null;
+  const status = String(raw.status ?? "active");
+  if (status !== "active" && status !== "open") return null;
+  const event = String(raw.event_ticker ?? ticker);
+  const info = cache.meta.get(event);
+  const contract = String(raw.yes_sub_title ?? "").trim();
+  const marketTitle = String(raw.title ?? "").trim();
+  const eventTitle = info?.title || "";
+  const title = eventTitle || marketTitle || contract || ticker;
+  const yes = contract && contract !== title ? contract : marketTitle && marketTitle !== title ? marketTitle : "";
+  const vol = Number(raw.volume_24h_fp ?? raw.volume_fp ?? 0) || 0;
+  return {
+    ticker,
+    event,
+    title,
+    yes,
+    category: info?.category || "Markets",
+    bid: num(raw.yes_bid_dollars),
+    ask: num(raw.yes_ask_dollars),
+    last: num(raw.last_price_dollars),
+    noAsk: num(raw.no_ask_dollars),
+    vol,
+    close: String(raw.close_time ?? "").slice(0, 10),
+  };
+}
+
+async function pullMarkets(cursor: string): Promise<{ rows: KalshiRow[]; cursor: string }> {
+  const u = new URL(MARKETS);
+  u.searchParams.set("limit", "200");
+  u.searchParams.set("status", "open");
+  u.searchParams.set("mve_filter", "exclude");
+  if (cursor) u.searchParams.set("cursor", cursor);
+  const j = await getJson(u.toString());
+  const markets = Array.isArray(j.markets) ? j.markets : [];
+  const rows: KalshiRow[] = [];
+  for (const raw of markets) {
+    if (!raw || typeof raw !== "object") continue;
+    const row = fromMarket(raw as Record<string, unknown>);
+    if (!row || cache.seen.has(row.ticker)) continue;
+    cache.seen.add(row.ticker);
+    rows.push(row);
+  }
+  return { rows, cursor: String(j.cursor ?? "") };
 }
 
 function walk() {
   if (walking) return walking;
   walking = (async () => {
-    let cursor = cache.cursor;
-    const rows = cache.rows.slice();
-    for (let i = 0; i < 25; i += 1) {
+    for (let i = 0; i < 8 && !cache.eventsDone; i += 1) {
       try {
-        const page = await pullPage(cursor);
-        rows.push(...page.rows);
-        cursor = page.cursor;
-        cache = { at: Date.now(), rows, cursor, done: !cursor };
-        if (!cursor) break;
+        const page = await pullEvents(cache.eventCursor);
+        cache.eventCursor = page.cursor;
+        cache.eventsDone = !page.cursor;
+        cache.at = Date.now();
       } catch {
-        cache = { at: Date.now(), rows, cursor, done: false };
         break;
       }
     }
+    const rows = cache.rows;
+    for (let i = 0; i < 6 && !cache.marketsDone; i += 1) {
+      try {
+        const page = await pullMarkets(cache.marketCursor);
+        rows.push(...page.rows);
+        cache.marketCursor = page.cursor;
+        cache.marketsDone = !page.cursor;
+        cache.rows = rows;
+        cache.at = Date.now();
+        cache.done = cache.marketsDone && cache.eventsDone;
+      } catch {
+        cache.at = Date.now();
+        break;
+      }
+    }
+    cache.done = cache.marketsDone && cache.eventsDone;
   })().finally(() => {
     walking = null;
   });
@@ -96,11 +166,23 @@ function walk() {
 }
 
 function ensure() {
-  if ((cache.rows.length === 0 || !cache.done) && !walking) void walk();
+  if ((!cache.done || cache.rows.length === 0) && !walking) void walk();
   else if (cache.done && Date.now() - cache.at > 5 * 60_000 && !walking) {
-    cache = { at: Date.now(), rows: [], cursor: "", done: false };
+    cache = empty();
     void walk();
   }
+}
+
+function decorate(row: KalshiRow): KalshiRow {
+  const info = cache.meta.get(row.event);
+  if (!info) return row;
+  const contract = row.yes || (row.title !== info.title ? row.title : "");
+  return {
+    ...row,
+    title: info.title || row.title,
+    yes: contract && contract !== info.title ? contract : "",
+    category: info.category || row.category,
+  };
 }
 
 export const kalshiPage = createServerFn({ method: "POST" })
@@ -110,25 +192,28 @@ export const kalshiPage = createServerFn({ method: "POST" })
         q: z.string().max(80).optional(),
         category: z.string().max(48).optional(),
         offset: z.number().int().min(0).max(250_000).optional(),
-        limit: z.number().int().min(1).max(60).optional(),
+        limit: z.number().int().min(1).max(240).optional(),
       })
       .parse(input ?? {}),
   )
   .handler(async ({ data }) => {
     ensure();
-    if (cache.rows.length < 40) {
+    if (cache.rows.length < 80) {
       await Promise.race([walk(), new Promise((resolve) => setTimeout(resolve, 8000))]);
     }
     const q = (data.q ?? "").trim().toLowerCase();
     const category = (data.category ?? "").trim();
-    let rows = cache.rows;
+    let rows = cache.rows.map(decorate);
     if (category) rows = rows.filter((r) => r.category === category);
     if (q) rows = rows.filter((r) => `${r.ticker} ${r.title} ${r.yes} ${r.event}`.toLowerCase().includes(q));
     else rows = rows.slice().sort((a, b) => b.vol - a.vol);
     const offset = data.offset ?? 0;
-    const limit = data.limit ?? 40;
+    const limit = data.limit ?? 80;
     const cats = new Map<string, number>();
-    for (const r of cache.rows) cats.set(r.category, (cats.get(r.category) ?? 0) + 1);
+    for (const r of cache.rows) {
+      const row = decorate(r);
+      cats.set(row.category, (cats.get(row.category) ?? 0) + 1);
+    }
     return {
       rows: rows.slice(offset, offset + limit),
       total: rows.length,

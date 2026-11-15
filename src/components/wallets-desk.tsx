@@ -6,6 +6,11 @@ import { connectWallet, detectWallets, type WalletChoice, type WalletId } from "
 import { isPhoneBrowser } from "@/lib/mobile-wallet";
 import { robinhoodBuyingPowerUrl } from "@/lib/robinhood";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { AddressBook } from "@/components/address-book";
+import { Link } from "@tanstack/react-router";
+import { ReceiveBook } from "@/components/receive-book";
+import { AndroidInstall } from "@/components/android-install";
+import { EarnDesk } from "@/components/earn-desk";
 import { cn } from "@/lib/utils";
 
 const JOB: { id: WalletId; does: string }[] = [
@@ -65,6 +70,9 @@ export function WalletsDesk({ view = "all" }: { view?: "all" | "connect" | "powe
         coming={["A wallet Senda custodies"]}
       />
       <MoneyBar />
+      <ReceiveBook />
+      <AndroidInstall />
+      <Link to="/listing" className="inline-flex text-sm text-accent">Play listing</Link>
       <section className="grid gap-3 lg:grid-cols-3">
         {[
           ["1", "Open the wallet app", "On a phone, Phantom or Solflare opens. You do not install an extension."],
@@ -95,6 +103,8 @@ export function WalletsDesk({ view = "all" }: { view?: "all" | "connect" | "powe
           ))}
         </ul>
       </section>
+      <AddressBook />
+      <EarnDesk />
       <section className="grid gap-2 md:grid-cols-2">
         {choices.map((c) => {
           const job = JOB.find((j) => j.id === c.id);

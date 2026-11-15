@@ -20,6 +20,7 @@ import { getVerifiedAssets, type VerifiedAsset } from "@/lib/quote-gate";
 import { getPreRoutes, type PreRoute } from "@/lib/prestock";
 import { useHouse } from "@/lib/use-house";
 import { useNavigate } from "@tanstack/react-router";
+import { MoneyJumps } from "@/components/money-jumps";
 
 const preRoute = getRouteApi("/pre");
 const walletRoute = getRouteApi("/wallet");
@@ -39,20 +40,51 @@ export function PreView({ view }: { view: "book" | "ticket" | "cover" | "spend" 
 
 export function PlayLobby() {
   const navigate = useNavigate();
+  const openKalshi = () => {
+    void navigate({ href: "/invest?desk=kalshi" });
+  };
+  const openPoly = () => {
+    void navigate({ href: "/invest?desk=poly" });
+  };
   return (
-    <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-      {GAMES.map((g) => (
-        <button
-          key={g.id}
-          type="button"
-          onClick={() => void navigate({ href: `/social/${g.id}` })}
-          className="rounded-2xl border border-white/10 bg-[#10131c] p-5 text-left"
-        >
-          <p className="text-xl tracking-tight">{g.name}</p>
-          <p className="mt-1 font-mono text-sm text-accent">{g.pay}</p>
-          <p className="mt-2 text-sm text-muted">{g.line}</p>
-        </button>
-      ))}
+    <div className="space-y-4 px-3 py-3 lg:px-4">
+      <section>
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Predictions</p>
+        <h1 className="mt-1 text-3xl tracking-tight">Live books. Not a game.</h1>
+        <p className="mt-2 max-w-xl text-sm text-muted">
+          Kalshi and Polymarket prices are theirs. Senda does not hold the contract. Open the market there to trade it. The games below use a PreStock print and cash on this browser.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <button type="button" onClick={openKalshi} className="rounded-2xl border border-white/10 bg-[#10131c] p-4 text-left">
+            <p className="text-lg font-semibold">Kalshi</p>
+            <p className="mt-1 text-sm text-muted">Yes-prices, in cents. Search the open book.</p>
+          </button>
+          <button type="button" onClick={openPoly} className="rounded-2xl border border-white/10 bg-[#10131c] p-4 text-left">
+            <p className="text-lg font-semibold">Polymarket</p>
+            <p className="mt-1 text-sm text-muted">Their book. A click here does not place the bet.</p>
+          </button>
+        </div>
+      </section>
+      <MoneyJumps here="/social" />
+      <section>
+        <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Games</p>
+        <h2 className="mt-1 text-2xl tracking-tight">Ten games on the live print.</h2>
+        <p className="mt-1 max-w-xl text-sm text-muted">Practice cash never touches the wallet. Real stakes are the balance already on this browser.</p>
+      </section>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {GAMES.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            onClick={() => void navigate({ href: "/social/" + g.id })}
+            className="rounded-2xl border border-white/10 bg-[#10131c] p-5 text-left"
+          >
+            <p className="text-xl tracking-tight">{g.name}</p>
+            <p className="mt-1 font-mono text-sm text-accent">{g.pay}</p>
+            <p className="mt-2 text-sm text-muted">{g.line}</p>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

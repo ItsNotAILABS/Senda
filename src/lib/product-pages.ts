@@ -1,9 +1,7 @@
 import type { ProductPage } from "@/components/product-shell";
 
 export const TRADE_PAGES: ProductPage[] = [
-  { href: "/liquify", label: "Liquify Global", hint: "International liquidity and spending route research" },
-  { href: "/market-intelligence", label: "Market Intelligence", hint: "Sourced volume and liquidity research" },
-  { href: "/invest", label: "Quotes", hint: "A name, a last price, and a ticket" },
+  { href: "/invest", label: "Terminal", hint: "Chart, markets, and the trading box" },
   { href: "/invest/world", label: "FX & metals", hint: "Metals, FX, indexes" },
   { href: "/invest/world?lane=energy", label: "Commodities", hint: "Energy and softs" },
   { href: "/invest/options", label: "Options", hint: "Calls and puts on a print" },
@@ -34,8 +32,11 @@ export const PRE_PAGES: ProductPage[] = [
 ];
 
 export const PLAY_PAGES: ProductPage[] = [
-  { href: "/social/events", label: "Real event markets", hint: "Public Kalshi depth and event-based planning; official venue executes" },
-  { href: "/social", label: "Lobby", hint: "Pick a game" },
+  { href: "/social", label: "Lobby", hint: "Games on a print, and the live prediction books" },
+  { href: "/invest?desk=kalshi", label: "Predict", hint: "Kalshi's book. A linked key can place it." },
+  { href: "/invest?desk=slabs", label: "Slabs", hint: "Collector Crypt. USDC. You sign." },
+  { href: "/invest?desk=private", label: "Private", hint: "Senda signs the answer. You verify it." },
+  { href: "/invest?desk=poly", label: "Polymarket", hint: "Their book. Senda does not hold it." },
   { href: "/social/wheel", label: "Wheel", hint: "The print stops it" },
   { href: "/social/slots", label: "Slots", hint: "Three faces from the book" },
   { href: "/social/updown", label: "Up / Down", hint: "Call the next move" },
@@ -50,13 +51,14 @@ export const PLAY_PAGES: ProductPage[] = [
 
 export const SEND_PAGES: ProductPage[] = [
   { href: "/payments", label: "Send", hint: "To a person" },
-  { href: "/payments/usdc", label: "USDC", hint: "To a Solana address" },
+  { href: "/payments/usdc", label: "USDC", hint: "Cash out at an exchange, or send it" },
+  { href: "/payments/mexico", label: "Mexico", hint: "USDC to their Solana address. A peso quote, not a bank." },
   { href: "/payments/gift", label: "Gift", hint: "A link. The vault pays the fee." },
   { href: "/payments/accept", label: "Accept", hint: "Pay a solana: link" },
   { href: "/payments/request", label: "Request", hint: "Ask them for it" },
   { href: "/payments/nearby", label: "Nearby", hint: "The phone beside you" },
   { href: "/payments/exchange", label: "Exchange", hint: "One pocket to another" },
-  { href: "/payments/add", label: "Add", hint: "Cash into a pocket" },
+  { href: "/payments/add", label: "Add", hint: "Card, MoonPay, or Robinhood into the wallet" },
   { href: "/payments/space", label: "Space", hint: "A room for two wallets" },
   { href: "/payments/pockets", label: "Pockets", hint: "What each currency holds" },
   { href: "/payments/activity", label: "Activity", hint: "What already moved" },
@@ -68,7 +70,7 @@ export const SHOP_PAGES: ProductPage[] = [
   { href: "/cards/chain", label: "On chain", hint: "USDC the merchant can take" },
   { href: "/cards/number", label: "Number", hint: "Issued once, capped" },
   { href: "/cards/expenses", label: "Expenses", hint: "What the number already did" },
-  { href: "/cards/rails", label: "Rails", hint: "Who can actually clear a swipe" },
+  { href: "/cards/rails", label: "Rails", hint: "Jupiter, Phantom, Rain. You sign the top-up." },
 ];
 
 export const COVER_PAGES: ProductPage[] = [
@@ -78,7 +80,6 @@ export const COVER_PAGES: ProductPage[] = [
 ];
 
 export const WORK_PAGES: ProductPage[] = [
-  { href: "/work/interface", label: "Interface Studio", hint: "Opt-in design board; current screens remain unchanged" },
   { href: "/work", label: "Jobs", hint: "Pay someone in USDC" },
   { href: "/work/sheet", label: "Sheet", hint: "A note on every name" },
   { href: "/work/page", label: "Page", hint: "One name, written out" },
@@ -91,6 +92,8 @@ export const LISTED_PAGES: ProductPage[] = [
 
 export const PORTFOLIO_PAGES: ProductPage[] = [
   { href: "/vault", label: "Holdings", hint: "Tokens times the last print" },
+  { href: "/vault/lens", label: "Position", hint: "This wallet and this browser's fills" },
+  { href: "/vault/loans", label: "Loans", hint: "Kamino and Aave. You sign." },
   { href: "/vault/sleeve", label: "Cash sleeve", hint: "Wrap USDC, send it back" },
 ];
 
@@ -113,6 +116,8 @@ export const SOLANA_PAGES: ProductPage[] = [
 export const MAKE_PAGES: ProductPage[] = [
   { href: "/make", label: "Board", hint: "What people will pay for" },
   { href: "/make/post", label: "Post", hint: "Put a listing up" },
+  { href: "/make/contracts", label: "Contracts", hint: "What this account already signed" },
+  { href: "/make/launch", label: "Baskets", hint: "Bundle assets that already trade" },
 ];
 
 export const BOOK_PAGES: ProductPage[] = [
@@ -128,13 +133,15 @@ export const DOCS_PAGES: ProductPage[] = [
   { href: "/docs/cards", label: "Cards", hint: "The number" },
   { href: "/docs/play", label: "Play", hint: "The felt" },
   { href: "/docs/cover", label: "Cover", hint: "The 10% line" },
-  { href: "/docs/agents", label: "Agents", hint: "They cannot sign" },
+  { href: "/docs/agents", label: "Agents", hint: "A model queues. You sign." },
+  { href: "/docs/contracts", label: "Contracts", hint: "A signature, or a program this desk calls" },
+  { href: "/docs/markets", label: "Terminal", hint: "Cabinets, the chart, and the trading box" },
+  { href: "/docs/crew", label: "Three seats", hint: "Signer, operator, model" },
   { href: "/docs/make", label: "Make", hint: "The board" },
   { href: "/docs/limits", label: "Limits", hint: "What is not built" },
 ];
 
 export const AGENT_PAGES: ProductPage[] = [
-  { href: "/agents", label: "Studio", hint: "Agents on this browser" },
-  { href: "/agents/intelligence", label: "Intelligence", hint: "Sourced markets, liquidity and stablecoin review" },
+  { href: "/agents", label: "Studio", hint: "A model queues. You sign." },
   { href: "/agents/build", label: "Build", hint: "Make one" },
 ];

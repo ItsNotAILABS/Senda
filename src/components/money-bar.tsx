@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { connectPhantom, readChain } from "@/lib/phantom";
-import { TransactionRecovery } from "@/components/transaction-recovery";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { openDeposit } from "@/components/fund-sheet";
 
 /** What the connected Solana wallet holds right now. Senda does not keep a balance. */
 export function MoneyBar() {
@@ -47,7 +47,6 @@ export function MoneyBar() {
   }
 
   return (
-    <div className="space-y-2">
     <section className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-3">
       <div className="min-w-[8rem] flex-1">
         <p className="text-[11px] tracking-[0.16em] text-subtle uppercase">In the wallet</p>
@@ -65,9 +64,10 @@ export function MoneyBar() {
           Connect Phantom
         </button>
       )}
+      <button type="button" onClick={() => openDeposit()} className="min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold">
+        Deposit
+      </button>
     </section>
-    <TransactionRecovery owner={owner} />
-    </div>
   );
 }
 

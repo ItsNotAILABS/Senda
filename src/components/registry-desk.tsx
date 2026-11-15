@@ -10,6 +10,7 @@ const FAMILIES: { id: RegFamily | "all"; label: string }[] = [
   { id: "all", label: "All" },
   { id: "coin", label: "Coins" },
   { id: "xstock", label: "xStocks" },
+  { id: "security", label: "Securities" },
   { id: "name", label: "Pre-IPO" },
   { id: "ostium", label: "Ostium" },
   { id: "hl", label: "Hyperliquid" },
@@ -44,7 +45,7 @@ export function RegistryDesk() {
           setTotal(page.total);
           setMatched(page.matched);
           setFamilies(page.families);
-          setNote(`${page.total.toLocaleString("en-US")} markets the venues returned. ${page.matched.toLocaleString("en-US")} match.`);
+          setNote(`${page.total.toLocaleString("en-US")} markets the venues returned. ${page.liquid.toLocaleString("en-US")} have a pool of at least $25,000. ${page.matched.toLocaleString("en-US")} match.`);
         })
         .catch(() => live && setNote("The venues did not answer."));
     }, q ? 280 : 0);

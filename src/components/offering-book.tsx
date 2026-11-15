@@ -16,6 +16,8 @@ const LABEL: Record<string, string> = {
   rail: "Send",
   ostium: "Ostium",
   chain: "Chains",
+  meme: "Memes",
+  vault: "Vaults",
   option: "Options",
   cover: "Cover",
 };
@@ -36,6 +38,7 @@ const OPEN: Record<string, "/pre" | "/xstocks" | "/market" | "/payments" | "/cov
   loan: "/market",
   stake: "/market",
   chain: "/market",
+  meme: "/market",
 };
 
 export function OfferingBook() {

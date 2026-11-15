@@ -45,6 +45,40 @@ export function insideWalletApp(): boolean {
   return /Phantom|Solflare|Backpack/i.test(navigator.userAgent);
 }
 
+/** True when a Solana wallet has injected a signer into this page. */
+export function injectedWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as {
+    phantom?: { solana?: { connect?: unknown } };
+    solana?: { connect?: unknown };
+    solflare?: { connect?: unknown };
+    backpack?: { connect?: unknown };
+  };
+  return Boolean(w.phantom?.solana?.connect || w.solflare?.connect || w.backpack?.connect || w.solana?.connect);
+}
+
+/** Opens this page inside the wallet app. Returns false when a signer is already here. */
+export function openInWallet(wallet: MobileWallet): boolean {
+  if (typeof window === "undefined") return false;
+  if (insideWalletApp() || injectedWallet()) return false;
+  openWalletBrowser(wallet);
+  return true;
+}
+
+/** One-shot line left for the wallet browser: tap the trade again, this window can sign. */
+export function takeBuyAgain(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const line = localStorage.getItem(HINT) || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem(HINT) : "") || "";
+    if (!line) return null;
+    localStorage.removeItem(HINT);
+    sessionStorage.removeItem(HINT);
+    return line;
+  } catch {
+    return null;
+  }
+}
+
 function b64(bytes: Uint8Array): string {
   let s = "";
   for (let i = 0; i < bytes.length; i += 1) s += String.fromCharCode(bytes[i]);
@@ -215,4 +249,18 @@ export function takeMobileReturn(search: string): MobileReturn {
 /** Old encrypted sign jobs are not resumed. Signing happens on the injected provider. */
 export function resumeMobileSign() {
   localStorage.removeItem(PENDING);
+}
+
+/** Never show a wallet login payload as if Senda wrote it. */
+export function humanWalletError(message: string): string {
+  const raw = message.trim();
+  if (/oidc|kms|accountidentifier|phantom\.com\/ul\/v1\/connect|\{/.test(raw.toLowerCase()) || raw.length > 180) {
+    return insideWalletApp()
+      ? "Phantom is already open. Tap Connect. This page signs here."
+      : "That link was a wallet login page, not the signer. Open Phantom and buy on this page.";
+  }
+  if (/did not match the expected pattern/i.test(raw)) {
+    return "The wallet could not read that transfer. Sign the same amount again.";
+  }
+  return raw || "The wallet did not connect.";
 }

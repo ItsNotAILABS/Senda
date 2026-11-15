@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { listClears, type ClearRecord } from "@/lib/clearing";
 
+const BUMP = "senda-clear";
+
+/** Same-tab notice so a strip already on the page reads the new row. */
+export function bumpClears(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(BUMP));
+}
+
 export function ClearStrip({ desk }: { desk?: ClearRecord["desk"] }) {
   const [rows, setRows] = useState<ClearRecord[]>([]);
 
@@ -10,8 +18,8 @@ export function ClearStrip({ desk }: { desk?: ClearRecord["desk"] }) {
       setRows(desk ? all.filter((r) => r.desk === desk) : all);
     };
     pull();
-    window.addEventListener("senda-clear", pull);
-    return () => window.removeEventListener("senda-clear", pull);
+    window.addEventListener(BUMP, pull);
+    return () => window.removeEventListener(BUMP, pull);
   }, [desk]);
 
   return (

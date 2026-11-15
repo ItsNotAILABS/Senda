@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { BasketDesk } from "@/components/basket-desk";
+import { BundleDesk } from "@/components/bundle-desk";
 import { ChainDesk } from "@/components/chain-desk";
 import { VaultMarket } from "@/components/vault-market";
 import { CoinBoard } from "@/components/coin-board";
@@ -17,11 +18,14 @@ import { FdvDesk } from "@/components/fdv-desk";
 import { RegistryDesk } from "@/components/registry-desk";
 import { EcosystemDesk } from "@/components/ecosystem-desk";
 import { LaunchDesk } from "@/components/launch-desk";
+import { EarnDesk } from "@/components/earn-desk";
+import { ReflectDesk } from "@/components/reflect-desk";
 import { LendDesk } from "@/components/lend-desk";
 import { WorldDesk } from "@/components/world-desk";
 import { OptionChain } from "@/components/option-chain";
 import { OfferingBook } from "@/components/offering-book";
 import { OstiumBook } from "@/components/ostium-book";
+import { PhoenixDesk } from "@/components/phoenix-desk";
 import { PairBook } from "@/components/pair-book";
 import { PerpDesk } from "@/components/perp-desk";
 import { PlayDesk } from "@/components/play-desk";
@@ -33,12 +37,11 @@ import { LiveChart } from "@/components/price-chart";
 import { SolanaFloor } from "@/components/solana-floor";
 import { ListedView } from "@/components/desk-views";
 import { WalletDesk } from "@/components/wallet-desk";
-import { connectPhantom } from "@/lib/phantom";
+import { connectPhantom, PRESTOCK_MINTS } from "@/lib/phantom";
 import { getPreRoutes, runPrestock, type PreRoute } from "@/lib/prestock";
-import { useEffect } from "react";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useHouse } from "@/lib/use-house";
-import { jupTape, type TapeRow } from "@/lib/world-book";
+import { jupTape, searchTape, type TapeRow } from "@/lib/world-book";
 import { chainFor, type OptContract, type OptTenor } from "@/lib/option-chain";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +50,7 @@ const DESKS = [
   ["news", "News"],
   ["kalshi", "Kalshi"],
   ["poly", "Polymarket"],
-  ["quotes", "Quotes"],
+  ["quotes", "Terminal"],
   ["futures", "Futures"],
   ["registry", "Registry"],
   ["world", "FX & metals"],
@@ -58,9 +61,11 @@ const DESKS = [
   ["deriv", "Derivatives"],
   ["chains", "Chains"],
   ["vaults", "Vaults"],
+  ["earn", "Earn"],
   ["products", "Products"],
   ["options", "Options"],
   ["perps", "Perps"],
+  ["phoenix", "Phoenix"],
   ["pre", "PreStocks"],
   ["bridge", "Bridge"],
   ["cards", "Spot"],
@@ -76,14 +81,25 @@ const DESKS = [
   ["wrap", "Radar"],
   ["eco", "Rails"],
   ["cover", "Cover"],
+  ["bundle", "Baskets"],
+  ["reflect", "Reflect"],
 ] as const;
+
+const GROUPS: { label: string; ids: Desk[] }[] = [
+  { label: "Trade", ids: ["chart", "quotes", "cards", "tape", "bundle"] },
+  { label: "Names", ids: ["pre", "xstock", "futures", "minty", "basket", "options"] },
+  { label: "Derivatives", ids: ["perps", "phoenix", "ostium", "hl", "deriv", "pairs", "cover", "book", "wrap"] },
+  { label: "World", ids: ["world", "comms", "kalshi", "poly", "news"] },
+  { label: "Yield", ids: ["earn", "stake", "vaults", "lend", "reflect"] },
+  { label: "Networks", ids: ["chains", "solana", "bridge", "eco", "registry", "products", "curve"] },
+];
 
 type Desk = (typeof DESKS)[number][0];
 
-export function TradePit() {
+export function TradePit({ initial }: { initial?: string }) {
   const house = useHouse();
-  const pre = useMemo(() => house.filter((h) => h.venue === "prestocks" && h.last > 0), [house]);
-  const [desk, setDesk] = useState<Desk>("quotes");
+  const pre = useMemo(() => house.filter((h) => h.venue === "prestocks" && (h.last > 0 || PRESTOCK_MINTS.some(([symbol]) => symbol === h.symbol))), [house]);
+  const [desk, setDesk] = useState<Desk>(DESKS.some(([id]) => id === initial) ? (initial as Desk) : "quotes");
   const [underId, setUnderId] = useState<string | null>(null);
   const [armed, setArmed] = useState(1);
   const [side, setSide] = useState<"buy" | "sell">("buy");
@@ -94,6 +110,7 @@ export function TradePit() {
   const [chartId, setChartId] = useState("");
   const [chartQ, setChartQ] = useState("");
   const [chartCap, setChartCap] = useState(40);
+  const [deskQ, setDeskQ] = useState("");
   const under = pre.find((h) => h.id === underId) ?? pre[0] ?? null;
 
   useEffect(() => {
@@ -124,18 +141,33 @@ export function TradePit() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="sticky top-0 z-10 border-b border-white/10 bg-[#07070f]/95 px-3 py-2 backdrop-blur">
-        <p className="mb-2 text-sm text-white/55">A name, a last price, and a ticket. Phantom signs the swap.</p>
-        <div className="flex gap-1 overflow-x-auto">
-          {DESKS.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setDesk(id)}
-              className={cn("min-h-9 shrink-0 rounded-full px-3 text-sm font-semibold", desk === id ? "bg-white text-black" : "text-white/60")}
-            >
-              {label}
-            </button>
-          ))}
+        <p className="mb-2 text-sm text-white/55">
+          {(tape.length + house.length).toLocaleString("en-US")} products on this load. Every desk is still here. Phantom signs the ticket.
+        </p>
+        <input value={deskQ} onChange={(e) => setDeskQ(e.target.value)} placeholder="Find a desk" className="mb-2 min-h-10 w-full rounded-full bg-white/10 px-4 text-sm outline-none" />
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {GROUPS.map((group) => {
+            const needle = deskQ.trim().toLowerCase();
+            const items = DESKS.filter(([id, label]) => group.ids.includes(id) && (!needle || `${label} ${id}`.toLowerCase().includes(needle)));
+            if (!items.length) return null;
+            return (
+              <div key={group.label} className="shrink-0">
+                <p className="mb-1 text-[10px] tracking-[0.14em] text-white/35 uppercase">{group.label}</p>
+                <div className="flex gap-1">
+                  {items.map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setDesk(id)}
+                      className={cn("min-h-9 shrink-0 rounded-full px-3 text-sm font-semibold", desk === id ? "bg-white text-black" : "text-white/60")}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
       <div className="min-w-0 flex-1">
@@ -146,7 +178,7 @@ export function TradePit() {
           <ChartBook tape={tape} house={house} chartId={chartId} setChartId={setChartId} q={chartQ} setQ={setChartQ} cap={chartCap} setCap={setChartCap} />
         ) : null}
         {desk === "news" ? <DeskNews /> : null}
-        {desk === "kalshi" ? <div className="px-3 py-3"><KalshiTape /></div> : null}
+        {desk === "kalshi" ? <KalshiTape /> : null}
         {desk === "poly" ? <div className="px-3 py-3"><PolyTape /></div> : null}
         {desk === "cards" ? <SpotPage scope="coins" /> : null}
         {desk === "world" ? <WorldDesk key="fx" start="fx" /> : null}
@@ -157,6 +189,8 @@ export function TradePit() {
         {desk === "deriv" ? <DerivDesk /> : null}
         {desk === "chains" ? <ChainDesk /> : null}
         {desk === "vaults" ? <div className="px-3 py-3"><VaultMarket /></div> : null}
+        {desk === "earn" ? <EarnDesk /> : null}
+        {desk === "reflect" ? <ReflectDesk /> : null}
         {desk === "products" ? <div className="px-3 py-3"><OfferingBook /></div> : null}
         {desk === "options" ? (
           <div className="px-3 py-3">
@@ -181,6 +215,7 @@ export function TradePit() {
             <PerpBooks />
           </div>
         ) : null}
+        {desk === "phoenix" ? <PhoenixDesk /> : null}
         {desk === "pre" ? <PreDesk names={house} routes={routes} view="book" /> : null}
         {desk === "bridge" ? <WalletDesk view="swap" /> : null}
         {desk === "solana" ? <SolanaFloor house={pre} view="mints" /> : null}
@@ -189,6 +224,7 @@ export function TradePit() {
         {desk === "stake" ? <PlayDesk house={house} /> : null}
         {desk === "book" ? <RadarDesk house={pre} /> : null}
         {desk === "basket" ? <BasketDesk house={pre} /> : null}
+        {desk === "bundle" ? <BundleDesk /> : null}
         {desk === "lend" ? <LendDesk house={pre} /> : null}
         {desk === "minty" ? <LaunchDesk /> : null}
         {desk === "curve" ? <CurveDesk /> : null}
@@ -221,10 +257,29 @@ function ChartBook({
 }) {
   const [sort, setSort] = useState<"gain" | "loss" | "price" | "name">("gain");
   const [usd, setUsd] = useState(5);
+  const [hits, setHits] = useState<TapeRow[]>([]);
   const query = q.trim().toLowerCase();
+
+  useEffect(() => {
+    if (query.length < 2) {
+      setHits([]);
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      searchTape({ data: query })
+        .then((list) => live && setHits(list))
+        .catch(() => live && setHits([]));
+    }, 280);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
   const seen = new Set<string>();
   const rows: { id: string; symbol: string; name: string; price: number; change: number | null }[] = [];
-  for (const r of tape) {
+  for (const r of [...hits, ...tape]) {
     if (!r.id || seen.has(r.id)) continue;
     seen.add(r.id);
     rows.push({ id: r.id, symbol: r.symbol, name: r.name, price: r.price ?? 0, change: r.change });
@@ -234,7 +289,7 @@ function ChartBook({
     seen.add(h.mint);
     rows.push({ id: h.mint, symbol: h.symbol, name: h.name, price: h.last, change: h.change24h });
   }
-  const book = rows.filter((r) => !query || `${r.symbol} ${r.name}`.toLowerCase().includes(query));
+  const book = rows.filter((r) => !query || `${r.symbol} ${r.name} ${r.id}`.toLowerCase().includes(query));
   book.sort((a, b) => {
     if (sort === "name") return a.symbol.localeCompare(b.symbol);
     if (sort === "price") return b.price - a.price;

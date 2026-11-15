@@ -1,13 +1,148 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { CorridorCard } from "@/components/corridor-card";
+import { CardFund } from "@/components/card-fund";
+import { MoneyJumps } from "@/components/money-jumps";
 import { MCC } from "@/lib/card-issuing";
 import { AccountDetails } from "@/components/account-details";
 import { MoneyBar } from "@/components/money-bar";
-import { payUsdc } from "@/lib/solana-pay";
+import { paySol, payToken, payUsdc } from "@/lib/solana-pay";
+import { bindCardSend, CARD_BOOK } from "@/lib/card-rails";
+import { CardTerms } from "@/components/card-terms";
+import { USDC } from "@/lib/jup-exec";
+import { signRoute } from "@/lib/jup-sign";
+import { connectPhantom } from "@/lib/phantom";
+import { EarnDesk } from "@/components/earn-desk";
+import { McPayout } from "@/components/mc-payout";
+import { CheckoutForm } from "@/components/checkout-form";
 import { TabLead } from "@/components/tab-lead";
 import { formatMoney, type Card, type CardAuth, type CardKind } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
+
+const CASH = "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH";
+const PAY_WITH = [
+  { id: "CASH", mint: CASH, label: "Phantom Cash" },
+  { id: "USDC", mint: USDC, label: "USDC" },
+  { id: "USDT", mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", label: "USDT" },
+] as const;
+
+function CardConnect({ owner }: { owner: string }) {
+  const [where, setWhere] = useState<"jupiter" | "avici" | "kast" | "xplace" | "phantom" | "fuse">("jupiter");
+  const [asset, setAsset] = useState("USDC");
+  const [to, setTo] = useState("");
+  const [usd, setUsd] = useState("10");
+  const [busy, setBusy] = useState(false);
+  const book = CARD_BOOK[where];
+  const note: Record<typeof where, string> = {
+    jupiter: "Jupiter’s card is theirs. Paste the Spend address their app shows. Only USDC.",
+    avici: "Avici’s card is theirs. Paste the escrow address they show. The balance sits in their contract.",
+    kast: "KAST holds the deposit. Paste the Solana address they show. This send is USDC.",
+    xplace: "USDT, SOL, wETH, cbBTC, or jitoSOL. USDC is refused. A new address stops at the first-send cap.",
+    phantom: "Phantom’s Visa is theirs. This swaps USDC for their CASH token and leaves it in the wallet that signs.",
+    fuse: "Fuse’s Visa is theirs. Paste the card address they show. United States, except New York and Alaska.",
+  };
+
+  async function send() {
+    const n = Number(usd);
+    if (!(n > 0)) {
+      toast.error("Enter an amount.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const who = owner || (await connectPhantom());
+      if (where === "phantom") {
+        const done = await signRoute({
+          owner: who,
+          inputMint: USDC,
+          outputMint: CASH,
+          amountRaw: Math.round(n * 1e6),
+          outDecimals: 6,
+          usd: n,
+        });
+        toast.success(`CASH is in this wallet. Phantom’s card spends it. solscan.io/tx/${done.signature}`);
+      } else {
+        const remembered = (() => {
+          try {
+            const raw = JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") as Record<string, string>;
+            return raw[where] || "";
+          } catch {
+            return "";
+          }
+        })();
+        const bound = bindCardSend({ program: where, symbol: asset, dest: to, amount: n });
+        const keep = () => {
+          const prior = remembered ? { ...JSON.parse(localStorage.getItem("senda.cardfund.v2") || "{}") } : {};
+          prior[where] = bound.dest;
+          localStorage.setItem("senda.cardfund.v2", JSON.stringify(prior));
+        };
+        if (bound.asset.native) {
+          const sigOut = await paySol({ owner: who, to: bound.dest, sol: n });
+          keep();
+          toast.success(`${n} SOL sent. solscan.io/tx/${sigOut}`);
+        } else if (bound.asset.symbol === "USDC") {
+          const done = await payUsdc({ owner: who, to: bound.dest, usd: n, memo: where });
+          keep();
+          toast.success(`${n} USDC sent. solscan.io/tx/${done.signature}`);
+        } else {
+          const done = await payToken({ owner: who, to: bound.dest, mint: bound.asset.mint, symbol: bound.asset.symbol, amount: n, decimals: bound.asset.decimals });
+          keep();
+          toast.success(`${n} ${bound.asset.symbol} sent. solscan.io/tx/${done.signature}`);
+        }
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The wallet did not send.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4">
+      <h2 className="text-lg font-semibold">Fund a card you already have</h2>
+      <label className="mt-3 block text-[12px] text-white/45">
+        Where it goes
+        <select value={where} onChange={(e) => { const next = e.target.value as typeof where; setWhere(next); setAsset(CARD_BOOK[next]?.assets[0].symbol ?? "USDC"); }} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+          <option value="jupiter">Jupiter</option>
+          <option value="avici">Avici</option>
+          <option value="kast">KAST</option>
+          <option value="xplace">XPlace</option>
+          <option value="phantom">Phantom</option>
+          <option value="fuse">Fuse</option>
+        </select>
+      </label>
+      {where === "phantom" ? null : (
+        <>
+          {book && book.assets.length > 1 ? (
+            <label className="mt-3 block text-[12px] text-white/45">
+              Asset
+              <select value={asset} onChange={(e) => setAsset(e.target.value)} className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white">
+                {book.assets.map((row) => (
+                  <option key={row.symbol} value={row.symbol}>{row.symbol}</option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="mt-3 block text-[12px] text-white/45">
+            Their address
+            <input value={to} onChange={(e) => setTo(e.target.value)} placeholder="From that app" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 font-mono text-[14px] text-white" />
+          </label>
+        </>
+      )}
+      <label className="mt-3 block text-[12px] text-white/45">
+        Amount
+        <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="mt-1 h-12 w-full rounded-xl border border-white/10 bg-black px-3 text-[15px] text-white" />
+      </label>
+      <p className="mt-3 text-[13px] leading-snug text-white/50">{note[where]}</p>
+      <CardTerms id={where} />
+      <button type="button" disabled={busy} onClick={() => void send()} className="mt-3 h-12 w-full rounded-full bg-[#d7e36a] text-[15px] font-semibold text-black disabled:opacity-50">
+        {busy ? "Waiting on the wallet" : where === "phantom" ? "Swap into CASH" : "Sign and send"}
+      </button>
+    </section>
+  );
+}
 
 const PANEL = "rounded-[22px] border border-white/10 bg-[#10131c]";
 
@@ -61,6 +196,10 @@ export function CardsDesk({
   const [limitRaw, setLimitRaw] = useState("1500");
   const [payId, setPayId] = useState<string | null>(null);
   const [making, setMaking] = useState(false);
+  const [cardOpen, setCardOpen] = useState(false);
+  const [spendTo, setSpendTo] = useState("");
+  const [spendUsd, setSpendUsd] = useState("5");
+  const [spending, setSpending] = useState(false);
 
   const openCards = w.cards.filter((c) => c.status !== "terminated");
   const expenses = groupAuths(w.cardAuths ?? []);
@@ -69,6 +208,21 @@ export function CardsDesk({
     const r = issue(kind, nameOn || w.tag.replace("@", "").toUpperCase() || "SENDA", Number(limitRaw) || 1500);
     if (!r.ok) toast.error(r.error);
     else toast.success("On this cash. A store network will not clear it.");
+  }
+
+  async function spendUsdc() {
+    setSpending(true);
+    try {
+      const existing = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      const done = await payUsdc({ owner, to: spendTo.trim(), usd: Number(spendUsd), memo: "senda card" });
+      toast.success(`USDC sent. ${done.signature.slice(0, 8)}…`);
+      setCardOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "The transfer did not send.");
+    } finally {
+      setSpending(false);
+    }
   }
 
   return (
@@ -83,9 +237,72 @@ export function CardsDesk({
         live={["Account details", "USDC address", "One charge"]}
         coming={["Lead number, once the Bridge key is on", "A Rain Visa"]}
       />
+      <MoneyJumps here="/cards" />
+      <Link to="/cards/rails" className="flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[#10131c] px-4 py-4">
+        <span>
+          <span className="block text-sm font-semibold">Real cards</span>
+          <span className="mt-1 block text-xs text-muted">Jupiter, Phantom Cash, Rain, KAST, Fuse, Western Union. Their Visa. You sign the top-up.</span>
+        </span>
+        <span className="text-accent">→</span>
+      </Link>
+      <CardConnect owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
       <MoneyBar />
+      <section className="rounded-[22px] border border-white/10 bg-black px-4 py-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-semibold tracking-tight">Money</h2>
+        </div>
+        <button type="button" onClick={() => setCardOpen(true)} className="mt-4 flex w-full items-center justify-between text-left">
+          <span>
+            <span className="block text-xl font-semibold">Spend USDC</span>
+            <span className="mt-1 block text-sm text-white/50">The wallet signs. No card number is minted here.</span>
+          </span>
+          <span className="text-white/50">›</span>
+        </button>
+        <div className="mt-4 flex items-center gap-4">
+          <div className="relative grid h-16 w-28 place-items-end overflow-hidden rounded-xl border border-white/10 bg-[#07080d] p-2 text-xs font-semibold">
+            <span className="absolute inset-x-0 top-0 h-px bg-[#d6ff4a]" />
+            USDC
+          </div>
+          <div>
+            <p className="text-lg font-semibold">Wallet spend</p>
+            <p className="text-sm text-[#c6f56a]">USDC leaves only when you sign</p>
+          </div>
+        </div>
+        <ul className="mt-5 space-y-2 text-sm text-white/80">
+          <li>The receipt from Earn stays in this wallet. There is no lockup on a liquid stake token.</li>
+          <li>A Solana send is not a card charge. Paying a debit card is Mastercard Send, and it only goes out when the partner key is on this server.</li>
+          <li>Apple Pay and Google Pay are not attached. A network that is not signed is not shown as live.</li>
+        </ul>
+      </section>
+      <McPayout />
+      <CheckoutForm />
+      <EarnDesk />
+      {cardOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/70 p-3 sm:items-center sm:justify-center">
+          <div className="w-full max-w-md rounded-[28px] bg-[#140b3a] p-5">
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setCardOpen(false)} className="text-2xl text-white/70">×</button>
+            </div>
+            <h3 className="text-center text-3xl font-semibold">Spend from this wallet</h3>
+            <p className="mt-2 text-center text-sm text-white/70">Phantom signs a USDC transfer to a Solana address. A coffee shop that does not take Solana cannot clear it.</p>
+            <label className="mt-5 block text-xs text-white/50">
+              Dollars
+              <input inputMode="decimal" value={spendUsd} onChange={(e) => setSpendUsd(e.target.value)} className="mt-1 min-h-12 w-full rounded-2xl bg-black/40 px-4 font-mono text-lg outline-none" />
+            </label>
+            <label className="mt-3 block text-xs text-white/50">
+              Solana address
+              <input value={spendTo} onChange={(e) => setSpendTo(e.target.value)} placeholder="Address" className="mt-1 min-h-12 w-full rounded-2xl bg-black/40 px-4 font-mono text-sm outline-none" />
+            </label>
+            <button type="button" disabled={spending} onClick={() => void spendUsdc()} className="mt-5 min-h-14 w-full rounded-full bg-white text-base font-semibold text-black">
+              {spending ? "Waiting for Phantom…" : "Sign USDC"}
+            </button>
+          </div>
+        </div>
+      ) : null}
       </>
       ) : null}
+
+      {view === "all" || view === "account" ? <CorridorCard /> : null}
 
       {view === "all" || view === "account" ? (
       <AccountDetails owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
@@ -107,6 +324,8 @@ export function CardsDesk({
       {view === "all" || view === "chain" ? (
       <PayOnChain owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
       ) : null}
+
+      {view === "rails" ? <CardFund owner={w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} /> : null}
 
       {view === "all" || view === "rails" ? <CardRails /> : null}
 
@@ -383,23 +602,32 @@ function ChipMark() {
 function PayOnChain({ owner }: { owner: string }) {
   const [to, setTo] = useState("");
   const [usd, setUsd] = useState("20");
+  const [pay, setPay] = useState<(typeof PAY_WITH)[number]["id"]>("USDC");
   const [sig, setSig] = useState("");
   const [busy, setBusy] = useState(false);
+  const picked = PAY_WITH.find((row) => row.id === pay) ?? PAY_WITH[1];
 
   return (
     <section className={cn(PANEL, "grid gap-3 p-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-end")}>
       <div>
         <p className="text-[11px] tracking-[0.14em] text-accent uppercase">Solana Pay</p>
-        <h2 className="mt-1 text-lg">Pay the address in USDC</h2>
+        <h2 className="mt-1 text-lg">Pay the address</h2>
         <p className="mt-1 max-w-xl text-sm text-muted">
-          The wallet signs a transfer. The merchant receives USDC. No issuer, no BIN. The desk number above is a cap on this browser. This one moves on mainnet.
+          Phantom Cash, USDC, or USDT. The wallet signs one transfer of the token you pick. The address receives that token, not a conversion.
         </p>
+        <div className="mt-3 flex gap-2">
+          {PAY_WITH.map((row) => (
+            <button key={row.id} type="button" onClick={() => setPay(row.id)} className={cn("min-h-10 rounded-full px-3 text-sm font-semibold", pay === row.id ? "bg-white text-black" : "bg-white/10 text-white/70")}>
+              {row.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="grid gap-2">
         <input
           value={to}
           onChange={(e) => setTo(e.target.value)}
-          placeholder="Merchant Solana address"
+          placeholder="Solana address"
           spellCheck={false}
           className="min-h-12 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
         />
@@ -408,7 +636,7 @@ function PayOnChain({ owner }: { owner: string }) {
             value={usd}
             onChange={(e) => setUsd(e.target.value)}
             inputMode="decimal"
-            aria-label="USDC"
+            aria-label="Amount"
             className="min-h-12 w-28 rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none"
           />
           <button
@@ -421,17 +649,21 @@ function PayOnChain({ owner }: { owner: string }) {
               }
               setBusy(true);
               setSig("");
-              void payUsdc({ owner, to, usd: Number(usd) })
-                .then((r) => {
-                  setSig(r.signature);
-                  toast.success("Signed. USDC is on the way.");
+              const amount = Number(usd);
+              const sent = pay === "USDC"
+                ? payUsdc({ owner, to, usd: amount }).then((r) => r.signature)
+                : payToken({ owner, to, mint: picked.mint, symbol: picked.id, amount }).then((r) => r.signature);
+              void sent
+                .then((signature) => {
+                  setSig(signature);
+                  toast.success("Phantom signed.");
                 })
                 .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The transfer did not send."))
                 .finally(() => setBusy(false));
             }}
             className="min-h-12 flex-1 rounded-full bg-accent px-5 text-sm font-semibold text-accent-fg disabled:opacity-50"
           >
-            {busy ? "Waiting on the wallet" : owner ? "Sign USDC" : "Connect a wallet first"}
+            {busy ? "Waiting on the wallet" : owner ? `Sign ${picked.label}` : "Connect a wallet first"}
           </button>
         </div>
         {sig ? (
@@ -511,7 +743,7 @@ function CardRails() {
         </div>
         <div>
           <p className="text-[11px] tracking-[0.14em] text-subtle uppercase">3 · A real swipe</p>
-          <p className="mt-1 text-sm text-muted">A store clears only a number from an issuer. The pipes under Solana cards are Rain and Bridge. Both need a program and KYC. There is no button for that yet.</p>
+          <p className="mt-1 text-sm text-muted">A store clears only a number from an issuer. The top-up is on Rails. Senda does not print those 16 digits.</p>
         </div>
       </div>
       <div className="mt-4 overflow-x-auto">
@@ -576,22 +808,22 @@ function CardFace({
 
   return (
     <article className={cn(PANEL, "overflow-hidden")}>
-      <div className="relative overflow-hidden bg-[#141820] px-6 py-6 shadow-[inset_0_1px_0_rgb(255_255_255/0.12)]">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent_30%,rgb(255_255_255/0.07)_48%,transparent_66%)]" />
+      <div className="relative flex min-h-[210px] flex-col bg-[#07080d] px-5 py-5 shadow-[inset_0_1px_0_rgb(214_255_74/0.4)]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#d6ff4a]" />
         <div className="relative flex items-start justify-between">
           <div>
-            <p className="text-[11px] tracking-[0.16em] text-white/55 uppercase">{card.label}</p>
-            <p className="mt-1 text-xs font-semibold text-accent">{status}</p>
+            <p className="text-[11px] tracking-[0.18em] text-white/55 uppercase">{card.label}</p>
+            <p className="mt-2 inline-flex min-h-6 items-center rounded-full bg-[#d6ff4a] px-2 text-[11px] font-semibold text-black">{status}</p>
           </div>
           <McMark />
         </div>
-        <div className="relative mt-8">
+        <div className="relative mt-5">
           <ChipMark />
         </div>
-        <p className="relative mt-6 font-mono text-lg tracking-[0.16em] sm:text-xl">
+        <p className="relative mt-5 font-mono text-lg tracking-[0.18em] sm:text-xl">
           {revealed && !masked ? card.pan : `••••  ••••  ••••  ${card.last4}`}
         </p>
-        <div className="relative mt-6 flex items-end justify-between text-sm">
+        <div className="relative mt-auto flex items-end justify-between pt-4 text-sm">
           <div>
             <p className="text-[10px] tracking-[0.14em] text-white/45 uppercase">Name</p>
             <p className="font-medium">{card.nameOn}</p>

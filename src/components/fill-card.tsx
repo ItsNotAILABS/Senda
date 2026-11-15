@@ -1,3 +1,5 @@
+import { MarkFace } from "@/components/holding-cards";
+
 export function FillCard({
   title,
   symbol,
@@ -27,7 +29,7 @@ export function FillCard({
           <h2 className="mt-1 text-4xl font-semibold tracking-tight">{title}</h2>
           <div className="mt-3 flex items-center justify-between rounded-full bg-black px-3 py-2 text-white">
             <span className="flex items-center gap-2">
-              <span className="grid size-9 place-items-center rounded-full bg-[#d7e36a] text-xs font-semibold text-black">{symbol.slice(0, 2)}</span>
+              <MarkFace symbol={symbol} size={36} />
               <span>
                 <span className="block text-sm font-semibold">{symbol}</span>
                 <span className="block text-xs text-white/50">Sent just now</span>

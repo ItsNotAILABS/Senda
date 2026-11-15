@@ -13,7 +13,7 @@ export const CHAIN_LANES: ChainLane[] = [
   { id: "bitcoin", name: "Bitcoin", sign: "The Solana wrappers, in the same wallet", clears: "WBTC and cbBTC. Native bitcoin is not signed here.", live: true },
   { id: "ethereum", name: "Ethereum", sign: "Phantom Ethereum or MetaMask", clears: "Portal ETH on Solana, plus the Ethereum account for Arbitrum and Base", live: true },
   { id: "arbitrum", name: "Arbitrum", sign: "The same Ethereum account", clears: "Ostium longs and shorts in USDC", live: true },
-  { id: "monad", name: "Monad", sign: "Phantom Ethereum or MetaMask, chain 143", clears: "The wallet can add the chain. A Monad swap is not invented.", live: false },
+  { id: "monad", name: "Monad", sign: "Phantom Ethereum account, chain 143", clears: "Perpl perps. That account signs the order. A Monad spot swap is not built here.", live: true },
   { id: "base", name: "Base", sign: "MetaMask", clears: "The Base account already in Wallets", live: true },
   { id: "btc-taproot", name: "Bitcoin · Taproot", sign: "Phantom receive address. Native bitcoin is not signed.", clears: "WBTC and cbBTC on Solana. Taproot only receives.", live: false },
   { id: "btc-segwit", name: "Bitcoin · Native Segwit", sign: "Phantom receive address. Native bitcoin is not signed.", clears: "The same bitcoin tokens. Segwit is the other receive address, not a second market.", live: false },
@@ -26,7 +26,7 @@ export const CHAIN_LANES: ChainLane[] = [
 
 export const KEPT_DESKS: { name: string; where: string; holds: string }[] = [
   { name: "Chart", where: "Trade", holds: "Full-screen chart and a ticket" },
-  { name: "Quotes", where: "Trade", holds: "The whole Jupiter book" },
+  { name: "Trading terminal", where: "Trade", holds: "The whole Jupiter book" },
   { name: "Spot", where: "Trade", holds: "Coin cards with buy and sell" },
   { name: "PreStocks", where: "Trade and Pre", holds: "The private names" },
   { name: "xStocks", where: "Trade and Markets", holds: "Listed share tokens" },

@@ -41,3 +41,5 @@ export function rememberClear(row: Omit<ClearRecord, "id" | "at">): ClearRecord 
   window.dispatchEvent(new Event("senda-clear"));
   return next;
 }
+
+export { loadClearing, postPerp, closePerp, confirmFlight, postPred, settlePred, postRace, settleRace, fundPurse, agentStake } from "@/lib/clearing-desk";

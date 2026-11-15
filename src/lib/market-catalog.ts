@@ -1,6 +1,6 @@
 /** Add a market by appending a row. A mint makes Buy and Sell sign. No mint stays a print. */
 
-export type MarketGroup = "metal" | "crypto" | "fx";
+export type MarketGroup = "metal" | "crypto" | "meme" | "fx";
 
 export type CatalogMarket = {
   id: string;
@@ -27,6 +27,11 @@ export const PAIR_MARKETS: CatalogMarket[] = [
   { id: "pyth", group: "crypto", symbol: "PYTH", name: "Pyth", mint: "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3" },
   { id: "ray", group: "crypto", symbol: "RAY", name: "Raydium", mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R" },
   { id: "orca", group: "crypto", symbol: "ORCA", name: "Orca", mint: "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE" },
+  { id: "popcat", group: "meme", symbol: "POPCAT", name: "Popcat", mint: "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr" },
+  { id: "mew", group: "meme", symbol: "MEW", name: "cat in a dogs world", mint: "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5" },
+  { id: "pengu", group: "meme", symbol: "PENGU", name: "Pudgy Penguins", mint: "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv" },
+  { id: "fartcoin", group: "meme", symbol: "FARTCOIN", name: "Fartcoin", mint: "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump" },
+  { id: "trump", group: "meme", symbol: "TRUMP", name: "Official Trump", mint: "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN" },
   { id: "eur", group: "fx", symbol: "EURC", name: "Euro", mint: "HzwqbKZw8HxMN6bF2yFZNrht3c2iXXzpKcFu7uBEDKtr", ostium: "EUR-USD" },
   { id: "gbp", group: "fx", symbol: "VGBP", name: "Pound", mint: "5H4voZhzySsVvwVYDAKku8MZGuYBC7cXaBKDPW4YHWW1", ostium: "GBP-USD" },
   { id: "chf", group: "fx", symbol: "VCHF", name: "Swiss franc", mint: "AhhdRu5YZdjVkKR3wbnUDaymVQL2ucjMQ63sZ3LFHsch", ostium: "USD-CHF" },

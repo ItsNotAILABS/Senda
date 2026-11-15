@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { FillButton } from "@/components/fill-button";
@@ -436,9 +436,21 @@ function PrintChart({
   note: string;
   tf: string;
 }) {
+  const scale = useRef<{ key: string; hi: number; lo: number }>({ key: "", hi: 0, lo: 0 });
   if (bars.length < 2) {
     return <div className="grid min-h-[360px] flex-1 place-items-center px-6 text-center text-sm text-muted">{note || "No pool candles."}</div>;
   }
+  const rawHi = Math.max(...bars.map((b) => b.h));
+  const rawLo = Math.min(...bars.map((b) => b.l));
+  const key = `${symbol}:${tf}`;
+  const pad = ((rawHi - rawLo) || rawHi * 0.01) * 0.12;
+  if (scale.current.key !== key) scale.current = { key, hi: rawHi + pad, lo: Math.max(0, rawLo - pad) };
+  else {
+    if (rawHi > scale.current.hi) scale.current.hi = rawHi + pad * 0.25;
+    if (rawLo < scale.current.lo) scale.current.lo = Math.max(0, rawLo - pad * 0.25);
+  }
+  const hi = scale.current.hi;
+  const lo = scale.current.lo;
   const w = 860;
   const h = 420;
   const padL = 8;
@@ -447,8 +459,6 @@ function PrintChart({
   const volH = 64;
   const padB = 22;
   const chartH = h - padT - volH - padB;
-  const hi = Math.max(...bars.map((b) => b.h));
-  const lo = Math.min(...bars.map((b) => b.l));
   const span = hi - lo || hi * 0.01;
   const maxVol = Math.max(1, ...bars.map((b) => b.v));
   const innerW = w - padL - padR;

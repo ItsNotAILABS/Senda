@@ -1,6 +1,7 @@
 import { activeSolProvider } from "@/lib/wallets";
 import { insideWalletApp, isPhoneBrowser, mobileSession, startMobileConnect, startMobileSign, type SignJob } from "@/lib/mobile-wallet";
-import { unlockSeal } from "@/lib/seal";
+import { sealOpen, unlockSeal } from "@/lib/seal";
+import { PublicKey } from "@solana/web3.js";
 
 type Pub = { toString: () => string };
 
@@ -61,12 +62,12 @@ export async function connectPhantom(): Promise<string> {
     const res = await injected.connect();
     const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
     if (!addr) throw new Error("The wallet returned no account.");
-    await unlockSeal(addr);
+    if (!sealOpen()) await unlockSeal(addr);
     return addr;
   }
   const known = mobileSession();
   if (known && !insideWalletApp()) {
-    await unlockSeal(known.publicKey);
+    if (!sealOpen()) await unlockSeal(known.publicKey);
     return known.publicKey;
   }
   if (isPhoneBrowser() && !insideWalletApp() && !location.pathname.startsWith("/wallets/app")) {
@@ -105,6 +106,41 @@ async function providerOrThrow(): Promise<PhantomProvider | null> {
   );
 }
 
+export function liveSolAddress(): string {
+  try {
+    return phantomProvider()?.publicKey?.toString() || "";
+  } catch {
+    return "";
+  }
+}
+
+export function pickOwner(links: Array<{ kind?: string; address?: string }>): string {
+  const live = liveSolAddress();
+  if (live) return live;
+  return (
+    links.find((l) => l.kind === "phantom" && l.address)?.address ||
+    links.find((l) => l.kind === "solana" && l.address)?.address ||
+    ""
+  );
+}
+
+export async function signSerializedTx(b64: string): Promise<string> {
+  const { Buffer } = await import("buffer");
+  if (!globalThis.Buffer) globalThis.Buffer = Buffer;
+  const raw = Buffer.from(b64, "base64");
+  const { VersionedTransaction, Transaction } = await import("@solana/web3.js");
+  const p = await providerOrThrow();
+  if (!p?.signTransaction) throw new Error("Connect a Solana wallet. A limit needs the signature before it is sent.");
+  let tx: { serialize: () => Uint8Array };
+  try {
+    tx = VersionedTransaction.deserialize(raw);
+  } catch {
+    tx = Transaction.from(raw);
+  }
+  const signed = await p.signTransaction(tx);
+  return Buffer.from(signed.serialize()).toString("base64");
+}
+
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
   await simulateFirst(tx);
   const p = await providerOrThrow();
@@ -116,6 +152,15 @@ export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promis
     return bytesToBase58(sig);
   }
   if (!p.signTransaction) throw new Error("This wallet cannot send a transaction.");
+  const signed = await p.signTransaction(tx);
+  return broadcastSigned(signed);
+}
+
+/** One key has already signed. The wallet adds its signature. A send-and-sign call is not used, so the first signature stays. */
+export async function sendPartial(tx: { serialize: () => Uint8Array }): Promise<string> {
+  const p = await providerOrThrow();
+  if (!p) return phoneSign(tx, { kind: "broadcast", note: "Create" });
+  if (!p.signTransaction) throw new Error("This wallet cannot add a signature. Nothing was sent.");
   const signed = await p.signTransaction(tx);
   return broadcastSigned(signed);
 }
@@ -233,6 +278,26 @@ const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 const NAMES: Record<string, string> = {
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo": "PYUSD",
+  "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH": "USDG",
+  USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB: "USD1",
+  CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH: "CASH",
+  USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA: "USDS",
+  JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD: "JupUSD",
+  KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS: "KMNO",
+  pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn: "PUMP",
+  METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL: "MET",
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: "JUP",
+  "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": "JLP",
+  HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3: "PYTH",
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": "RAY",
+  orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE: "ORCA",
+  jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL: "JTO",
+  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr": "POPCAT",
+  MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5: "MEW",
+  "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv": "PENGU",
+  "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump": "FARTCOIN",
+  "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN": "TRUMP",
   PresTj4Yc2bAR197Er7wz4UUKSfqt6FryBEdAriBoQB: "ANDURIL",
   Pren1FvFX6J3E4kXhJuCiAD5aDmGEb7qJRncwA8Lkhw: "ANTHROPIC",
   PreZad18qfPtbxNpMtMuAuX2zVpvkEU8DnJx56faCWd: "FIGUREAI",
@@ -319,5 +384,100 @@ export async function readChain(owner: string): Promise<ChainWallet> {
       time: s.blockTime ?? null,
     })),
   };
+}
+
+/** The same chain read the desks already use. */
+export function chainRpc(method: string, params: unknown[]): Promise<unknown> {
+  return rpc(method, params);
+}
+
+/** Wait until the chain has seen this signature. Do not send it again while this is running. */
+export async function confirmSig(signature: string): Promise<void> {
+  const start = Date.now();
+  let last = "The transaction was sent. The chain has not confirmed it. Do not send it again.";
+  while (Date.now() - start < 22_000) {
+    try {
+      const result = (await rpc("getSignatureStatuses", [[signature]])) as {
+        value?: Array<{ err?: unknown; confirmationStatus?: string } | null>;
+      };
+      const row = result?.value?.[0];
+      if (row?.err) throw new Error("The chain rejected the transaction.");
+      const status = row?.confirmationStatus;
+      if (status === "processed" || status === "confirmed" || status === "finalized") return;
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("The chain rejected")) throw e;
+      last = e instanceof Error ? e.message : last;
+    }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  throw new Error(last);
+}
+
+export async function requirePhantom(): Promise<PhantomProvider & { signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }> }> {
+  const signer = phantomProvider() ?? (await waitForInjected(800));
+  if (!signer?.signTransaction) throw new Error("Connect Phantom in this window. It has to sign.");
+  return signer as PhantomProvider & { signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }> };
+}
+
+export function invalidateChain(_owner?: string) {
+  /* This reader does not keep a wallet cache. */
+}
+
+const shownMints = new Set<string>();
+
+export async function showInPhantom(mint: string): Promise<void> {
+  if (!mint || shownMints.has(mint)) return;
+  const provider = phantomProvider() as (PhantomProvider & { request?: (args: { method: string; params: unknown }) => Promise<unknown> }) | null;
+  if (!provider?.request) return;
+  shownMints.add(mint);
+  try {
+    await provider.request({ method: "wallet_watchAsset", params: { type: "SPL", options: { mint } } });
+  } catch {
+    shownMints.delete(mint);
+  }
+}
+
+export type UsdcMove = {
+  signature: string;
+  delta: number;
+  other: string;
+  time: number | null;
+  err: boolean;
+};
+
+/** USDC in and out of this address, read from the chain. */
+export async function readUsdcMoves(owner: string): Promise<UsdcMove[]> {
+  const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const ata = PublicKey.findProgramAddressSync(
+    [new PublicKey(owner).toBytes(), new PublicKey(TOKEN_PROGRAM).toBytes(), new PublicKey(USDC).toBytes()],
+    new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+  )[0];
+  const listed = (await rpc("getSignaturesForAddress", [ata.toBase58(), { limit: 12 }])) as
+    | Array<{ signature?: string; err?: unknown; blockTime?: number | null }>
+    | null;
+  const out: UsdcMove[] = [];
+  for (const row of listed ?? []) {
+    if (!row.signature) continue;
+    const tx = (await rpc("getTransaction", [row.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }])) as {
+      blockTime?: number | null;
+      meta?: { err?: unknown; preTokenBalances?: Array<{ mint?: string; owner?: string; uiTokenAmount?: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } }>; postTokenBalances?: Array<{ mint?: string; owner?: string; uiTokenAmount?: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } }> };
+    } | null;
+    const ui = (rowBal: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } | undefined) => {
+      if (!rowBal) return 0;
+      if (typeof rowBal.uiAmount === "number") return rowBal.uiAmount;
+      if (rowBal.uiAmountString) return Number(rowBal.uiAmountString) || 0;
+      if (rowBal.amount && typeof rowBal.decimals === "number") return Number(rowBal.amount) / 10 ** rowBal.decimals;
+      return 0;
+    };
+    const pre = (tx?.meta?.preTokenBalances ?? []).filter((b) => b.mint === USDC && b.owner === owner);
+    const post = (tx?.meta?.postTokenBalances ?? []).filter((b) => b.mint === USDC && b.owner === owner);
+    const before = pre.reduce((s, b) => s + ui(b.uiTokenAmount), 0);
+    const after = post.reduce((s, b) => s + ui(b.uiTokenAmount), 0);
+    const delta = Math.round((after - before) * 1e6) / 1e6;
+    const other = (tx?.meta?.postTokenBalances ?? []).find((b) => b.mint === USDC && b.owner && b.owner !== owner)?.owner ?? "";
+    if (delta === 0 && !tx?.meta?.err) continue;
+    out.push({ signature: row.signature, delta, other, time: tx?.blockTime ?? row.blockTime ?? null, err: Boolean(tx?.meta?.err || row.err) });
+  }
+  return out;
 }
 

@@ -204,7 +204,7 @@ export function DerivDesk({ lane: start = "fx", lanes }: { lane?: DerivLane; lan
             Ostium on Arbitrum signs when that pair is listed. Avantis on Base signs when that pair has a Base book. A hold is a Solana token. A share print is not the stock.
           </p>
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1 overflow-x-auto">
           {(LANES.filter(([key]) => allowed.includes(key))).map(([key, label]) => (
             <button
               key={key}
@@ -220,6 +220,18 @@ export function DerivDesk({ lane: start = "fx", lanes }: { lane?: DerivLane; lan
             </button>
           ))}
         </div>
+      </div>
+      <div className="mt-3 flex gap-1 overflow-x-auto">
+        {shown.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setId(item.id)}
+            className={cn("min-h-9 shrink-0 rounded-full px-3 text-xs font-semibold", item.id === row?.id ? "bg-white text-black" : "bg-black/40 text-muted")}
+          >
+            {item.base}/{item.quote}
+          </button>
+        ))}
       </div>
 
       {row ? (

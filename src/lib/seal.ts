@@ -5,13 +5,16 @@ import { finishGrant, listBlobs, openNonce, putBlob } from "@/lib/sealed-store";
  * The key lives in memory for this visit. It is the signature of one fixed line.
  * Postgres stores that ciphertext and nothing else. Flags the desk needs before
  * a wallet exists stay in the clear, and they are not uploaded.
+ * While the vault is locked, that clear copy still reads and writes. Ciphertext
+ * waiting on this wallet is not returned and is not overwritten.
  */
 
 const MARK = "sen1.";
 const EVENT = "senda-seal";
-const PLAIN = new Set(["senda.seen.v1", "senda.howto.v1"]);
+const PLAIN = new Set(["senda.seen.v1", "senda.howto.v1", "senda.passport.v1"]);
 
 let aes: CryptoKey | null = null;
+let door: "wallet" | "phone" = "wallet";
 let who = "";
 let grant = "";
 const open = new Map<string, string>();
@@ -54,6 +57,7 @@ export function sealOpen(): boolean {
 }
 
 function tell() {
+  if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(EVENT));
 }
 
@@ -142,9 +146,11 @@ function install() {
   const store = Storage.prototype;
   store.getItem = function (key: string) {
     if (!own(key)) return rawGet(key);
-    if (open.has(key)) return open.get(key) ?? null;
-    if (!aes) return pending.get(key) ?? null;
-    return null;
+    if (aes) return open.has(key) ? (open.get(key) ?? null) : null;
+    if (pending.has(key)) return pending.get(key) ?? null;
+    const stored = rawGet(key);
+    if (!stored || stored.startsWith(MARK)) return null;
+    return stored;
   };
   store.setItem = function (key: string, value: string) {
     if (!own(key)) {
@@ -153,8 +159,11 @@ function install() {
     }
     if (!aes) {
       pending.set(key, value);
+      const stored = rawGet(key);
+      if (!stored || !stored.startsWith(MARK)) rawSet(key, value);
       return;
     }
+    pending.delete(key);
     open.set(key, value);
     void writeCipher(key, value);
   };
@@ -167,6 +176,63 @@ function install() {
     pending.delete(key);
     rawRemove(key);
   };
+}
+
+export function sealState(): { open: boolean; door: "wallet" | "phone" | "locked" } {
+  return { open: aes != null, door: aes ? door : "locked" };
+}
+
+/** Drop the in-memory key. Ciphertext stays on the device. */
+export function lockSeal() {
+  aes = null;
+  who = "";
+  grant = "";
+  open.clear();
+  pending.clear();
+  tell();
+}
+
+async function absorb() {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i);
+    if (key && own(key)) keys.push(key);
+  }
+  for (const key of keys) {
+    const stored = rawGet(key);
+    if (!stored) continue;
+    if (stored.startsWith(MARK)) {
+      const clear = await unpack(stored);
+      if (clear != null) open.set(key, clear);
+    } else {
+      open.set(key, stored);
+      await writeCipher(key, stored);
+    }
+  }
+  for (const [key, value] of pending) {
+    open.set(key, value);
+    await writeCipher(key, value);
+  }
+  pending.clear();
+}
+
+/** A 32-byte master key already unwrapped on this device. Does not replace a key that is open. */
+export async function unlockSealWithMaster(raw: Uint8Array): Promise<"opened" | "kept"> {
+  install();
+  if (aes) return "kept";
+  if (raw.length !== 32) throw new Error("The phone key is the wrong size.");
+  const copy = new Uint8Array(raw);
+  try {
+    aes = await crypto.subtle.importKey("raw", copy, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  } finally {
+    copy.fill(0);
+  }
+  door = "phone";
+  who = "";
+  grant = "";
+  await absorb();
+  tell();
+  return "opened";
 }
 
 async function signVault(owner: string): Promise<Uint8Array> {
@@ -190,30 +256,12 @@ function walletProvider(): {
 
 export async function unlockSeal(owner: string): Promise<void> {
   install();
+  if (aes) return;
   who = owner;
   grant = "";
   aes = await aesFrom(await signVault(owner));
-  const keys: string[] = [];
-  for (let i = 0; i < localStorage.length; i += 1) {
-    const key = localStorage.key(i);
-    if (key && own(key)) keys.push(key);
-  }
-  for (const key of keys) {
-    const stored = rawGet(key);
-    if (!stored) continue;
-    if (stored.startsWith(MARK)) {
-      const clear = await unpack(stored);
-      if (clear != null) open.set(key, clear);
-    } else {
-      open.set(key, stored);
-      await writeCipher(key, stored);
-    }
-  }
-  for (const [key, value] of pending) {
-    open.set(key, value);
-    await writeCipher(key, value);
-  }
-  pending.clear();
+  door = "wallet";
+  await absorb();
   try {
     await authorize(owner);
     await pull();

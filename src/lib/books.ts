@@ -192,3 +192,66 @@ export function digestBooks(w: Wallet, usdPer: Record<string, number> = {}): Dig
     tied: Math.abs(suspense) < 0.01 && ghost <= cashForGhost + 0.01 && Math.abs(capital - assets) < 0.01,
   };
 }
+
+export type JournalLine = {
+  id: string;
+  at: string;
+  kind: string;
+  memo: string;
+  ccy: string;
+  debit: number;
+  credit: number;
+};
+
+const OUT = new Set(["withdraw", "send", "card", "cover", "nearby"]);
+
+/** Every stored line as a debit or a credit. Nothing is filled in. */
+export function journalOf(w: Wallet): JournalLine[] {
+  return w.txs.map((tx) => {
+    const sale = tx.kind === "invest" && /sale/i.test(tx.note);
+    const spend = OUT.has(tx.kind) || (tx.kind === "invest" && !sale);
+    return {
+      id: tx.id,
+      at: tx.createdAt,
+      kind: tx.kind,
+      memo: tx.counterparty || tx.note || tx.kind,
+      ccy: tx.ccy,
+      debit: spend ? tx.amount : 0,
+      credit: spend ? 0 : tx.amount,
+    };
+  });
+}
+
+export type Alpha = {
+  lines: number;
+  debit: number;
+  credit: number;
+  net: number;
+  kinds: { kind: string; n: number; usd: number }[];
+};
+
+/** Counts and sums from the journal. The token book is the other side of the same account. */
+export function alphaOf(w: Wallet): Alpha {
+  const lines = journalOf(w);
+  const kinds = new Map<string, { n: number; usd: number }>();
+  let debit = 0;
+  let credit = 0;
+  for (const line of lines) {
+    debit += line.debit;
+    credit += line.credit;
+    const row = kinds.get(line.kind) ?? { n: 0, usd: 0 };
+    row.n += 1;
+    row.usd += line.debit || line.credit;
+    kinds.set(line.kind, row);
+  }
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return {
+    lines: lines.length,
+    debit: round(debit),
+    credit: round(credit),
+    net: round(credit - debit),
+    kinds: [...kinds.entries()]
+      .map(([kind, row]) => ({ kind, n: row.n, usd: round(row.usd) }))
+      .sort((a, b) => b.usd - a.usd),
+  };
+}

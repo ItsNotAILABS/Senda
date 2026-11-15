@@ -66,6 +66,8 @@ export const EVM_CHAINS = {
   56: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org", symbol: "BNB", explorer: "https://bscscan.com" },
   42161: { name: "Arbitrum", rpc: "https://arb1.arbitrum.io/rpc", symbol: "ETH", explorer: "https://arbiscan.io" },
   43114: { name: "Avalanche", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorer: "https://snowtrace.io" },
+  8453: { name: "Base", rpc: "https://mainnet.base.org", symbol: "ETH", explorer: "https://basescan.org" },
+  137: { name: "Polygon", rpc: "https://polygon-rpc.com", symbol: "POL", explorer: "https://polygonscan.com" },
 };
 
 /** Token units to sell for about `usd`, never more than the wallet holds. */
