@@ -1,8 +1,9 @@
 export type JournalEntry = {
  signature: string; owner: string; kind: 'swap' | 'send'; asset: string; destination: string;
  amountRaw: string; submittedAt: number; checkedAt: number; status: 'pending' | 'confirmed' | 'finalized' | 'failed';
+ lastValidBlockHeight?: number;
 };
-export type JournalDraft = Omit<JournalEntry, 'submittedAt' | 'checkedAt' | 'status'> & { amountRaw: string | number | bigint };
+export type JournalDraft = Omit<JournalEntry, 'submittedAt' | 'checkedAt' | 'status' | 'amountRaw'> & { amountRaw: string | number | bigint };
 type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 export declare const JOURNAL_KEY: string;
 export declare function listTransactions(storage: StorageLike, owner?: string): JournalEntry[];

@@ -27,7 +27,13 @@ export function validateFriendDestination(input){
   return {kind:"unresolved-contact",address:null,verified:false,reason:"Phone and email recipients require a verified directory and identity service; no payment was created."};
  return {kind:"invalid",address:null,verified:false,reason:"Enter a full Solana address. Phone, card and bank payouts are not connected."};
 }
-export function quoteFriendPayment({recipient,amount,wallet,verified=false,note="",limitUsd=1000}){
+export const PUBLIC_MEMO_NOTICE="Your message is written into a public Solana memo. Anyone can read it on a block explorer, so leave out private details.";
+export const DEFAULT_FRIEND_MEMO="Senda friend payment";
+/**
+ * limitUsd must be the wallet's real per-send cap (spendCap()). payUsdc enforces the same cap again
+ * before signing; the quote only surfaces it early.
+ */
+export function quoteFriendPayment({recipient,amount,wallet,verified=false,note="",limitUsd}){
  const dest=validateFriendDestination(recipient);
  if(dest.kind!=="wallet")return {ready:false,reason:dest.reason,recipient:dest};
  if(!verified)return {ready:false,reason:"Confirm the recipient address before signing; pasted addresses can be replaced by malware.",recipient:dest};
@@ -35,11 +41,20 @@ export function quoteFriendPayment({recipient,amount,wallet,verified=false,note=
   return {ready:false,reason:"Connect the sending wallet and choose a different recipient.",recipient:dest};
  let cents;
  try{cents=usdToCents(amount)}catch(e){return {ready:false,reason:e instanceof Error?e.message:"Invalid amount",recipient:dest};}
- if(!Number.isFinite(limitUsd)||limitUsd<=0||cents>Math.round(limitUsd*100))
-  return {ready:false,reason:"Amount exceeds your configured spending limit.",recipient:dest};
+ if(typeof limitUsd!=="number"||!Number.isFinite(limitUsd)||limitUsd<=0)
+  return {ready:false,reason:"Your per-send spending cap could not be read. Set it on Wallet before sending.",recipient:dest};
+ const capCents=Math.round(limitUsd*100);
+ if(cents>capCents)
+  return {ready:false,reason:`Amount exceeds your $${(capCents/100).toFixed(2)} per-send cap. Raise it on Wallet or send less.`,recipient:dest};
  if(typeof note!=="string"||note.length>80||/[\r\n\x00-\x1f]/.test(note))
   return {ready:false,reason:"Note cannot contain control characters or exceed 80 characters.",recipient:dest};
  return {ready:true,recipient:dest,from:wallet,to:dest.address,cents,usd:cents/100,asset:"USDC",network:"Solana Mainnet",displayCurrency:"USD",
-  senderAction:"Phantom signs transfer",fee:"Wallet network fee; check Phantom preview",settlement:"Wait for Solana confirmation",note:note.trim(),
+  senderAction:"Phantom signs transfer",fee:"Wallet network fee; check Phantom preview",settlement:"Wait for Solana confirmation",note:note.trim(),limitCents:capCents,
   disclosure:"$ amount is paid as an equal quantity of native Solana USDC. This is not a debit-card payment, fiat balance, bank transfer or off-ramp."};
+}
+/** The exact payUsdc input for a ready quote: integer cents end to end, note carried as the on-chain memo. */
+export function buildFriendPayment(quote){
+ if(!quote||quote.ready!==true||typeof quote.from!=="string"||typeof quote.to!=="string"||!Number.isSafeInteger(quote.cents))
+  throw Error("Payment is not ready to sign.");
+ return {owner:quote.from,to:quote.to,cents:quote.cents,memo:quote.note||DEFAULT_FRIEND_MEMO};
 }

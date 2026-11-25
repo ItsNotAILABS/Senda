@@ -5,7 +5,14 @@
 
 import { Buffer } from "buffer";
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
-import { signAndBroadcast } from "@/lib/phantom";
+import { sendSignedRaw, signAndBroadcast, signForJournal, simulateSignedRaw } from "@/lib/phantom";
+import { checkSendRecovery, journaledSend, markNotBroadcast, SendOutcomeUncertain } from "@/lib/journaled-send.mjs";
+import { ataCreateIdempotentData, transferCheckedData } from "@/lib/spl-instructions.mjs";
+import { buildUsdcPayLink, verifyReferencedUsdcPayment } from "@/lib/solana-pay-request.mjs";
+import { assertCents, centsToDecimalString, centsToUsdcRaw, USDC_DECIMALS, usdNumberToCents } from "@/lib/usdc-amount.mjs";
+import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
+import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
+import { quoteRoute, SOL } from "@/lib/jup-sign";
 import { spendCap } from "@/lib/spend-cap";
 import { deskFeeAccount, sendCut } from "@/lib/desk-fee";
 import { fileFill } from "@/lib/trade-log";
@@ -26,6 +33,32 @@ export function usdcPayLink(to: string, usd: number, memo: string): string {
     memo: memo.slice(0, 80),
   });
   return `solana:${to.trim()}?${q.toString()}`;
+}
+
+/** Request by integer cents with a fresh reference key the requester can look up later. */
+export function usdcPayRequest(to: string, cents: number, memo: string): { url: string; reference: string } {
+  const reference = Keypair.generate().publicKey.toBase58();
+  return { url: buildUsdcPayLink({ to, cents, memo, reference, mint: USDC_MINT.toBase58() }), reference };
+}
+
+/** Find a confirmed transaction carrying `reference` and verify it paid `cents` USDC to `to`. */
+export async function findReferencedUsdcPayment(
+  to: string,
+  cents: number,
+  reference: string,
+): Promise<{ paid: boolean; reason: string; signature?: string }> {
+  const sigs = (await rpc("getSignaturesForAddress", [reference, { limit: 10, commitment: "confirmed" }])) as
+    | { signature: string; err: unknown }[]
+    | null;
+  if (!Array.isArray(sigs) || !sigs.length) return { paid: false, reason: "No payment with this reference yet." };
+  let last = { paid: false, reason: "No matching payment yet." };
+  for (const row of sigs) {
+    const tx = await rpc("getTransaction", [row.signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+    const verdict = verifyReferencedUsdcPayment(tx, { recipient: to, mint: USDC_MINT.toBase58(), cents });
+    if (verdict.paid) return { ...verdict, signature: row.signature };
+    last = verdict;
+  }
+  return last;
 }
 
 function rpc(method: string, params: unknown[]): Promise<unknown> {
@@ -67,11 +100,18 @@ function u64(amount: bigint): Uint8Array {
   return d;
 }
 
-async function blockhash(): Promise<string> {
-  const result = (await rpc("getLatestBlockhash", [{ commitment: "confirmed" }])) as { value?: { blockhash?: string } };
+async function latestBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
+  const result = (await rpc("getLatestBlockhash", [{ commitment: "confirmed" }])) as {
+    value?: { blockhash?: string; lastValidBlockHeight?: number };
+  };
   const hash = result?.value?.blockhash;
-  if (!hash) throw new Error("No blockhash.");
-  return hash;
+  const last = result?.value?.lastValidBlockHeight;
+  if (!hash || !Number.isSafeInteger(last)) throw new Error("No blockhash.");
+  return { blockhash: hash, lastValidBlockHeight: last as number };
+}
+
+async function blockhash(): Promise<string> {
+  return (await latestBlockhash()).blockhash;
 }
 
 async function accountExists(address: PublicKey): Promise<boolean> {
@@ -79,98 +119,145 @@ async function accountExists(address: PublicKey): Promise<boolean> {
   return Boolean(result?.value);
 }
 
-/** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
-export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string; deskFee?: boolean }): Promise<{ signature: string; reference: string; feeUsd: number }> {
-  const usd = Math.round(input.usd * 100) / 100;
-  if (!(usd > 0)) throw new Error("Enter an amount.");
-  const cap = spendCap();
-  if (usd > cap) throw new Error(`That is over the spend cap of ${cap}. Raise it on the wallet, or send less.`);
-  let to: PublicKey;
+/**
+ * USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses.
+ * Pass integer `cents` (preferred). `usd` remains for legacy callers and is converted once to cents.
+ * The transfer is TransferChecked (mint + 6 decimals verified on-chain), the recipient token
+ * account is created idempotently, and the signed transaction is journaled before broadcast.
+ * `deskFee` (from later main) adds an optional TransferChecked desk cut and is returned as `feeUsd`.
+ */
+export async function payUsdc(input: { owner: string; to: string; cents?: number; usd?: number; memo?: string; deskFee?: boolean }): Promise<{ signature: string; reference: string; feeUsd: number }> {
+  return withWalletExecutionLock(input.owner, async () => {
   let owner: PublicKey;
+  let to: PublicKey;
+  let cents: number;
+  let raw: bigint;
   try {
-    owner = new PublicKey(input.owner);
-    to = new PublicKey(input.to.trim());
-  } catch {
-    throw new Error("That is not a Solana address.");
+    cents = typeof input.cents === "number" ? assertCents(input.cents) : usdNumberToCents(input.usd as number);
+    const capCents = Math.round(spendCap() * 100);
+    const feeCents = input.deskFee ? Math.round(sendCut(cents / 100).usd * 100) : 0;
+    if (cents + feeCents > capCents) throw new Error(`That is over the spend cap of ${spendCap()}. Raise it on the wallet, or send less.`);
+    try {
+      owner = new PublicKey(input.owner);
+      to = new PublicKey(input.to.trim());
+    } catch {
+      throw new Error("That is not a Solana address.");
+    }
+    if (owner.equals(to)) throw new Error("Pay someone else.");
+    raw = centsToUsdcRaw(cents);
+  } catch (e) {
+    throw markNotBroadcast(e);
   }
-  if (owner.equals(to)) throw new Error("Pay someone else.");
+  const journalDraft = {
+    owner: owner.toBase58(), kind: "send" as const,
+    asset: "USDC", destination: to.toBase58(), amountRaw: raw.toString(),
+  };
+  try {
+    assertNoPendingDuplicate(window.localStorage, journalDraft);
+  } catch (e) {
+    // A matching pending transfer exists or the journal is unreadable: never treat as safe to retry.
+    throw new SendOutcomeUncertain(e instanceof Error ? e.message : "A matching transfer may already be on-chain.");
+  }
   const source = ata(owner);
-  if (!(await accountExists(source))) throw new Error("This wallet has no USDC account.");
   const dest = ata(to);
-  const raw = BigInt(Math.round(usd * 1_000_000));
   const reference = Keypair.generate().publicKey;
   const ix: TransactionInstruction[] = [];
-  if (!(await accountExists(dest))) {
+  let latest: { blockhash: string; lastValidBlockHeight: number };
+  let feeUsd = 0;
+  try {
+    if (!(await accountExists(source))) throw new Error("This wallet has no USDC account.");
+    if (!(await accountExists(dest))) {
+      ix.push(
+        new TransactionInstruction({
+          programId: ATA_PROGRAM,
+          keys: [
+            { pubkey: owner, isSigner: true, isWritable: true },
+            { pubkey: dest, isSigner: false, isWritable: true },
+            { pubkey: to, isSigner: false, isWritable: false },
+            { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+            { pubkey: SYSTEM, isSigner: false, isWritable: false },
+            { pubkey: TOKEN, isSigner: false, isWritable: false },
+          ],
+          // CreateIdempotent: still succeeds if the account appears between the check and the send.
+          data: Buffer.from(ataCreateIdempotentData()),
+        }),
+      );
+    }
     ix.push(
       new TransactionInstruction({
-        programId: ATA_PROGRAM,
+        programId: TOKEN,
         keys: [
-          { pubkey: owner, isSigner: true, isWritable: true },
-          { pubkey: dest, isSigner: false, isWritable: true },
-          { pubkey: to, isSigner: false, isWritable: false },
+          { pubkey: source, isSigner: false, isWritable: true },
           { pubkey: USDC_MINT, isSigner: false, isWritable: false },
-          { pubkey: SYSTEM, isSigner: false, isWritable: false },
-          { pubkey: TOKEN, isSigner: false, isWritable: false },
+          { pubkey: dest, isSigner: false, isWritable: true },
+          { pubkey: owner, isSigner: true, isWritable: false },
         ],
-        data: Buffer.alloc(0),
+        data: Buffer.from(transferCheckedData(raw, USDC_DECIMALS)),
       }),
     );
-  }
-  ix.push(
-    new TransactionInstruction({
-      programId: TOKEN,
-      keys: [
-        { pubkey: source, isSigner: false, isWritable: true },
-        { pubkey: dest, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: true, isWritable: false },
-      ],
-      data: Buffer.from(u64(raw)),
-    }),
-  );
-  const memo = `${input.memo ?? `Senda USDC ${usd}`} ref=${reference.toBase58()}`;
-  ix.push(
-    new TransactionInstruction({
-      programId: MEMO,
-      keys: [
-        { pubkey: owner, isSigner: true, isWritable: false },
-        { pubkey: reference, isSigner: false, isWritable: false },
-      ],
-      data: Buffer.from(new TextEncoder().encode(memo)),
-    }),
-  );
-  let feeUsd = 0;
-  if (input.deskFee) {
-    const cut = sendCut(usd);
-    const acct = deskFeeAccount();
-    if (cut.usd > 0 && acct) {
-      try {
-        const feeDest = new PublicKey(acct);
-        if (!feeDest.equals(dest) && (await accountExists(feeDest))) {
-          feeUsd = cut.usd;
-          ix.push(
-            new TransactionInstruction({
-              programId: TOKEN,
-              keys: [
-                { pubkey: source, isSigner: false, isWritable: true },
-                { pubkey: feeDest, isSigner: false, isWritable: true },
-                { pubkey: owner, isSigner: true, isWritable: false },
-              ],
-              data: Buffer.from(u64(BigInt(Math.round(feeUsd * 1_000_000)))),
-            }),
-          );
+    const memoText = (input.memo ?? `Senda USDC ${centsToDecimalString(cents)}`).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 80);
+    const memo = `${memoText} ref=${reference.toBase58()}`;
+    ix.push(
+      new TransactionInstruction({
+        programId: MEMO,
+        keys: [
+          { pubkey: owner, isSigner: true, isWritable: false },
+          { pubkey: reference, isSigner: false, isWritable: false },
+        ],
+        data: Buffer.from(new TextEncoder().encode(memo)),
+      }),
+    );
+    if (input.deskFee) {
+      const cut = sendCut(cents / 100);
+      const acct = deskFeeAccount();
+      if (cut.usd > 0 && acct) {
+        try {
+          const feeDest = new PublicKey(acct);
+          if (!feeDest.equals(dest) && (await accountExists(feeDest))) {
+            feeUsd = cut.usd;
+            ix.push(
+              new TransactionInstruction({
+                programId: TOKEN,
+                keys: [
+                  { pubkey: source, isSigner: false, isWritable: true },
+                  { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+                  { pubkey: feeDest, isSigner: false, isWritable: true },
+                  { pubkey: owner, isSigner: true, isWritable: false },
+                ],
+                data: Buffer.from(transferCheckedData(centsToUsdcRaw(Math.round(feeUsd * 100)), USDC_DECIMALS)),
+              }),
+            );
+          }
+        } catch {
+          feeUsd = 0;
         }
-      } catch {
-        feeUsd = 0;
       }
     }
+    latest = await latestBlockhash();
+  } catch (e) {
+    throw markNotBroadcast(e);
   }
   const tx = new Transaction();
   tx.feePayer = owner;
-  tx.recentBlockhash = await blockhash();
+  tx.recentBlockhash = latest.blockhash;
   tx.add(...ix);
-  const signature = await signAndBroadcast(tx);
-  fileFill({ owner: input.owner, symbol: "USDC", side: "send", usd, mint: USDC_MINT.toBase58(), signature });
+  // Journal the signed transaction's signature before it is broadcast; the receipt is the chain confirmation.
+  const { signature } = await journaledSend({
+    storage: window.localStorage,
+    draft: { ...journalDraft, lastValidBlockHeight: latest.lastValidBlockHeight },
+    sign: () => signForJournal(tx),
+    preflight: simulateSignedRaw,
+    send: sendSignedRaw,
+    rpc,
+  });
+  fileFill({ owner: input.owner, symbol: "USDC", side: "send", usd: cents / 100, mint: USDC_MINT.toBase58(), signature });
   return { signature, reference: reference.toBase58(), feeUsd };
+  });
+}
+
+/** Check the journal and the chain before a retry is allowed after an uncertain send. */
+export function checkUsdcSendRecovery(owner: string, signature: string | null) {
+  return checkSendRecovery({ storage: window.localStorage, owner, rpc, signature });
 }
 
 /** An SPL the wallet already holds. Decimals default to 6. The mint's own program signs the move, so Cash and USDT leave the same way USDC does. */
@@ -235,8 +322,10 @@ export async function payToken(input: { owner: string; to: string; mint: string;
   return { signature };
 }
 
+
 /** SOL from the connected wallet. Phantom signs. Senda does not hold the key. */
 export async function paySol(input: { owner: string; to: string; sol: number }): Promise<string> {
+  return withWalletExecutionLock(input.owner, async () => {
   if (!(input.sol > 0)) throw new Error("Enter an amount.");
   let owner: PublicKey;
   let to: PublicKey;
@@ -248,12 +337,35 @@ export async function paySol(input: { owner: string; to: string; sol: number }):
   }
   if (owner.equals(to)) throw new Error("Pay someone else.");
   const lamports = Math.round(input.sol * 1_000_000_000);
-  if (lamports < 1) throw new Error("Enter an amount.");
+  if (!Number.isSafeInteger(lamports) || lamports < 1) throw new Error("Enter an exact SOL amount.");
+  // A SOL send also consumes the dollar-denominated wallet spend cap.
+  const quoted = await quoteRoute({ inputMint: SOL, outputMint: USDC_MINT.toBase58(), amountRaw: lamports, outDecimals: 6 });
+  if (!(quoted.outUi > 0) || !Number.isFinite(quoted.outUi)) throw new Error("Could not value SOL for the spending limit.");
+  if (quoted.outUi > spendCap()) throw new Error("This SOL transfer exceeds your wallet spend cap.");
+  const journalDraft = {
+    owner: owner.toBase58(), kind: "send" as const,
+    asset: "SOL", destination: to.toBase58(), amountRaw: String(lamports),
+  };
+  try {
+    assertNoPendingDuplicate(window.localStorage, journalDraft);
+  } catch (e) {
+    throw new SendOutcomeUncertain(e instanceof Error ? e.message : "A matching transfer may already be on-chain.");
+  }
+  const latest = await latestBlockhash();
   const tx = new Transaction();
   tx.feePayer = owner;
-  tx.recentBlockhash = await blockhash();
+  tx.recentBlockhash = latest.blockhash;
   tx.add(SystemProgram.transfer({ fromPubkey: owner, toPubkey: to, lamports }));
-  return signAndBroadcast(tx);
+  const { signature } = await journaledSend({
+    storage: window.localStorage,
+    draft: { ...journalDraft, lastValidBlockHeight: latest.lastValidBlockHeight },
+    sign: () => signForJournal(tx),
+    preflight: simulateSignedRaw,
+    send: sendSignedRaw,
+    rpc,
+  });
+  return signature;
+  });
 }
 
 function ataOf(owner: PublicKey, mint: PublicKey): PublicKey {

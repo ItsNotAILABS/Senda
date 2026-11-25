@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { openReceiveAccount, type IssuedAccount } from "@/lib/receive-account";
 import { phantomProvider, waitForInjected } from "@/lib/phantom";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { receiveAuthorizationMessage } from "@/lib/receive-account-auth.mjs";
 import { cn } from "@/lib/utils";
 
 type Ccy = "usd" | "eur" | "mxn" | "usdc";
@@ -76,7 +77,7 @@ export function AccountDetails({ owner }: { owner: string }) {
       const signedAt=Date.now();
       const nonceBytes=new Uint8Array(16);window.crypto.getRandomValues(nonceBytes);
       const nonce=Array.from(nonceBytes,v=>v.toString(16).padStart(2,"0")).join("");
-      const message=new TextEncoder().encode(`senda.receive-account:v1:${owner}:${ccy}:${signedAt}:${user.id}:${nonce}`);
+      const message=new TextEncoder().encode(receiveAuthorizationMessage({owner,currency:ccy,signedAt,userId:user.id,nonce}));
       const signed=await provider.signMessage(message,"utf8");
       const signature=Uint8Array.from(signed.signature);
       if(signature.length!==64)throw Error("Phantom did not return a valid wallet signature.");

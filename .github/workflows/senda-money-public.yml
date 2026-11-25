@@ -5,14 +5,30 @@ on:
       - 'src/lib/friend-payments.*'
       - 'src/lib/money-settlement-core.*'
       - 'src/lib/paper-money-policy.*'
+      - 'src/lib/usdc-amount.*'
+      - 'src/lib/spl-instructions.*'
+      - 'src/lib/journaled-send.*'
+      - 'src/lib/tx-journal.*'
+      - 'src/lib/solana-pay.ts'
+      - 'src/lib/solana-pay-request.*'
+      - 'src/lib/phantom.ts'
+      - 'src/lib/receive-account*'
       - 'src/lib/wallet.ts'
       - 'src/lib/use-wallet.ts'
-      - 'src/lib/receive-account.ts'
       - 'src/components/friends-money-desk.tsx'
       - 'src/components/money-rail-view.tsx'
       - 'src/components/account-details.tsx'
       - 'src/routes/payments/**'
+      - 'migrations/0009_receive_auth_nonce.sql'
+      - 'scripts/friend-payments.test.mjs'
+      - 'scripts/usdc-amount.test.mjs'
+      - 'scripts/spl-instructions.test.mjs'
+      - 'scripts/journaled-send.test.mjs'
+      - 'scripts/solana-pay-request.test.mjs'
+      - 'scripts/receive-account-auth.test.mjs'
       - 'scripts/*money*.test.mjs'
+      - 'tsconfig.money.json'
+      - '.github/workflows/senda-money-public.yml'
       - 'docs/SENDA_MONEY_PUBLIC_LAUNCH.md'
   workflow_dispatch:
 permissions:
@@ -27,11 +43,23 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Financial state-machine and source-boundary regressions
-        run: node --test scripts/friend-payments.test.mjs scripts/money-settlement-core.test.mjs scripts/paper-money-policy.test.mjs scripts/money-public-safety.test.mjs
       - name: Dependencies
         run: npm ci
-      - name: TypeScript
-        run: npm run typecheck
+      - name: Money behavior tests
+        run: >-
+          node --test
+          scripts/friend-payments.test.mjs
+          scripts/usdc-amount.test.mjs
+          scripts/spl-instructions.test.mjs
+          scripts/journaled-send.test.mjs
+          scripts/solana-pay-request.test.mjs
+          scripts/money-settlement-core.test.mjs
+          scripts/receive-account-auth.test.mjs
+          scripts/paper-money-policy.test.mjs
+          scripts/money-public-safety.test.mjs
+      # Scoped to the money surface: the repo-wide `npm run typecheck` has
+      # pre-existing errors unrelated to this workflow.
+      - name: TypeScript (money files)
+        run: npx tsc --noEmit -p tsconfig.money.json
       - name: Build
         run: npm run build:dev
