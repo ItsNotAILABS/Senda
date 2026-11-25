@@ -12,14 +12,18 @@ export function treasuryProposal(input){
  const deny=reason=>({status:"denied",reason,canExecute:false});
  if(!input||typeof input!=="object"||!SOLANA_ADDRESS.test(input.owner||"")||
    !SOLANA_ADDRESS.test(input.agent||"")||!SOLANA_ADDRESS.test(input.beneficiary||"")||
-   !SOLANA_ADDRESS.test(input.mint||"")||input.owner===input.agent||
+   !SOLANA_ADDRESS.test(input.mint||"")||input.owner===input.agent||input.agent===input.beneficiary||
+   (input.guardian!=null&&(!SOLANA_ADDRESS.test(input.guardian)||input.guardian===input.agent))||
    !Number.isInteger(input.decimals)||input.decimals<0||input.decimals>18)return deny("INVALID_ACCOUNTS");
  const perTx=minorUnits(input.perTx,input.decimals),daily=minorUnits(input.daily,input.decimals),lifetime=minorUnits(input.lifetime,input.decimals);
  if(!perTx||!daily||!lifetime||BigInt(perTx)>BigInt(daily)||BigInt(daily)>BigInt(lifetime))
   return deny("INVALID_LIMITS");
  if(!Number.isSafeInteger(input.expiresAt)||input.expiresAt<=Date.now()/1000)return deny("INVALID_EXPIRATION");
+ // Treasury layout v2: one PDA per (owner, mint, seedId); seedId is a u64 the owner picks.
+ const seedId=input.seedId==null?"0":String(input.seedId);
+ if(!/^(?:0|[1-9][0-9]{0,19})$/.test(seedId)||BigInt(seedId)>18446744073709551615n)return deny("INVALID_SEED_ID");
  return {status:"review",kind:"treasury.create",owner:input.owner,agent:input.agent,
-  beneficiary:input.beneficiary,mint:input.mint,decimals:input.decimals,
+  beneficiary:input.beneficiary,mint:input.mint,seedId,guardian:input.guardian??null,decimals:input.decimals,
   perTxMinor:perTx,dailyMinor:daily,lifetimeMinor:lifetime,expiresAt:input.expiresAt,
   requiresOwnerSignature:true,requiresOnchainProgramVerification:true,canExecute:false};
 }
