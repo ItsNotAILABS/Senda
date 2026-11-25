@@ -228,3 +228,14 @@ Senda's native `/social/events` experience now includes a rebuilt market termina
 **Phantom execution rules:** Phantom's U.S. Kalshi account is operated inside Phantom's native app; a Senda `signMessage` acknowledgement authorizes research only. The separate DFlow Solana outcome-token transaction path uses Phantom signing but remains partner/KYC/jurisdiction/program-gated and disabled by default. Senda does not reuse Kalshi public prices as guaranteed executable DFlow quotes.
 
 Code and release rules: [docs/KALSHI_CONTINGENCY_STUDIO.md](docs/KALSHI_CONTINGENCY_STUDIO.md). Source changes are not a production activation. Require GitHub CI, browser/mobile QA, official-source verification and external approval before launch.
+
+
+## Senda Event Intelligence — reusable ecosystem API (November 2026)
+
+The Kalshi Markets V3 and Contingency Lab code has a separate, independently deployable **`services/event-intelligence/`** service with Node 22, a versioned OpenAPI 3.1 contract, Vercel function entrypoint, bearer-authenticated read-only market and scenario endpoints, and a server-side SDK.
+
+The on-screen Senda experience imports the **same canonical domain modules** that the service runs; there is no competing simulation or duplicate probability engine.
+
+**Consumers:** Senda, SendaPay backend via `integrations/sendapay/event-intelligence-client.mjs`, governed Kiln agents and approved external partners. **SendaPay is not automatically connected and no money transfer API was invented.** See [deployment guide](services/event-intelligence/README.md) and [service manifest](services/event-intelligence/service-manifest.json).
+
+All financial operations remain out of authority: no Kalshi brokerage session, on-chain settlement, wallet signing, payment execution, insurance underwriting or claims. A read-only research digest is not proof of a real-world financial transaction. The separate service is **not live until deployed with approved private credentials and passing production checks**.
