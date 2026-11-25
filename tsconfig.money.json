@@ -1,0 +1,27 @@
+{
+  // Scoped type check for the Senda Money surface (PR #44 review). The full
+  // `npm run typecheck` still has pre-existing errors elsewhere in the repo; this
+  // config lets CI gate the money files without being permanently red.
+  // tsc follows imports, so anything these files pull in must type-check too.
+  // Route files are excluded: their createFileRoute paths are typed by the
+  // generated routeTree.gen.ts, which only exists after a Vite build.
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/bs58.d.ts",
+    "src/lib/friend-payments.d.mts",
+    "src/lib/usdc-amount.d.mts",
+    "src/lib/spl-instructions.d.mts",
+    "src/lib/journaled-send.d.mts",
+    "src/lib/tx-journal.d.mts",
+    "src/lib/solana-pay-request.d.mts",
+    "src/lib/money-settlement-core.d.mts",
+    "src/lib/paper-money-policy.d.mts",
+    "src/lib/receive-account-auth.d.mts",
+    "src/lib/solana-pay.ts",
+    "src/lib/phantom.ts",
+    "src/lib/receive-account.ts",
+    "src/components/friends-money-desk.tsx",
+    "src/components/money-rail-view.tsx",
+    "src/components/account-details.tsx"
+  ]
+}
