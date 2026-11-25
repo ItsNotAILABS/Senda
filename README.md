@@ -217,3 +217,14 @@ Phantom Cash, Kalshi balances, native Solana USDC/outcome tokens and Polymarket 
 ### Prediction venue reliability hardening (Nov 6)
 
 The stacked provider-hardening branch fixes DFlow's documented `accounts.usdc` mint shape, explicitly locks crypto dependencies used by Phantom mobile, adds browser-native Ed25519 verification for Senda research signatures, and rejects unsupported DFlow submit/multi-signature/lookup-table transactions before wallet signing. It also unlocks Senda's encrypted recovery journal on the DFlow Phantom connect path. Read [provider hardening notes](docs/PREDICTION_PROVIDER_HARDENING.md). These are source fixes pending successful full CI and authorized production wallet tests; not a claim that all live venue orders now work.
+
+
+### Agent Trading, Encryption and Open-Source Infrastructure (November 2026)
+
+Senda is a **bring-your-own-wallet financial desk**, not a licensed bank or managed investment account. PARRALAX is being built as its separately deployable financial intelligence, pretrade-risk, agent-budget and execution-evidence backend. Research agents may observe, compare and propose; they do not gain wallet signing or withdrawal privileges by being enabled.
+
+**Security architecture:** [Financial encryption, custody boundaries and agent risk](docs/FINANCIAL_SECURITY_ENCRYPTION_AND_AGENT_TRADING.md). Existing wallet-encrypted continuity and passphrase boxes protect data at rest, not an unlocked browser. New KMS-keyed AES-256-GCM evidence envelopes are in `integrations/parralax-security` but are not yet attached to a production receipt store. Legacy localStorage-funded agent and table keys need a user-controlled recovery and migration plan before unattended funded trading.
+
+**Open-source intake:** [integration registry](integrations/open-source/catalog.json) tracks license, execution readiness and exact integration choice. An AGPL or BSL project is not silently copied into Senda. Paused Drift/Velocity lineage is blocked for new trade routes until the actual deployed venue is independently verified.
+
+**Governed trading:** [server-only PARRALAX risk client](integrations/parralax-trading/client.mjs) requires a separate authenticated policy/market-evidence service, confirmation and atomic budgets. It has no trade-submission method. No autonomous funded strategy or verified investment performance is claimed from this update.
