@@ -119,3 +119,12 @@ Canonical UI: `src/components/event-markets-desk.tsx`; dedicated route `/social/
 - `contingency-analysis.mjs` models event win/loss and real-world expense occurrence independently for both YES and NO. The separate self-funded reserve calculation has no financial-execution authority. Never label an event contract as insurer-backed coverage, protection payout, indemnity, policy or guaranteed hedge.
 - No regulated parametric insurance sale without appropriately authorized partners and jurisdiction-specific legal/insurance review.
 - Validate with `node --test scripts/contingency-analysis.test.mjs scripts/kalshi-history.test.mjs`, `npm run typecheck`, `npm run build:dev`, Phantom mobile/browser QA and provider-source receipts. Do not claim CI success when runner jobs never executed.
+
+
+## Event Intelligence service boundary (November 2026)
+
+Canonical risk and market policy now lives under `services/event-intelligence/src/`. Imports under `src/lib/event-contract-router.mjs`, `src/lib/contingency-analysis.mjs`, `src/lib/event-market-discovery.mjs` and `src/lib/kalshi-history-core.mjs` are re-export shims for backward compatibility. **Do not reintroduce two independent calculation implementations.**
+
+Service root is `services/event-intelligence/` (Node 22, Vercel Other), OpenAPI 3.1 in `openapi.json`, manifest in `service-manifest.json`, and consumer adapter at `integrations/sendapay/event-intelligence-client.mjs`. Any SendaPay or Kiln integration is server-to-server only, without public browser credentials, payment authority or fabricated customer balances.
+
+Use `npm ci && npm test && npm run build` from the service root, plus Senda's market tests. Real provider source mapping, multi-instance quotas, Vercel preview and browser flows must be verified prior to release. Current service digests are local SHA256 receipts, **not durable or on-chain proofs**. No unapproved insurance or DFlow/Kalshi order execution.
