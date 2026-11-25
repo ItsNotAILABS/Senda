@@ -1,0 +1,37 @@
+name: Senda money public-release hardening
+on:
+  pull_request:
+    paths:
+      - 'src/lib/friend-payments.*'
+      - 'src/lib/money-settlement-core.*'
+      - 'src/lib/paper-money-policy.*'
+      - 'src/lib/wallet.ts'
+      - 'src/lib/use-wallet.ts'
+      - 'src/lib/receive-account.ts'
+      - 'src/components/friends-money-desk.tsx'
+      - 'src/components/money-rail-view.tsx'
+      - 'src/components/account-details.tsx'
+      - 'src/routes/payments/**'
+      - 'scripts/*money*.test.mjs'
+      - 'docs/SENDA_MONEY_PUBLIC_LAUNCH.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  finance-boundaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Financial state-machine and source-boundary regressions
+        run: node --test scripts/friend-payments.test.mjs scripts/money-settlement-core.test.mjs scripts/paper-money-policy.test.mjs scripts/money-public-safety.test.mjs
+      - name: Dependencies
+        run: npm ci
+      - name: TypeScript
+        run: npm run typecheck
+      - name: Build
+        run: npm run build:dev

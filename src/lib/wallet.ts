@@ -4,6 +4,7 @@
  */
 
 import { encodeNote, makeCode, type NearbyPayload } from "@/lib/nearby";
+import { paperLedgerEnabled, UNSETTLED_PAYMENT_MESSAGE } from "@/lib/paper-money-policy.mjs";
 import { issueSendaKey } from "@/lib/senda-keys";
 import { endToEndOf, pain001, uetrOf } from "@/lib/iso20022";
 import { authRequest, authResponse, reasonToRc } from "@/lib/iso8583";
@@ -17,6 +18,8 @@ import {
   type IssuedCard,
 } from "@/lib/card-issuing";
 
+const allowPaperLedger = () => paperLedgerEnabled(import.meta.env?.MODE,import.meta.env?.VITE_SENDA_ENABLE_PAPER_MONEY);
+const paperError = () => ({error:UNSETTLED_PAYMENT_MESSAGE});
 export const FIAT_CCYS = ["USD", "EUR", "GBP", "MXN"] as const;
 export const CRYPTO_CCYS = ["USDC", "SOL"] as const;
 export const CCYS = ["USD", "EUR", "GBP", "MXN", "USDC", "SOL"] as const;
@@ -370,6 +373,8 @@ export function formatPan(raw: string): string {
 }
 
 export function sendaDeposit(tag: string): { bank: string; routing: string; account: string } {
+  // Only a licensed provider can issue real bank receiving instructions.
+  if(!allowPaperLedger())return {bank:"Not connected",routing:"",account:""};
   let h = 2166136261;
   for (let i = 0; i < tag.length; i += 1) h = Math.imul(h ^ tag.charCodeAt(i), 16777619);
   const acc = String(10000000 + ((h >>> 0) % 90000000));
@@ -383,6 +388,7 @@ export function addPayCard(
   cvv: string,
   nameOn: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const d = digitsOnly(pan);
   if (!luhnOk(d)) return { error: "Card number doesn’t check out." };
   const exp = expiry.replace(/\s/g, "");
@@ -412,6 +418,7 @@ export function addMaskedCard(
   nameOn: string,
   token: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (!/^\d{4}$/.test(last4)) return { error: "Could not mask that card." };
   const exp = expiry.replace(/\s/g, "");
   if (!/^\d{2}\/\d{2}$/.test(exp)) return { error: "Expiry is MM/YY." };
@@ -487,6 +494,7 @@ export function addPayBank(
   routing: string,
   account: string,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const name = bank.trim();
   const rt = digitsOnly(routing);
   const ac = digitsOnly(account);
@@ -549,6 +557,7 @@ export function addMoney(
   ccy: Ccy = "USD",
   source: FundSource = "bank",
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, ccy);
   if (!(amt > 0)) return { error: "Enter an amount." };
   const next = {
@@ -615,6 +624,7 @@ export function addMoney(
 }
 
 export function withdraw(w: Wallet, amount: number, ccy: Ccy = "USD"): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, ccy);
   if (!(amt > 0)) return { error: "Enter an amount." };
   if (w.balances[ccy] < amt) return { error: `Not enough ${ccy}.` };
@@ -634,6 +644,7 @@ export function withdraw(w: Wallet, amount: number, ccy: Ccy = "USD"): Wallet | 
 }
 
 export function releaseToWallet(w: Wallet, amount: number, label: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Enter an amount." };
   if ((w.balances.USD || 0) < amt) return { error: "Not enough Senda cash." };
@@ -661,6 +672,7 @@ export function sendTo(
   amountUsd: number,
   weekend: boolean,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, ccy);
   if (!(amt > 0)) return { error: "Enter an amount." };
   if (w.balances[ccy] < amt) return { error: `Not enough ${ccy}.` };
@@ -720,6 +732,7 @@ export function convert(
   amountUsd: number,
   weekend: boolean,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (from === to) return { error: "Pick two currencies." };
   const amt = roundCcy(amount, from);
   if (!(amt > 0)) return { error: "Enter an amount." };
@@ -752,6 +765,7 @@ export function spendCard(
   cardId?: string,
   mcc = "5999",
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const card =
     (cardId ? w.cards.find((c) => c.id === cardId) : w.cards.find((c) => !c.frozen && c.status !== "terminated")) ??
     w.cards[0];
@@ -830,6 +844,7 @@ export function terminateCard(w: Wallet, cardId: string): Wallet {
 }
 
 export function replaceCard(w: Wallet, cardId: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const card = w.cards.find((c) => c.id === cardId);
   if (!card) return { error: "No card." };
   if (card.status === "terminated") return { error: "Terminated. Issue a new one." };
@@ -838,6 +853,7 @@ export function replaceCard(w: Wallet, cardId: string): Wallet | { error: string
 }
 
 export function setCardLimit(w: Wallet, cardId: string, dailyLimit: number): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const n = roundCcy(dailyLimit, "USD");
   if (!(n > 0)) return { error: "Enter a limit." };
   return {
@@ -847,6 +863,7 @@ export function setCardLimit(w: Wallet, cardId: string, dailyLimit: number): Wal
 }
 
 export function moveToPocket(w: Wallet, pocketId: string, amount: number): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Enter an amount." };
   if (w.balances.USD < amt) return { error: "Not enough USD." };
@@ -858,6 +875,7 @@ export function moveToPocket(w: Wallet, pocketId: string, amount: number): Walle
 }
 
 export function investDebit(w: Wallet, amount: number, name: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Enter an amount." };
   const rail: Ccy = w.balances.USD >= amt ? "USD" : w.balances.USDC >= amt ? "USDC" : "USD";
@@ -909,6 +927,7 @@ export function issueCheckout(
   merchant: string,
   nameOn = "SENDA",
 ): { wallet: Wallet; reveal: CheckoutReveal } | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (!(cap > 0)) return { error: "Set a cap for this purchase." };
   if (w.cards.filter((c) => c.status !== "terminated").length >= 6) return { error: "Six live cards max." };
   const minted = mintCard("once", nameOn || "SENDA", cap);
@@ -939,6 +958,7 @@ export function issueCard(
   nameOn = "SENDA",
   dailyLimit = 1500,
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (w.cards.filter((c) => c.status !== "terminated").length >= 6) return { error: "Six live cards max." };
   const k: IssueKind = kind === "fleet" || kind === "once" ? kind : "virtual";
   return { ...w, cards: [...w.cards, mintCard(k, nameOn, dailyLimit)] };
@@ -948,6 +968,7 @@ export function buyCover(
   w: Wallet,
   plan: { id: string; title: string; premium: number; cover: number; term: string },
 ): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(plan.premium, "USD");
   if (w.balances.USD < amt) return { error: "Not enough USD." };
   const until = new Date(Date.now() + 30 * 86_400_000).toISOString();
@@ -972,6 +993,7 @@ export function buyCover(
 
 /** Pays a drop cover that already fired. The premium was taken when they bought it. */
 export function payCover(w: Wallet, amount: number, title: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Nothing to pay." };
   const next = {
@@ -991,6 +1013,7 @@ export function payCover(w: Wallet, amount: number, title: string): Wallet | { e
 
 /** One round. Stake leaves, payout is added, both in the same save. */
 export function playRound(w: Wallet, stake: number, payout: number, note: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const st = roundCcy(stake, "USD");
   if (!(st > 0)) return { error: "Set a stake." };
   if (w.balances.USD < st) return { error: "Not enough cash for that stake." };
@@ -1009,6 +1032,7 @@ export function playRound(w: Wallet, stake: number, payout: number, note: string
 
 /** Stake leaves Senda cash. A win pays the stake back twice. A loss keeps it. */
 export function playStake(w: Wallet, amount: number, note: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, "USD");
   if (!(amt > 0)) return { error: "Set a stake." };
   if (w.balances.USD < amt) return { error: "Not enough cash for that stake." };
@@ -1040,6 +1064,7 @@ export function playWin(w: Wallet, amount: number, note: string): Wallet {
 
 /** One claim pays the cover and ends it. Not a licensed carrier. */
 export function claimCover(w: Wallet, policyId: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const p = w.policies.find((x) => x.id === policyId);
   if (!p) return { error: "That cover is not on the account." };
   if (Date.parse(p.until) < Date.now()) return { error: "That cover has ended." };
@@ -1123,6 +1148,7 @@ export function openVault(w: Wallet, name: string, ccy: Ccy = "USD"): Wallet | {
 }
 
 export function vaultIn(w: Wallet, vaultId: string, amount: number): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const v = w.vaults.find((x) => x.id === vaultId);
   if (!v) return { error: "Vault not found." };
   if (v.lockUntil && Date.parse(v.lockUntil) > Date.now()) return { error: "Vault is locked." };
@@ -1146,6 +1172,7 @@ export function vaultIn(w: Wallet, vaultId: string, amount: number): Wallet | { 
 }
 
 export function vaultOut(w: Wallet, vaultId: string, amount: number): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const v = w.vaults.find((x) => x.id === vaultId);
   if (!v) return { error: "Vault not found." };
   if (v.lockUntil && Date.parse(v.lockUntil) > Date.now()) return { error: "Vault is locked." };
@@ -1169,6 +1196,7 @@ export function vaultOut(w: Wallet, vaultId: string, amount: number): Wallet | {
 }
 
 export function investFromVault(w: Wallet, vaultId: string, amount: number, name: string): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const v = w.vaults.find((x) => x.id === vaultId);
   if (!v) return { error: "Vault not found." };
   if (v.ccy !== "USD") return { error: "PreStocks settle in USD. Move to cash or a USD vault." };
@@ -1194,6 +1222,7 @@ export function issueNearby(
   amount: number,
   ccy: Ccy,
 ): { wallet: Wallet; note: NearbyNote } | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   const amt = roundCcy(amount, ccy);
   if (!(amt > 0)) return { error: "Enter an amount." };
   if (w.balances[ccy] < amt) return { error: `Not enough ${ccy}.` };
@@ -1232,6 +1261,7 @@ export function issueNearby(
 }
 
 export function claimNearby(w: Wallet, p: NearbyPayload): Wallet | { error: string } {
+  if (!allowPaperLedger()) return paperError();
   if (w.notes.some((n) => n.id === p.id && n.status === "claimed")) return { error: "Already claimed here." };
   if (p.from === w.tag) return { error: "That’s your own note." };
   const ccy = CCYS.includes(p.ccy as Ccy) ? (p.ccy as Ccy) : "USD";
