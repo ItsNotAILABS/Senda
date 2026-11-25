@@ -2,6 +2,8 @@ name: Senda encryption and agent trading contract gates
 on:
   pull_request:
     paths:
+      - "src/components/agent-security-notice.tsx"
+      - "src/routes/agents/index.tsx"
       - "integrations/parralax-security/**"
       - "integrations/parralax-trading/**"
       - "integrations/open-source/**"
