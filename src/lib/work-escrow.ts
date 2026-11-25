@@ -107,14 +107,15 @@ export async function fundJob(input: {
   brief: string;
   usd: number;
   worker: string;
-  venue: string;
+  /** Optional label for the hold desk; plain work orders (work desk, agent sign) have none. */
+  venue?: string;
 }): Promise<WorkJob> {
   const title = input.title.trim();
   const brief = input.brief.trim();
-  const venue = input.venue.trim();
+  const venue = (input.venue ?? "").trim();
   if (!title) throw new Error("Name the job.");
   if (!brief) throw new Error("Say what done looks like.");
-  if (!VENUE_NAMES.has(venue)) throw new Error("Pick a venue this desk already uses.");
+  if (venue && !VENUE_NAMES.has(venue)) throw new Error("Pick a venue this desk already uses.");
   if (!Number.isFinite(input.usd)) throw new Error("The smallest job is 1 USDC.");
   const usd = Math.round(input.usd * 1_000_000) / 1_000_000;
   if (usd < 1) throw new Error("The smallest job is 1 USDC.");

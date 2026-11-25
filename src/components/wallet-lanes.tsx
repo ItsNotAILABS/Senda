@@ -50,8 +50,9 @@ export function RevolutLane() {
         const kept = wallet.linkChain(owner, "Phantom", "phantom");
         if (!kept.ok && kept.error !== "Already linked.") throw new Error(kept.error || "Could not keep the address.");
       }
-      const done = asset === "USDC" ? await payUsdc({ owner, to: to.trim(), usd: amount, memo: "Senda to Revolut" }) : await paySol({ owner, to: to.trim(), sol: amount, memo: "Senda to Revolut" });
-      toast.success(`Signed to Revolut. ${done.signature.slice(0, 8)}…`);
+      // paySol resolves to the bare signature string and takes no memo; payUsdc returns a receipt.
+      const signature = asset === "USDC" ? (await payUsdc({ owner, to: to.trim(), usd: amount, memo: "Senda to Revolut" })).signature : await paySol({ owner, to: to.trim(), sol: amount });
+      toast.success(`Signed to Revolut. ${signature.slice(0, 8)}…`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Revolut did not get the transfer.");
     } finally {

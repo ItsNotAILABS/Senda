@@ -9,7 +9,6 @@ import { connectPhantom, readChain } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { paySol, payUsdc } from "@/lib/solana-pay";
 import { getHouse, type HouseListing } from "@/lib/sol-house";
-import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import type { Card } from "@/lib/wallet";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +18,6 @@ type Product = "send" | "pre" | "cover";
  * The card is the wallet. Receive is USDC in. Spend is a signature out to a product on this desk.
  */
 export function CardUse({ card, owner }: { card: Card; owner: string }) {
-  const { cardRail } = useWallet();
   const [mode, setMode] = useState<"receive" | "spend">("receive");
   const [who, setWho] = useState(owner);
   const [usd, setUsd] = useState("20");
@@ -155,8 +153,8 @@ export function CardUse({ card, owner }: { card: Card; owner: string }) {
       if (product === "send" && asset === "SOL") {
         toast.success("Signed. SOL left this wallet. The card number was not charged.");
       } else {
-        const r = cardRail(card.id, amount, merchant, signature, product === "pre" ? "6211" : product === "cover" ? "6300" : "6012");
-        if (!r.ok) toast.error(r.error);
+        // The wallet context no longer keeps a browser card ledger (cardRail was removed); the
+        // chain signature below is the receipt. Calling it threw after USDC had already left.
         toast.success("Signed. USDC left this wallet. The card number was not charged.");
       }
       setSig(signature);
