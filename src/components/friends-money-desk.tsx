@@ -8,6 +8,8 @@ import {useWalletCtx} from "@/lib/wallet-context";
 import {quoteFriendPayment,validateFriendDestination,buildFriendPayment,FRIEND_RAILS,PUBLIC_MEMO_NOTICE} from "@/lib/friend-payments.mjs";
 import {classifySendError} from "@/lib/journaled-send.mjs";
 import {centsToDecimalString} from "@/lib/usdc-amount.mjs";
+import {listTransactions} from "@/lib/tx-journal.mjs";
+import {TransactionRecovery} from "@/components/transaction-recovery";
 
 const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
 type Receipt={signature:string;cents:number;to:string};
@@ -31,6 +33,19 @@ export function FriendsMoneyDesk(){
  const quote=useMemo(()=>quoteFriendPayment({recipient:destination,amount,wallet,verified,note,limitUsd:spendCap()}),[destination,amount,wallet,verified,note]);
  useEffect(()=>{setVerified(false);setReview(false);},[destination]);
  useEffect(()=>{setReview(false);},[amount,note,wallet]);
+ // The uncertain-send lock lives in memory, so after a reload rebuild it from the recovery journal:
+ // a send that was broadcast (or may have been) and never resolved still blocks a retry.
+ useEffect(()=>{
+  if(!wallet||uncertain)return;
+  try{
+   const pending=listTransactions(window.localStorage,wallet).filter(r=>r.kind==="send"&&r.status==="pending");
+   if(pending.length){
+    const latest=pending.reduce((a,b)=>b.submittedAt>a.submittedAt?b:a);
+    setUncertain({signature:latest.signature});setWalletChecked(false);
+    setRecoveryNote("An earlier transfer from this wallet has not confirmed yet. Check its status before sending again.");
+   }
+  }catch{/* unreadable journal: journaledSend still refuses to write over it */}
+ },[wallet]);
  function clearForm(){setDestination("");setAmount("");setNote("");setVerified(false);setReview(false);}
  async function connect(){
   setBusy(true);setError("");
@@ -107,5 +122,6 @@ export function FriendsMoneyDesk(){
     <p className="flex items-start gap-2 text-xs leading-relaxed text-amber-100/60"><ShieldAlert className="mt-0.5 size-4 shrink-0"/>Bank delivery, debit-card funding and sending by phone or @handle require real issuer/payment partners and verified recipient identity. They cannot be enabled by quietly changing an on-screen balance.</p>
    </aside>
   </div>
+  {wallet?<TransactionRecovery owner={wallet}/>:null}
  </div>;
 }
