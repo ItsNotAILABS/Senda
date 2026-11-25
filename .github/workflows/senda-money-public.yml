@@ -4,6 +4,9 @@ on:
     paths:
       - 'src/lib/friend-payments.*'
       - 'src/lib/money-settlement-core.*'
+      - 'src/lib/money-webhook.*'
+      - 'src/routes/api/money/**'
+      - 'src/components/transaction-recovery.tsx'
       - 'src/lib/paper-money-policy.*'
       - 'src/lib/usdc-amount.*'
       - 'src/lib/spl-instructions.*'
@@ -20,6 +23,7 @@ on:
       - 'src/components/account-details.tsx'
       - 'src/routes/payments/**'
       - 'migrations/0009_receive_auth_nonce.sql'
+      - 'migrations/0010_money_intent.sql'
       - 'scripts/friend-payments.test.mjs'
       - 'scripts/usdc-amount.test.mjs'
       - 'scripts/spl-instructions.test.mjs'
@@ -54,6 +58,7 @@ jobs:
           scripts/journaled-send.test.mjs
           scripts/solana-pay-request.test.mjs
           scripts/money-settlement-core.test.mjs
+          scripts/money-webhook.test.mjs
           scripts/receive-account-auth.test.mjs
           scripts/paper-money-policy.test.mjs
           scripts/money-public-safety.test.mjs
