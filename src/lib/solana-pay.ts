@@ -8,6 +8,7 @@ import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction 
 import { sendSignedRaw, signForJournal, simulateSignedRaw } from "@/lib/phantom";
 import { checkSendRecovery, journaledSend, markNotBroadcast, SendOutcomeUncertain } from "@/lib/journaled-send.mjs";
 import { ataCreateIdempotentData, transferCheckedData } from "@/lib/spl-instructions.mjs";
+import { buildUsdcPayLink, verifyReferencedUsdcPayment } from "@/lib/solana-pay-request.mjs";
 import { assertCents, centsToDecimalString, centsToUsdcRaw, USDC_DECIMALS, usdNumberToCents } from "@/lib/usdc-amount.mjs";
 import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
 import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
@@ -29,6 +30,32 @@ export function usdcPayLink(to: string, usd: number, memo: string): string {
     memo: memo.slice(0, 80),
   });
   return `solana:${to.trim()}?${q.toString()}`;
+}
+
+/** Request by integer cents with a fresh reference key the requester can look up later. */
+export function usdcPayRequest(to: string, cents: number, memo: string): { url: string; reference: string } {
+  const reference = Keypair.generate().publicKey.toBase58();
+  return { url: buildUsdcPayLink({ to, cents, memo, reference, mint: USDC_MINT.toBase58() }), reference };
+}
+
+/** Find a confirmed transaction carrying `reference` and verify it paid `cents` USDC to `to`. */
+export async function findReferencedUsdcPayment(
+  to: string,
+  cents: number,
+  reference: string,
+): Promise<{ paid: boolean; reason: string; signature?: string }> {
+  const sigs = (await rpc("getSignaturesForAddress", [reference, { limit: 10, commitment: "confirmed" }])) as
+    | { signature: string; err: unknown }[]
+    | null;
+  if (!Array.isArray(sigs) || !sigs.length) return { paid: false, reason: "No payment with this reference yet." };
+  let last = { paid: false, reason: "No matching payment yet." };
+  for (const row of sigs) {
+    const tx = await rpc("getTransaction", [row.signature, { encoding: "jsonParsed", commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
+    const verdict = verifyReferencedUsdcPayment(tx, { recipient: to, mint: USDC_MINT.toBase58(), cents });
+    if (verdict.paid) return { ...verdict, signature: row.signature };
+    last = verdict;
+  }
+  return last;
 }
 
 function rpc(method: string, params: unknown[]): Promise<unknown> {
