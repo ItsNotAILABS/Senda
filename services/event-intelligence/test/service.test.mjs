@@ -89,7 +89,7 @@ test("cash reserve is not an event guarantee or insurance",async()=>{
 test("malformed transfer-like path, unsafe input and oversized amounts fail",async()=>{
  const api=create();
  assert.equal((await call(api,"/v1/transfer")).status,404);
- assert.equal((await call(api,"/v1/markets/BAD")).status,400);
+ assert.equal((await call(api,"/v1/markets/BO")).status,400);
  const bad=await call(api,"/v1/contingency/scenario",{method:"POST",body:{ticker,side:"yes",
   contracts:3,possibleLossUsd:-1,budgetUsd:50}});
  assert.equal(bad.status,400);
