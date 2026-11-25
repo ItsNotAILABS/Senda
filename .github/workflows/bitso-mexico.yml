@@ -4,6 +4,7 @@ on:
     paths:
       - 'services/bitso-business/**'
       - 'scripts/bitso-business.test.mjs'
+      - 'scripts/bitso-withdrawals.test.mjs'
       - 'docs/BITSO_MEXICO_INTEGRATION.md'
       - '.github/workflows/bitso-mexico.yml'
   workflow_dispatch:
@@ -20,7 +21,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Test Bitso read-only HMAC and Mexico payout guards
-        run: node --test scripts/bitso-business.test.mjs scripts/liquify-global.test.mjs
+        run: node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs scripts/liquify-global.test.mjs
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
