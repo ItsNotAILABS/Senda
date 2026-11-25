@@ -19,6 +19,7 @@ Primary documentation:
 - https://docs.bitso.com/bitso-payouts-funding/docs/how-to-enable-international-payments-in-mxn
 - https://docs.bitso.com/bitso-payouts-funding/reference/createwithdrawal
 - https://docs.bitso.com/bitso-payouts-funding/reference/listwithdrawals
+- https://docs.bitso.com/bitso-payouts-funding/docs/list-your-withdrawals
 - https://docs.bitso.com/bitso-payouts-funding/docs/webhooks
 - https://docs.bitso.com/bitso-payouts-funding/docs/managing-webhook-subscriptions
 - https://docs.bitso.com/bitso-api/docs/create-signed-requests
@@ -51,7 +52,7 @@ A wallet signature approves exactly the blockchain transfer being signed. It doe
 ## Validation commands
 
 \`\`\`bash
-node --test scripts/bitso-business.test.mjs scripts/liquify-global.test.mjs
+node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs scripts/liquify-global.test.mjs
 npm run typecheck
 npm run build:dev
 \`\`\`
