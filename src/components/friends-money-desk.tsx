@@ -1,12 +1,16 @@
-import {useEffect,useMemo,useState} from "react";
-import {ArrowRight,CheckCircle2,Copy,ExternalLink,LockKeyhole,ShieldAlert,Wallet,UserRound,Landmark,CreditCard} from "lucide-react";
+import {useEffect,useMemo,useRef,useState} from "react";
+import {ArrowRight,CheckCircle2,ExternalLink,LockKeyhole,ShieldAlert,Wallet,UserRound} from "lucide-react";
 import {toast} from "sonner";
 import {connectPhantom} from "@/lib/phantom";
-import {payUsdc} from "@/lib/solana-pay";
+import {payUsdc,checkUsdcSendRecovery} from "@/lib/solana-pay";
+import {spendCap} from "@/lib/spend-cap";
 import {useWalletCtx} from "@/lib/wallet-context";
-import {quoteFriendPayment,validateFriendDestination,FRIEND_RAILS} from "@/lib/friend-payments.mjs";
+import {quoteFriendPayment,validateFriendDestination,buildFriendPayment,FRIEND_RAILS,PUBLIC_MEMO_NOTICE} from "@/lib/friend-payments.mjs";
+import {classifySendError} from "@/lib/journaled-send.mjs";
+import {centsToDecimalString} from "@/lib/usdc-amount.mjs";
 
 const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
+type Receipt={signature:string;cents:number;to:string};
 export function FriendsMoneyDesk(){
  const walletApi=useWalletCtx();
  const [wallet,setWallet]=useState("");
@@ -16,14 +20,18 @@ export function FriendsMoneyDesk(){
  const [verified,setVerified]=useState(false);
  const [review,setReview]=useState(false);
  const [busy,setBusy]=useState(false);
- const [signature,setSignature]=useState("");
- const [reference,setReference]=useState("");
+ const inFlight=useRef(false);
+ const [receipt,setReceipt]=useState<Receipt|null>(null);
  const [error,setError]=useState("");
- const [uncertain,setUncertain]=useState(false);
+ // Fail closed: any send outcome not proven safe blocks retries until recovery proves it failed or expired.
+ const [uncertain,setUncertain]=useState<{signature:string|null}|null>(null);
+ const [walletChecked,setWalletChecked]=useState(false);
+ const [recoveryNote,setRecoveryNote]=useState("");
  const recipient=useMemo(()=>validateFriendDestination(destination),[destination]);
- const quote=useMemo(()=>quoteFriendPayment({recipient:destination,amount,wallet,verified,note}),[destination,amount,wallet,verified,note]);
- useEffect(()=>{setVerified(false);setReview(false);setSignature("");},[destination]);
- useEffect(()=>{setReview(false);setSignature("");},[amount,note,wallet]);
+ const quote=useMemo(()=>quoteFriendPayment({recipient:destination,amount,wallet,verified,note,limitUsd:spendCap()}),[destination,amount,wallet,verified,note]);
+ useEffect(()=>{setVerified(false);setReview(false);},[destination]);
+ useEffect(()=>{setReview(false);},[amount,note,wallet]);
+ function clearForm(){setDestination("");setAmount("");setNote("");setVerified(false);setReview(false);}
  async function connect(){
   setBusy(true);setError("");
   try{const address=await connectPhantom();setWallet(address);if(!walletApi.w.links.some(x=>x.address===address))walletApi.linkChain(address,"Phantom","phantom");}
@@ -31,19 +39,40 @@ export function FriendsMoneyDesk(){
   finally{setBusy(false);}
  }
  async function send(){
-  if(busy||uncertain||!review||!quote.ready||!quote.to||!quote.usd)return;
-  setBusy(true);setError("");setSignature("");
+  if(inFlight.current||busy||uncertain||!review||!quote.ready)return;
+  inFlight.current=true;setBusy(true);setError("");setRecoveryNote("");
   try{
-   const result=await payUsdc({owner:wallet,to:quote.to,usd:quote.usd,note:note.trim()||"Senda friend payment"});
-   setSignature(result.signature);setReference(result.reference);setReview(false);
+   const payment=buildFriendPayment(quote);
+   const result=await payUsdc(payment);
+   setReceipt({signature:result.signature,cents:payment.cents,to:payment.to});
+   clearForm();
    toast.success("USDC transfer confirmed on Solana.");
   }catch(e){
    const message=e instanceof Error?e.message:"The transfer could not be verified.";
    setError(message);
-   // A wallet may have broadcast a transaction before the confirmation request fails.
-   // Do not encourage automatic resubmission when the outcome is uncertain.
-   setUncertain(/confirm|pending|timeout|submitted|broadcast|signature|receipt|network|status/i.test(message));
-  }finally{setBusy(false);}
+   const verdict=classifySendError(e);
+   if(verdict.uncertain){setUncertain({signature:verdict.signature});setWalletChecked(false);}
+  }finally{inFlight.current=false;setBusy(false);}
+ }
+ async function checkStatus(){
+  if(!uncertain||!wallet)return;
+  setBusy(true);setRecoveryNote("");
+  try{
+   const out=await checkUsdcSendRecovery(wallet,uncertain.signature);
+   if(out.state==="paid"&&uncertain.signature){
+    setReceipt({signature:uncertain.signature,cents:quote.cents??0,to:quote.to??""});
+    setUncertain(null);setError("");clearForm();
+    toast.success("That transfer did confirm on Solana. It was not sent twice.");
+   }else if(out.state==="clear"&&(uncertain.signature||walletChecked)){
+    setUncertain(null);setError("");
+    setRecoveryNote("The earlier attempt failed or expired without landing. You can send again.");
+   }else if(out.state==="clear"){
+    setRecoveryNote("No pending transfer is recorded, but Senda never saw a signature. Confirm in Phantom's activity that nothing was sent, then tick the box below.");
+   }else{
+    setRecoveryNote("Still pending on Solana. Check again in a minute; it cannot be retried until it confirms or expires.");
+   }
+  }catch(e){setRecoveryNote(e instanceof Error?e.message:"Could not reach Solana to check status.");}
+  finally{setBusy(false);}
  }
  return <div className="mx-auto max-w-[960px] space-y-4 text-white">
   <section className="rounded-[26px] border border-cyan-300/20 bg-[radial-gradient(circle_at_top_right,#184a54,#101927_45%,#0a101c)] p-5 sm:p-7">
@@ -61,12 +90,16 @@ export function FriendsMoneyDesk(){
     <label className="block"><span className="text-xs font-medium text-white/65">Amount in USD</span><div className="mt-2 flex items-center gap-2 rounded-xl border border-white/15 bg-[#0b111d] px-4"><span className="font-mono text-3xl">$</span><input className="min-h-16 w-full bg-transparent font-mono text-3xl outline-none" inputMode="decimal" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="0.00"/></div></label>
     <div className="flex flex-wrap gap-2">{[5,10,25,50,100].map(n=><button type="button" key={n} onClick={()=>setAmount(String(n))} className="min-h-9 rounded-full border border-white/15 px-4 font-mono text-xs hover:border-cyan-300/40">${n}</button>)}</div>
     <label className="block"><span className="text-xs font-medium text-white/65">Message (optional)</span><input className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#0b111d] px-4 text-sm outline-none" value={note} onChange={e=>setNote(e.target.value)} maxLength={80} placeholder="For dinner, tickets, groceries…"/></label>
-    {quote.ready?<div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4 text-xs"><p className="flex justify-between"><span className="text-white/50">Send</span><strong>{money(quote.usd!)}</strong></p><p className="flex justify-between"><span className="text-white/50">Recipient receives</span><strong>{quote.usd!.toFixed(2)} USDC</strong></p><p className="flex justify-between"><span className="text-white/50">Chain</span><span>Solana Mainnet</span></p><p className="text-amber-100/65">Additional network fees are shown in Phantom. The recipient receives crypto, not bank dollars.</p></div>:<p className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-3 text-xs text-amber-100">{quote.reason}</p>}
+    <p className="text-[11px] leading-relaxed text-amber-100/60">{PUBLIC_MEMO_NOTICE}</p>
+    {quote.ready?<div className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-4 text-xs"><p className="flex justify-between"><span className="text-white/50">Send</span><strong>{money(quote.cents!/100)}</strong></p><p className="flex justify-between"><span className="text-white/50">Recipient receives</span><strong>{centsToDecimalString(quote.cents!)} USDC</strong></p><p className="flex justify-between"><span className="text-white/50">Chain</span><span>Solana Mainnet</span></p><p className="text-amber-100/65">Additional network fees are shown in Phantom. The recipient receives crypto, not bank dollars.</p></div>:<p className="rounded-xl border border-amber-300/15 bg-amber-300/5 p-3 text-xs text-amber-100">{quote.reason}</p>}
     {quote.ready?<label className="flex items-center gap-2 text-xs text-white/70"><input type="checkbox" checked={review} onChange={e=>setReview(e.target.checked)}/>I've reviewed the amount, asset and destination.</label>:null}
-    <button type="button" disabled={busy||!quote.ready||!review||uncertain} onClick={()=>void send()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 text-sm font-bold text-[#08141e] disabled:opacity-40">{busy?"Confirming in Phantom…":uncertain?"Check previous transfer before retrying":"Review and send with Phantom"}<ArrowRight className="size-4"/></button>
+    <button type="button" disabled={busy||!quote.ready||!review||Boolean(uncertain)} onClick={()=>void send()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-cyan-300 px-4 text-sm font-bold text-[#08141e] disabled:opacity-40">{busy?"Confirming in Phantom…":uncertain?"Check previous transfer before retrying":receipt?"Send another with Phantom":"Review and send with Phantom"}<ArrowRight className="size-4"/></button>
     {error?<p role="alert" className="rounded-xl border border-rose-300/20 bg-rose-300/5 p-3 text-xs text-rose-100">{error}</p>:null}
-    {uncertain?<p className="rounded-xl border border-amber-300/20 p-3 text-xs text-amber-100">Transfer status is uncertain. Check wallet activity and Senda's transaction recovery view before retrying. Reloading does not reverse a broadcast transaction.</p>:null}
-    {signature?<div role="status" className="rounded-xl border border-cyan-300/25 bg-cyan-300/[.05] p-4"><p className="flex items-center gap-2 text-sm font-semibold text-cyan-200"><CheckCircle2 className="size-4"/>Confirmed USDC transfer</p><p className="mt-2 break-all font-mono text-[11px] text-white/55">{signature}</p><a target="_blank" rel="noreferrer" href={`https://solscan.io/tx/${signature}`} className="mt-3 inline-flex items-center gap-2 text-xs text-cyan-200">View transaction <ExternalLink className="size-4"/></a></div>:null}
+    {uncertain?<div className="space-y-2 rounded-xl border border-amber-300/20 p-3 text-xs text-amber-100"><p>Transfer status is uncertain{uncertain.signature?<> (<span className="break-all font-mono">{uncertain.signature}</span>)</>:null}. Sending is blocked until Senda checks Solana. Reloading does not reverse a broadcast transaction.</p>
+     {!uncertain.signature?<label className="flex items-start gap-2"><input type="checkbox" checked={walletChecked} onChange={e=>setWalletChecked(e.target.checked)} className="mt-0.5"/>I checked Phantom's activity and this payment is not there.</label>:null}
+     <button type="button" disabled={busy} onClick={()=>void checkStatus()} className="min-h-10 rounded-xl border border-amber-300/30 px-3 disabled:opacity-40">Check transfer status</button></div>:null}
+    {recoveryNote?<p role="status" className="rounded-xl border border-white/10 p-3 text-xs text-white/70">{recoveryNote}</p>:null}
+    {receipt?<div role="status" className="rounded-xl border border-cyan-300/25 bg-cyan-300/[.05] p-4"><p className="flex items-center gap-2 text-sm font-semibold text-cyan-200"><CheckCircle2 className="size-4"/>Confirmed USDC transfer{receipt.cents?` · ${money(receipt.cents/100)}`:""}</p><p className="mt-2 break-all font-mono text-[11px] text-white/55">{receipt.signature}</p><a target="_blank" rel="noreferrer" href={`https://solscan.io/tx/${receipt.signature}`} className="mt-3 inline-flex items-center gap-2 text-xs text-cyan-200">View transaction <ExternalLink className="size-4"/></a></div>:null}
    </section>
    <aside className="space-y-3">
     <div className="rounded-[22px] border border-white/10 bg-[#101825] p-4"><p className="flex items-center gap-2 text-sm font-semibold"><LockKeyhole className="size-4 text-cyan-300"/>How Senda routes your money</p><p className="mt-2 text-xs leading-relaxed text-white/55">One dollars-first interface. For now, the only enabled money-moving route is real wallet-to-wallet USDC. Adding a debit card does not fund a balance until a card processor actually settles it.</p></div>

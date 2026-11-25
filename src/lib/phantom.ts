@@ -1,6 +1,8 @@
 import { activeSolProvider } from "@/lib/wallets";
 import { insideWalletApp, isPhoneBrowser, mobileSession, startMobileConnect, startMobileSign, type SignJob } from "@/lib/mobile-wallet";
 import { unlockSeal } from "@/lib/seal";
+import { firstSignatureFromWire } from "@/lib/spl-instructions.mjs";
+import { markNotBroadcast, type PreparedSignature } from "@/lib/journaled-send.mjs";
 
 type Pub = { toString: () => string };
 
@@ -132,6 +134,47 @@ export async function signAndBroadcast(tx: { serialize: (...args: never[]) => Ui
   const sig = out.signature;
   if (typeof sig === "string") return sig;
   return bytesToBase58(sig);
+}
+
+/**
+ * Sign without broadcasting when the wallet allows it, so the caller can journal the exact
+ * transaction signature before it reaches the network. Wallets that only expose
+ * signAndSendTransaction (and the phone deep link) broadcast themselves: mode "sent".
+ * Errors raised before anything was sent carry notBroadcast=true.
+ */
+export async function signForJournal(tx: { serialize: (...args: never[]) => Uint8Array }): Promise<PreparedSignature> {
+  let p: PhantomProvider | null;
+  try {
+    p = await providerOrThrow();
+  } catch (e) {
+    throw markNotBroadcast(e);
+  }
+  if (!p) return { mode: "sent", signature: await phoneSign(tx, { kind: "broadcast", note: "USDC" }) };
+  if (p.signTransaction) {
+    let raw: Uint8Array;
+    try {
+      const signed = await p.signTransaction(tx);
+      raw = signed.serialize();
+    } catch (e) {
+      throw markNotBroadcast(e);
+    }
+    return { mode: "signed", raw, signature: firstSignatureFromWire(raw) };
+  }
+  const out = await p.signAndSendTransaction!(tx);
+  const sig = out.signature;
+  return { mode: "sent", signature: typeof sig === "string" ? sig : bytesToBase58(sig) };
+}
+
+/** Simulate already-signed wire bytes. Throws when the chain would reject them. */
+export async function simulateSignedRaw(raw: Uint8Array): Promise<void> {
+  await simulateFirst({ serialize: () => raw });
+}
+
+/** Broadcast already-signed wire bytes once. Returns the RPC's signature. */
+export async function sendSignedRaw(raw: Uint8Array): Promise<string> {
+  const body = await rpc("sendTransaction", [bytesToBase64(raw), { encoding: "base64", skipPreflight: true, maxRetries: 5 }]);
+  if (typeof body !== "string") throw new Error("RPC did not return a signature.");
+  return body;
 }
 
 /** Simulate and submit a transaction that is already signed. Does not ask the wallet again. */

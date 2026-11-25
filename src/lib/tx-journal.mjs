@@ -66,6 +66,10 @@ export function recordSubmission(storage, candidate, now = Date.now()) {
     return existing;
   }
   const entry = { signature, owner, kind, asset, destination, amountRaw, submittedAt: now, checkedAt: now, status: 'pending' };
+  // Lets recovery prove a never-landed transaction can no longer land (blockhash expired).
+  if (Number.isSafeInteger(candidate.lastValidBlockHeight) && candidate.lastValidBlockHeight > 0) {
+    entry.lastValidBlockHeight = candidate.lastValidBlockHeight;
+  }
   try { persist(storage, [entry, ...rows]); }
   catch { throw new Error('Transaction ' + signature + ' was submitted but could not be saved locally. Verify it on-chain before retrying.'); }
   return entry;

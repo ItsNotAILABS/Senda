@@ -5,9 +5,11 @@
 
 import { Buffer } from "buffer";
 import { Keypair, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
-import { signAndBroadcast } from "@/lib/phantom";
+import { sendSignedRaw, signForJournal, simulateSignedRaw } from "@/lib/phantom";
+import { checkSendRecovery, journaledSend, markNotBroadcast, SendOutcomeUncertain } from "@/lib/journaled-send.mjs";
+import { ataCreateIdempotentData, transferCheckedData } from "@/lib/spl-instructions.mjs";
+import { assertCents, centsToDecimalString, centsToUsdcRaw, USDC_DECIMALS, usdNumberToCents } from "@/lib/usdc-amount.mjs";
 import { assertNoPendingDuplicate } from "@/lib/tx-journal.mjs";
-import { confirmTrackedSubmission } from "@/lib/tracked-confirmation.mjs";
 import { withWalletExecutionLock } from "@/lib/wallet-execution-lock.mjs";
 import { quoteRoute, SOL } from "@/lib/jup-sign";
 import { spendCap } from "@/lib/spend-cap";
@@ -61,99 +63,131 @@ function ata(owner: PublicKey): PublicKey {
   )[0];
 }
 
-function u64(amount: bigint): Uint8Array {
-  const d = new Uint8Array(9);
-  d[0] = 3;
-  new DataView(d.buffer).setBigUint64(1, amount, true);
-  return d;
+async function latestBlockhash(): Promise<{ blockhash: string; lastValidBlockHeight: number }> {
+  const result = (await rpc("getLatestBlockhash", [{ commitment: "confirmed" }])) as {
+    value?: { blockhash?: string; lastValidBlockHeight?: number };
+  };
+  const hash = result?.value?.blockhash;
+  const last = result?.value?.lastValidBlockHeight;
+  if (!hash || !Number.isSafeInteger(last)) throw new Error("No blockhash.");
+  return { blockhash: hash, lastValidBlockHeight: last as number };
 }
 
-async function blockhash(): Promise<string> {
-  const result = (await rpc("getLatestBlockhash", [{ commitment: "confirmed" }])) as { value?: { blockhash?: string } };
-  const hash = result?.value?.blockhash;
-  if (!hash) throw new Error("No blockhash.");
-  return hash;
-}
 
 async function accountExists(address: PublicKey): Promise<boolean> {
   const result = (await rpc("getAccountInfo", [address.toBase58(), { encoding: "base64" }])) as { value?: unknown };
   return Boolean(result?.value);
 }
 
-/** USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses. */
-export async function payUsdc(input: { owner: string; to: string; usd: number; memo?: string }): Promise<{ signature: string; reference: string }> {
+/**
+ * USDC from the connected wallet to `to`. Memo carries the reference Solana Pay uses.
+ * Pass integer `cents` (preferred). `usd` remains for legacy callers and is converted once to cents.
+ * The transfer is TransferChecked (mint + 6 decimals verified on-chain), the recipient token
+ * account is created idempotently, and the signed transaction is journaled before broadcast.
+ */
+export async function payUsdc(input: { owner: string; to: string; cents?: number; usd?: number; memo?: string }): Promise<{ signature: string; reference: string }> {
   return withWalletExecutionLock(input.owner, async () => {
-  const usd = Math.round(input.usd * 100) / 100;
-  if (!(usd > 0)) throw new Error("Enter an amount.");
-  const cap = spendCap();
-  if (usd > cap) throw new Error(`That is over the spend cap of ${cap}. Raise it on the wallet, or send less.`);
-  let to: PublicKey;
   let owner: PublicKey;
+  let to: PublicKey;
+  let cents: number;
+  let raw: bigint;
   try {
-    owner = new PublicKey(input.owner);
-    to = new PublicKey(input.to.trim());
-  } catch {
-    throw new Error("That is not a Solana address.");
+    cents = typeof input.cents === "number" ? assertCents(input.cents) : usdNumberToCents(input.usd as number);
+    const capCents = Math.round(spendCap() * 100);
+    if (cents > capCents) throw new Error(`That is over the spend cap of ${spendCap()}. Raise it on the wallet, or send less.`);
+    try {
+      owner = new PublicKey(input.owner);
+      to = new PublicKey(input.to.trim());
+    } catch {
+      throw new Error("That is not a Solana address.");
+    }
+    if (owner.equals(to)) throw new Error("Pay someone else.");
+    raw = centsToUsdcRaw(cents);
+  } catch (e) {
+    throw markNotBroadcast(e);
   }
-  if (owner.equals(to)) throw new Error("Pay someone else.");
-  const raw = BigInt(Math.round(usd * 1_000_000));
   const journalDraft = {
     owner: owner.toBase58(), kind: "send" as const,
     asset: "USDC", destination: to.toBase58(), amountRaw: raw.toString(),
   };
-  assertNoPendingDuplicate(window.localStorage, journalDraft);
+  try {
+    assertNoPendingDuplicate(window.localStorage, journalDraft);
+  } catch (e) {
+    // A matching pending transfer exists or the journal is unreadable: never treat as safe to retry.
+    throw new SendOutcomeUncertain(e instanceof Error ? e.message : "A matching transfer may already be on-chain.");
+  }
   const source = ata(owner);
-  if (!(await accountExists(source))) throw new Error("This wallet has no USDC account.");
   const dest = ata(to);
   const reference = Keypair.generate().publicKey;
   const ix: TransactionInstruction[] = [];
-  if (!(await accountExists(dest))) {
+  let latest: { blockhash: string; lastValidBlockHeight: number };
+  try {
+    if (!(await accountExists(source))) throw new Error("This wallet has no USDC account.");
+    if (!(await accountExists(dest))) {
+      ix.push(
+        new TransactionInstruction({
+          programId: ATA_PROGRAM,
+          keys: [
+            { pubkey: owner, isSigner: true, isWritable: true },
+            { pubkey: dest, isSigner: false, isWritable: true },
+            { pubkey: to, isSigner: false, isWritable: false },
+            { pubkey: USDC_MINT, isSigner: false, isWritable: false },
+            { pubkey: SYSTEM, isSigner: false, isWritable: false },
+            { pubkey: TOKEN, isSigner: false, isWritable: false },
+          ],
+          // CreateIdempotent: still succeeds if the account appears between the check and the send.
+          data: Buffer.from(ataCreateIdempotentData()),
+        }),
+      );
+    }
     ix.push(
       new TransactionInstruction({
-        programId: ATA_PROGRAM,
+        programId: TOKEN,
         keys: [
-          { pubkey: owner, isSigner: true, isWritable: true },
-          { pubkey: dest, isSigner: false, isWritable: true },
-          { pubkey: to, isSigner: false, isWritable: false },
+          { pubkey: source, isSigner: false, isWritable: true },
           { pubkey: USDC_MINT, isSigner: false, isWritable: false },
-          { pubkey: SYSTEM, isSigner: false, isWritable: false },
-          { pubkey: TOKEN, isSigner: false, isWritable: false },
+          { pubkey: dest, isSigner: false, isWritable: true },
+          { pubkey: owner, isSigner: true, isWritable: false },
         ],
-        data: Buffer.alloc(0),
+        data: Buffer.from(transferCheckedData(raw, USDC_DECIMALS)),
       }),
     );
+    const memoText = (input.memo ?? `Senda USDC ${centsToDecimalString(cents)}`).replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 80);
+    const memo = `${memoText} ref=${reference.toBase58()}`;
+    ix.push(
+      new TransactionInstruction({
+        programId: MEMO,
+        keys: [
+          { pubkey: owner, isSigner: true, isWritable: false },
+          { pubkey: reference, isSigner: false, isWritable: false },
+        ],
+        data: Buffer.from(new TextEncoder().encode(memo)),
+      }),
+    );
+    latest = await latestBlockhash();
+  } catch (e) {
+    throw markNotBroadcast(e);
   }
-  ix.push(
-    new TransactionInstruction({
-      programId: TOKEN,
-      keys: [
-        { pubkey: source, isSigner: false, isWritable: true },
-        { pubkey: dest, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: true, isWritable: false },
-      ],
-      data: Buffer.from(u64(raw)),
-    }),
-  );
-  const memo = `${input.memo ?? `Senda USDC ${usd}`} ref=${reference.toBase58()}`;
-  ix.push(
-    new TransactionInstruction({
-      programId: MEMO,
-      keys: [
-        { pubkey: owner, isSigner: true, isWritable: false },
-        { pubkey: reference, isSigner: false, isWritable: false },
-      ],
-      data: Buffer.from(new TextEncoder().encode(memo)),
-    }),
-  );
   const tx = new Transaction();
   tx.feePayer = owner;
-  tx.recentBlockhash = await blockhash();
+  tx.recentBlockhash = latest.blockhash;
   tx.add(...ix);
-  const signature = await signAndBroadcast(tx);
-  // The broadcast signature alone is not an irreversible USDC payment receipt.
-  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
+  // Journal the signed transaction's signature before it is broadcast; the receipt is the chain confirmation.
+  const { signature } = await journaledSend({
+    storage: window.localStorage,
+    draft: { ...journalDraft, lastValidBlockHeight: latest.lastValidBlockHeight },
+    sign: () => signForJournal(tx),
+    preflight: simulateSignedRaw,
+    send: sendSignedRaw,
+    rpc,
+  });
   return { signature, reference: reference.toBase58() };
   });
+}
+
+/** Check the journal and the chain before a retry is allowed after an uncertain send. */
+export function checkUsdcSendRecovery(owner: string, signature: string | null) {
+  return checkSendRecovery({ storage: window.localStorage, owner, rpc, signature });
 }
 
 /** SOL from the connected wallet. Phantom signs. Senda does not hold the key. */
@@ -179,13 +213,24 @@ export async function paySol(input: { owner: string; to: string; sol: number }):
     owner: owner.toBase58(), kind: "send" as const,
     asset: "SOL", destination: to.toBase58(), amountRaw: String(lamports),
   };
-  assertNoPendingDuplicate(window.localStorage, journalDraft);
+  try {
+    assertNoPendingDuplicate(window.localStorage, journalDraft);
+  } catch (e) {
+    throw new SendOutcomeUncertain(e instanceof Error ? e.message : "A matching transfer may already be on-chain.");
+  }
+  const latest = await latestBlockhash();
   const tx = new Transaction();
   tx.feePayer = owner;
-  tx.recentBlockhash = await blockhash();
+  tx.recentBlockhash = latest.blockhash;
   tx.add(SystemProgram.transfer({ fromPubkey: owner, toPubkey: to, lamports }));
-  const signature = await signAndBroadcast(tx);
-  await confirmTrackedSubmission(window.localStorage, { ...journalDraft, signature }, rpc);
+  const { signature } = await journaledSend({
+    storage: window.localStorage,
+    draft: { ...journalDraft, lastValidBlockHeight: latest.lastValidBlockHeight },
+    sign: () => signForJournal(tx),
+    preflight: simulateSignedRaw,
+    send: sendSignedRaw,
+    rpc,
+  });
   return signature;
   });
 }
