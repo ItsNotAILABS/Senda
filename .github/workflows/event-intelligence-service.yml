@@ -1,0 +1,41 @@
+name: Senda Event Service CI
+on:
+  pull_request:
+    paths:
+      - "services/event-intelligence/**"
+      - "integrations/sendapay/event-intelligence-client.mjs"
+      - "src/lib/event-contract-router.mjs"
+      - "src/lib/contingency-analysis.mjs"
+      - "src/lib/event-market-discovery.mjs"
+      - "src/lib/kalshi-history-core.mjs"
+      - ".github/workflows/event-intelligence-service.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/event-intelligence/**"
+      - "integrations/sendapay/event-intelligence-client.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/event-intelligence
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/event-intelligence/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      - name: Verify shared Senda market policy tests
+        working-directory: .
+        run: node --test scripts/event-contract-router.test.mjs scripts/contingency-analysis.test.mjs scripts/kalshi-history.test.mjs
