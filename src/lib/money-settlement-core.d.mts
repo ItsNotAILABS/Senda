@@ -13,6 +13,7 @@ export declare function createHmacWebhookVerifier(input:{provider:string;secret:
 export declare function verifyProviderWebhook(rawBody:string,headers:Headers|Record<string,string|undefined>,verifier:WebhookVerifier):Promise<VerifiedProviderEvent>;
 export declare function recordProviderTransition(intent:MoneyIntent,event:VerifiedProviderEvent):{intent:MoneyIntent;outcome:"applied"|"duplicate"|"held"|"stale"};
 export declare function createMemoryIntentStore():IntentStore&{create(intent:MoneyIntent):Promise<void>};
+export declare function createSqlIntentStore(query:(text:string,params:unknown[])=>Promise<unknown[]>):IntentStore&{create(intent:MoneyIntent):Promise<void>};
 export declare function applyProviderWebhook(input:{store:IntentStore;rawBody:string;headers:Headers|Record<string,string|undefined>;verifier:WebhookVerifier;maxAttempts?:number}):Promise<{intent:MoneyIntent;outcome:"applied"|"duplicate"|"held"|"stale"}>;
 export declare function canDisplayDelivered(intent:MoneyIntent|null|undefined):boolean;
 export declare function publicMoneyState(intent:MoneyIntent|null|undefined):{state:string;delivered:boolean;reversible:boolean;terminal:boolean;notification:string};

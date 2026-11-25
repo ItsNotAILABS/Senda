@@ -165,14 +165,23 @@ export async function signRoute(input: {
   amountRaw: number;
   outDecimals: number;
   usd: number;
+  /** Route Pro settings. Callers passed these before signRoute read them; they were silently ignored. */
+  slippageBps?: number;
+  onlyDirect?: boolean;
+  /** Can only tighten the 5% impact guard, never loosen it. */
+  maxImpact?: number;
 }): Promise<{ signature: string; outUi: number }> {
   if (!(input.usd > 0)) throw new Error("Enter an amount.");
   assertPrestockRoute(input.inputMint, input.outputMint);
   const cap = spendCap();
   if (input.usd > cap) throw new Error(`That is about $${input.usd.toFixed(0)}. Your send cap is $${cap}. Raise it on Your money.`);
-  const quoted = await quoteRoute(input);
-  if (quoted.impact > 5) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
-  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=100&restrictIntermediateTokens=true`;
+  const pinnedSlippage = Number.isInteger(input.slippageBps) && input.slippageBps! >= 1 && input.slippageBps! <= 100 ? input.slippageBps! : null;
+  const slip = pinnedSlippage ?? 100;
+  const maxImpact = Math.min(5, Number.isFinite(input.maxImpact) && input.maxImpact! > 0 ? input.maxImpact! : 5);
+  const quoted = await quoteRoute({ ...input, slippageBps: slip });
+  if (quoted.impact > maxImpact) throw new Error(`Price impact is ${quoted.impact.toFixed(1)}%. The wallet was not asked to sign.`);
+  const direct = input.onlyDirect ? "&onlyDirectRoutes=true" : "";
+  const qs = `inputMint=${input.inputMint}&outputMint=${input.outputMint}&amount=${Math.floor(input.amountRaw)}&slippageBps=${slip}&restrictIntermediateTokens=true${direct}`;
   let quote: RawQuote | null = null;
   for (const base of QUOTE_URLS) {
     const quoteRes = await fetch(base(qs), { headers: { accept: "application/json", "user-agent": "Senda/1.0" } });
@@ -198,7 +207,8 @@ export async function signRoute(input: {
         quoteResponse: quote,
         userPublicKey: input.owner,
         dynamicComputeUnitLimit: true,
-        dynamicSlippage: true,
+        // An explicit Route Pro slippage is a ceiling the user chose; don't let Jupiter widen it.
+        dynamicSlippage: pinnedSlippage == null,
       }),
     });
     const text = await swapRes.text();

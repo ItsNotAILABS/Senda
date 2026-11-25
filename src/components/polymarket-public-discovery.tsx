@@ -1,8 +1,8 @@
 import {useEffect,useState} from "react";
 import {ExternalLink,RefreshCw,Search} from "lucide-react";
-import {getPolymarketPublicMarkets} from "@/lib/polymarket-catalog";
+import {getPolymarketPublicMarkets} from "@/lib/polymarket-catalog.functions";
 import {polymarketMarketUrl,type PolymarketCatalogRow} from "@/lib/polymarket-catalog.mjs";
-import {getPolymarketPublicDepth} from "@/lib/polymarket-depth";
+import {getPolymarketPublicDepth} from "@/lib/polymarket-depth.functions";
 import {planPolymarketBuy,type PolymarketBook} from "@/lib/polymarket-depth.mjs";
 function PolymarketDepthPreview({market}:{market:PolymarketCatalogRow}){
  const [index,setIndex]=useState(0),[shares,setShares]=useState(5),[book,setBook]=useState<PolymarketBook|null>(null);
@@ -12,7 +12,7 @@ function PolymarketDepthPreview({market}:{market:PolymarketCatalogRow}){
  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()),10000);return()=>clearInterval(timer)},[]);
  useEffect(()=>{
   setBook(null);
-  if(!token||!/^\\d{20,100}$/.test(token)){setNote("This market has no source-verified outcome token identifier.");return;}
+  if(!token||!/^\d{20,100}$/.test(token)){setNote("This market has no source-verified outcome token identifier.");return;}
   let active=true;setLoading(true);
   void getPolymarketPublicDepth({data:{tokenId:token}})
    .then(r=>{if(active){setBook(r.book);setNote(r.reason);}})

@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Activity, ArrowUpRight, BarChart3, CheckCircle2, CircleAlert, Eye, RefreshCw, Search, ShieldCheck, Star, TrendingUp } from "lucide-react";
 import { LiveChart } from "@/components/price-chart";
 import { NativeVolumePanel } from "@/components/native-volume-panel";
-import { getPrint, type PrintBar, type PrintTf } from "@/lib/print";
+import { getPrint, type PrintBar } from "@/lib/print";
 import { inspectMarketQuality, shortlistMarkets, type QualityResult } from "@/lib/market-quality.mjs";
 import type { HouseListing } from "@/lib/sol-house";
 import type { TapeRow } from "@/lib/world-book";
@@ -24,7 +24,7 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
  const [order,setOrder]=useState<"movers"|"volume"|"liquidity">("movers");
  const [minLiquidity,setMinLiquidity]=useState(0);
  const [focus,setFocus]=useState("");
- const [tf,setTf]=useState<PrintTf>("1H");
+ const [tf,setTf]=useState<"15m"|"1H"|"4H"|"1D">("1H");
  const [refresh,setRefresh]=useState(0);
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState("");
@@ -41,14 +41,15 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
    .map(h=>{
     const live=byMint.get(h.mint);
     return {mint:h.mint,symbol:h.symbol,name:h.name,venue:"prestocks",
-      price:live?.price??null,changePct:live?.changePct??null,
-      liquidityUsd:live?.liquidityUsd??null,volume24hUsd:live?.volume24hUsd??null,
-      organicScore:live?.organicScore??null,verified:live?.verified===true,updatedAt:live?.updatedAt??null};
+      // world-book TapeRow carries price, change and (Jupiter) liquidity only; the rest stay unknown.
+      price:live?.price??null,changePct:live?.change??null,
+      liquidityUsd:live?.liquidity??null,volume24hUsd:null,
+      organicScore:null,verified:false,updatedAt:null};
    });
   const coins:Market[]=tape.filter(t=>t.id&&t.price!=null&&t.price>0)
-   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:t.changePct??null,
-    liquidityUsd:t.liquidityUsd??null,volume24hUsd:t.volume24hUsd??null,
-    organicScore:t.organicScore??null,verified:t.verified===true,updatedAt:t.updatedAt??null}));
+   .map(t=>({mint:t.id,symbol:t.symbol,name:t.name,venue:"spot",price:t.price,changePct:t.change??null,
+    liquidityUsd:t.liquidity??null,volume24hUsd:null,
+    organicScore:null,verified:false,updatedAt:null}));
   return shortlistMarkets([...pre,...coins],"",250);
  },[house,tape]);
  const matches=useMemo(()=>{
@@ -155,7 +156,7 @@ export function MarketIntelligence({house,tape,embedded=false}:{house:HouseListi
      <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="min-w-0"><p className="font-mono text-[10px] tracking-widest text-cyan-300">SELECTED / {chosen?.venue.toUpperCase()??"NONE"}</p><h3 className="mt-1 text-xl font-semibold">{chosen?.symbol??"Choose a market"} <span className="text-sm font-normal text-white/40">{chosen?.name}</span></h3><p className="mt-1 font-mono text-sm">{money(chosen?.price)}</p></div>
       <div className="flex items-center gap-2">
-       <select aria-label="Chart timeframe" className="min-h-10 rounded-xl border border-white/15 bg-[#182334] px-2 text-xs" value={tf} onChange={e=>setTf(e.target.value as PrintTf)}>{(["15m","1H","4H","1D"] as const).map(t=><option key={t} value={t}>{t}</option>)}</select>
+       <select aria-label="Chart timeframe" className="min-h-10 rounded-xl border border-white/15 bg-[#182334] px-2 text-xs" value={tf} onChange={e=>setTf(e.target.value as "15m"|"1H"|"4H"|"1D")}>{(["15m","1H","4H","1D"] as const).map(t=><option key={t} value={t}>{t}</option>)}</select>
        <button type="button" title="Refresh selected market" aria-label="Refresh selected market" onClick={()=>setRefresh(n=>n+1)} className="grid size-10 place-items-center rounded-xl border border-white/10"><RefreshCw className={`size-4 ${loading?"animate-spin":""}`}/></button>
        <button type="button" title={linked?"Remove watch":"Watch market"} aria-label={linked?"Remove watch":"Watch market"} onClick={toggleWatch} className="grid size-10 place-items-center rounded-xl border border-white/10"><Star className={`size-4 ${linked?"fill-amber-300 text-amber-300":"text-white/60"}`}/></button>
       </div>

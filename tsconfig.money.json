@@ -15,6 +15,7 @@
     "src/lib/tx-journal.d.mts",
     "src/lib/solana-pay-request.d.mts",
     "src/lib/money-settlement-core.d.mts",
+    "src/lib/money-webhook.d.mts",
     "src/lib/paper-money-policy.d.mts",
     "src/lib/receive-account-auth.d.mts",
     "src/lib/solana-pay.ts",

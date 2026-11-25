@@ -13,6 +13,16 @@ test("treasury proposal requires fixed beneficiary and owner",()=>{
  const x=treasuryProposal({owner:a,agent:b,beneficiary:c,mint:a,decimals:6,perTx:"1",daily:"2",lifetime:"3",expiresAt:Math.floor(Date.now()/1000)+3600});
  assert.equal(x.status,"review");assert.equal(x.canExecute,false);assert.equal(x.requiresOwnerSignature,true);
 });
+test("v2 proposal carries seedId and guardian and enforces distinct roles",()=>{
+ const exp=Math.floor(Date.now()/1000)+3600,base={owner:a,agent:b,beneficiary:c,mint:a,decimals:6,perTx:"1",daily:"2",lifetime:"3",expiresAt:exp};
+ const x=treasuryProposal({...base,seedId:"42",guardian:c});
+ assert.equal(x.status,"review");assert.equal(x.seedId,"42");assert.equal(x.guardian,c);
+ assert.equal(treasuryProposal(base).seedId,"0");
+ assert.equal(treasuryProposal({...base,beneficiary:b}).status,"denied");
+ assert.equal(treasuryProposal({...base,guardian:b}).status,"denied");
+ assert.equal(treasuryProposal({...base,seedId:"-1"}).reason,"INVALID_SEED_ID");
+ assert.equal(treasuryProposal({...base,seedId:"18446744073709551616"}).reason,"INVALID_SEED_ID");
+});
 test("rejects reversed spending limits",()=>{
  const x=treasuryProposal({owner:a,agent:b,beneficiary:c,mint:a,decimals:6,perTx:"3",daily:"2",lifetime:"1",expiresAt:Math.floor(Date.now()/1000)+3600});
  assert.equal(x.status,"denied");

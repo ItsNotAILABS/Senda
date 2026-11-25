@@ -270,7 +270,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
         <div className={cn("border-t border-border py-3", rail ? "px-2" : "px-2")}>
           <Link
-            to="/safe"
+            to="/vault/sleeve"
             title="Vault"
             className={cn("mb-2 min-h-9 rounded-full bg-accent font-semibold text-accent-fg", rail ? "flex w-full items-center justify-center px-3 text-[12px]" : "mx-auto grid size-9 place-items-center")}
           >
@@ -315,10 +315,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                 if (key === "send") void navigate({ to: "/payments" });
                 else if (key === "add") void navigate({ to: "/payments", search: { act: "add" } });
                 else if (key === "card" || key === "cards" || key === "shop") void navigate({ to: "/cards", search: { spend: 0 } });
-                else if (key === "wallets") void navigate({ to: "/wallet", search: { lane: "wallets" } });
-                else if (key === "stake") void navigate({ to: "/wallet", search: { lane: "stake" } });
+                else if (key === "wallets") void navigate({ to: "/wallets" });
+                else if (key === "stake") void navigate({ to: "/wallet" });
                 else if (key === "exchange" || key === "convert" || key === "wallet" || key === "swap") void navigate({ to: "/wallet" });
-                else if (key === "vault") void navigate({ to: "/safe" });
+                else if (key === "vault") void navigate({ to: "/vault/sleeve" });
                 else if (key === "portfolio") void navigate({ to: "/vault" });
                 else if (key === "revolut") void navigate({ to: "/revolut" });
                 else if (key === "phantom") void navigate({ to: "/phantom" });
@@ -494,7 +494,7 @@ function NavLink({
   dock,
   close,
 }: {
-  to: "/" | "/pre" | "/xstocks" | "/contracts" | "/invest" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/orders" | "/launch" | "/solana" | "/swap" | "/market" | "/radar" | "/wire" | "/books" | "/docs" | "/more" | "/revolut" | "/phantom" | "/metamask" | "/backpack";
+  to: "/" | "/pre" | "/xstocks" | "/contracts" | "/invest" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/orders" | "/launch" | "/solana" | "/market" | "/radar" | "/wire" | "/books" | "/docs" | "/more" | "/revolut" | "/phantom" | "/metamask" | "/backpack";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;

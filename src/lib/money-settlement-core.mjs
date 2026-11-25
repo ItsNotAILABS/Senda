@@ -169,6 +169,31 @@ export function createMemoryIntentStore(){
   },
  };
 }
+/**
+ * Postgres/PGLite store (table: migrations/0010_money_intent.sql).
+ * `query(text, params)` must resolve to an array of row objects (src/lib/db.ts `sql.query`).
+ */
+export function createSqlIntentStore(query){
+ const parse=row=>{if(!row)return null;const body=typeof row.body==="string"?JSON.parse(row.body):row.body;
+  if(!body||body.id!==row.id||body.version!==Number(row.version))throw Error("Corrupt money intent row "+row.id);return body;};
+ return {
+  async create(intent){
+   const rows=await query("insert into money_intent (id, version, body) values ($1, $2, $3) on conflict (id) do nothing returning id",
+    [intent.id,intent.version,JSON.stringify(intent)]);
+   if(!Array.isArray(rows)||rows.length!==1)throw Error("Intent exists");
+  },
+  async get(id){
+   const rows=await query("select id, version, body from money_intent where id = $1",[id]);
+   return parse(Array.isArray(rows)?rows[0]:null);
+  },
+  async compareAndSet(id,expectedVersion,next){
+   if(!next||next.id!==id||next.version!==expectedVersion+1)return false;
+   const rows=await query("update money_intent set body = $3, version = $4, updated_at = now() where id = $1 and version = $2 returning id",
+    [id,expectedVersion,JSON.stringify(next),next.version]);
+   return Array.isArray(rows)&&rows.length===1;
+  },
+ };
+}
 /** Verify -> load -> transition -> compare-and-set, retrying on concurrent writers. */
 export async function applyProviderWebhook({store,rawBody,headers,verifier,maxAttempts=5}){
  const event=await verifyProviderWebhook(rawBody,headers,verifier);

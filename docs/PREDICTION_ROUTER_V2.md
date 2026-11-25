@@ -20,7 +20,7 @@ The **U.S. Phantom user experience** is our product standard: integrated funding
 - `src/components/prediction-venue-router.tsx`: five-venue selector, source/funding/settlement badges and honest status.
 - `src/lib/kalshi-book.ts`, `src/lib/kalshi-depth.ts`: public Kalshi research and sourced orderbook, no execution.
 - `src/lib/dflow-predictions.ts`, `src/lib/dflow-prediction-sign.ts`, `src/lib/dflow-prediction-receipt.mjs`: private producer/Proof, mandatory wallet signing and asynchronous fills. Still disabled by default until approved credentials and compliance services operate.
-- `src/lib/polymarket-catalog.ts` / `.mjs`: public Polymarket Gamma feed. Published outcomePrices are **indicative catalog values, not executable CLOB quotes**.
+- `src/lib/polymarket-catalog.functions.ts` / `.mjs`: public Polymarket Gamma feed. Published outcomePrices are **indicative catalog values, not executable CLOB quotes**.
 - `src/components/event-markets-desk.tsx`: unified shell that renders venue-specific market sources and avoids presenting Kalshi markets as World or Polymarket quotes.
 
 ## Genuine venue routing design

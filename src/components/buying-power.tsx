@@ -66,7 +66,7 @@ export function BuyingPower({ owner }: { owner: string }) {
         </div>
         <button
           type="button"
-          onClick={() => window.open(robinhoodBuyingPowerUrl(owner, Math.max(25, Math.ceil(usdc))), "_blank", "noopener,noreferrer")}
+          onClick={() => window.open(robinhoodBuyingPowerUrl({ wallet: owner, usd: Math.max(25, Math.ceil(usdc)), origin: window.location.origin }), "_blank", "noopener,noreferrer")}
           className="inline-flex min-h-10 items-center rounded-full bg-white px-3 text-xs font-semibold text-black"
         >
           Use Robinhood buying power

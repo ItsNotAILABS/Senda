@@ -720,7 +720,7 @@ function Amount({ usd, setUsd }: { usd: string; setUsd: (v: string) => void }) {
   );
 }
 
-function Fault({ fault, note, sig, href }: { fault: string; note?: string; sig: string; href: string }) {
+function Fault({ fault, note, sig, href }: { fault: string; note?: string; sig?: string; href?: string }) {
   return (
     <div>
       {fault ? <p className="mt-2 text-sm text-[#ff5d73]">{fault}</p> : null}

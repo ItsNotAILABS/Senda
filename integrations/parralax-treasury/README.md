@@ -2,7 +2,7 @@
 
 This package defines **review-only client-side intent artifacts**, exact SPL minor-unit conversion, machine-payment verification drafts and verifiable-AI hash commitments. It never signs a transaction or reports that a hash was anchored on chain.
 
-Related program source: `ItsNotAILABS/PARRALAX-AIHFTFUND/programs/agent-treasury`.
+Related program source: `ItsNotAILABS/PARRALAX-AIHFTFUND/solana/programs/agent-treasury` (treasury layout v2; see ONCHAIN_INTEGRATION.md).
 
 The treasury contract is not deployed. Never accept a program id from an organism or application query; pin the verified on-chain program id from a signed configuration manifest. To actually integrate it, generate an Anchor IDL from compiled program, derive and independently verify PDAs/ATAs, connect mainnet/devnet separately, simulate wallet-signed initialize/deposit and agent-signed spends, and independently confirm finality and exact SPL token movements. Program key management belongs to secure service infrastructure, not the model or React localStorage.
 

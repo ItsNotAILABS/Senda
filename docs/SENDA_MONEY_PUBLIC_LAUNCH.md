@@ -13,7 +13,7 @@ A user should experience: choose a friend -> enter USD -> see recipient and deli
 - `/payments/activity`: connected wallet readout and recovered transaction status; not simulated bank transaction history.
 - `/payments/add`, `/payments/exchange` and `/payments/nearby`: wallet-based navigation and truthful non-connected states. The live wallet conversion screen is preserved; fabricated card top-ups are not presented as settled cash.
 - `src/lib/friend-payments.mjs`: exact decimal cent parser, recipient verification, per-transaction spending limit and memo limits.
-- `src/lib/money-settlement-core.mjs`: provider-backed funding/settlement/payout finite-state machine with idempotent event IDs, explicit transition checks and verified-provider receipt requirement. **This is a server-side orchestration contract, not a connected debit-card processor**.
+- `src/lib/money-settlement-core.mjs`: provider-backed funding/settlement/payout finite-state machine with idempotent event IDs, explicit transition checks and verified-provider receipt requirement. **This is a server-side orchestration contract, not a connected debit-card processor**. Intents persist in `money_intent` (`migrations/0010_money_intent.sql`, `createSqlIntentStore`, optimistic version check). Provider events arrive at `POST /api/money/webhook` (`src/lib/money-webhook.mjs`), which HMAC-verifies the raw body before parsing and is disabled (503) until `SENDA_SETTLEMENT_PROVIDER` and `SENDA_SETTLEMENT_WEBHOOK_SECRET` are set. Nothing creates intents yet: that belongs to the first approved processor integration.
 - `src/lib/paper-money-policy.mjs` and `src/lib/wallet.ts`: legacy simulated card charges, cash creation, local send, bank withdraw, paper cover payments, and virtual card issuance are blocked in public builds. Paper data can only be used in explicit local development with `VITE_SENDA_ENABLE_PAPER_MONEY=true`.
 - `src/lib/receive-account.ts`: Bridge customer provisioning now requires a real signed-in user, that user's explicit customer allowance, opt-in enablement and a fresh Phantom signMessage proving ownership of the exact wallet/currency before the server contacts Bridge. A single shared Bridge customer ID is never used for arbitrary visitors. Multi-user Bridge customer provisioning still requires a per-user customer mapping and authorization policy.
 
@@ -43,7 +43,7 @@ A user should experience: choose a friend -> enter USD -> see recipient and deli
 ### Verification
 
 ```sh
-node --test scripts/friend-payments.test.mjs scripts/money-settlement-core.test.mjs scripts/paper-money-policy.test.mjs
+node --test scripts/friend-payments.test.mjs scripts/money-settlement-core.test.mjs scripts/money-webhook.test.mjs scripts/paper-money-policy.test.mjs
 npm ci
 npm run typecheck
 npm run build:dev
