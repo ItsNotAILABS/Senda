@@ -11,7 +11,8 @@ const facts={
   category:"Weather",markets:[{ticker,yes_sub_title:"In Dallas",yes_bid_dollars:"0.39",
    yes_ask_dollars:"0.45",volume_24h_fp:"123.00",close_time:"2026-12-01T00:00:00Z"}]}],cursor:""},
  market:{market:{ticker,title:"Rainfall contract",status:"active",event_ticker:"KXRAIN-26NOV20",
-  series_ticker:series,rules_primary:"Settlement according to official source",volume_24h_fp:"123.00"}},
+  rules_primary:"Settlement according to official source",volume_24h_fp:"123.00"}},
+ event:{event:{event_ticker:"KXRAIN-26NOV20",series_ticker:series,markets:[{ticker}]}},
  book:{orderbook_fp:{yes_dollars:[["0.5500","5.00"]],no_dollars:[["0.6000","3.00"],["0.5000","10.00"]]}},
  candles:{ticker,candlesticks:[
   {end_period_ts:Math.floor(clock/1000)-3600,price:{close_dollars:"0.5600"},volume_fp:"8.00",open_interest_fp:"14"},
@@ -23,6 +24,7 @@ function fakeFetch(address){
  const data=u.pathname==="/trade-api/v2/events"?facts.events:
   u.pathname.endsWith("/orderbook")?facts.book:
   u.pathname.endsWith("/candlesticks")?facts.candles:
+  u.pathname==="/trade-api/v2/events/KXRAIN-26NOV20"?facts.event:
   u.pathname==="/trade-api/v2/markets/"+ticker?facts.market:null;
  if(!data)return Promise.resolve(new Response(JSON.stringify({message:"missing"}),{status:404}));
  return Promise.resolve(new Response(JSON.stringify(data),{status:200,headers:{"content-type":"application/json"}}));
@@ -118,4 +120,27 @@ test("capability and failure responses have no payment authority",async()=>{
  assert.equal(c.body.data.capabilities.insuranceIssuance,false);
  assert.equal(c.body.data.capabilities.kalshiAccountOrders,false);
  assert.equal((await call(api,"/v1/markets?limit=99999")).status,400);
+});
+
+test("history refuses unverified market-to-event or fake series mapping",async()=>{
+ const fakeMismatched=async address=>{
+  const u=new URL(address);
+  if(u.pathname==="/trade-api/v2/events/KXRAIN-26NOV20")
+   return new Response(JSON.stringify({event:{event_ticker:"KXRAIN-26NOV20",
+    series_ticker:"FORGED",markets:[{ticker:"SOME-OTHER-MARKET"}]}}));
+  return fakeFetch(address);
+ };
+ const api=createEventService({env:{SENDA_EVENT_API_KEYS:key},fetchImpl:fakeMismatched,now:()=>clock});
+ const response=await call(api,"/v1/markets/"+ticker+"/history?window=7d");
+ assert.equal(response.status,503);
+ assert.equal(response.body.error.code,"MARKET_EVENT_MISMATCH");
+});
+test("market detail no longer requires nonexistent series field",async()=>{
+ const api=create();
+ const detail=await call(api,"/v1/markets/"+ticker);
+ assert.equal(detail.status,200);
+ assert.equal(detail.body.data.eventTicker,"KXRAIN-26NOV20");
+ const h=await call(api,"/v1/markets/"+ticker+"/history?window=7d");
+ assert.equal(h.status,200);
+ assert.equal(h.body.data.seriesTicker,series);
 });
