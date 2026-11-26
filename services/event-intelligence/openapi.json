@@ -1,0 +1,444 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Senda Event Intelligence Service",
+    "version": "1.0.0",
+    "description": "Independent read-only Kalshi public market intelligence and contingency math. No insurance, no trades, no transfers."
+  },
+  "servers": [
+    {
+      "url": "https://events.example.com",
+      "description": "Replace with the verified standalone service origin."
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Markets"
+    },
+    {
+      "name": "Contingency"
+    },
+    {
+      "name": "Service"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Read-only liveness",
+        "tags": [
+          "Service"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Process responds; does not certify provider connections."
+          }
+        }
+      }
+    },
+    "/v1/capabilities": {
+      "get": {
+        "summary": "Truthful capabilities",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution-disabled capabilities",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "schema": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "execution": {
+                      "const": "disabled"
+                    },
+                    "insurance": {
+                      "const": false
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "receipt": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/markets": {
+      "get": {
+        "summary": "Single page of public Kalshi events",
+        "tags": [
+          "Markets"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            }
+          },
+          {
+            "name": "lane",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "sports",
+                "economy",
+                "crypto",
+                "weather",
+                "world",
+                "technology",
+                "culture"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "activity",
+                "closing",
+                "tight-spread"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 60
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page-limited market discovery with nextCursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "properties": {
+                    "schema": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "observedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "execution": {
+                      "const": "disabled"
+                    },
+                    "insurance": {
+                      "const": false
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "receipt": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Source failure; no invented markets"
+          }
+        }
+      }
+    },
+    "/v1/markets/{ticker}": {
+      "get": {
+        "summary": "Contract rules and metadata",
+        "tags": [
+          "Markets"
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 120
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified Kalshi public market detail"
+          }
+        }
+      }
+    },
+    "/v1/markets/{ticker}/book": {
+      "get": {
+        "summary": "Read-only opposing bids",
+        "tags": [
+          "Markets"
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Time-stamped Kalshi bid depth; not an executable quote"
+          }
+        }
+      }
+    },
+    "/v1/markets/{ticker}/history": {
+      "get": {
+        "summary": "Kalshi public close and volume series",
+        "tags": [
+          "Markets"
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Official source candles; null values remain null"
+          }
+        }
+      }
+    },
+    "/v1/contingency/scenario": {
+      "post": {
+        "summary": "Four event/loss states from refreshed public depth",
+        "tags": [
+          "Contingency"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ticker",
+                  "side",
+                  "contracts",
+                  "possibleLossUsd",
+                  "budgetUsd"
+                ],
+                "properties": {
+                  "ticker": {
+                    "type": "string"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "yes",
+                      "no"
+                    ]
+                  },
+                  "contracts": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "possibleLossUsd": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000000
+                  },
+                  "budgetUsd": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 10000000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Insurance=false, execution disabled, unknown fees"
+          },
+          "400": {
+            "description": "Validation rejected request"
+          }
+        }
+      }
+    },
+    "/v1/contingency/reserve": {
+      "post": {
+        "summary": "User-supplied self-funded cash buffer",
+        "tags": [
+          "Contingency"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "potentialExpenseUsd",
+                  "availableCashUsd",
+                  "targetCoveragePct"
+                ],
+                "properties": {
+                  "potentialExpenseUsd": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000000
+                  },
+                  "availableCashUsd": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 10000000
+                  },
+                  "targetCoveragePct": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic planning arithmetic; no payment or policy created"
+          }
+        }
+      }
+    },
+    "/v1/ready": {
+      "get": {
+        "summary": "Authenticated Kalshi provider readiness",
+        "description": "Actively queries fixed Kalshi public events endpoint and reports a source-backed probe result. Unlike health, this checks a real upstream request. Does not certify trading, liquidity or payment execution.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider responded with valid events-array schema; may still contain no active contracts."
+          },
+          "401": {
+            "description": "Private bearer token required."
+          },
+          "503": {
+            "description": "Service not configured or upstream source unavailable."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Opaque private server credential"
+      }
+    },
+    "schemas": {
+      "EventEnvelope": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "schema": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "execution": {
+            "const": "disabled"
+          },
+          "insurance": {
+            "const": false
+          },
+          "data": {
+            "type": "object"
+          },
+          "receipt": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}
