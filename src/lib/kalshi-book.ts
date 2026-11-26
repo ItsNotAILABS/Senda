@@ -2,6 +2,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { selectMarkets } from "@/lib/event-market-discovery.mjs";
 
 const EVENTS = "https://api.elections.kalshi.com/trade-api/v2/events";
 const MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets";
@@ -9,6 +10,7 @@ const MARKETS = "https://api.elections.kalshi.com/trade-api/v2/markets";
 export type KalshiRow = {
   ticker: string;
   event: string;
+  seriesTicker?: string;
   title: string;
   yes: string;
   category: string;
@@ -17,10 +19,12 @@ export type KalshiRow = {
   last: number | null;
   noAsk: number | null;
   vol: number;
+  reportedVolume?: number | null;
   close: string;
+  closeFull?: string;
 };
 
-type EventMeta = { title: string; category: string };
+type EventMeta = { title: string; category: string; seriesTicker?: string };
 type Cache = {
   at: number;
   rows: KalshiRow[];
@@ -78,6 +82,7 @@ async function pullEvents(cursor: string): Promise<{ cursor: string }> {
     cache.meta.set(ticker, {
       title: String(e.title ?? "").trim(),
       category: String(e.category ?? "Markets"),
+      seriesTicker: typeof e.series_ticker === "string" ? e.series_ticker.slice(0, 120) : undefined,
     });
   }
   return { cursor: String(j.cursor ?? "") };
@@ -95,10 +100,14 @@ function fromMarket(raw: Record<string, unknown>): KalshiRow | null {
   const eventTitle = info?.title || "";
   const title = eventTitle || marketTitle || contract || ticker;
   const yes = contract && contract !== title ? contract : marketTitle && marketTitle !== title ? marketTitle : "";
-  const vol = Number(raw.volume_24h_fp ?? raw.volume_fp ?? 0) || 0;
+  const rawVolume = raw.volume_24h_fp ?? raw.volume_fp;
+  const measured = rawVolume == null ? NaN : Number(rawVolume);
+  const reportedVolume = Number.isFinite(measured) && measured >= 0 ? measured : null;
+  const vol = reportedVolume ?? 0;
   return {
     ticker,
     event,
+    seriesTicker: String(raw.series_ticker ?? info?.seriesTicker ?? "").slice(0, 120) || undefined,
     title,
     yes,
     category: info?.category || "Markets",
@@ -107,7 +116,9 @@ function fromMarket(raw: Record<string, unknown>): KalshiRow | null {
     last: num(raw.last_price_dollars),
     noAsk: num(raw.no_ask_dollars),
     vol,
+    reportedVolume,
     close: String(raw.close_time ?? "").slice(0, 10),
+    closeFull: String(raw.close_time ?? ""),
   };
 }
 
@@ -191,6 +202,9 @@ export const kalshiPage = createServerFn({ method: "POST" })
       .object({
         q: z.string().max(80).optional(),
         category: z.string().max(48).optional(),
+        lane: z.enum(["all","sports","economy","crypto","weather","world","technology","culture"]).optional(),
+        watchlist: z.array(z.string().regex(/^[A-Z0-9][A-Z0-9._-]{2,119}$/)).max(70).optional(),
+        sort: z.enum(["activity","closing","tight-spread"]).optional(),
         offset: z.number().int().min(0).max(250_000).optional(),
         limit: z.number().int().min(1).max(240).optional(),
       })
@@ -205,7 +219,10 @@ export const kalshiPage = createServerFn({ method: "POST" })
     const category = (data.category ?? "").trim();
     let rows = cache.rows.map(decorate);
     if (category) rows = rows.filter((r) => r.category === category);
-    if (q) rows = rows.filter((r) => `${r.ticker} ${r.title} ${r.yes} ${r.event}`.toLowerCase().includes(q));
+    if (data.lane || data.sort || data.watchlist) {
+      if (data.watchlist) rows = rows.filter((r) => data.watchlist!.includes(r.ticker));
+      rows = selectMarkets(rows, {q, lane:data.lane ?? "all", sort:data.sort ?? "activity"});
+    } else if (q) rows = rows.filter((r) => `${r.ticker} ${r.title} ${r.yes} ${r.event}`.toLowerCase().includes(q));
     else rows = rows.slice().sort((a, b) => b.vol - a.vol);
     const offset = data.offset ?? 0;
     const limit = data.limit ?? 80;
@@ -219,6 +236,8 @@ export const kalshiPage = createServerFn({ method: "POST" })
       total: rows.length,
       loaded: cache.rows.length,
       done: cache.done,
+      observedAt: cache.at ? new Date(cache.at).toISOString() : null,
+      source: "Kalshi public market observations",
       categories: [...cats.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, n })),
     };
   });
