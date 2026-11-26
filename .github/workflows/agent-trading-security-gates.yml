@@ -1,0 +1,32 @@
+name: Senda encryption and agent trading contract gates
+on:
+  pull_request:
+    paths:
+      - "src/components/agent-security-notice.tsx"
+      - "src/routes/agents/index.tsx"
+      - "integrations/parralax-security/**"
+      - "integrations/parralax-trading/**"
+      - "integrations/open-source/**"
+      - "docs/FINANCIAL_SECURITY_ENCRYPTION_AND_AGENT_TRADING.md"
+      - ".github/workflows/agent-trading-security-gates.yml"
+  workflow_dispatch:
+jobs:
+  source-and-security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Evidence envelope and private client test
+        run: node --test integrations/parralax-security/envelope.test.mjs integrations/parralax-trading/client.test.mjs integrations/open-source/catalog.test.mjs
+      - name: Senda typecheck
+        run: npm run typecheck
+      - name: Existing Senda tests
+        run: npm test
+      - name: Senda build
+        run: npm run build:dev
