@@ -5,6 +5,12 @@ on:
       - 'services/bitso-business/**'
       - 'scripts/bitso-business.test.mjs'
       - 'scripts/bitso-withdrawals.test.mjs'
+      - 'scripts/bitso-webhooks.test.mjs'
+      - 'scripts/bitso-postgres.test.mjs'
+      - 'scripts/bitso-http.test.mjs'
+      - 'scripts/bitso-worker.test.mjs'
+      - 'migrations/0009_bitso_inbox.sql'
+      - 'src/routes/api/bitso-webhook.ts'
       - 'docs/BITSO_MEXICO_INTEGRATION.md'
       - '.github/workflows/bitso-mexico.yml'
   workflow_dispatch:
@@ -21,7 +27,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Test Bitso read-only HMAC and Mexico payout guards
-        run: node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs scripts/liquify-global.test.mjs
+        run: node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs scripts/bitso-webhooks.test.mjs scripts/bitso-postgres.test.mjs scripts/bitso-http.test.mjs scripts/bitso-worker.test.mjs scripts/liquify-global.test.mjs
       - name: Install dependencies
         run: npm ci
       - name: Typecheck
