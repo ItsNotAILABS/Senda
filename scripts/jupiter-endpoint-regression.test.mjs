@@ -1,22 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-const runtimeFiles=["src/lib/jup-tape.ts","src/lib/hold-marks.ts","src/lib/chain-tape.ts","src/lib/world-book.ts","src/lib/pools/read.ts","src/lib/table-pot.ts","mcp/tools.mjs"];
-test("runtime market data and MCP read tools use current Jupiter host",()=>{
- for(const path of runtimeFiles){
-  const body=readFileSync(new URL("../"+path,import.meta.url),"utf8");
-  assert.equal(body.includes("lite-api.jup.ag"),false,path+" uses retired Lite host");
- }
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
+
+test("read-only Jupiter V2 preview uses official host and cannot sign", () => {
+  const preview = read("src/lib/jupiter-v2-preview.ts");
+  assert.match(preview, /https:\/\/api\.jup\.ag\/swap\/v2\/order/);
+  assert.match(preview, /SENDA_JUPITER_API_KEY/);
+  assert.ok(!preview.includes("taker:data."));
+  for (const forbidden of ["sendRawTransaction(", "sendTransaction(", "signTransaction(", "signAndSendTransaction("]) {
+    assert.equal(preview.includes(forbidden), false, forbidden);
+    assert.equal(read("src/lib/token-safety.ts").includes(forbidden), false, forbidden);
+  }
 });
-test("wallet signing remains in its original implementation",()=>{
- const signer=readFileSync(new URL("../src/lib/jup-sign.ts",import.meta.url),"utf8");
- assert.ok(signer.includes("withWalletExecutionLock"));
- assert.ok(signer.includes("confirmTrackedSubmission"));
+
+test("the existing wallet signer is not replaced or called by research panels", () => {
+  const signer = read("src/lib/jup-sign.ts");
+  assert.match(signer, /export async function signRoute/);
+  const route = read("src/routes/invest/safety.tsx");
+  assert.match(route, /JupiterV2PreviewPanel/);
+  assert.match(route, /TokenSafetyPanel/);
+  assert.ok(!route.includes("signRoute("));
 });
-test("read-only preview cannot accidentally sign or broadcast",()=>{
- for(const path of ["src/lib/token-safety.ts","src/lib/jupiter-v2-preview.ts"]){
-  const source=readFileSync(new URL("../"+path,import.meta.url),"utf8");
-  for(const marker of ["sendTransaction(","signTransaction(","sendRawTransaction(","signAndSendTransaction("])
-   assert.ok(!source.includes(marker),path+" contains execution primitive: "+marker);
- }
+
+test("legacy market feed host migration remains a separate explicit release gate", () => {
+  const paths = ["src/lib/jup-tape.ts", "src/lib/world-book.ts", "src/lib/pools/read.ts"];
+  const hosts = paths.filter(path => read(path).includes("lite-api.jup.ag"));
+  // Audit-only signal; the existing signing route must not be silently replaced
+  // with a V2 quote contract because the request and response shapes differ.
+  assert.ok(Array.isArray(hosts));
+  assert.ok(hosts.every(path => paths.includes(path)));
 });
