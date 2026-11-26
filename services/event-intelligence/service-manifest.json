@@ -1,0 +1,66 @@
+{
+  "schema": "senda.service.manifest.v1",
+  "id": "senda.event-intelligence",
+  "version": "1.0.0",
+  "description": "Independent, source-backed Kalshi market research and non-insurance contingency calculations",
+  "source": "services/event-intelligence",
+  "openapi": "services/event-intelligence/openapi.json",
+  "deployment": {
+    "provider": "vercel",
+    "rootDirectory": "services/event-intelligence",
+    "status": "not-deployed",
+    "url": null
+  },
+  "http": {
+    "basePath": "/v1",
+    "authentication": "server-to-server-bearer",
+    "secretKey": "SENDA_EVENT_API_KEYS",
+    "browserAccessible": false
+  },
+  "capabilities": [
+    {
+      "id": "markets.discovery",
+      "authority": "read"
+    },
+    {
+      "id": "markets.contracts",
+      "authority": "read"
+    },
+    {
+      "id": "markets.depth",
+      "authority": "read"
+    },
+    {
+      "id": "markets.history",
+      "authority": "read"
+    },
+    {
+      "id": "contingency.scenario",
+      "authority": "deterministic-no-execution"
+    },
+    {
+      "id": "contingency.cash-reserve",
+      "authority": "deterministic-no-execution"
+    }
+  ],
+  "consumers": [
+    "Senda",
+    "SendaPay (adapter only, not connected)",
+    "Kiln agents (proposed)",
+    "other permitted server clients"
+  ],
+  "deniedCapabilities": [
+    "money-transfer",
+    "wallet-sign",
+    "submit-order",
+    "issue-insurance",
+    "guarantee-payout",
+    "import-balance"
+  ],
+  "verification": {
+    "state": "source-built",
+    "liveProviderContractTests": false,
+    "realMoneyTests": false,
+    "productionApproval": false
+  }
+}

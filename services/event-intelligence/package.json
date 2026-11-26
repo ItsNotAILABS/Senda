@@ -1,0 +1,14 @@
+{
+  "name": "@senda/event-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Senda reusable public event-market and contingency decision API, read-only",
+  "engines": {"node": ">=22"},
+  "scripts": {
+    "start": "node bin/server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "build": "node --check api/index.mjs && node --check src/service.mjs && node --check src/provider.mjs && node --check src/node-adapter.mjs && npm run test"
+  },
+  "dependencies": {}
+}
