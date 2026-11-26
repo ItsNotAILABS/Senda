@@ -83,19 +83,31 @@ export function createKalshiProvider({fetchImpl=fetch,now=Date.now}={}){
   const result=await raw("/trade-api/v2/markets/"+encodeURIComponent(ticker)+"/orderbook?depth=20",4000);
   return normalizeEventBook(ticker,result,at);
  }
+ // Kalshi's Get Market response does not guarantee series_ticker. Resolve it
+ // through the exact owning event and verify this market belongs to that event.
+ async function seriesForMarket(ticker,eventTicker){
+  requireTicker(ticker);requireTicker(eventTicker);
+  const data=await raw("/trade-api/v2/events/"+encodeURIComponent(eventTicker)+"?with_nested_markets=true",30000);
+  const event=data?.event;
+  if(!event||event.event_ticker!==eventTicker||!tickerPattern.test(event.series_ticker??"")||
+     !Array.isArray(event.markets)||!event.markets.some(m=>m?.ticker===ticker))
+   throw Object.assign(new Error("Unverified Kalshi event/market relationship"),{
+    status:503,code:"MARKET_EVENT_MISMATCH"});
+  return event.series_ticker;
+ }
  async function history(ticker,window="7d"){
   requireTicker(ticker);
   const spec=HISTORY_WINDOWS.find(x=>x.id===window);
   if(!spec)throw Object.assign(new Error("Unsupported timeframe"),{status:400,code:"INVALID_TIMEFRAME"});
   const d=await detail(ticker);
-  requireTicker(d.seriesTicker);
+  const seriesTicker=await seriesForMarket(ticker,d.eventTicker);
   const end=Math.floor(now()/1000),start=end-spec.days*86400;
-  const u=new URL("/trade-api/v2/series/"+encodeURIComponent(d.seriesTicker)+"/markets/"+encodeURIComponent(ticker)+"/candlesticks",KALSHI_ORIGIN);
+  const u=new URL("/trade-api/v2/series/"+encodeURIComponent(seriesTicker)+"/markets/"+encodeURIComponent(ticker)+"/candlesticks",KALSHI_ORIGIN);
   for(const [key,value] of Object.entries({start_ts:String(start),end_ts:String(end),period_interval:String(spec.interval)}))u.searchParams.set(key,value);
   const result=await raw(u.pathname+u.search,30000);
   if(result?.ticker&&result.ticker!==ticker)throw upstreamError(502);
   if(!Array.isArray(result?.candlesticks))throw upstreamError(502);
-  return {ticker,seriesTicker:d.seriesTicker,window,source:"Kalshi public market candlesticks",
+  return {ticker,seriesTicker,window,source:"Kalshi public market candlesticks",
    observedAt:new Date(now()).toISOString(),bars:normalizeKalshiCandles(result.candlesticks,{from:start,to:end})};
  }
  return {markets,detail,book,history,planEventSide};
