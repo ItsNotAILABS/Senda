@@ -2,7 +2,7 @@ import {createHash,randomUUID,timingSafeEqual} from "node:crypto";
 import {createKalshiProvider,requireTicker} from "./provider.mjs";
 import {contingencyScenario,contingencyReservePlan} from "./contingency-analysis.mjs";
 
-const routes=["/v1/markets","/v1/markets/:ticker","/v1/markets/:ticker/book","/v1/markets/:ticker/history",
+const routes=["/v1/ready","/v1/markets","/v1/markets/:ticker","/v1/markets/:ticker/book","/v1/markets/:ticker/history",
  "/v1/contingency/scenario","/v1/contingency/reserve","/v1/capabilities"];
 const response=(data,status=200,headers={})=>new Response(JSON.stringify(data),{
  status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",
@@ -69,6 +69,11 @@ export function createEventService({env=process.env,fetchImpl=fetch,now=Date.now
    if(!tokenId)return err(401,"UNAUTHORIZED","Valid server-to-server bearer credentials required.",id);
    if(!allowRequest(tokenId))return err(429,"RATE_LIMITED","Event research quota exceeded for this instance.",id);
    const path=url.pathname,method=request.method;
+   if(method==="GET"&&path==="/v1/ready"){
+    const live=await provider.probe();
+    return response(envelope({role:"read-only",provider:live,serviceConfigured:true,
+     financialExecution:false,serviceConnectedToSendapay:false},id));
+   }
    if(method==="GET"&&path==="/v1/capabilities")
     return response(envelope({service:"senda-event-intelligence",version:"v1",routes,
      capabilities:{publicMarkets:"source-dependent",marketRules:"source-dependent",
