@@ -1,0 +1,147 @@
+{
+  "schema": "senda.opensource.integration-catalog.v1",
+  "asOf": "2026-11-25",
+  "policy": "No blind vendoring: verify exact source license, maintainer activity, security posture, runtime compatibility and live execution evidence. Adapters are disabled until separately approved.",
+  "entries": [
+    {
+      "id": "solana-kit",
+      "name": "Anza Solana Kit",
+      "repo": "https://github.com/anza-xyz/kit",
+      "license": "MIT",
+      "licenseChecked": true,
+      "role": "transaction and RPC SDK modernization",
+      "tier": "P1",
+      "mode": "incremental-adapter",
+      "executionEnabled": false
+    },
+    {
+      "id": "x402",
+      "name": "x402",
+      "repo": "https://github.com/x402-foundation/x402",
+      "license": "Apache-2.0",
+      "licenseChecked": true,
+      "role": "API metering and agent payment protocol",
+      "tier": "P1",
+      "mode": "verified-protocol-sdk",
+      "executionEnabled": false,
+      "conditions": [
+        "authentic settlement proof",
+        "replay protection",
+        "per-tenant spending authority"
+      ]
+    },
+    {
+      "id": "squads-v4",
+      "name": "Squads V4",
+      "repo": "https://github.com/Squads-Protocol/v4",
+      "license": "AGPL-3.0",
+      "licenseChecked": true,
+      "role": "multisig governed treasury",
+      "tier": "P2",
+      "mode": "protocol-adapter-only",
+      "executionEnabled": false,
+      "conditions": [
+        "legal review of AGPL network obligations",
+        "program and authority verification"
+      ]
+    },
+    {
+      "id": "kamino-lending",
+      "name": "Kamino klend",
+      "repo": "https://github.com/Kamino-Finance/klend",
+      "license": "Business Source License 1.1 (program)",
+      "licenseChecked": true,
+      "role": "lending risk and collateral analytics",
+      "tier": "P1",
+      "mode": "read-only-adapter-first",
+      "executionEnabled": false,
+      "conditions": [
+        "do not copy program source without license review",
+        "check SDK separately",
+        "live health-factor and reserve evidence"
+      ]
+    },
+    {
+      "id": "kamino-sdk",
+      "name": "Kamino klend-sdk",
+      "repo": "https://github.com/Kamino-Finance/klend-sdk",
+      "license": "unverified at file level",
+      "licenseChecked": false,
+      "role": "lending TS SDK and reserve data",
+      "tier": "P1",
+      "mode": "candidate-pending-license-review",
+      "executionEnabled": false
+    },
+    {
+      "id": "phoenix-legacy",
+      "name": "Phoenix V1",
+      "repo": "https://github.com/Ellipsis-Labs/phoenix-v1",
+      "license": "MIT",
+      "licenseChecked": true,
+      "role": "legacy onchain orderbook patterns",
+      "tier": "P2",
+      "mode": "research-only",
+      "executionEnabled": false,
+      "conditions": [
+        "current venue status and liquidity independent verification",
+        "not equivalent to similarly named current perps venues"
+      ]
+    },
+    {
+      "id": "velocity-drift-lineage",
+      "name": "Velocity / archived Drift V2",
+      "repo": "https://github.com/velocity-exchange/velocity-v1",
+      "license": "pending review",
+      "licenseChecked": false,
+      "role": "perps",
+      "tier": "BLOCKED",
+      "mode": "do-not-connect",
+      "executionEnabled": false,
+      "reason": "Velocity transactions reportedly paused on 2026-11-25; original Drift program paused; re-review official recovery and security audits before any adapter"
+    },
+    {
+      "id": "hyperliquid",
+      "name": "Hyperliquid SDK",
+      "repo": "https://github.com/nktkas/hyperliquid",
+      "license": "verify exact SDK version",
+      "licenseChecked": false,
+      "role": "existing Senda perps",
+      "tier": "P0",
+      "mode": "audit-existing-adapter",
+      "executionEnabled": false,
+      "conditions": [
+        "venue status",
+        "market eligibility",
+        "fresh orderbook and funding",
+        "independent execution receipt"
+      ]
+    },
+    {
+      "id": "mayan-sdk",
+      "name": "Mayan Swap SDK",
+      "repo": "https://github.com/mayan-finance/swap-sdk",
+      "license": "verify exact SDK version",
+      "licenseChecked": false,
+      "role": "existing Senda multi-chain routing",
+      "tier": "P1",
+      "mode": "audit-existing-adapter",
+      "executionEnabled": false
+    },
+    {
+      "id": "jupiter",
+      "name": "Jupiter Swap V2",
+      "repo": "https://github.com/jup-ag",
+      "license": "API / SDK specific",
+      "licenseChecked": false,
+      "role": "existing Senda spot and liquidity",
+      "tier": "P0",
+      "mode": "modernize-existing-connector",
+      "executionEnabled": false,
+      "conditions": [
+        "V2 wallet signer integration tested",
+        "quote-to-fill measurements",
+        "token program checks"
+      ]
+    }
+  ]
+}
