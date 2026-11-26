@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Bitso → /api/bitso-webhook | raw JSON HTTP, RSA-SHA256 payload signature, fixed Bitso key source | **Route in source**, disabled by default |
 | /api/bitso-webhook → PostgreSQL | atomic insert into webhook inbox + reconciliation outbox | **Implemented**, requires DATABASE_URL and database migration |
-| Deployment → migrations/0009_bitso_inbox.sql | canonical Senda /migrations glob + scripts/migrate.mjs | **Migration added**, NOT applied to deployed DB |
+| Deployment → services/bitso-business/sql/0009_bitso_inbox.sql | kept out of migrations/ so build and PGLite do not auto-apply | **Migration added**, NOT applied to deployed DB |
 | Scheduled private worker → outbox | leased SKIP LOCKED rows, attempt fencing and dead-letter | **Implemented**, no scheduled deployment |
 | Worker → Senda approved intent | map account + wid to approved origin_id | **Read-only lookup**, no authorization API or approval writer |
 | Worker → Bitso withdrawals | HMAC request using DB-allocated nonce | **GET-only client**, account credentials missing |
@@ -27,7 +27,7 @@ Ensure no same-key nonce allocator runs outside the shared DB: \`createBitsoNonc
 
 ## Deployment sequence
 1. Pass tests and full app typecheck/build; latest GitHub CI reports failure, so the PR cannot be called production-ready.
-2. Apply \`migrations/0009_bitso_inbox.sql\` using \`npm run db:migrate\` on a private PostgreSQL database after backup; verify schema, indexes and privileges. **Do not run money movement in preview.**
+2. Apply \`services/bitso-business/sql/0009_bitso_inbox.sql\` manually on a private PostgreSQL database after backup (`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f services/bitso-business/sql/0009_bitso_inbox.sql`). Do not copy it into \`migrations/\` until you intend the next deploy to apply it. Verify schema, indexes and privileges. **Do not run money movement in preview.**
 3. Configure dedicated DB runtime role for inbox/outbox and a separate read-only Bitso key. Set \`SENDA_BITSO_WEBHOOK_ENABLED=true\` only after provider account and correct subscription setup.
 4. Set a private ingress/WAF rule for the endpoint with request/body size, per-source rate limits, TLS, protection against path probing; store only minimal received event metadata.
 5. Subscribe the correct **funding/withdrawal** events for the Withdrawals API (not Unified Payments \`payout\`/ \`payin\` events). Verify signatures and retry conditions against actual Bitso sandbox payloads.

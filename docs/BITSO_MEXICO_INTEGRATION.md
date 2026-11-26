@@ -85,7 +85,7 @@ node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs s
 
 ## Durable PostgreSQL adapter — 2026-11-26
 
-- Migration: `services/bitso-business/sql/001_inbox_outbox.sql` defines a unique-key webhook inbox plus a private reconciliation outbox. This migration **has not been applied** to a deployed database.
+- Migration: `services/bitso-business/sql/0009_bitso_inbox.sql` defines a unique-key webhook inbox plus a private reconciliation outbox. It is intentionally kept out of `migrations/` so deploy/PGLite do not auto-apply it. This migration **has not been applied** to a deployed database.
 - Adapter: `services/bitso-business/postgres-inbox.mjs` uses `node-postgres` compatible Pool transactions, atomic `INSERT ... ON CONFLICT DO NOTHING`, and `FOR UPDATE SKIP LOCKED` worker claims.
 - Tests: `scripts/bitso-postgres.test.mjs` covers commit, rollback, and claim SQL using an injected fake PostgreSQL connection. It is **not a real DB integration test**.
 - Workers must implement lease expiry, bounded retries, dead-letter alerts, authenticated Bitso status lookup, account-level isolation, encrypted recipient identifiers, and independent settlement evidence. The claim primitive does not complete jobs automatically.

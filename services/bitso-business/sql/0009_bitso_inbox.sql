@@ -1,4 +1,7 @@
--- Canonical migration: scripts/migrate.mjs and PGLite read migrations/*.sql.
+-- Manual Bitso inbox/outbox migration. Keep this file out of migrations/
+-- so `npm run build` and PGLite startup do not auto-apply it.
+-- Apply on a private PostgreSQL database only, after backup:
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f services/bitso-business/sql/0009_bitso_inbox.sql
 -- DO NOT expose this database to browsers. No payment credentials or bank PII here.
 CREATE SCHEMA IF NOT EXISTS bitso_business;
 

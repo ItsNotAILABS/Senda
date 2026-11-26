@@ -9,7 +9,7 @@ on:
       - 'scripts/bitso-postgres.test.mjs'
       - 'scripts/bitso-http.test.mjs'
       - 'scripts/bitso-worker.test.mjs'
-      - 'migrations/0009_bitso_inbox.sql'
+      - 'services/bitso-business/sql/0009_bitso_inbox.sql'
       - 'src/routes/api/bitso-webhook.ts'
       - 'docs/BITSO_MEXICO_INTEGRATION.md'
       - '.github/workflows/bitso-mexico.yml'
