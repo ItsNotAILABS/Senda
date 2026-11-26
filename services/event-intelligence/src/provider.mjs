@@ -110,5 +110,12 @@ export function createKalshiProvider({fetchImpl=fetch,now=Date.now}={}){
   return {ticker,seriesTicker,window,source:"Kalshi public market candlesticks",
    observedAt:new Date(now()).toISOString(),bars:normalizeKalshiCandles(result.candlesticks,{from:start,to:end})};
  }
- return {markets,detail,book,history,planEventSide};
+ async function probe(){
+  const path="/trade-api/v2/events?limit=1&status=open&with_nested_markets=true";
+  const data=await raw(path,5000);
+  if(!Array.isArray(data?.events))throw upstreamError(502);
+  return {source:"Kalshi public events",reachable:true,observedAt:new Date(now()).toISOString(),
+   sampledEvents:data.events.length,synthetic:false,financialExecution:false};
+ }
+ return {markets,detail,book,history,probe,planEventSide};
 }
