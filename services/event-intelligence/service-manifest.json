@@ -8,8 +8,11 @@
   "deployment": {
     "provider": "vercel",
     "rootDirectory": "services/event-intelligence",
-    "status": "not-deployed",
-    "url": null
+    "status": "preview-ready-protected",
+    "projectId": "prj_7ce2eLN5SGusFStTASRMfRa7bjgx",
+    "deploymentId": "dpl_4HVyu77eGhw9r2z6gWz5Zyt568rA",
+    "url": "https://senda-event-intelligence-9ua5oi6vl-q7qx6fvztq-9008.vercel.app",
+    "productionApproved": false
   },
   "http": {
     "basePath": "/v1",
@@ -58,9 +61,14 @@
     "import-balance"
   ],
   "verification": {
-    "state": "source-built",
+    "state": "preview-build-passed",
+    "isolatedTests": {
+      "passed": 14,
+      "total": 14
+    },
     "liveProviderContractTests": false,
     "realMoneyTests": false,
-    "productionApproval": false
+    "productionApproval": false,
+    "credentialConfigured": false
   }
 }
