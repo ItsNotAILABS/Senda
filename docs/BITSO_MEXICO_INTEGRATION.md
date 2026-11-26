@@ -58,3 +58,36 @@ npm run build:dev
 \`\`\`
 
 Unit tests use fakes, not Bitso credentials; no authenticated provider or SPEI execution test has been performed.
+
+
+## Complementary technology implementation — 2026-11-26
+
+New server-only components:
+- `services/bitso-business/webhook-signatures.mjs`: pinned official public-key retrieval at `https://api.bitso.com/v4/webhooks/public-key`, signed `payload` verification using RSA-SHA256 PKCS#1 v1.5, public-key rotation/cache, strict body/header checks, resource-to-event binding, and PII-minimized output. **No direct bank settlement from a webhook.** Documentation: https://docs.bitso.com/bitso-payouts-funding/docs/webhook-event-signatures
+- `services/bitso-business/webhook-inbox.mjs`: transactionally committed unique event receipt and durable reconciliation-job interface, using a caller-provided transactional store; deliberately *not* a public HTTP handler. Database implementation must enforce unique primary-key, transaction rollback and durable outbox. No in-memory dedupe for production.
+- `scripts/bitso-webhooks.test.mjs`: real RSA keypair unit tests for signature validation and tamper rejection; state/deduplication tests use a fake transactional database for development only.
+
+**Webhook API nuance:** `funding` and `withdrawal` correspond to Bitso Fundings/Withdrawals API. The newer Unified Payments API uses `payin` / `payout` with different resources, and MUST get a distinct validated adapter after the account's API product is chosen. Do not route those events into this legacy-specific parser. See https://docs.bitso.com/bitso-payouts-funding/docs/webhook-event-payloads
+
+**Open production tasks (not shipped):**
+1. Deploy durable PostgreSQL inbox/outbox keyed by provider account + resource + event state and hash, plus transactional job dispatch to a private worker; configure private connection pooling, row-level account isolation, dead-letter queue and audit retention.
+2. Authenticated read-only provider status queries (with account-specific schema) and independent beneficiary/bank settlement evidence; compare exact integer minor units rather than formatted strings in production. No automatic retry of unknown-status payout submissions.
+3. Provider-signed delivery endpoint with raw-body capture, strict content length, configured source-IP allowlist (only behind a trusted reverse proxy), rate limiting, preconfigured provider account binding, and secure 2xx response **only after durable receipt**.
+4. Provider account + KYB + FXaaS enterprise contract + compliance and data privacy approvals, exact source-token network and approved deposit instructions, quote/FX entitlement, SPEI payout authorization and refund/chargeback policy.
+5. Integrate approved FX quote into Senda's explicit wallet intent authorization and external payout mandate; preserve the user's signer and never assume a Solana signature authorizes unrelated conversions.
+6. Full CI build, staging contract tests, reconciliation drills, and actual low-value SPEI receipt before route activation. The new modules **cannot** enable bank payouts.
+
+Run focused tests:
+```bash
+node --test scripts/bitso-business.test.mjs scripts/bitso-withdrawals.test.mjs scripts/bitso-webhooks.test.mjs scripts/liquify-global.test.mjs
+```
+
+
+## Durable PostgreSQL adapter — 2026-11-26
+
+- Migration: `services/bitso-business/sql/001_inbox_outbox.sql` defines a unique-key webhook inbox plus a private reconciliation outbox. This migration **has not been applied** to a deployed database.
+- Adapter: `services/bitso-business/postgres-inbox.mjs` uses `node-postgres` compatible Pool transactions, atomic `INSERT ... ON CONFLICT DO NOTHING`, and `FOR UPDATE SKIP LOCKED` worker claims.
+- Tests: `scripts/bitso-postgres.test.mjs` covers commit, rollback, and claim SQL using an injected fake PostgreSQL connection. It is **not a real DB integration test**.
+- Workers must implement lease expiry, bounded retries, dead-letter alerts, authenticated Bitso status lookup, account-level isolation, encrypted recipient identifiers, and independent settlement evidence. The claim primitive does not complete jobs automatically.
+- Private database credentials must never reach the web client. Use a dedicated migration role and a restricted runtime role.
+- The new `services/bitso-business` files are modular provider-side primitives and are not currently wired into a Senda HTTP endpoint or the existing user transfer UI. **No SPEI/FX execution has been enabled.**
