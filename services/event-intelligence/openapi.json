@@ -380,6 +380,50 @@
           }
         }
       }
+    },
+    "/v1/intelligence/{ticker}": {
+      "get": {
+        "summary": "Verified source-quality intelligence for a single Kalshi market, no execution",
+        "tags": [
+          "Markets"
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "window",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "default": "7d"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence quality, fresh opposing depth and historical price coverage; non-executable, non-insurance"
+          },
+          "401": {
+            "description": "Server credential missing or invalid"
+          },
+          "503": {
+            "description": "Provider unavailable or sources inconsistent"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -98,3 +98,10 @@ The adapter assumes **no** SendaPay login, wallet, ledger, payment rail, virtual
 - [Kalshi Orderbook](https://docs.kalshi.com/api-reference/market/get-market-orderbook)
 - [Kalshi Candlesticks](https://docs.kalshi.com/api-reference/market/get-market-candlesticks)
 - [OpenAPI contract](./openapi.json)
+
+### Evidence Intelligence (new source module)
+- `GET /v1/intelligence/:ticker?window=24h|7d|30d` is a server-authenticated, read-only evaluation of contract rules, matching ticker identities, fresh two-sided public bids and source candle coverage. `researchReady` means evidence quality, **not** that a trade is executable.
+- `src/components/event-evidence-strip.tsx` shows the same canonical quality flags in Senda's existing Events V3 desk without changing Phantom transaction controls.
+- The private SDK exposes `client.intelligence(ticker,window)`; the SendaPay server-only adapter exposes `marketEvidence(ticker,window)`. No money, prediction order or insurance instruction can be issued from either.
+- Tests: `npm test` now includes `test/event-risk-intelligence.test.mjs`. Live Kalshi schema verification and durable distributed rate limiting remain release gates.
+- Existing preview status may differ from the source manifest; deploying this branch requires a new verified preview before production activation.
