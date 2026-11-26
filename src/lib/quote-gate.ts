@@ -1,4 +1,4 @@
-/** A name is listed only after Jupiter quotes a $25 buy inside 1% impact. */
+/** A name is listed after an indicative Jupiter $25 quote inside 1% estimated price impact; not an executed fill. */
 
 import { createServerFn } from "@tanstack/react-start";
 import { fetchQuote, impactPct } from "@/lib/jup-exec";
@@ -140,10 +140,10 @@ async function build(): Promise<VerifiedBook> {
   const xCount = assets.filter((a) => a.kind === "xstock").length;
   const note =
     xCount > 0
-      ? `${xCount} xStocks and ${assets.length - xCount} pre-IPO names quoted at $${RETAIL_USD} inside ${MAX_IMPACT}% impact. Anything Jupiter would not fill is not listed.`
+      ? `${xCount} xStocks and ${assets.length - xCount} pre-IPO names quoted at $${RETAIL_USD} inside ${MAX_IMPACT}% impact. Unquoted names are not listed; no trade is executed.`
       : assets.length
-        ? `Pre-IPO names that filled at $${RETAIL_USD} are listed. No xStock quoted inside ${MAX_IMPACT}% before the clock.`
-        : `Jupiter did not fill a $${RETAIL_USD} buy inside ${MAX_IMPACT}% impact. Nothing is listed.`;
+        ? `Pre-IPO names with indicative ${RETAIL_USD} quotes are listed. No xStock quoted inside ${MAX_IMPACT}% before the clock.`
+        : `Jupiter did not quote a ${RETAIL_USD} buy inside ${MAX_IMPACT}% impact. Nothing is listed.`;
   const book: VerifiedBook = { assets, tried, at: Date.now(), note };
   cache = book;
   return book;
