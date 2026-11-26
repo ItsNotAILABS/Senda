@@ -18,7 +18,7 @@ export function createBitsoBalanceReader({environment="stage",key,secret,nonceFa
   if(typeof fetchImpl!=="function")throw new Error("HTTP transport required");
   return Object.freeze({
     async getBalance(){
-      const nonce=nonceFactory();
+      const nonce=await nonceFactory();
       const auth=signBalance({key,secret,nonce});
       const response=await fetchImpl(HOSTS[environment]+PATH,{
         method:"GET",headers:{Authorization:auth,Accept:"application/json"},
