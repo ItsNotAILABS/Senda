@@ -11,6 +11,7 @@ export function createSendaPayContingencyBridge({serviceOrigin,serviceKey,fetchI
   planIndependentCashReserve:({potentialExpenseUsd,availableCashUsd,targetCoveragePct})=>
    client.reserve({potentialExpenseUsd,availableCashUsd,targetCoveragePct}),
   findRelatedMarkets:({q,lane,limit})=>client.listMarkets({q,lane,limit}),
+  marketEvidence:(ticker,window="7d")=>client.intelligence(ticker,window),
   getCapabilities:()=>client.capabilities(),
   executionAuthority:"NONE",
   transfersSupported:false,
