@@ -110,3 +110,19 @@ func netSplit(s string)(string,string,error){
  return uri.Hostname(),uri.Port(),nil
 }
 var _ = time.Second
+
+func TestPrivateRouterRejectsWrongAndPrefixTokens(t *testing.T) {
+ service:=NewServer("http://127.0.0.1:1","test-key","private-long-token")
+ for _,value:=range []string{"","private","private-long-token-extra","wrong-token"}{
+  req:=httptest.NewRequest("GET","/v1/ladder?mint="+testMint,nil)
+  req.Header.Set("X-Senda-Router-Key",value)
+  res:=httptest.NewRecorder()
+  service.mux().ServeHTTP(res,req)
+  if res.Code!=401{t.Errorf("wrong token rejected with status %d, want 401",res.Code)}
+ }
+ req:=httptest.NewRequest("GET","/v1/ladder?mint=invalid",nil)
+ req.Header.Set("X-Senda-Router-Key","private-long-token")
+ ok:=httptest.NewRecorder()
+ service.mux().ServeHTTP(ok,req)
+ if ok.Code!=400{t.Errorf("correct token should reach input validation, got %d",ok.Code)}
+}
