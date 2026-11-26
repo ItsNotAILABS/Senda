@@ -1,0 +1,47 @@
+name: Senda 2026 read-only integration gates
+on:
+  pull_request:
+    paths:
+      - 'src/lib/ecosystem-upgrade-core.mjs'
+      - 'src/lib/jupiter-v2-preview.ts'
+      - 'src/lib/token-safety.ts'
+      - 'src/lib/contingency-analysis.*'
+      - 'src/lib/kalshi-*'
+      - 'src/lib/event-market-discovery.*'
+      - 'src/components/jupiter-v2-preview.tsx'
+      - 'src/components/token-safety-panel.tsx'
+      - 'src/components/kalshi-history-chart.tsx'
+      - 'src/components/event-contingency-lab.tsx'
+      - 'src/routes/invest/safety.tsx'
+      - 'src/lib/product-pages.ts'
+      - 'scripts/ecosystem-upgrade.test.mjs'
+      - 'scripts/jupiter-endpoint-regression.test.mjs'
+      - 'scripts/kalshi-history.test.mjs'
+      - 'scripts/contingency-analysis.test.mjs'
+      - '.github/workflows/senda-2026-readonly-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Dependency lock verification
+        run: npm ci
+      - name: Read-only financial source and evidence tests
+        run: |
+          node --test \
+            scripts/ecosystem-upgrade.test.mjs \
+            scripts/jupiter-endpoint-regression.test.mjs \
+            scripts/kalshi-history.test.mjs \
+            scripts/contingency-analysis.test.mjs
+      - name: TypeScript baseline check
+        run: npm run typecheck
+      - name: Application build
+        run: npm run build:dev
