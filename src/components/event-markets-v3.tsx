@@ -14,6 +14,7 @@ import {MARKET_LANES,marketSpread,type MarketLane,type SortMode} from "@/lib/eve
 import {planEventSide,eventMarketUrl,type EventBook,type EventQuote} from "@/lib/event-contract-router.mjs";
 import {EventContingencyLab} from "@/components/event-contingency-lab";
 import {KalshiHistoryChart} from "@/components/kalshi-history-chart";
+import {EventEvidenceStrip} from "@/components/event-evidence-strip";
 import {PhantomPredictBridge} from "@/components/phantom-predict-bridge";
 import {DflowPhantomPrediction} from "@/components/dflow-phantom-prediction";
 import {PredictionVenueRouter} from "@/components/prediction-venue-router";
@@ -186,6 +187,7 @@ export function EventMarketsDesk({initialWorkspace="markets"}:{initialWorkspace?
      <div className="flex flex-wrap items-start justify-between gap-2"><div><p className="font-mono text-[10px] tracking-[.16em] text-cyan-300">KALSHI / CONTRACT DETAIL</p><h2 className="mt-2 text-xl font-semibold leading-7">{market.yes||market.title}</h2><p className="mt-2 break-all font-mono text-[10px] text-white/40">{market.ticker}</p></div><button type="button" onClick={()=>toggleWatch(market.ticker)} aria-label="Toggle saved market" className="grid size-10 place-items-center rounded-xl border border-white/15">{watchlisted?<BookmarkCheck className="size-4 text-cyan-300"/>:<Bookmark className="size-4"/>}</button></div>
      <div className="grid grid-cols-3 gap-2"><div className={stat}><p className="text-[10px] text-white/40">YES bid</p><p className="mt-1 font-mono text-lg text-cyan-200">{price(market.bid)}</p></div><div className={stat}><p className="text-[10px] text-white/40">YES ask</p><p className="mt-1 font-mono text-lg">{price(market.ask)}</p></div><div className={stat}><p className="text-[10px] text-white/40">Displayed spread</p><p className="mt-1 font-mono text-lg">{marketSpread(market)==null?"—":marketSpread(market)+"¢"}</p></div></div>
      <KalshiHistoryChart ticker={market.ticker} seriesTicker={market.seriesTicker} refreshKey={stamp}/>
+     <EventEvidenceStrip ticker={market.ticker} seriesTicker={market.seriesTicker} book={book} contract={contract?.detail??null} now={clock} refreshKey={stamp}/>
      <div className="rounded-2xl border border-cyan-300/15 bg-[#0e2130] p-4">
       <div className="flex items-center justify-between gap-3"><div><p className="font-mono text-[10px] text-cyan-300">ORDERBOOK-BASED RESEARCH</p><h3 className="mt-1 text-base font-semibold">Size an event position</h3></div><span className={cn("rounded-full border px-2 py-1 font-mono text-[10px]",sourceReady?"border-emerald-300/25 text-emerald-200":"border-amber-300/25 text-amber-200")}>{loadingDepth?"Loading":sourceReady?"Depth fresh":"Unverified / stale"}</span></div>
       <div className="mt-4 grid grid-cols-2 gap-2">{(["yes","no"] as const).map(x=><button type="button" key={x} aria-pressed={side===x} onClick={()=>setSide(x)} className={cn("min-h-11 rounded-xl border text-sm font-semibold",side===x?x==="yes"?"border-emerald-300/35 bg-emerald-300/10 text-emerald-200":"border-rose-300/35 bg-rose-300/10 text-rose-200":"border-white/10 bg-white/[.04] text-white/50")}>Research {x.toUpperCase()}</button>)}</div>
