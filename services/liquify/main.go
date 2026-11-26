@@ -4,6 +4,7 @@ package main
 
 import (
  "context"
+ "crypto/subtle"
  "encoding/json"
  "errors"
  "fmt"
@@ -79,7 +80,8 @@ func writeJSON(w http.ResponseWriter,status int,value any){
 }
 func (s *Server) authorized(w http.ResponseWriter,r *http.Request)bool{
  if s.internalSecret==""{return true}
- if r.Header.Get("X-Senda-Router-Key")!=s.internalSecret{
+ provided:=r.Header.Get("X-Senda-Router-Key")
+ if subtle.ConstantTimeCompare([]byte(provided),[]byte(s.internalSecret))!=1{
   writeJSON(w,http.StatusUnauthorized,map[string]string{"error":"Private Senda router token required"})
   return false
  }
@@ -192,8 +194,8 @@ func main(){
  host,_,err:=net.SplitHostPort(addr)
  if err!=nil{log.Fatal("invalid listen address: ",err)}
  secret:=os.Getenv("SENDA_ROUTER_INTERNAL_KEY")
- if host!="127.0.0.1"&&host!="localhost"&&host!="::1"&&secret==""{
-  log.Fatal("refusing non-loopback bind without SENDA_ROUTER_INTERNAL_KEY")
+ if host!="127.0.0.1"&&host!="localhost"&&host!="::1"&&len(secret)<32{
+  log.Fatal("refusing non-loopback bind without 32+ byte SENDA_ROUTER_INTERNAL_KEY")
  }
  key:=os.Getenv("SENDA_JUPITER_API_KEY")
  srv:=NewServer("https://api.jup.ag",key,secret)
