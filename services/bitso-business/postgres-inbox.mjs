@@ -77,8 +77,9 @@ export async function claimBitsoReconciliationJobs(pool,{limit=10}={}){
  * Only an actual authenticated GET observation can be stored as a verified observation.
  * This does not mark user payouts settled, even if Bitso says "complete".
  */
+function validJobId(value){return (Number.isSafeInteger(value)&&value>0)||(typeof value==="string"&&/^[1-9][0-9]{0,18}$/.test(value));}
 export async function completeBitsoReconciliation(pool,{job,observation}={}){
- if(!Number.isSafeInteger(job?.id)||!Number.isSafeInteger(job?.attempts)||job.attempts<1)
+ if(!validJobId(job?.id)||!Number.isSafeInteger(job?.attempts)||job.attempts<1)
   throw new Error("Invalid fenced job");
  if(observation?.source!=="authenticated-provider-query"||
     observation.providerId!==job.provider_id ||
@@ -118,7 +119,7 @@ export async function completeBitsoReconciliation(pool,{job,observation}={}){
 
 /** Retry with bounded exponential backoff; dead-letter only after max attempts. */
 export async function deferBitsoReconciliation(pool,{job,reason="provider_unavailable",maxAttempts=12}={}){
- if(!Number.isSafeInteger(job?.id)||!Number.isSafeInteger(job?.attempts)||job.attempts<1)
+ if(!validJobId(job?.id)||!Number.isSafeInteger(job?.attempts)||job.attempts<1)
   throw new Error("Invalid retry job");
  if(!/^[a-z_]{1,40}$/.test(reason))throw new Error("Invalid retry reason");
  if(!Number.isSafeInteger(maxAttempts)||maxAttempts<1||maxAttempts>50)
