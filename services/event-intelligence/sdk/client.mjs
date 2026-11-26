@@ -34,6 +34,7 @@ export function createSendaEventClient({baseUrl,apiKey,fetchImpl=fetch,allowInse
  const id=value=>{if(!ticker.test(value||""))throw Error("Invalid event ticker");return value;};
  return Object.freeze({
   capabilities:()=>call("GET","/v1/capabilities"),
+  readiness:()=>call("GET","/v1/ready"),
   listMarkets:({q="",lane="all",sort="activity",limit=30,cursor=""}={})=>{
    const params=new URLSearchParams({q,lane,sort,limit:String(limit)});
    if(cursor)params.set("cursor",cursor);
