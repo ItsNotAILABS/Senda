@@ -37,3 +37,23 @@ Canonical repository: ItsNotAILABS/Senda. Baseline before this integration: `8fa
 - BLOCKED: safety or infrastructure gate not met.
 
 **No production, chain deployment, external provider onboarding, key access or financial execution is claimed by this integration.**
+
+## Offline/runner-independent source release invocation
+
+Run from a real cloned repository with Node 22 and Go installed:
+
+```bash
+node scripts/release-certify.mjs
+```
+
+The runner installs locked npm dependencies, runs targeted money/recovery tests, read-only market-source tests, full TypeScript typecheck, a development build, Go race tests/static vet, and PARRALAX client tests. At the **first failure** it stops and emits a locally stored `release-receipt.json` with gate exit codes, log paths, SHA-256 hashes, exact commit and an explicit `BLOCKED` status. The default evidence directory is the system temp directory; set `SENDA_EVIDENCE_DIR` to override. **Source gates passing still does not constitute a wallet test, provider certification, on-chain deployment or security audit.**
+
+### Verified narrow unit evidence
+On 2026-11-26, five `verified-send-receipt` Node test cases passed locally against a source copy whose Git blob hashes exactly matched the committed repository:
+- `src/lib/verified-send-receipt.mjs`: `4202650cf898cce14e139156298f533291d3557a`
+- `scripts/verified-send-receipt.test.mjs`: `1c1c7437d85a9300259aa6e3735763e9b0c8b38d`
+
+This confirms only receipt provenance validation: pending/failed status denial, wrong-wallet/asset rejection, duplicate/malformed journal denial and exact USDC-cent constraints. No live Solana payment, provider simulation or complete app build was executed in that check.
+
+### Operators must still resolve
+The latest observed Actions run had no runner assigned and zero executed steps. Reinstating repository Actions billing/runner provisioning and branch protection requires repository administration. Issue: https://github.com/ItsNotAILABS/Senda/issues/55.
