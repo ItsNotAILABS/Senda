@@ -21,5 +21,7 @@ jobs:
         run: |
           node --test integrations/parralax-treasury/treasury-intent.test.mjs
           node --test integrations/parralax-treasury/chain-client.test.mjs
+          node --test integrations/parralax-treasury/agent-money-policy.test.mjs
+          node --test integrations/parralax-treasury/agent-account-read.test.mjs
       - name: Typecheck Senda
         run: npm run typecheck

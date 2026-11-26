@@ -21,3 +21,10 @@ Owner signs initialization -> owner signs funding transfer -> PARRALAX verifies 
 - Micropayments: use exact amount and fee-aware Solana SPL settlement; return a service result only after confirmed payment, checked against recipient and token mint.
 - Provenance: digest only is not proof until anchor signature and model/data evidence are independently reproducible.
 - Lending/borrow, issuer-backed RWA, bank deposits and payment cards require connected audited protocols and regulated partner obligations. No financial claims without receipts.
+
+## Agent Money account and policy modules (new)
+- `agent-money-policy.mjs` checks exact integer-denominated spending policies and a trusted-ledger-provided request state. Passing the check returns `status: review`, `authority: NONE`, and `canExecute: false`; it never grants a spending key or reserves value.
+- `agent-account-read.mjs` reads the treasury/vault from a caller-supplied RPC with a **pinned genesis hash** and verified program ID. It checks account/program owners, PDA owner/mint, parsed SPL token vault, exact minor-unit balance and caps. This is read-only chain observation, not a funded Senda account.
+- Test: `node --test integrations/parralax-treasury/agent-money-policy.test.mjs integrations/parralax-treasury/agent-account-read.test.mjs`. Requires root repo dependencies for the account-read test.
+- **NOT CONNECTED:** no verified devnet/mainnet treasury deployment, authorized agent signer, funded vault, provider ledger integration, debit card or bank. Do not advertise an operating agent neobank until the chain proofs and partner obligations exist.
+- [Senda Money and agent-bank architecture](../../docs/SENDA_MONEY_AGENT_BANKING_SYSTEM_2026-11-26.md).
