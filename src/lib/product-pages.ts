@@ -1,6 +1,7 @@
 import type { ProductPage } from "@/components/product-shell";
 
 export const TRADE_PAGES: ProductPage[] = [
+  { href: "/invest/safety", label: "Token Safety", hint: "Read-only mint inspection and V2 quote previews" },
   { href: "/invest", label: "Terminal", hint: "Chart, markets, and the trading box" },
   { href: "/invest/world", label: "FX & metals", hint: "Metals, FX, indexes" },
   { href: "/invest/world?lane=energy", label: "Commodities", hint: "Energy and softs" },
