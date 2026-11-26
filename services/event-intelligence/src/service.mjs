@@ -1,9 +1,11 @@
 import {createHash,randomUUID,timingSafeEqual} from "node:crypto";
 import {createKalshiProvider,requireTicker} from "./provider.mjs";
 import {contingencyScenario,contingencyReservePlan} from "./contingency-analysis.mjs";
+import {analyzeEventEvidence} from "./event-risk-intelligence.mjs";
 
 const routes=["/v1/markets","/v1/markets/:ticker","/v1/markets/:ticker/book","/v1/markets/:ticker/history",
- "/v1/contingency/scenario","/v1/contingency/reserve","/v1/capabilities"];
+ "/v1/contingency/scenario","/v1/contingency/reserve","/v1/capabilities",
+ "/v1/intelligence/:ticker"];
 const response=(data,status=200,headers={})=>new Response(JSON.stringify(data),{
  status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",
  "x-content-type-options":"nosniff","referrer-policy":"no-referrer",...headers}
@@ -73,6 +75,7 @@ export function createEventService({env=process.env,fetchImpl=fetch,now=Date.now
     return response(envelope({service:"senda-event-intelligence",version:"v1",routes,
      capabilities:{publicMarkets:"source-dependent",marketRules:"source-dependent",
       marketHistory:"source-dependent",contingency:"research-only",cashReserves:"deterministic",
+      eventEvidenceQuality:"research-only",
       phantomOrderSigning:false,kalshiAccountOrders:false,dflowOrderExecution:false,
       sendapayMoneyMovement:false,insuranceIssuance:false},
      financialExecution:"not-available",serviceBoundary:"No wallet keys, no transfers, no Kalshi order authority."},id));
@@ -102,6 +105,16 @@ export function createEventService({env=process.env,fetchImpl=fetch,now=Date.now
     const win=url.searchParams.get("window")??"7d";
     if(!windowNames.has(win))throw inputError("INVALID_TIMEFRAME","Choose 24h, 7d or 30d.");
     return response(envelope(await provider.history(ticker,win),id));
+   }
+   const intelligenceMatch=/^\/v1\/intelligence\/([^/]+)$/.exec(path);
+   if(method==="GET"&&intelligenceMatch){
+    const ticker=requireTicker(decodeURIComponent(intelligenceMatch[1]));
+    const win=url.searchParams.get("window")??"7d";
+    if(!windowNames.has(win))throw inputError("INVALID_TIMEFRAME","Choose 24h, 7d or 30d.");
+    const [detail,book,history]=await Promise.all([
+     provider.detail(ticker),provider.book(ticker),provider.history(ticker,win)
+    ]);
+    return response(envelope(analyzeEventEvidence({detail,book,history,now:now()}),id));
    }
    if(method==="POST"&&path==="/v1/contingency/reserve"){
     const obj=requireBody(await request.text());
