@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {Readable} from "node:stream";
-import {nodeHandler} from "../src/node-adapter.mjs";
+// Isolate this process to verify the service refuses financial requests without a key.
+delete process.env.SENDA_EVENT_API_KEYS;
+const {nodeHandler}=await import("../src/node-adapter.mjs");
 
 function request({url,method="GET",headers={},body}={}){
  const req=Readable.from(body===undefined?[]:[Buffer.from(typeof body==="string"?body:JSON.stringify(body))]);
