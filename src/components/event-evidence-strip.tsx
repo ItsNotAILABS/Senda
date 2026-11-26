@@ -21,7 +21,7 @@ export function EventEvidenceStrip({ticker,seriesTicker,book,contract,now,refres
   return()=>{active=false};
  },[ticker,seriesTicker,refreshKey]);
  const risk=useMemo(()=>{
-  if(!book||!contract||book.ticker!==ticker||contract.ticker!==ticker||history?.ticker!==ticker)return null;
+  if(!book||!contract||!history||book.ticker!==ticker||contract.ticker!==ticker||history.ticker!==ticker)return null;
   try{return analyzeEventEvidence({detail:contract,book,history,now})}
   catch{return null}
  },[book,contract,history,ticker,now]);
