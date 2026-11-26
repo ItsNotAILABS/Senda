@@ -28,8 +28,8 @@ export function analyzeEventEvidence({detail,book,history,now=Date.now()}={}) {
  if (bid==null || ask==null)flags.push("INCOMPLETE_TWO_SIDED_BOOK");
  if (spread!==null && spread<0)flags.push("CROSSED_OR_INCONSISTENT_BOOK");
  if (!detail.rulesPrimary)flags.push("RULES_UNAVAILABLE");
- if (!Array.isArray(history.bars))flags.push("HISTORY_UNAVAILABLE");
- const bars=Array.isArray(history.bars)?
+ if (!Array.isArray(history?.bars))flags.push("HISTORY_UNAVAILABLE");
+ const bars=Array.isArray(history?.bars)?
   history.bars.filter(x=>Number.isSafeInteger(x.time) && x.time>0 && x.time<=Math.floor(now/1000)+60).slice(-190):[];
  const priced=bars.filter(x=>finite(x.priceUsd) && x.priceUsd>=0 && x.priceUsd<=1);
  const newest=priced.at(-1),prior=priced.length>=2?priced.at(-2):null;
@@ -44,8 +44,8 @@ export function analyzeEventEvidence({detail,book,history,now=Date.now()}={}) {
   researchReady,quality:flags.length===0?"complete":researchReady?"limited":"blocked",
   flags,observedAt:new Date(now).toISOString(),
   evidence:{
-   bookObservedAt:finite(book.asOf)?new Date(book.asOf).toISOString():null,
-   bookAgeMs,historyWindow:history.window??null,reportedVolume24hContracts:detail.volume24hContracts??null,
+   bookObservedAt:finite(book?.asOf)?new Date(book.asOf).toISOString():null,
+   bookAgeMs,historyWindow:history?.window??null,reportedVolume24hContracts:detail.volume24hContracts??null,
    rulesPresent:Boolean(detail.rulesPrimary),historyBars:bars.length
   },
   market:{
