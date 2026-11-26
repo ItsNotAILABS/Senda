@@ -22,7 +22,7 @@ export function analyzeEventEvidence({detail,book,history,now=Date.now()}={}) {
  const flags=[];
  if (detail.status!=="active" && detail.status!=="open")flags.push("MARKET_NOT_ACTIVE");
  const closeAt=detail.closeTime?Date.parse(detail.closeTime):null;
- if (detail.closeTime && !finite(closeAt))flags.push("UNVERIFIED_CLOSE_TIME");
+ if (!finite(closeAt))flags.push("UNVERIFIED_CLOSE_TIME");
  if (finite(closeAt) && closeAt<=now)flags.push("MARKET_CLOSE_PASSED");
  if (bookAgeMs===null || bookAgeMs<0 || bookAgeMs>30000)flags.push("BOOK_NOT_FRESH");
  if (bid==null || ask==null)flags.push("INCOMPLETE_TWO_SIDED_BOOK");
@@ -36,7 +36,8 @@ export function analyzeEventEvidence({detail,book,history,now=Date.now()}={}) {
  const historyAgeMs=newest?now-newest.time*1000:null;
  if (historyAgeMs===null || historyAgeMs<0 || historyAgeMs>86400000)flags.push("RECENT_PRICE_MISSING");
  const blockers=new Set(["MARKET_NOT_ACTIVE","MARKET_CLOSE_PASSED","BOOK_NOT_FRESH",
-  "INCOMPLETE_TWO_SIDED_BOOK","CROSSED_OR_INCONSISTENT_BOOK","RULES_UNAVAILABLE"]);
+  "INCOMPLETE_TWO_SIDED_BOOK","CROSSED_OR_INCONSISTENT_BOOK","RULES_UNAVAILABLE",
+  "UNVERIFIED_CLOSE_TIME","HISTORY_UNAVAILABLE","RECENT_PRICE_MISSING"]);
  const researchReady=flags.every(x=>!blockers.has(x));
  return {
   schema:"senda.events.intelligence.v1",ticker,source:"Kalshi public market/detail/book/history",
@@ -50,7 +51,7 @@ export function analyzeEventEvidence({detail,book,history,now=Date.now()}={}) {
   },
   market:{
    yesBestBidUsd:dollars(bid),yesImpliedAskUsd:dollars(ask),
-   noBestBidUsd:dollars(bestNo),spreadUsd:spread==null?null:two(spread*100)/100,
+   noBestBidUsd:dollars(bestNo),spreadUsd:spread==null?null:Math.round(spread*10000)/10000,
    yesBidDepthContracts:two(yes.reduce((n,x)=>n+x.size,0)),
    noBidDepthContracts:two(no.reduce((n,x)=>n+x.size,0)),
    lastReportedPriceUsd:newest?.priceUsd??null,
