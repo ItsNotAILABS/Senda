@@ -1,6 +1,6 @@
 # SENDA Event Intelligence Service
 
-**Status: source-ready, not yet provider-certified or deployed.** Standalone read-only API product extracted from Senda Markets V3 and Contingency Lab. This service is designed for Senda, SendaPay, Kiln workflows, internal AI agents and other approved backends.
+**Status: source merged to Senda main; preview built previously, production configuration and provider contracts not certified.** Standalone read-only API product extracted from Senda Markets V3 and Contingency Lab. This service is designed for Senda, SendaPay, Kiln workflows, internal AI agents and other approved backends.
 
 ### Capabilities
 - `GET /v1/health` — public liveness, not provider readiness
@@ -101,7 +101,7 @@ The adapter assumes **no** SendaPay login, wallet, ledger, payment rail, virtual
 
 ### Evidence Intelligence (new source module)
 - `GET /v1/intelligence/:ticker?window=24h|7d|30d` is a server-authenticated, read-only evaluation of contract rules, matching ticker identities, fresh two-sided public bids and source candle coverage. `researchReady` means evidence quality, **not** that a trade is executable.
-- `src/components/event-evidence-strip.tsx` shows the same canonical quality flags in Senda's existing Events V3 desk without changing Phantom transaction controls.
+- The UI source-quality strip is **draft PR #69**, not yet merged into the existing Senda Events V3 UI. It must pass a full application build and mobile/desktop review before release.
 - The private SDK exposes `client.intelligence(ticker,window)`; the SendaPay server-only adapter exposes `marketEvidence(ticker,window)`. No money, prediction order or insurance instruction can be issued from either.
 - Tests: `npm test` now includes `test/event-risk-intelligence.test.mjs`. Live Kalshi schema verification and durable distributed rate limiting remain release gates.
 - Existing preview status may differ from the source manifest; deploying this branch requires a new verified preview before production activation.

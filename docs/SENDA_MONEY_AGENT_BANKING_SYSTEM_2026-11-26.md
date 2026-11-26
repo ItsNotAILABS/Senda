@@ -1,7 +1,7 @@
 # SENDA · Money for people, governed accounts for agents
 ## Product and architecture release contract — 2026-11-26
 
-**North star:** one wallet-native money app for people and a programmable spending/accounting layer for agents, anchored in the working Senda desktop/mobile Phantom execution flow. **Do not replace or reset that flow.** The founder reports real-money Phantom swaps and sends, totaling over $1,000 of observed personal trading/sending activity; independent transaction receipts are not attached in this PR, so this is operator-reported production usage, not a certification of every route.
+**North star:** one wallet-native money app for people and a programmable spending/accounting layer for agents, anchored in the working Senda desktop/mobile Phantom execution flow. **Do not replace or reset that flow.** The founder reports real-money Phantom swaps and sends, totaling over $1,000 of observed personal trading/sending activity; independent transaction receipts are not attached to these release notes, so this is operator-reported production usage, not a certification of every route.
 
 Senda may offer a neobank-like experience, but it is **not a licensed bank**, FDIC-insured deposit institution, card issuer, or guarantee of access to fiat rails. Any true banking accounts, ACH, debit cards, wire, SPEI, custodial balances, deposits or insurance require licensed partners, agreements, compliance and verified technical integration.
 
@@ -23,11 +23,11 @@ Senda may offer a neobank-like experience, but it is **not a licensed bank**, FD
 
 The model cannot enlarge its budget, edit the owner-signed policy, approve its own transaction, or turn a read-only event signal into a permission to spend.
 
-### Implemented in this PR
+### Integrated source on main and tracked follow-ups
 
 1. `services/event-intelligence/src/event-risk-intelligence.mjs`: checks matching Kalshi ticker provenance, venue state, close time, freshness, two-sided bid depth, crossed books, rule availability, and candle coverage. No invented probabilities, orders or insurance.
 2. `GET /v1/intelligence/:ticker?window=24h|7d|30d`: **server-authenticated**, read-only quality evidence with the existing non-executable response digest contract. SDK and SendaPay server-only adapter method included.
-3. `src/components/event-evidence-strip.tsx`: narrow source-quality/market-depth strip in the existing Events V3 interface. Retains original chart, order-book, Phantom and contingency controls.
+3. **Draft PR #69, not merged:** `src/components/event-evidence-strip.tsx` adds a narrow source-quality/market-depth strip to Events V3. Awaiting application build and device smoke tests; current production UI is unchanged.
 4. `integrations/parralax-treasury/agent-money-policy.mjs`: scope, recipient allowlist, expiration, exact minor-unit caps, pending obligations, request replay and nonce validation. **Review-only**, canExecute=false. Supplied state is *not* a trusted ledger unless independently verified.
 5. `integrations/parralax-treasury/agent-account-read.mjs`: server-side chain-backed read model; checks pinned genesis, program owner, PDA seeds, token-program owner, ATA mint and exact u64 amount. It **does not** sign, submit, reserve funds or establish a bank account.
 6. New negative/positive Node tests; existing event and PARRALAX CI workflows updated to include their relevant tests.
@@ -36,10 +36,10 @@ The model cannot enlarge its budget, edit the owner-signed policy, approve its o
 
 | Feature | Status | Evidence or limitation |
 | --- | --- | --- |
-| User Phantom swaps and USDC sending | **PARTIAL (operator-used)** | Founder reports repeated real funds movement; no independent sample signatures supplied in this PR. Preserve existing wallet and money UI. |
+| User Phantom swaps and USDC sending | **PARTIAL (operator-used)** | Founder reports repeated real funds movement; no independent sample signatures supplied in these release notes. Preserve existing wallet and money UI. |
 | Live event research / Kalshi public book | **PARTIAL** | Public-source adapters, independent history, rules, book and data-quality views. Live provider contract verification needed. |
 | Standalone Event Intelligence service | **PARTIAL** | Vercel READY preview previously observed; server credentials and authenticated runtime tests not yet certified. |
-| Event probabilities/insurance/prediction order execution | **NOT CONNECTED** | No authorization or payout capability added by this PR. A prediction market is not insurance. |
+| Event probabilities/insurance/prediction order execution | **NOT CONNECTED** | No authorization or payout capability added by the integrated code. A prediction market is not insurance. |
 | Agent PARRALAX treasury | **PARTIAL** | v2 localnet/client source exists; no independently verified devnet/mainnet deployment or audit. New read model fails closed without pinned program/genesis. |
 | Bank deposits, card funding, SPEI payouts | **NOT CONNECTED** | Requires real licensed providers and receipts; never backfilled from browser cash or local desk cards. |
 | Agent automatic spending | **NOT ENABLED** | Review and chain read only; no signer/permission activation. |
