@@ -26,7 +26,7 @@ export function createBitsoWithdrawalReader({environment="stage",key,secret,nonc
  return Object.freeze({
   async byOriginId(originId){
    const path=withdrawalQueryPath(originId);
-   const authorization=signWithdrawalQuery({key,secret,nonce:nonceFactory(),path});
+   const authorization=signWithdrawalQuery({key,secret,nonce:await nonceFactory(),path});
    const response=await fetchImpl(HOSTS[environment]+path,{
     method:"GET",headers:{Authorization:authorization,Accept:"application/json"},
     cache:"no-store",redirect:"error",signal:AbortSignal.timeout(8000)
