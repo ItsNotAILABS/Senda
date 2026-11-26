@@ -6,8 +6,8 @@ import type {EventBook} from "@/lib/event-contract-router.mjs";
 import {analyzeEventEvidence} from "@/lib/event-risk-intelligence.mjs";
 
 /** Low-profile research quality strip. Uses the same Kalshi source readers as the existing desk. */
-export function EventEvidenceStrip({ticker,seriesTicker,book,contract,refreshKey=0}:{
- ticker:string;seriesTicker?:string;book:EventBook|null;contract:KalshiContractDetail|null;refreshKey?:number;
+export function EventEvidenceStrip({ticker,seriesTicker,book,contract,now,refreshKey=0}:{
+ ticker:string;seriesTicker?:string;book:EventBook|null;contract:KalshiContractDetail|null;now:number;refreshKey?:number;
 }){
  const [history,setHistory]=useState<KalshiHistoryResult|null>(null);
  const [loading,setLoading]=useState(false);
@@ -22,9 +22,9 @@ export function EventEvidenceStrip({ticker,seriesTicker,book,contract,refreshKey
  },[ticker,seriesTicker,refreshKey]);
  const risk=useMemo(()=>{
   if(!book||!contract||book.ticker!==ticker||contract.ticker!==ticker||history?.ticker!==ticker)return null;
-  try{return analyzeEventEvidence({detail:contract,book,history,now:Date.now()})}
+  try{return analyzeEventEvidence({detail:contract,book,history,now})}
   catch{return null}
- },[book,contract,history,ticker]);
+ },[book,contract,history,ticker,now]);
  const status=risk?.quality??"unavailable";
  const labels:Record<string,string>={
   MARKET_NOT_ACTIVE:"Market not open",MARKET_CLOSE_PASSED:"Market close passed",
