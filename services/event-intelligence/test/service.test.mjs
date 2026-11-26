@@ -144,3 +144,20 @@ test("market detail no longer requires nonexistent series field",async()=>{
  assert.equal(h.status,200);
  assert.equal(h.body.data.seriesTicker,series);
 });
+
+test("readiness verifies the upstream provider, not merely process liveness",async()=>{
+ const api=create();
+ const result=await call(api,"/v1/ready");
+ assert.equal(result.status,200);
+ assert.equal(result.body.data.provider.reachable,true);
+ assert.equal(result.body.data.provider.synthetic,false);
+ assert.equal(result.body.data.serviceConnectedToSendapay,false);
+ assert.equal(result.body.execution,"disabled");
+ assert.equal((await call(api,"/v1/ready",{auth:false})).status,401);
+});
+test("readiness fails closed when Kalshi public API is unavailable",async()=>{
+ const api=createEventService({env:{SENDA_EVENT_API_KEYS:key},fetchImpl:async()=>new Response("unavailable",{status:503}),now:()=>clock});
+ const result=await call(api,"/v1/ready");
+ assert.equal(result.status,503);
+ assert.equal(result.body.error.code,"PROVIDER_UNAVAILABLE");
+});
