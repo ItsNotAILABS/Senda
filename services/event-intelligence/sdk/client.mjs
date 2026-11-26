@@ -11,7 +11,7 @@ export function createSendaEventClient({baseUrl,apiKey,fetchImpl=fetch,allowInse
  if(!Number.isInteger(timeoutMs)||timeoutMs<2000||timeoutMs>30000)
   throw Error("Invalid client request timeout");
  async function call(method,path,payload=null){
-  if(!/^\/v1\/[a-zA-Z0-9/?._=&%\-]+$/.test(path)||path.includes(".."))
+  if(!/^\/v1\/[a-zA-Z0-9/?._=&%+\-]+$/.test(path)||path.includes(".."))
    throw Error("Unsupported service route.");
   const url=new URL(path,root);
   if(url.origin!==root.origin)throw Error("Cross-origin service request denied.");
