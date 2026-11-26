@@ -63,3 +63,21 @@ CREATE TABLE IF NOT EXISTS bitso_business.readonly_nonces (
 );
 
 -- The business registry remains 'candidate'; nothing here authorizes FX/payouts.
+
+
+-- Prepared mapping for an independently authorized bank payout.
+-- This is NOT writable from a webhook, client, or user-submitted lookup.
+CREATE TABLE IF NOT EXISTS bitso_business.approved_intent_links (
+  account_id TEXT NOT NULL,
+  origin_id TEXT NOT NULL,
+  withdrawal_id TEXT NOT NULL,
+  payment_intent_id TEXT NOT NULL,
+  consent_sha256 CHAR(64) NOT NULL CHECK (consent_sha256 ~ '^[a-f0-9]{64}$'),
+  approval_reference TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id,withdrawal_id),
+  UNIQUE (account_id,origin_id),
+  UNIQUE (account_id,payment_intent_id),
+  CHECK (length(origin_id) BETWEEN 1 AND 40)
+);
+-- Only the regulated payment-intent service should insert an approved link.
