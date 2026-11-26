@@ -33,6 +33,8 @@ export const PRE_PAGES: ProductPage[] = [
 ];
 
 export const PLAY_PAGES: ProductPage[] = [
+  { href: "/social/events-v3", label: "Events V3", hint: "Public contract research and sourced volume" },
+  { href: "/social/contingency", label: "Contingency", hint: "Scenario research, not insurance" },
   { href: "/social", label: "Lobby", hint: "Games on a print, and the live prediction books" },
   { href: "/invest?desk=kalshi", label: "Predict", hint: "Kalshi's book. A linked key can place it." },
   { href: "/invest?desk=slabs", label: "Slabs", hint: "Collector Crypt. USDC. You sign." },
