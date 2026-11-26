@@ -1,6 +1,6 @@
 # SENDA Event Intelligence Service
 
-**Status: source-ready, not yet provider-certified or deployed.** Standalone read-only API product extracted from Senda Markets V3 and Contingency Lab. This service is designed for Senda, SendaPay, Kiln workflows, internal AI agents and other approved backends.
+**Status: protected Vercel preview READY with 19/19 isolated tests; provider runtime and production activation not certified.** Standalone read-only API product extracted from Senda Markets V3 and Contingency Lab. This service is designed for Senda, SendaPay, Kiln workflows, internal AI agents and other approved backends.
 
 ### Capabilities
 - `GET /v1/health` — public liveness, not provider readiness
@@ -105,3 +105,9 @@ The adapter assumes **no** SendaPay login, wallet, ledger, payment rail, virtual
 Call `GET /v1/ready` with a server-managed bearer token after the protected preview is reachable. Its response actively verifies the public Kalshi events source; `GET /v1/health` only proves the process responds. Neither endpoint claims account access, tradability, settlement, real insurance, or SendaPay integration. The isolated tests use explicitly synthetic test fixtures and do not substitute for actual Kalshi API verification.
 
 For production-scale usage add an approved distributed rate-limiting/identity gateway and a secure audit-event store, then perform real current-provider contract testing and account-specific eligibility review. Current in-process token budgets are a per-instance guard, not a cross-region spending control.
+
+### Current verified preview
+
+Protected preview: https://senda-event-intelligence-n4osxpom8-q7qx6fvztq-9008.vercel.app (deployment `dpl_4UPfqYYwnFeT1rapqt96Am39bEHh`). Vercel logs report `npm ci`, `npm run build`, and **19/19 tests passed**, including HTTP rewrite and fail-closed transport tests. This was uploaded as an isolated files-based Vercel preview, not activated by Git push. Neither this READY status nor the mocked provider tests establish successful authenticated runtime requests or live Kalshi quote certification.
+
+The Kalshi candle provider now resolves `series_ticker` from the owning **Get Event** response, checks the market ticker is actually a member of the returned event, and refuses mismatches. A secured `GET /v1/ready` endpoint actively probes the current public source once credentials are configured; `GET /v1/health` remains process liveness only.
