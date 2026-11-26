@@ -9,6 +9,7 @@ import {quoteFriendPayment,validateFriendDestination,buildFriendPayment,FRIEND_R
 import {classifySendError} from "@/lib/journaled-send.mjs";
 import {centsToDecimalString} from "@/lib/usdc-amount.mjs";
 import {listTransactions} from "@/lib/tx-journal.mjs";
+import {verifiedSendReceipt} from "@/lib/verified-send-receipt.mjs";
 import {TransactionRecovery} from "@/components/transaction-recovery";
 
 const money=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:"USD"}).format(n);
@@ -75,7 +76,8 @@ export function FriendsMoneyDesk(){
   try{
    const out=await checkUsdcSendRecovery(wallet,uncertain.signature);
    if(out.state==="paid"&&uncertain.signature){
-    setReceipt({signature:uncertain.signature,cents:quote.cents??0,to:quote.to??""});
+    // Recover from the immutable journal row, never from a changed form or fresh quote.
+    setReceipt(verifiedSendReceipt({owner:wallet,signature:uncertain.signature,rows:out.rows}));
     setUncertain(null);setError("");clearForm();
     toast.success("That transfer did confirm on Solana. It was not sent twice.");
    }else if(out.state==="clear"&&(uncertain.signature||walletChecked)){
