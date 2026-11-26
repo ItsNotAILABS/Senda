@@ -35,6 +35,10 @@
       "authority": "read"
     },
     {
+      "id": "markets.evidence-intelligence",
+      "authority": "read-only-quality-analysis"
+    },
+    {
       "id": "contingency.scenario",
       "authority": "deterministic-no-execution"
     },

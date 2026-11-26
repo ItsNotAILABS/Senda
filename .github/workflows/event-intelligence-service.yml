@@ -8,6 +8,9 @@ on:
       - "src/lib/contingency-analysis.mjs"
       - "src/lib/event-market-discovery.mjs"
       - "src/lib/kalshi-history-core.mjs"
+      - "src/lib/event-risk-intelligence.*"
+      - "src/components/event-evidence-strip.tsx"
+      - "src/components/event-markets-v3.tsx"
       - ".github/workflows/event-intelligence-service.yml"
   push:
     branches: [main]

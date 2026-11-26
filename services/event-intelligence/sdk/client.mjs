@@ -41,6 +41,10 @@ export function createSendaEventClient({baseUrl,apiKey,fetchImpl=fetch,allowInse
   },
   market:ticker=>call("GET","/v1/markets/"+id(ticker)),
   book:ticker=>call("GET","/v1/markets/"+id(ticker)+"/book"),
+  intelligence:(ticker,window="7d")=>{
+   if(!["24h","7d","30d"].includes(window))throw Error("Unsupported history window");
+   return call("GET","/v1/intelligence/"+id(ticker)+"?window="+window);
+  },
   history:(ticker,window="7d")=>call("GET","/v1/markets/"+id(ticker)+"/history?window="+window),
   scenario:input=>call("POST","/v1/contingency/scenario",input),
   reserve:input=>call("POST","/v1/contingency/reserve",input)
