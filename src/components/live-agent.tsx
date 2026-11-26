@@ -87,9 +87,9 @@ export function LiveAgent() {
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <div>
         <p className="font-mono text-[10px] tracking-[0.16em] text-white/40 uppercase">Live agent</p>
-        <h2 className="mt-1 text-2xl tracking-tight">The agent does not hold a key.</h2>
+        <h2 className="mt-1 text-2xl tracking-tight">Legacy agent wallet · recovery only</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/50">
-          A pass no longer signs. Queue the trade on the desk and sign it in Phantom. If this browser already has an old agent address, you can still withdraw its idle USDC with the existing recovery path. New deposits are disabled because the legacy key was stored in browser storage. A new address is not created.
+          A pass no longer signs. Queue the trade on the desk and sign it in Phantom. If this browser already has an old agent address, you can still recover idle USDC using the existing withdrawal path. New deposits are disabled because the legacy key was stored in browser storage. A new address is not created.
         </p>
       </div>
       <div className="rounded-2xl border border-white/10 p-4">
@@ -120,7 +120,7 @@ export function LiveAgent() {
       </div>
       <div className="rounded-2xl border border-white/10 p-4">
         <p className="text-sm font-semibold">Send the idle USDC back</p>
-        <p className="mt-1 text-xs text-white/40">Only when nothing is open. A second wallet can fund the same address. The key that can move it is in this browser, so this is not a shared multisig. Idle USDC earns nothing here. SOL yield is the stake lane on Swap.</p>
+        <p className="mt-1 text-xs text-white/40">Recovery only when no position is open. Do not deposit to this browser-key address. Confirm the destination carefully; withdrawals sign with the existing local recovery key and cannot be reversed.</p>
         <div className="mt-2 flex gap-2">
           <input value={to} onChange={(e) => setTo(e.target.value.trim())} placeholder="Solana address" spellCheck={false} className="h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-xs outline-none" />
           <button type="button" disabled={busy} onClick={() => void withdraw()} className="h-11 rounded-full border border-white/15 px-4 text-sm font-semibold disabled:opacity-40">Withdraw</button>
