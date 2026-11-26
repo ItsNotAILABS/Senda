@@ -380,6 +380,26 @@
           }
         }
       }
+    },
+    "/v1/ready": {
+      "get": {
+        "summary": "Authenticated Kalshi provider readiness",
+        "description": "Actively queries fixed Kalshi public events endpoint and reports a source-backed probe result. Unlike health, this checks a real upstream request. Does not certify trading, liquidity or payment execution.",
+        "tags": [
+          "Service"
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider responded with valid events-array schema; may still contain no active contracts."
+          },
+          "401": {
+            "description": "Private bearer token required."
+          },
+          "503": {
+            "description": "Service not configured or upstream source unavailable."
+          }
+        }
+      }
     }
   },
   "components": {
