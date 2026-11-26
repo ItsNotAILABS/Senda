@@ -4,6 +4,7 @@
 
 ### Capabilities
 - `GET /v1/health` — public liveness, not provider readiness
+- `GET /v1/ready` — authenticated live Kalshi provider probe, explicitly separate from process health
 - `GET /v1/capabilities` — exact authorized read-only service contract
 - `GET /v1/markets?q=&lane=&sort=&limit=&cursor=` — one official Kalshi events-index page, with cursor and explicit incompleteness
 - `GET /v1/markets/:ticker` — verified market rules, status, close and venue statistics
@@ -98,3 +99,9 @@ The adapter assumes **no** SendaPay login, wallet, ledger, payment rail, virtual
 - [Kalshi Orderbook](https://docs.kalshi.com/api-reference/market/get-market-orderbook)
 - [Kalshi Candlesticks](https://docs.kalshi.com/api-reference/market/get-market-candlesticks)
 - [OpenAPI contract](./openapi.json)
+
+### Provider certification and safe launch
+
+Call `GET /v1/ready` with a server-managed bearer token after the protected preview is reachable. Its response actively verifies the public Kalshi events source; `GET /v1/health` only proves the process responds. Neither endpoint claims account access, tradability, settlement, real insurance, or SendaPay integration. The isolated tests use explicitly synthetic test fixtures and do not substitute for actual Kalshi API verification.
+
+For production-scale usage add an approved distributed rate-limiting/identity gateway and a secure audit-event store, then perform real current-provider contract testing and account-specific eligibility review. Current in-process token budgets are a per-instance guard, not a cross-region spending control.
