@@ -12,3 +12,9 @@ export declare function readVerifiedReceipts(query:SqlQuery,input:{
  owner:string;network?:"mainnet-beta";limit?:number;olderThanSlot?:number|null;
 }):Promise<Array<{signature:string;status:string;slot:string;block_time:string|null;
  delta_usdc_raw:string|null;checked_at:number}>>;
+export type ReceiptCursor={slot:number;signature:string};
+export type StoredChainReceipt={signature:string;status:string;slot:string;block_time:string|null;delta_usdc_raw:string|null;checked_at:number};
+export declare function readVerifiedReceiptPage(query:SqlQuery,input:{
+ owner:string;network?:"mainnet-beta";limit?:number;cursor?:ReceiptCursor|null;olderThanSlot?:number|null;
+}):Promise<{rows:StoredChainReceipt[];nextCursor:ReceiptCursor|null;hasMore:boolean;
+ source:"public-chain-receipt-index";pageScope:string}>;
