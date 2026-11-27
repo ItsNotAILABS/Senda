@@ -3,7 +3,8 @@
  * Does NOT deploy, sign, audit, certify byte-for-byte source reproducibility or enable agents.
  */
 import {createHash} from "node:crypto";
-import {PublicKey,BPF_LOADER_UPGRADEABLE_PROGRAM_ID} from "@solana/web3.js";
+import {PublicKey} from "@solana/web3.js";
+const BPF_LOADER_UPGRADEABLE_PROGRAM_ID=new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
 export const PARRALAX_LOCALNET_PROGRAM_ID="5HJCtwtWWvDDQiMLVuvrwyqaVfXgX3hZnzMTarTKv61p";
 export const SOLANA_DEVNET_GENESIS="EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG";
 const HASH=/^[a-f0-9]{64}$/;
