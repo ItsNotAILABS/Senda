@@ -6,7 +6,7 @@ const integer=x=>Number.isSafeInteger(x)&&x>=0;
 const minor=x=>typeof x==="string"&&/^(?:0|[1-9][0-9]*)$/.test(x)?BigInt(x):null;
 const known=new Set(["processed","confirmed","finalized"]);
 function parsedDelta(tx,owner){
- if(!tx||typeof tx!=="object"||!tx.meta||tx.meta.err!=null)return null;
+ if(!tx||typeof tx!=="object"||!tx.meta||tx.meta.err!==null)return null;
  const balances=(rows)=>{
   if(!Array.isArray(rows))return null;
   let sum=0n,found=false;
@@ -44,7 +44,7 @@ export function normalizeWalletActivity({owner,entries,statuses,transactions={},
   const row={signature:sig,network:"mainnet-beta",owner,
    status,source:"solana-rpc",slot:item.slot,
    blockTime:integer(item.blockTime)?item.blockTime:null,
-   kind:"transaction",deltaUsdcRaw:parsedDelta(transactions[sig],owner),
+   kind:"transaction",deltaUsdcRaw:status==="confirmed"||status==="finalized"?parsedDelta(transactions[sig],owner):null,
    observedAt:now,localKind:null,localAmountRaw:null,localDestination:null};
   const prior=out.get(sig);
   if(!prior||rank(row.status)>rank(prior.status))out.set(sig,row);
