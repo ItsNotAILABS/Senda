@@ -104,7 +104,7 @@ export function WalletActivityTimeline(){
    const result=await getWalletActivity({data:{owner,cursor,limit:20}});
    setChain(previous=>mergePages(previous,result.rows));
    setCursor(result.nextCursor);
-   setSyncedAt(result.observedAt);
+   setSyncedAt(result.observedAt);setDiagnostics(result.diagnostics);
   }catch(e){setError(e instanceof Error?e.message:"Could not load older chain history")}
   finally{setLoadingOlder(false)}
  }
