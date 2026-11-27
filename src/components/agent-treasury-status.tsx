@@ -37,10 +37,9 @@ export function AgentTreasuryStatus(){
   catch(e){setError(e instanceof Error?e.message:"Could not check treasury status")}
   finally{setLoading(false)}
  }
- const account=result?.account;
- const observed=result?.status==="observed"&&account;
- const active=observed&&account.paused===false&&account.revoked===false;
- const decimals=typeof account?.decimals==="number"?account.decimals:6;
+ const observed=result?.status==="observed"&&result.account?result.account:null;
+ const active=observed&&observed.paused===false&&observed.revoked===false;
+ const decimals=typeof observed?.decimals==="number"?observed.decimals:6;
  return <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-4 sm:p-5" aria-label="Agent treasury status">
   <div className="flex flex-wrap items-start justify-between gap-3">
    <div><p className="font-mono text-[10px] tracking-[.15em] text-violet-300">PARRALAX / AGENT ACCOUNTS</p>
@@ -71,10 +70,10 @@ export function AgentTreasuryStatus(){
   {result?.reason?<p className="mt-3 text-xs leading-6 text-white/50">{result.reason}</p>:null}
   {observed?<div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
    {([
-    ["Vault balance",showRaw(account.balanceMinor,decimals)+" tokens"],
-    ["Per transaction",showRaw(account.perTxCapMinor,decimals)],
-    ["Daily limit",showRaw(account.dailyCapMinor,decimals)],
-    ["Lifetime limit",showRaw(account.lifetimeCapMinor,decimals)]
+    ["Vault balance",showRaw(observed.balanceMinor,decimals)+" tokens"],
+    ["Per transaction",showRaw(observed.perTxCapMinor,decimals)],
+    ["Daily limit",showRaw(observed.dailyCapMinor,decimals)],
+    ["Lifetime limit",showRaw(observed.lifetimeCapMinor,decimals)]
    ] as const).map(([name,value])=><div key={name} className="rounded-xl border border-white/10 bg-black/20 p-3">
     <p className="text-[10px] text-white/45">{name}</p>
     <p className="mt-1 break-all font-mono text-sm">{value}</p>
@@ -82,7 +81,7 @@ export function AgentTreasuryStatus(){
    <p className="col-span-2 text-[11px] leading-5 text-white/50 sm:col-span-4">
     {active?"Account policy appears active on the observed chain snapshot; Senda signing remains disabled.":
      "Vault is paused or revoked. No agent payment authority is available."}
-    {" · "}Network: {result?.network} · Slot {String(account.slot??"unknown")} · This data can change after the observation.
+    {" · "}Network: {result?.network} · Slot {String(observed.slot??"unknown")} · This data can change after the observation.
    </p>
   </div>:null}
   <p className="mt-4 border-t border-white/10 pt-3 text-[10px] leading-5 text-white/35">
