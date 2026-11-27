@@ -49,6 +49,17 @@ export function normalizeWalletActivity({owner,entries,statuses,transactions={},
   const prior=out.get(sig);
   if(!prior||rank(row.status)>rank(prior.status))out.set(sig,row);
  }
+ return mergeActivityWithRecovery({owner,chain:[...out.values()],local,now});
+}
+export function mergeActivityWithRecovery({owner,chain=[],local=[],now=Date.now()}={}){
+ if(!ADDR.test(owner||"")||!Array.isArray(chain)||!Array.isArray(local)||!integer(now)||now<=0)
+  throw Error("Invalid wallet activity merge");
+ const out=new Map();
+ for(const row of chain){
+  if(row?.owner!==owner||!SIG.test(row?.signature||"")||
+   row.network!=="mainnet-beta"||row.source!=="solana-rpc")throw Error("Mixed-wallet chain activity");
+  out.set(row.signature,row);
+ }
  for(const record of local){
   if(record?.owner!==owner||!SIG.test(record.signature||""))continue;
   const prior=out.get(record.signature);
