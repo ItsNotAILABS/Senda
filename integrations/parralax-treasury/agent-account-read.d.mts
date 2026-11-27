@@ -1,3 +1,4 @@
+import type {Connection} from "@solana/web3.js";
 export type AgentTreasuryChainView={
  schema:"senda.agent-money.chain-account.v1";
  status:"observed"|"not-created";network:string;
@@ -9,10 +10,7 @@ export type AgentTreasuryChainView={
  source:string;execution:"disabled";canSpend:false;note?:string;finality?:string;
 };
 export declare function readAgentTreasuryAccount(input:{
- connection:{
-  getGenesisHash:()=>Promise<string>;
-  getMultipleAccountsInfoAndContext:(keys:unknown[],commitment:string)=>Promise<unknown>;
- };
+ connection:Pick<Connection,"getGenesisHash"|"getMultipleAccountsInfoAndContext">;
  network:"localnet"|"devnet"|"mainnet-beta";
  programId:string;verifiedProgramId:string;expectedGenesisHash:string;
  owner:string;mint:string;seedId?:bigint;commitment?:"confirmed"|"finalized";
