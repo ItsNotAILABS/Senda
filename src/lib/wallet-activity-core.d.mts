@@ -8,7 +8,7 @@ export type WalletActivityRow={
 export type ActivityCursor={wallet:string|null;usdc:string|null};
 export declare function normalizeWalletActivity(input:{
  owner:string;entries:Array<{signature:string;slot:number;blockTime?:number|null}>;
- statuses:Array<{err:unknown;confirmationStatus?:string|null}|null>;
+ statuses:Array<{err?:unknown;confirmationStatus?:string|null}|null>;
  transactions?:Record<string,unknown>;
  local?:Array<{owner:string;signature:string;kind:string;status:string;
   amountRaw:string;destination:string;submittedAt:number;checkedAt?:number}>;
