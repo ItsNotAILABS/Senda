@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createHash} from "node:crypto";
-import {PublicKey,BPF_LOADER_UPGRADEABLE_PROGRAM_ID} from "@solana/web3.js";
+import {PublicKey} from "@solana/web3.js";
+const BPF_LOADER_UPGRADEABLE_PROGRAM_ID=new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
 import {verifyParralaxDevnetProof,SOLANA_DEVNET_GENESIS,PARRALAX_LOCALNET_PROGRAM_ID} from "./parralax-devnet-proof.mjs";
 const key=n=>new PublicKey(new Uint8Array(32).fill(n));
 const programId=key(4).toBase58(),dataAddr=key(5),authority=key(6).toBase58();
