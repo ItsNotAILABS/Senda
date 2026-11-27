@@ -32,7 +32,7 @@ async function rpc(method:string,params:unknown[]){
    if(value.error){error="Solana RPC refused "+method;continue}
    if(!("result" in value))throw Error("Missing Solana RPC result");
    return value.result;
-  }catch(e){error=e instanceof Error?e.message:error}
+  }catch{error="Solana history RPC timed out or returned an invalid response"}
  }
  throw Error("Unable to verify chain activity. "+error);
 }
@@ -42,7 +42,6 @@ export const getWalletActivity=createServerFn({method:"POST"})
  .handler(async({data})=>{
   let owner:PublicKey;
   try{owner=new PublicKey(data.owner)}catch{throw Error("Invalid Solana wallet address")}
-  if(!PublicKey.isOnCurve(owner.toBuffer()))throw Error("Connect a regular wallet to inspect user history");
   const address=owner.toBase58();
   const [usdcAta]=PublicKey.findProgramAddressSync([owner.toBuffer(),TOKEN.toBuffer(),USDC.toBuffer()],ATA);
   const now=Date.now(),limit=data.limit,before=data.cursor;
