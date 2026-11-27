@@ -1,5 +1,2 @@
-/** Precise boundary for the read-only Jupiter sell-sizing helper. */
-export declare function deriveRoundTripSellRaw(buyQuote:{
- inputMint:string;outputMint:string;inAmount:string;outAmount:string;
- otherAmountThreshold:string;
-},expectedUsdcRaw:string,targetMint:string):string;
+/** Pure read-only sell sizing checks fields at runtime before returning raw mint units. */
+export declare function deriveRoundTripSellRaw(buyQuote:Record<string,unknown>,expectedUsdcRaw:string,targetMint:string):string;
