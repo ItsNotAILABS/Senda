@@ -58,19 +58,47 @@ export async function persistVerifiedReceipts(query,rows,owner){
  }
  return {observed:receipts.length,stored:saved,authority:"chain-rpc",execution:"disabled"};
 }
-/** Public blockchain history only; scope to one owner and bounded page size. */
-export async function readVerifiedReceipts(query,{owner,network="mainnet-beta",limit=30,olderThanSlot=null}={}){
+/** Stable keyset cursor: slot descending, signature ascending inside a slot. */
+const validCursor=cursor=>cursor&&typeof cursor==="object"&&
+ integer(cursor.slot)&&SIG.test(cursor.signature||"");
+
+/**
+ * Return a bounded page plus a cursor. Uses limit+1 to detect actual remaining rows.
+ * A slot-only cursor is kept for legacy callers but can skip multiple transfers at
+ * the same slot; new callers MUST use the (slot,signature) tuple.
+ */
+export async function readVerifiedReceiptPage(query,{owner,network="mainnet-beta",limit=30,
+ cursor=null,olderThanSlot=null}={}){
  if(typeof query!=="function"||!ADDRESS.test(owner||"")||network!=="mainnet-beta"||
- !Number.isInteger(limit)||limit<1||limit>50||
- (olderThanSlot!==null&&!integer(olderThanSlot)))
+  !Number.isInteger(limit)||limit<1||limit>50||
+  (cursor!==null&&!validCursor(cursor))||
+  (olderThanSlot!==null&&!integer(olderThanSlot))||
+  (cursor!==null&&olderThanSlot!==null))
   throw Error("Invalid receipt history query");
- const rows=await query(
+ const slot=cursor?.slot??olderThanSlot??null;
+ const signature=cursor?.signature??null;
+ const fetched=await query(
   `SELECT signature,status,slot::text AS slot,block_time::text AS block_time,
     delta_usdc_raw,extract(epoch from checked_at)*1000 AS checked_at
     FROM wallet_chain_receipt WHERE network=$1 AND owner=$2
-    AND ($3::bigint IS NULL OR slot<$3::bigint)
-    ORDER BY slot DESC,signature LIMIT $4`,
-  [network,owner,olderThanSlot==null?null:String(olderThanSlot),limit]
+    AND ($3::bigint IS NULL OR slot<$3::bigint
+      OR (slot=$3::bigint AND $4::text IS NOT NULL AND signature>$4::text))
+    ORDER BY slot DESC,signature ASC LIMIT $5`,
+  [network,owner,slot==null?null:String(slot),signature,limit+1]
  );
- return Array.isArray(rows)?rows:[];
+ if(!Array.isArray(fetched))throw Error("Invalid receipt store response");
+ const rows=fetched.slice(0,limit);
+ const last=rows.at(-1);
+ const nextCursor=fetched.length>limit&&last?{
+  slot:Number(last.slot),signature:last.signature
+ }:null;
+ if(nextCursor&&!validCursor(nextCursor))
+  throw Error("Invalid persisted receipt cursor");
+ return {rows,nextCursor,hasMore:Boolean(nextCursor),
+  source:"public-chain-receipt-index",pageScope:"public mainnet signatures only"};
+}
+/** Compatibility: older callers still receive only an array. */
+export async function readVerifiedReceipts(query,options={}){
+ const page=await readVerifiedReceiptPage(query,options);
+ return page.rows;
 }
