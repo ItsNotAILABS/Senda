@@ -1,11 +1,12 @@
 /** Read-only treasury status. Never derives signing authority from an app wallet. */
 import {createServerFn} from "@tanstack/react-start";
 import {z} from "zod";
+import type {AgentTreasuryChainView} from "../../integrations/parralax-treasury/agent-account-read.mjs";
 const schema=z.object({owner:z.string().min(32).max(44),seedId:z.string().regex(/^(?:0|[1-9][0-9]{0,19})$/).default("0")});
 type AccountStatus={
  status:"unconfigured"|"unavailable"|"not-created"|"observed";
  reason:string;network:string|null;observedAt:number;
- account:Record<string,unknown>|null;
+ account:AgentTreasuryChainView|null;
 };
 const cache=new Map<string,{expires:number,value:AccountStatus}>();
 export const getAgentTreasuryStatus=createServerFn({method:"POST"})
@@ -53,7 +54,7 @@ export const getAgentTreasuryStatus=createServerFn({method:"POST"})
     status:result.status,reason:result.status==="not-created"?
      "No treasury exists at this owner/mint/seed. No funds were inferred.":
      "Observed from a pinned, same-slot Solana RPC account snapshot; read only.",
-    network:cfg.network,observedAt:now,account:result as unknown as Record<string,unknown>
+    network:cfg.network,observedAt:now,account:result
    };
    if(cache.size>100)cache.clear();
    cache.set(key,{expires:now+10000,value:state});
