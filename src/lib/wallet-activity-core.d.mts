@@ -20,3 +20,6 @@ export declare function selectActivityPage(input:{
  limit?:number;before?:ActivityCursor;
 }):{entries:Array<{signature:string;slot:number;blockTime?:number|null}>;
  nextCursor:ActivityCursor|null;pageScope:string};
+export declare function mergeActivityWithRecovery(input:{owner:string;chain?:WalletActivityRow[];
+ local?:Array<{owner:string;signature:string;kind:string;status:string;amountRaw:string;
+ destination:string;submittedAt:number;checkedAt?:number}>;now?:number}):WalletActivityRow[];
