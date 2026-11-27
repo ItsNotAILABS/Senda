@@ -12,6 +12,10 @@ on:
       - 'src/lib/spl-instructions.*'
       - 'src/lib/journaled-send.*'
       - 'src/lib/tx-journal.*'
+      - 'src/lib/wallet-chain-receipt-index.*'
+      - 'src/lib/wallet-receipt-index.server.ts'
+      - 'migrations/0011_wallet_chain_receipt.sql'
+      - 'scripts/wallet-chain-receipt-index.test.mjs'
       - 'src/lib/solana-pay.ts'
       - 'src/lib/solana-pay-request.*'
       - 'src/lib/phantom.ts'
@@ -65,6 +69,7 @@ jobs:
           scripts/receive-account-auth.test.mjs
           scripts/paper-money-policy.test.mjs
           scripts/money-public-safety.test.mjs
+          scripts/wallet-chain-receipt-index.test.mjs
       # Scoped to the money surface: the repo-wide `npm run typecheck` has
       # pre-existing errors unrelated to this workflow.
       - name: TypeScript (money files)
