@@ -114,6 +114,16 @@ export const getWalletActivity=createServerFn({method:"POST"})
     enrichedTransactions,missingEnrichments:eligible.length-enrichedTransactions}};
   if(cache.size>300)cache.clear();
   cache.set(cacheKey,{expires:Date.now()+6000,value:result});
+  // Optional durable index contains ONLY these server-RPC-observed chain rows; never local metadata.
+  if(process.env.SENDA_ACTIVITY_INDEX_ENABLED==="true"&&process.env.DATABASE_URL?.trim()){
+   try{
+    const {indexChainReceiptsFromRpc}=await import("@/lib/wallet-receipt-index.server");
+    const persisted=await indexChainReceiptsFromRpc(rows,address);
+    console.info("[senda:receipt-index]",JSON.stringify({status:persisted.status,stored:persisted.stored}));
+   }catch{
+    console.warn("[senda:receipt-index] Persistence unavailable; fresh RPC activity remains authoritative.");
+   }
+  }
   // Log only aggregate provider performance; no wallet addresses, payment amounts or secrets.
   console.info("[senda:wallet-activity]",JSON.stringify({durationMs:result.diagnostics.durationMs,
    rows:rows.length,unverified:rows.filter(x=>x.status==="unverified").length,
