@@ -31,6 +31,9 @@ on:
       - 'scripts/solana-pay-request.test.mjs'
       - 'scripts/receive-account-auth.test.mjs'
       - 'scripts/*money*.test.mjs'
+      - 'package.json'
+      - 'scripts/patch-ssr-export.mjs'
+      - 'scripts/ssr-preview-smoke.mjs'
       - 'tsconfig.money.json'
       - '.github/workflows/senda-money-public.yml'
       - 'docs/SENDA_MONEY_PUBLIC_LAUNCH.md'
@@ -68,3 +71,5 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.money.json
       - name: Build
         run: npm run build:dev
+      - name: Packaged SSR preview smoke
+        run: npm run smoke:preview
