@@ -45,6 +45,7 @@ export function WalletActivityTimeline(){
  const [error,setError]=useState("");
  const [journalError,setJournalError]=useState("");
  const [syncedAt,setSyncedAt]=useState<number|null>(null);
+ const [diagnostics,setDiagnostics]=useState<{durationMs:number;missingEnrichments:number}|null>(null);
  const [connecting,setConnecting]=useState(false);
  useEffect(()=>{
   if(!owner){setLocal([]);setJournalError("");return;}
@@ -58,11 +59,11 @@ export function WalletActivityTimeline(){
  },[owner]);
  useEffect(()=>{
   let active=true;
-  setChain([]);setCursor(null);setSyncedAt(null);setError("");
+  setChain([]);setCursor(null);setSyncedAt(null);setDiagnostics(null);setError("");
   if(!owner)return()=>{active=false};
   setLoading(true);
   void getWalletActivity({data:{owner,limit:20}})
-   .then(result=>{if(active){setChain(result.rows);setCursor(result.nextCursor);setSyncedAt(result.observedAt)}})
+   .then(result=>{if(active){setChain(result.rows);setCursor(result.nextCursor);setSyncedAt(result.observedAt);setDiagnostics(result.diagnostics)}})
    .catch(e=>{if(active)setError(e instanceof Error?e.message:"Solana activity is unavailable.")})
    .finally(()=>{if(active)setLoading(false)});
   return()=>{active=false};
@@ -92,7 +93,7 @@ export function WalletActivityTimeline(){
    setChain(previous=>mergePages(previous,result.rows));
    // Retain deeper pagination cursor already visited unless this is the first page.
    setCursor(previous=>previous??result.nextCursor);
-   setSyncedAt(result.observedAt);
+   setSyncedAt(result.observedAt);setDiagnostics(result.diagnostics);
   }catch(e){setError(e instanceof Error?e.message:"Failed to verify the chain.")}
   finally{setChecking(false)}
  }
@@ -126,6 +127,7 @@ export function WalletActivityTimeline(){
     <span className="rounded-full border border-white/10 px-3 py-2">Solana mainnet</span>
     <span className="rounded-full border border-white/10 px-3 py-2">{owner?short(owner):"No linked Solana wallet"}</span>
     <span className="rounded-full border border-white/10 px-3 py-2">{syncedAt?"Source checked "+new Date(syncedAt).toLocaleTimeString():"No verified source sync"}</span>
+    {diagnostics?<span className="rounded-full border border-white/10 px-3 py-2">RPC {diagnostics.durationMs} ms · {diagnostics.missingEnrichments} details unavailable</span>:null}
     {unknown>0?<span className="rounded-full border border-amber-300/25 px-3 py-2 text-amber-200">{unknown} to verify</span>:null}
    </div>
   </div>
