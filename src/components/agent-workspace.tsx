@@ -36,6 +36,7 @@ import {
   type ToolId,
   type Worker,
 } from "@/lib/agent-workspace";
+import { assignAgentWallet } from "@/lib/coffer-agent";
 import { connectPhantom } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -223,6 +224,7 @@ export function AgentWorkspace({ names, pane = "studio" }: { names: HouseListing
       side,
     });
     refresh(row.id);
+    void assignAgentWallet(row.id, row.name).catch((error) => toast.error(error instanceof Error ? error.message : "Coffer did not open a wallet."));
     toast.success(row.name + " is ready. Every wallet action still needs you.");
   }
 

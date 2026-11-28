@@ -1,20 +1,11 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Buffer } from "buffer";
-import { VersionedTransaction } from "@solana/web3.js";
 import { BRIDGE_RAILS, getUsdcBridge, type BridgeRailId } from "@/lib/lifi";
-import { sendVersioned } from "@/lib/phantom";
+import { sendLifiSolana } from "@/lib/lifi-solana";
 import { humanWalletError } from "@/lib/mobile-wallet";
 import { rememberClear } from "@/lib/clearing";
 import { connectPhantom } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
-
-function bytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
-  return out;
-}
 
 /** USDC leaves Solana and arrives as USDC on another chain. Not a bank deposit. */
 export function CrossSend({ owner }: { owner: string }) {
@@ -35,9 +26,7 @@ export function CrossSend({ owner }: { owner: string }) {
       const who = owner || (await connectPhantom());
       const quoted = await getUsdcBridge({ data: { rail, usd, fromAddress: who, toAddress: to.trim() } });
       if ("error" in quoted) throw new Error(quoted.error);
-      if (!globalThis.Buffer) globalThis.Buffer = Buffer;
-      const tx = VersionedTransaction.deserialize(bytes(quoted.tx));
-      const signature = await sendVersioned(tx);
+      const signature = await sendLifiSolana(quoted.tx);
       setSig(signature);
       setNote(`About ${quoted.toUi.toFixed(2)} USDC via ${quoted.tool}. They receive USDC on that chain, not a bank deposit.`);
       rememberClear({

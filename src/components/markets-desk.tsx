@@ -12,7 +12,7 @@ import { ChainMount } from "@/components/trade-mounts";
 import { getEquityBook } from "@/lib/equities";
 import { WORLD } from "@/lib/world-book";
 import { formatPremium, type HouseListing } from "@/lib/sol-house";
-import { cn } from "@/lib/utils";
+import { MarkFace } from "@/components/holding-cards";
 
 type Lens = "trending" | "up" | "down" | "names" | "perps" | "x" | "metals" | "comms" | "fx" | "shares" | "stake" | "chains" | "stats" | "news";
 
@@ -169,10 +169,7 @@ export function MarketsDesk({ house, coins }: { house: HouseListing[]; coins: Ta
           <section className="overflow-hidden rounded-2xl bg-[#10131c] px-3 pt-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="relative grid size-9 shrink-0 place-items-center rounded-full bg-[#2a2a2e] text-[10px] font-bold">
-                  {coin.symbol.slice(0, 2)}
-                  {coin.icon ? <img src={coin.icon} alt="" className="absolute inset-0 size-9 rounded-full bg-white object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : null}
-                </span>
+                <MarkFace icon={coin.icon} symbol={coin.symbol} mint={coin.id} size={36} />
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{coin.symbol}</p>
                   <p className="font-mono text-lg tabular-nums">{money(coin.price)} <span className={cn("text-xs", coin.change < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>{pct(coin.change)}</span></p>
@@ -218,12 +215,7 @@ export function MarketsDesk({ house, coins }: { house: HouseListing[]; coins: Ta
                 <li key={c.id}>
                   <div className={cn("flex items-center gap-2 border-t border-white/[0.06] px-3 py-2 first:border-t-0", c.id === coin?.id ? "bg-white/[0.04]" : "")}>
                     <button type="button" onClick={() => { setPick(c.id); setSheet("coin"); setOpen(true); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                      <span className="relative grid size-8 shrink-0 place-items-center rounded-full bg-[#2a2a2e] text-[10px] font-bold text-white">
-                        {c.symbol.slice(0, 2)}
-                        {c.icon ? (
-                          <img src={c.icon} alt="" className="absolute inset-0 size-8 rounded-full bg-white object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                        ) : null}
-                      </span>
+                      <MarkFace icon={c.icon} symbol={c.symbol} mint={c.id} size={32} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-semibold">{c.symbol}</span>
                         <span className="block truncate text-[11px] text-white/45">{c.name}</span>
@@ -408,9 +400,12 @@ function NameList({ rows, onOpen }: { rows: HouseListing[]; onOpen: (mint: strin
         const ch = n.change24h == null ? null : Math.abs(n.change24h) <= 2 ? n.change24h * 100 : n.change24h;
         return (
           <li key={n.id} className="flex items-center justify-between gap-3 py-2">
-            <button type="button" onClick={() => { onOpen(n.mint); }} className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-sm font-semibold">{n.symbol}</span>
-              <span className="block truncate text-[11px] text-white/40">{n.name}</span>
+            <button type="button" onClick={() => { onOpen(n.mint); }} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+              <MarkFace symbol={n.symbol} mint={n.mint} size={32} />
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-semibold">{n.symbol}</span>
+                <span className="block truncate text-[11px] text-white/40">{n.name}</span>
+              </span>
             </button>
             <span className="text-right">
               <span className="block font-mono text-sm tabular-nums">{money(n.last)}</span>

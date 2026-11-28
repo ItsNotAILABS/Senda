@@ -1,0 +1,13 @@
+{
+  "cluster": "devnet",
+  "rpc": "https://api.devnet.solana.com",
+  "programId": "DeJVhSszpHrwHonu78hnYxrQxcr6ZEuYgwZmzYQYXpwy",
+  "deploySignature": "5Uxc7EPN8sZoZ8yd1D7t7JdLw4E6Vv9SFqk9vNPxvVRjm82ez8CL9fN2rxjPfUkbydfmqNTfB5c1qTWm3hWK2dxV",
+  "upgradeAuthority": "FMn74h5jZMPXoKYYWSTxHiD5j6PeAVsAc6ftkxg6apvA",
+  "treasury": "D7ZbAbJUkDEU4tfqcWQNGSHBXXrdfZKmrvgovvSQEvJb",
+  "initSignature": "4SmGhfjho7padFYPodHnwn3mrCvQT2gwyK2iLfzTMxCzLaSvdxhtcjZxYabhQ85y3HTqAVx7rsfFe8id3Ru8Dr2P",
+  "magic": "SENDATRY",
+  "version": 1,
+  "spendOpen": 0,
+  "fundedLamports": 1000
+}

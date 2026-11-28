@@ -1,20 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { MarkFace } from "@/components/holding-cards";
 import { TabLead } from "@/components/tab-lead";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
-
-const LOGO: Record<string, string> = {
-  SPACEX: "/logos/spacex.png",
-  OPENAI: "/logos/openai.png",
-  ANTHROPIC: "/logos/anthropic.png",
-  ANDURIL: "/logos/anduril.png",
-  NEURALINK: "/logos/neuralink.png",
-  FIGUREAI: "/logos/figureai.png",
-  KALSHI: "/logos/kalshi.png",
-  POLYMARKET: "/logos/polymarket.png",
-};
 
 const PRACTICE = "senda.practice.usd";
 
@@ -873,7 +863,9 @@ function Wheel(props: {
 }
 
 function Face({ symbol, className }: { symbol: string; className?: string }) {
-  const src = LOGO[symbol] ?? LOGO[symbol.toUpperCase()];
-  if (!src) return <span className={cn("grid place-items-center rounded-full bg-white text-[10px] font-semibold text-black", className)}>{symbol.slice(0, 2)}</span>;
-  return <img src={src} alt="" className={cn("rounded-full bg-white object-contain p-1", className)} />;
+  return (
+    <span className={cn("inline-grid overflow-hidden rounded-full", className)}>
+      <MarkFace symbol={symbol} fill />
+    </span>
+  );
 }

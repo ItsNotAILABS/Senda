@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TokenMark } from "@/components/token-mark";
 import { FillButton } from "@/components/fill-button";
+import { ExtraRails } from "@/components/extra-rails";
 import { impactPct, inUi, outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,7 @@ export function JupRow({ stock, usd, pane = false }: { stock: HouseListing; usd:
         label={side === "buy" ? "Buy in your wallet" : "Sell in your wallet"}
         className="mt-3 flex min-h-12 w-full items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-fg"
       />
+      <ExtraRails mint={stock.mint} symbol={stock.symbol} usd={25} side={side} price={stock.last} decimals={6} jupOut={0} />
       <p className="mt-2 break-all text-center font-mono text-[11px] text-subtle">{stock.mint}</p>
     </li>
   );

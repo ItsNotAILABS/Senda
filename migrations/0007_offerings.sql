@@ -1,5 +1,5 @@
--- Every product Senda offers is a row here. Prices are not stored.
--- A row is the registration: what it is, where it lives, and what can sign it.
+-- Every product Senda offers is a row. Prices are not stored.
+-- Inserts add a product. They do not rewrite a row that is already here.
 
 create table if not exists offering (
   id         text primary key,

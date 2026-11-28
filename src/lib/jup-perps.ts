@@ -1,7 +1,7 @@
 /** Jupiter perpetual markets. The wallet signs. Senda does not hold collateral. */
 
 import { activeSolProvider } from "@/lib/wallets";
-import { connectPhantom, phantomProvider, waitForInjected, type PhantomProvider } from "@/lib/phantom";
+import { connectPhantom, phantomProvider, signSerializedTx, waitForInjected, type PhantomProvider } from "@/lib/phantom";
 import { insideWalletApp, isPhoneBrowser, startMobileSign } from "@/lib/mobile-wallet";
 
 const BASE = "https://perps-api.jup.ag/v1";
@@ -235,8 +235,8 @@ export async function signPerpRequest(b64: string, action: "increase-position" |
     }
     throw new Error(
       insideWalletApp()
-        ? "Phantom is open. Tap Connect Phantom, then open the position again. It signs in this window."
-        : "Connect a Solana wallet. On a phone, Phantom or Solflare opens to sign.",
+        ? "Phantom is open. Tap again. It signs in this window."
+        : "Connect a Solana wallet. On a phone, Phantom opens to sign.",
     );
   }
   if (p.signTransaction) {
@@ -266,4 +266,60 @@ export async function submitSignedPerp(serializedTxBase64: string, action: "incr
   });
   if (!out.txid) throw new Error("Jupiter took the signature and did not return a transaction.");
   return out.txid;
+}
+
+export type JupPerpQuote = {
+  entry: number;
+  liq: number;
+  leverage: number;
+  fee: number;
+  collateral: number;
+};
+
+/** Jupiter builds the perp. The wallet signs. Leverage stops at 20×. */
+export async function openJupPerp(input: {
+  owner: string;
+  side: "long" | "short";
+  usd: number;
+  leverage: number;
+  marketMint: string;
+  marketDecimals: number;
+  marketPrice: number;
+}): Promise<{ signature: string; quote: JupPerpQuote }> {
+  if (input.usd < 10) throw new Error("Jupiter asks for at least $10 of collateral on a new position.");
+  if (input.leverage > 20) throw new Error("Leverage stops at 20×. The wallet was not asked to sign.");
+  const leverage = Math.min(20, Math.max(1.1, input.leverage));
+  const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const collateralMint = input.side === "long" ? input.marketMint : USDC;
+  const raw = input.side === "long"
+    ? String(Math.ceil((input.usd / (input.marketPrice || 1)) * 10 ** input.marketDecimals))
+    : String(Math.round(input.usd * 1_000_000));
+  const body = await call<{
+    serializedTxBase64?: string;
+    message?: string;
+    quote?: { entryPriceUsd?: string; liquidationPriceUsd?: string; leverage?: string; openFeeUsd?: string; positionCollateralSizeUsd?: string };
+  }>("/positions/increase", {
+    method: "POST",
+    body: JSON.stringify({
+      walletAddress: input.owner,
+      side: input.side,
+      leverage: String(leverage),
+      maxSlippageBps: "100",
+      collateralMint,
+      inputMint: collateralMint,
+      marketMint: input.marketMint,
+      collateralTokenDelta: raw,
+    }),
+  });
+  if (!body.serializedTxBase64) throw new Error(body.message || "Jupiter did not build the position.");
+  const signed = await signSerializedTx(body.serializedTxBase64);
+  const quote: JupPerpQuote = {
+    entry: Number(body.quote?.entryPriceUsd) || 0,
+    liq: Number(body.quote?.liquidationPriceUsd) || 0,
+    leverage: Number(body.quote?.leverage) || leverage,
+    fee: Number(body.quote?.openFeeUsd) || 0,
+    collateral: Number(body.quote?.positionCollateralSizeUsd) || input.usd,
+  };
+  if (quote.leverage > 20) throw new Error("Jupiter quoted more than 20×. The wallet was not asked to sign.");
+  return { signature: await submitSignedPerp(signed, "increase-position"), quote };
 }

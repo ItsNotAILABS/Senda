@@ -12,6 +12,7 @@ import { MarketStream } from "@/components/market-stream";
 import { OptionChain } from "@/components/option-chain";
 import { PerpDesk } from "@/components/perp-desk";
 import { RadarDesk } from "@/components/radar-desk";
+import { MarkFace } from "@/components/holding-cards";
 import { TradeTerminal } from "@/components/trade-terminal";
 import { type OptTenor } from "@/lib/option-chain";
 import { connectPhantom, readChain, splHolding, type ChainWallet } from "@/lib/phantom";
@@ -94,7 +95,7 @@ export function MarketsPage() {
                 className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
                 onClick={() => void navigate({ href: `/invest/name/${encodeURIComponent(a.symbol)}` })}
               >
-                <span className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-[11px] font-bold text-black">{a.symbol.slice(0, 4)}</span>
+                <MarkFace symbol={a.symbol} mint={a.mint} size={44} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-base font-semibold">{a.symbol}</span>
                   <span className="block truncate text-xs text-white/45">{n?.name || "Pre-IPO token"}</span>

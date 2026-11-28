@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { FillButton } from "@/components/fill-button";
 import { getPrint, type PrintBar } from "@/lib/print";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ const LANES: { id: LaneId | "all"; label: string }[] = [
   { id: "tokens", label: "Tokens" },
 ];
 
-const CHIPS = [1, 5, 25] as const;
+const CHIPS = [1, 5, 25, 100] as const;
 
 function digits(n: number): number {
   const a = Math.abs(n);
@@ -448,7 +449,17 @@ export function WorldDesk({ start }: { start?: LaneId | "all" | "comms" }) {
           </div>
 
           <div className="border-t border-white/10 p-3">
-            <div className="flex gap-1">
+            <label className="block text-xs text-white/45">
+              Dollars
+              <input
+                inputMode="decimal"
+                aria-label="Dollars"
+                value={usd ? String(usd) : ""}
+                onChange={(e) => setUsd(Math.max(0, Number(e.target.value.replace(/[^0-9.]/g, "")) || 0))}
+                className="mt-1 min-h-11 w-full rounded-xl border border-white/10 bg-black/40 px-3 font-mono text-lg outline-none"
+              />
+            </label>
+            <div className="mt-2 flex gap-1">
               {CHIPS.map((n) => (
                 <button
                   key={n}
@@ -495,6 +506,9 @@ export function WorldDesk({ start }: { start?: LaneId | "all" | "comms" }) {
                 </button>
               )}
             </div>
+            <Link to="/invest" search={{ desk: "world" }} className="mt-2 block text-center text-xs text-white/45">
+              Leverage on Base or Arbitrum is a different book
+            </Link>
           </div>
         </div>
       </div>

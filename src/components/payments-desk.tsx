@@ -1,9 +1,20 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { ArrowDownLeft, ArrowUpRight, Bluetooth, Link2, Plus, RefreshCw } from "lucide-react";
 import { AddMoneyScreen } from "@/components/add-money";
+import { FundRails } from "@/components/fund-rails";
+import { OutRails } from "@/components/out-rails";
+import { MoneyJumps } from "@/components/money-jumps";
+import { BitsoDesk } from "@/components/bitso-desk";
+import { MexicoSend } from "@/components/mexico-send";
+import { MxnbCard } from "@/components/mxnb-card";
+import { MoveWidget } from "@/components/move-widget";
 import { ClearStrip } from "@/components/clear-strip";
 import { MoneyBar } from "@/components/money-bar";
+import { MoneyLife } from "@/components/money-life";
+import { TransferAgent } from "@/components/transfer-agent";
+import { WalletSend } from "@/components/wallet-send";
 import { SpaceDesk } from "@/components/space-desk";
 import { NearbyDesk } from "@/components/nearby-desk";
 import { TabLead } from "@/components/tab-lead";
@@ -60,7 +71,7 @@ function payAgainRows(txs: Tx[], contacts: Contact[]) {
   return rows;
 }
 
-export type SendPage = PayAct | "activity" | "pockets" | "space";
+export type SendPage = PayAct | "activity" | "pockets" | "space" | "mexico" | "shop";
 
 export function PaymentsDesk({ initialAct, initialFrom, page }: { initialAct?: string; initialFrom?: string; page?: SendPage }) {
   const lone = Boolean(page);
@@ -98,9 +109,55 @@ export function PaymentsDesk({ initialAct, initialFrom, page }: { initialAct?: s
 
       {!lone || page === "space" ? <SpaceDesk /> : null}
 
-      {!lone || (page !== "space" && page !== "pockets" && page !== "activity") ? (
+      {page === "mexico" ? (
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Mexico</p>
+          <h2 className="mt-1 text-xl font-semibold">USDC, quoted in pesos.</h2>
+          <p className="mt-1 text-sm text-muted">You sign a Solana send. It is not a CLABE, a SPEI, or cash at a store. MXNB is a different mint, and it is empty.</p>
+          <div className="mt-4 space-y-4">
+            <MexicoSend owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+            <MxnbCard />
+          </div>
+        </section>
+      ) : null}
+
+      {page === "shop" ? (
+        <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
+          <p className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Shop</p>
+          <h2 className="mt-1 text-xl font-semibold">USDC at the counter.</h2>
+          <p className="mt-1 text-sm text-muted">Make a bill, or pay one. A clock can kill the bill. A tip rides in the same signature. It is not a card, and it is not a second balance.</p>
+          <div className="mt-4">
+            <MoneyLife start="qr" only />
+          </div>
+        </section>
+      ) : null}
+
+      {page !== "mexico" && page !== "shop" && (!lone || (page !== "space" && page !== "pockets" && page !== "activity")) ? (
       <section className={cn("rounded-[22px] border border-white/10 bg-[#10131c]", act === "nearby" ? "py-4" : "p-5")}>
-        {act === "send" ? <SendForm w={w} /> : null}
+        {act === "send" ? (
+          <div className="space-y-6">
+            <WalletSend />
+            <TransferAgent
+              surface="send"
+              owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""}
+              pocket={w.w.balances.USDC || 0}
+            />
+            <Link to="/payments/house" className="block rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] tracking-[0.16em] text-accent uppercase">House rails</p>
+              <p className="mt-1 text-sm font-semibold">Mexico, Guatemala, El Salvador, and the US</p>
+              <p className="mt-1 text-xs text-muted">The house sets the fee and the fields. Rosis posts the local credit in the south.</p>
+            </Link>
+            <Link to="/payments/rails" className="block rounded-[22px] border border-white/10 bg-black/20 px-4 py-3">
+              <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Cash rails</p>
+              <p className="mt-1 text-sm font-semibold">Western Union and MoneyGram</p>
+              <p className="mt-1 text-xs text-muted">USDPT is the live mint. MoneyGram cash-out opens in Solflare. A swap signs only if the quote clears.</p>
+            </Link>
+            <MoneyLife />
+            <MoveWidget owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+            <BitsoDesk owner={w.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} />
+            <SendForm w={w} />
+          </div>
+        ) : null}
         {act === "chain" ? <ChainPay w={w} /> : null}
         {act === "nearby" ? <NearbyDesk /> : null}
         {act === "request" ? <RequestForm w={w} /> : null}
@@ -344,6 +401,9 @@ function ChainPay({ w }: { w: ReturnType<typeof useWallet> }) {
           {sig}
         </a>
       ) : null}
+      <div className="mt-6">
+        <OutRails owner={owner} />
+      </div>
     </div>
   );
 }
@@ -378,11 +438,12 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
     const r = w.send(amount, ccy, person, note);
     setBusy(false);
     if (!r.ok) toast.error(r.error);
-    else toast.success(`Sent ${formatMoney(amount, ccy)} to ${person.tag}.`);
+    else toast.success(`Recorded ${formatMoney(amount, ccy)} for ${person.tag} in this browser. Phantom did not sign.`);
   }
 
   return (
     <div className="flex flex-col gap-3">
+      <p className="text-sm text-muted">This pocket lives in the browser. Recording it does not move USDC.</p>
       <label className="block">
         <span className="text-[11px] tracking-[0.14em] text-subtle uppercase">Person</span>
         <input
@@ -479,7 +540,7 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
           <span className="text-subtle">Note</span>
           <span className="max-w-[65%] truncate">{note.trim() || "—"}</span>
         </p>
-        <p className="text-subtle">Network fee, paid by the wallet</p>
+        <p className="text-subtle">Recorded here. Phantom is not asked to sign.</p>
       </div>
 
       <button
@@ -488,7 +549,7 @@ function SendForm({ w }: { w: ReturnType<typeof useWallet> }) {
         onClick={go}
         className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg disabled:opacity-40"
       >
-        {busy ? "Waiting for the wallet…" : `Send ${shown}`}
+        {busy ? "Recording…" : `Record ${shown}`}
       </button>
 
       {again.length > 0 ? (
@@ -534,7 +595,7 @@ function RequestForm({ w }: { w: ReturnType<typeof useWallet> }) {
     }
     const who = w.remember(t, t);
     const r = w.receive(amount, ccy, who.tag, `Paid your request · ${ccy}`);
-    if (r.ok) toast.success(`${who.tag} paid ${formatMoney(amount, ccy)}.`);
+    if (r.ok) toast.success(`Recorded in this browser. Nothing arrived on-chain.`);
   }
 
   return (
@@ -640,22 +701,17 @@ function ExchangeForm({ w, fromInit }: { w: ReturnType<typeof useWallet>; fromIn
 function AddForm({ w }: { w: ReturnType<typeof useWallet> }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-4">
+      <MoneyJumps here="/payments/add" />
+      <FundRails />
+      <div className="rounded-2xl border border-white/10 p-4">
+        <p className="text-sm font-semibold">Browser pocket</p>
+        <p className="mt-1 text-xs text-muted">This number stays in this browser. It is not a bank deposit and it does not buy USDC. The pocket holds {formatMoney(w.w.balances.USD || 0)}. MoonPay, above, is the cash that lands on the wallet.</p>
+        <button type="button" onClick={() => setOpen(true)} className="mt-3 min-h-12 rounded-full border border-white/15 px-4 text-sm font-semibold">
+          Add to the pocket
+        </button>
+      </div>
       {open ? <AddMoneyScreen onClose={() => setOpen(false)} /> : null}
-      <button type="button" onClick={() => setOpen(true)} className="min-h-12 rounded-full bg-accent text-base font-semibold text-accent-fg">
-        Add money
-      </button>
-      <button
-        type="button"
-        className="min-h-12 rounded-full border border-white/15 text-sm font-semibold"
-        onClick={() => {
-          const r = w.withdraw(Math.min(w.w.balances.USD, 2500), "USD");
-          if (!r.ok) toast.error(r.error);
-          else toast.success("On the way to checking.");
-        }}
-      >
-        Withdraw to bank
-      </button>
     </div>
   );
 }

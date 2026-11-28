@@ -39,6 +39,14 @@ export function MoreDesk() {
         coming={["A login that follows you to another computer."]}
       />
       <MoneyBar />
+      <Link to="/profile" className="flex items-center justify-between gap-3 rounded-[22px] border border-white/10 bg-[#10131c] px-5 py-4">
+        <span>
+          <span className="font-mono text-[11px] tracking-[0.16em] text-accent uppercase">Profile</span>
+          <span className="mt-1 block text-xl font-semibold">Travel eSIM</span>
+          <span className="mt-1 block text-sm text-muted">Live plans for where you land. The QR stays on this profile.</span>
+        </span>
+        <span className="text-accent">→</span>
+      </Link>
       <OfferingBook />
       <section className="grid gap-3 lg:grid-cols-3">
         <article className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 sm:p-8">

@@ -1,3 +1,4 @@
+import { installSendBuffer } from "@/lib/buffer-polyfill";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { WalletProvider } from "@/lib/wallet-context";
@@ -6,6 +7,8 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Senda";
+
+installSendBuffer();
 
 export const Route = createRootRoute({
   head: () => ({
@@ -36,6 +39,7 @@ export const Route = createRootRoute({
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
     ],
+    scripts: [{ src: "https://js.stripe.com/dahlia/stripe.js" }],
   }),
   component: () => (
     <html lang="en" className="antialiased" suppressHydrationWarning>

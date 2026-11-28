@@ -6,6 +6,7 @@ import { connectPhantom } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { useHouse } from "@/lib/use-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
 
 const SIZES = [1, 5, 25];
@@ -127,7 +128,8 @@ export function SpotPage({
   }
 
   const coins = book.filter((c) => c.kind === "coin").length;
-  const shown = book.slice(0, cap);
+  const queryOn = q.trim().length > 0;
+  const shown = queryOn ? book : book.slice(0, cap);
 
   return (
     <div className={bare ? "mt-4" : "px-3 py-3 lg:px-4"}>
@@ -199,11 +201,7 @@ export function SpotPage({
           return (
             <li key={r.id} className="flex min-h-[210px] flex-col rounded-[22px] border border-white/10 bg-[#10131c] p-3">
               <div className="flex items-center gap-2">
-                {r.icon ? (
-                  <img src={r.icon} alt="" className="size-9 rounded-full bg-white object-cover" />
-                ) : (
-                  <span className="grid size-9 place-items-center rounded-full bg-white text-[10px] font-semibold text-black">{r.symbol.slice(0, 2)}</span>
-                )}
+                <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={36} />
                 <span className="min-w-0">
                   <span className="block truncate font-semibold">{r.symbol}</span>
                   <span className={cn("block text-xs", n != null && n < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>
@@ -231,11 +229,7 @@ export function SpotPage({
           const tag = r.kind === "pre" ? "PreStock" : r.kind === "x" ? "xStock" : "Coin";
           return (
             <li key={r.id} className="flex items-center gap-3 py-3">
-              {r.icon ? (
-                <img src={r.icon} alt="" className="size-10 rounded-full object-cover" />
-              ) : (
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[10px] font-semibold text-black">{r.symbol.slice(0, 3)}</span>
-              )}
+              <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={40} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold">{r.symbol}</span>
                 <span className="block truncate text-xs text-white/45">{tag} · {r.name}</span>
@@ -259,10 +253,15 @@ export function SpotPage({
         })}
       </ul>
       )}
-      {book.length > cap ? (
-        <button type="button" onClick={() => setCap((n) => n + 24)} className="mt-3 min-h-11 w-full rounded-full bg-white/10 text-sm font-semibold">
-          Show more · {(book.length - cap).toLocaleString("en-US")} still on the book
-        </button>
+      {book.length > shown.length ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setCap((n) => n + 24)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+            More
+          </button>
+          <button type="button" onClick={() => setCap(book.length)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+            All {book.length.toLocaleString("en-US")}
+          </button>
+        </div>
       ) : null}
       {book.length === 0 ? <p className="py-6 text-sm text-muted">Waiting on Jupiter.</p> : null}
     </div>

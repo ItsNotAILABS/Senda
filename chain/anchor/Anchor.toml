@@ -1,0 +1,10 @@
+[features]
+resolution = true
+skip-lint = false
+
+[programs.devnet]
+senda_fund = "FdcRjiN8GJmibutLtubvDf8hXavsYpBe7ZAHEyV5VjLJ"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"

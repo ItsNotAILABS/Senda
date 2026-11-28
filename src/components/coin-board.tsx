@@ -1,21 +1,36 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { LiveChart } from "@/components/price-chart";
-import { jupTape, type TapeRow } from "@/lib/world-book";
+import { searchTape, type TapeRow } from "@/lib/world-book";
+import { tapeNow, watchTape } from "@/lib/live-tape";
 import { quoteRoute, signRoute } from "@/lib/jup-sign";
 import { useHouse } from "@/lib/use-house";
 import { connectPhantom, mintDecimals } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
 
 const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SIZES = [0.01, 0.1, 1, 5, 25];
 type Lens = "all" | "movers" | "spot" | "pre" | "x";
 
+function vol(n: number | undefined) {
+  if (!(n && n > 0)) return "";
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B 24h`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M 24h`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K 24h`;
+  return `$${n.toFixed(0)} 24h`;
+}
+
 function pct(change: number | null) {
-  if (change == null) return null;
-  const n = Math.abs(change) <= 2 ? change * 100 : change;
-  return n;
+  if (change == null || !Number.isFinite(change)) return null;
+  return change;
+}
+
+function kindOf(row: TapeRow): BookRow["kind"] {
+  if (row.id.startsWith("Pre")) return "pre";
+  if (/^[A-Z0-9]{1,8}x$/.test(row.symbol)) return "x";
+  return "coin";
 }
 
 type BookRow = TapeRow & { kind: "coin" | "pre" | "x" };
@@ -32,13 +47,13 @@ function bookOf(
       symbol: h.symbol,
       name: h.name,
       price: h.last,
-      change: h.change24h,
+      change: h.change24h == null ? null : Math.abs(h.change24h) <= 2 ? h.change24h * 100 : h.change24h,
       icon: h.image || undefined,
       kind: h.venue === "prestocks" ? "pre" : "x",
     }));
   return [
     ...extra,
-    ...rows.map((r): BookRow => ({ ...r, kind: /x$/i.test(r.symbol) ? "x" : "coin" })),
+    ...rows.map((r): BookRow => ({ ...r, kind: kindOf(r) })),
   ];
 }
 
@@ -46,49 +61,77 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
   const house = useHouse();
   const wallet = useWallet();
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
-  const [rows, setRows] = useState<TapeRow[]>([]);
+  const [rows, setRows] = useState<TapeRow[]>(() => tapeNow());
+  const [hits, setHits] = useState<TapeRow[]>([]);
   const [pick, setPick] = useState<string>("");
   const [usd, setUsd] = useState(25);
   const [out, setOut] = useState<string>("");
+  const [quoting, setQuoting] = useState(false);
+  const [quoteErr, setQuoteErr] = useState("");
   const [busy, setBusy] = useState("");
   const [cap, setCap] = useState(24);
+  const [note, setNote] = useState("");
   const [lens, setLens] = useState<Lens>(start);
   const [q, setQ] = useState("");
   const book = useMemo(() => {
     const query = q.trim().toLowerCase();
-    return bookOf(rows, house).filter((r) => {
-      if (query && !`${r.symbol} ${r.name}`.toLowerCase().includes(query)) return false;
+    const base = query.length < 2 ? rows : [...hits, ...rows.filter((r) => !hits.some((h) => h.id === r.id))];
+    return bookOf(base, house).filter((r) => {
+      if (query && !`${r.symbol} ${r.name} ${r.id}`.toLowerCase().includes(query)) return false;
       if (lens === "pre") return r.kind === "pre";
       if (lens === "x") return r.kind === "x";
       if (lens === "spot") return r.kind === "coin";
       if (lens === "movers") return Math.abs(pct(r.change) ?? 0) >= 3;
       return true;
     });
-  }, [rows, house, q, lens]);
+  }, [rows, hits, house, q, lens]);
   const coin = book.find((r) => r.id === pick) ?? book[0] ?? null;
 
   useEffect(() => {
+    return watchTape((list) => {
+      setNote("");
+      setRows((cur) => (list.length >= cur.length ? list : cur));
+      if (list[0]) setPick((id) => id || list[0].id);
+    });
+  }, []);
+
+  useEffect(() => {
+    const query = q.trim();
+    if (query.length < 2) {
+      setHits([]);
+      return;
+    }
     let live = true;
-    jupTape()
-      .then((list) => {
-        if (!live) return;
-        setRows(list);
-        if (list[0]) setPick((id) => id || list[0].id);
-      })
-      .catch(() => undefined);
+    const timer = window.setTimeout(() => {
+      searchTape({ data: query })
+        .then((list) => live && setHits(list))
+        .catch(() => live && setHits([]));
+    }, 280);
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
-  }, []);
+  }, [q]);
 
   useEffect(() => {
     if (!coin || !(usd > 0)) return;
     let live = true;
     setOut("");
+    setQuoteErr("");
+    setQuoting(true);
     mintDecimals(coin.id)
       .then((dec) => quoteRoute({ inputMint: USDC, outputMint: coin.id, amountRaw: Math.round(usd * 1_000_000), outDecimals: dec }))
-      .then((q) => live && setOut(q.outUi.toLocaleString("en-US", { maximumFractionDigits: 4 })))
-      .catch(() => live && setOut(""));
+      .then((q) => {
+        if (!live) return;
+        setOut(q.outUi.toLocaleString("en-US", { maximumFractionDigits: 6 }));
+        setQuoting(false);
+      })
+      .catch((error: unknown) => {
+        if (!live) return;
+        setOut("");
+        setQuoting(false);
+        setQuoteErr(error instanceof Error ? error.message : "Jupiter did not quote.");
+      });
     return () => {
       live = false;
     };
@@ -137,11 +180,12 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
             ) : null}
           </div>
           <p className="mt-2 font-mono text-4xl">{coin.price == null ? "—" : coin.price >= 1 ? `$${coin.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${coin.price.toPrecision(3)}`}</p>
+          {coin.volume ? <p className="mt-1 font-mono text-xs text-white/45">{vol(coin.volume)}{coin.liquidity ? ` · $${Math.round(coin.liquidity).toLocaleString("en-US")} pool` : ""}</p> : null}
           <div className="mt-3 overflow-hidden rounded-2xl bg-black/40">
             <LiveChart compact mint={coin.id} symbol={coin.symbol} live={coin.price ?? 0} />
           </div>
           <p className="font-mono text-3xl">{usd}</p>
-          {out ? <p className="text-sm text-[#d7e36a]">About {out} {coin.symbol}</p> : <p className="text-sm text-[#d7e36a]">No quote at this size.</p>}
+          {out ? <p className="text-sm text-[#d7e36a]">About {out} {coin.symbol}</p> : <p className="text-sm text-[#d7e36a]">{quoting ? "Asking Jupiter…" : quoteErr || "No quote at this size."}</p>}
           <div className="mt-3 flex gap-2 overflow-x-auto">
             {SIZES.map((n) => (
               <button key={n} type="button" onClick={() => setUsd(n)} className={cn("min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold", usd === n ? "bg-white text-black" : "bg-[#2a2a2e] text-white")}>
@@ -159,7 +203,7 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
           </div>
         </section>
       ) : (
-        <p className="text-sm text-white/45">Waiting on Jupiter.</p>
+        <p className="text-sm text-white/45">{note || "Waiting on Jupiter."}</p>
       )}
       <div className="flex gap-1 overflow-x-auto">
         {(
@@ -183,11 +227,9 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
           const on = coin?.id === r.id;
           return (
             <button key={r.id} type="button" onClick={() => setPick(r.id)} className="text-center">
-              {r.icon ? (
-                <img src={r.icon} alt="" className={cn("mx-auto size-14 rounded-full object-cover", on && "ring-2 ring-[#d7e36a]")} />
-              ) : (
-                <span className={cn("mx-auto grid size-14 place-items-center rounded-full bg-white text-xs font-semibold text-black", on && "bg-[#d7e36a]")}>{r.symbol.slice(0, 4)}</span>
-              )}
+              <span className={cn("mx-auto block w-fit rounded-full", on && "ring-2 ring-[#d7e36a]")}>
+                <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={56} />
+              </span>
               <span className="mt-1 block text-xs font-semibold">{r.symbol.slice(0, 5)}</span>
               <span className={cn("block text-[11px]", n != null && n < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>{n == null ? "" : `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`}</span>
             </button>
@@ -201,10 +243,10 @@ export function CoinBoard({ start = "all" }: { start?: Lens }) {
           return (
             <li key={r.id} className="rounded-[22px] bg-[#101114] p-3">
               <button type="button" onClick={() => setPick(r.id)} className="flex w-full items-center gap-3 text-left">
-                {r.icon ? <img src={r.icon} alt="" className="size-11 rounded-full object-cover" /> : <span className="grid size-11 place-items-center rounded-full bg-white text-[10px] font-semibold text-black">{r.symbol.slice(0, 2)}</span>}
+                <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={44} />
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{r.symbol}</span>
-                  <span className="block truncate text-xs text-white/45">{r.kind === "pre" ? "PreStock" : r.kind === "x" ? "xStock" : "Spot"} · {r.name}</span>
+                  <span className="block truncate text-xs text-white/45">{r.kind === "pre" ? "PreStock" : r.kind === "x" ? "xStock" : "Spot"} · {r.name}{vol(r.volume) ? ` · ${vol(r.volume)}` : ""}</span>
                 </span>
                 <span className="text-right">
                   <span className="block font-mono text-sm">{r.price == null ? "—" : r.price >= 1 ? `$${r.price.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : `$${r.price.toPrecision(3)}`}</span>

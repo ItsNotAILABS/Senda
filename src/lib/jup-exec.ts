@@ -80,6 +80,50 @@ export const quoteJup = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }): Promise<JupQuote | { error: string }> => fetchQuote(data.mint, data.usd, data.side));
 
+/** Same quote, fetched here, so a browser that cannot reach Jupiter still gets the route. The body is a string because the raw Jupiter object is not a typed serializable map. */
+export const relayQuote = createServerFn({ method: "POST" })
+  .validator((input: unknown) =>
+    z
+      .object({
+        inputMint: z.string().min(32).max(48),
+        outputMint: z.string().min(32).max(48),
+        amount: z.number().positive().max(1e18),
+        slippageBps: z.number().int().min(1).max(5_000).optional(),
+        onlyDirect: z.boolean().optional(),
+      })
+      .parse(input),
+  )
+  .handler(async ({ data }): Promise<{ ok: true; quote: string } | { ok: false; error: string }> => {
+    const slip = data.slippageBps ?? 100;
+    const direct = data.onlyDirect ? "&onlyDirectRoutes=true" : "";
+    const base = `inputMint=${data.inputMint}&outputMint=${data.outputMint}&amount=${Math.floor(data.amount)}&slippageBps=${slip}`;
+    let last = "Jupiter did not quote.";
+    for (const restrict of [true, false]) {
+      const qs = `${base}${restrict ? "&restrictIntermediateTokens=true" : ""}${direct}`;
+      for (const url of QUOTE_URLS) {
+        try {
+          const res = await fetch(url(qs), { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) });
+          const text = await res.text();
+          let quote: { outAmount?: string; error?: string } = {};
+          try {
+            quote = JSON.parse(text) as { outAmount?: string; error?: string };
+          } catch {
+            last = res.status === 429 ? "Jupiter is busy. Wait a moment." : "Jupiter did not quote.";
+            continue;
+          }
+          if (!res.ok || !quote.outAmount) {
+            last = res.status === 429 ? "Jupiter is busy. Wait a moment." : quote.error || `Jupiter quote ${res.status}`;
+            continue;
+          }
+          return { ok: true, quote: text };
+        } catch {
+          last = "Jupiter did not quote.";
+        }
+      }
+    }
+    return { ok: false, error: last };
+  });
+
 export function outUi(q: JupQuote, decimals = 6): number {
   return Number(q.outAmount) / 10 ** decimals;
 }

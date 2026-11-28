@@ -1,3 +1,5 @@
+import { coverDesk } from "@/lib/privacy";
+
 export type AccountFill = {
   id: string;
   at: number;
@@ -22,7 +24,7 @@ export function listFills(): AccountFill[] {
 
 export function noteFill(row: Omit<AccountFill, "id" | "at">): AccountFill {
   const next: AccountFill = { ...row, id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, at: Date.now() };
-  if (typeof window === "undefined") return next;
+  if (typeof window === "undefined" || coverDesk()) return next;
   const rows = [next, ...listFills()].slice(0, 200);
   try {
     localStorage.setItem(KEY, JSON.stringify(rows));

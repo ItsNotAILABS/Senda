@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { TransferAgent } from "@/components/transfer-agent";
 import { FillButton } from "@/components/fill-button";
+import { LiveChart } from "@/components/price-chart";
+import { coinPx } from "@/components/coin-ticker";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
 import { type EquityBook, type ListedStock, type StockReserve } from "@/lib/equities";
+import { tapeNow, watchTape } from "@/lib/live-tape";
 import { WalletPicker } from "@/components/wallet-picker";
 import { digestBooks } from "@/lib/books";
 import { CCYS, formatMoney } from "@/lib/wallet";
@@ -27,6 +31,7 @@ export function EquitiesDesk({ book, view = "all", note }: { book: EquityBook; v
 
   return (
     <div className="flex flex-col">
+      <XMarket stocks={book.stocks} symbol={symbol} onPick={setSymbol} />
       {view === "market" ? null : (
       <section className="grid gap-8 border-b border-border px-5 py-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:px-8">
         <div>
@@ -76,6 +81,9 @@ export function EquitiesDesk({ book, view = "all", note }: { book: EquityBook; v
               placeholder="Find a share"
               className="min-h-9 w-44 rounded-lg bg-elevated px-3 text-sm outline-none placeholder:text-subtle"
             />
+          </div>
+          <div className="px-5 pb-4 lg:px-8">
+            <TransferAgent surface="stocks" owner={wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? ""} symbol={stock?.symbol ?? ""} mint={stock?.mint ?? ""} halted={stock?.halted} />
           </div>
           <table className="w-full text-left text-sm">
             <thead className="text-xs text-subtle">
@@ -169,6 +177,72 @@ export function EquitiesDesk({ book, view = "all", note }: { book: EquityBook; v
       </div>
       )}
     </div>
+  );
+}
+
+function XMarket({ stocks, symbol, onPick }: { stocks: ListedStock[]; symbol: string; onPick: (symbol: string) => void }) {
+  const [tape, setTape] = useState(tapeNow);
+  const [q, setQ] = useState("");
+  useEffect(() => watchTape(setTape), []);
+  const byMint = useMemo(() => new Map(tape.map((row) => [row.id, row])), [tape]);
+  const needle = q.trim().toLowerCase();
+  const rows = stocks.filter((stock) => !needle || `${stock.symbol} ${stock.name}`.toLowerCase().includes(needle));
+  const stock = stocks.find((row) => row.symbol === symbol) ?? rows[0] ?? null;
+  const quote = stock ? byMint.get(stock.mint) : undefined;
+  const price = quote?.price ?? 0;
+  const change = quote?.change ?? null;
+  return (
+    <section className="border-b border-white/10 px-4 py-4">
+      {stock ? (
+        <>
+          <p className="text-sm text-white/45">{stock.name}</p>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-3xl font-semibold">{stock.symbol}</h2>
+            <span className={cn("rounded-full px-2 py-1 text-xs font-semibold", (change ?? 0) < 0 ? "bg-[#3a1520] text-[#ff5d73]" : "bg-[#1c2a12] text-[#c6f56a]")}>
+              {change == null ? stock.halted ? "Halted" : stock.open ? "Open" : "Closed" : `${change >= 0 ? "+" : ""}${change.toFixed(1)}%`}
+            </span>
+          </div>
+          <p className="mt-2 font-mono text-4xl">{price > 0 ? coinPx(price) : "—"}</p>
+          <p className="mt-1 font-mono text-xs text-white/45">
+            {quote?.volume ? `${quote.volume >= 1e6 ? `$${(quote.volume / 1e6).toFixed(1)}M` : quote.volume >= 1e3 ? `$${(quote.volume / 1e3).toFixed(0)}K` : `$${Math.round(quote.volume)}`} 24h` : "24h volume lands with the tape"}
+            {stock.halted ? " · Halted" : ""}
+          </p>
+          <div className="mt-3 overflow-hidden rounded-2xl bg-black/40">
+            <LiveChart compact mint={stock.mint} symbol={stock.symbol} live={price} />
+          </div>
+          <div className="mt-3">
+            <FillButton mint={stock.mint} usd={25} label={`Buy $25 ${stock.symbol}`} className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-[#d7e36a] text-sm font-semibold text-black" />
+          </div>
+        </>
+      ) : (
+        <p className="text-sm text-white/45">No listed names.</p>
+      )}
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a share" className="mt-4 min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
+      <ul className="mt-3 overflow-hidden rounded-2xl bg-white/[0.04]">
+        {rows.slice(0, 80).map((row) => {
+          const mark = byMint.get(row.mint);
+          const px = mark?.price ?? 0;
+          const ch = mark?.change ?? null;
+          return (
+            <li key={row.mint} className="border-b border-white/10 last:border-0">
+              <button type="button" onClick={() => onPick(row.symbol)} className={cn("flex w-full items-center gap-3 px-3 py-3 text-left", row.symbol === stock?.symbol && "bg-white/[0.05]")}>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[16px] font-semibold">{row.symbol}</span>
+                  <span className="block truncate text-[12px] text-white/45">{row.name}{mark?.volume ? ` · ${mark.volume >= 1e6 ? `$${(mark.volume / 1e6).toFixed(1)}M` : mark.volume >= 1e3 ? `$${(mark.volume / 1e3).toFixed(0)}K` : `$${Math.round(mark.volume)}`} 24h` : ""}</span>
+                </span>
+                <span className="text-right">
+                  <span className="block font-mono text-[16px] tabular-nums">{px > 0 ? coinPx(px) : "—"}</span>
+                  <span className={cn("font-mono text-[12px]", ch == null ? "text-white/35" : ch < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>
+                    {ch == null ? (row.halted ? "Halted" : row.open ? "Open" : "Closed") : `${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%`}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-white/40">{rows.length.toLocaleString("en-US")} xStocks. Borrow sits under the book. You sign the buy.</p>
+    </section>
   );
 }
 

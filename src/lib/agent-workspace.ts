@@ -35,6 +35,7 @@ export type Worker = {
   createdAt: string;
   lastRunAt: string;
   runs: number;
+  coffer: { id: string; address: string; network: "devnet" | "mainnet-beta"; type: "agent" } | null;
 };
 
 function normalize(row: Partial<Worker> & Pick<Worker, "id" | "name" | "purpose">): Worker {
@@ -57,7 +58,15 @@ function normalize(row: Partial<Worker> & Pick<Worker, "id" | "name" | "purpose"
     createdAt: row.createdAt || new Date().toISOString(),
     lastRunAt: row.lastRunAt || "",
     runs: Number(row.runs) || 0,
+    coffer: cofferOf(row.coffer),
   };
+}
+
+function cofferOf(value: unknown): Worker["coffer"] {
+  if (!value || typeof value !== "object") return null;
+  const row = value as { id?: string; address?: string; network?: string };
+  if (!row.id || !row.address) return null;
+  return { id: row.id, address: row.address, network: row.network === "mainnet-beta" ? "mainnet-beta" : "devnet", type: "agent" };
 }
 
 function load(): Worker[] {
@@ -117,6 +126,7 @@ export function createWorker(input: {
     createdAt: now,
     lastRunAt: "",
     runs: 0,
+    coffer: null,
   };
   save([row, ...load()]);
   return row;

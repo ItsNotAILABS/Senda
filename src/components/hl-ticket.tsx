@@ -1,13 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { FillCard } from "@/components/fill-card";
-import { MarkChart } from "@/components/mark-chart";
-import { hlBook, hlCash, hlPositions, type HlCash, type HlKind, type HlMarket, type HlPosition } from "@/lib/hl-book";
+import { DayChart, MarkChart } from "@/components/mark-chart";
+import { hlBook, hlCash, hlPositions, hlRange, type HlCash, type HlKind, type HlMarket, type HlPosition } from "@/lib/hl-book";
+import { dayChange, impliedValue, markText, privateBooks, type DayBar } from "@/lib/hl-private";
 import { hlAccount, hlClose, hlFund, hlOpen, hlUnify } from "@/lib/hl-sign";
 import { noteAct } from "@/lib/book";
 import { cn } from "@/lib/utils";
 
-const KINDS: Array<HlKind | "all"> = ["all", "crypto", "stock", "commodity", "fx", "index"];
+const KINDS: Array<[HlKind | "all", string]> = [
+  ["all", "All"],
+  ["private", "Private"],
+  ["crypto", "Crypto"],
+  ["stock", "Stocks"],
+  ["commodity", "Gold & oil"],
+  ["fx", "FX"],
+  ["index", "Indexes"],
+];
 
 function money(n: number): string {
   if (!(n > 0)) return "—";
@@ -16,9 +25,28 @@ function money(n: number): string {
   return `$${n.toPrecision(4)}`;
 }
 
-export function HlTicket() {
+function heroPrice(mark: number, unit: HlMarket["unit"]): string {
+  if (!(mark > 0)) return "—";
+  if (unit === "valuation") return markText(mark, unit);
+  return `$${mark.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`;
+}
+
+function chipLabel(row: HlMarket): string {
+  if (row.id === "xyz:ANT") return "Share";
+  if (row.id === "para:ANTH") return "Other share";
+  if (row.id === "io:ANTH") return "Value";
+  if (row.id === "io:OAI") return "OpenAI";
+  if (row.id === "vntl:SPACEX") return "SpaceX";
+  if (row.dex === "vntl") return `${row.company}, quiet`;
+  return row.company;
+}
+
+export function HlTicket({ start = "all" }: { start?: HlKind | "all" }) {
   const [book, setBook] = useState<HlMarket[]>([]);
-  const [kind, setKind] = useState<HlKind | "all">("all");
+  const [kind, setKind] = useState<HlKind | "all">(start);
+  useEffect(() => {
+    if (start === "private") setKind("private");
+  }, [start]);
   const [q, setQ] = useState("");
   const [pick, setPick] = useState("");
   const [open, setOpen] = useState(false);
@@ -32,6 +60,9 @@ export function HlTicket() {
   const [positions, setPositions] = useState<HlPosition[]>([]);
   const [fill, setFill] = useState<{ title: string; symbol: string; amount: string; paid: string; received: string; sig: string } | null>(null);
   const [trail, setTrail] = useState<Record<string, number[]>>({});
+  const [range, setRange] = useState<DayBar | null>(null);
+  const [feature, setFeature] = useState("xyz:ANT");
+  const [day, setDay] = useState<(DayBar & { id: string }) | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -76,15 +107,53 @@ export function HlTicket() {
     const rows = book
       .filter((row) => kind === "all" || row.kind === kind)
       .filter((row) => dex === "all" || (row.dex || "hyperliquid") === dex)
-      .filter((row) => !query || row.label.toLowerCase().includes(query) || row.id.toLowerCase().includes(query));
+      .filter((row) => !query || row.label.toLowerCase().includes(query) || row.id.toLowerCase().includes(query) || row.company.toLowerCase().includes(query));
     if (sort === "name") rows.sort((a, b) => a.label.localeCompare(b.label));
     else if (sort === "move") rows.sort((a, b) => Math.abs(b.change ?? 0) - Math.abs(a.change ?? 0));
     else rows.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0));
     return rows;
   }, [book, kind, q, sort, dex]);
   const market = book.find((row) => row.id === pick) ?? null;
+  const order = useMemo(() => new Map(privateBooks().map((row, i) => [row.id, i])), []);
+  const privates = useMemo(
+    () => book.filter((row) => order.has(row.id)).sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0)),
+    [book, order],
+  );
+  const hero = privates.find((row) => row.id === feature) ?? privates[0] ?? null;
+  const value = privates.find((row) => row.id === "io:ANTH") ?? null;
   const marginN = Number(margin);
   const maxLev = market ? Math.min(40, market.maxLeverage) : 20;
+
+  useEffect(() => {
+    if (!open || !pick) {
+      setRange(null);
+      return;
+    }
+    let live = true;
+    setRange(null);
+    hlRange({ data: { coin: pick } })
+      .then((row) => live && setRange(row))
+      .catch(() => live && setRange(null));
+    return () => {
+      live = false;
+    };
+  }, [open, pick]);
+
+  useEffect(() => {
+    const id = hero?.id;
+    if (!id) return;
+    let live = true;
+    hlRange({ data: { coin: id } })
+      .then((row) => {
+        if (live) setDay(row ? { id, ...row } : { id, high: 0, low: 0, points: [] });
+      })
+      .catch(() => {
+        if (live) setDay(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [hero?.id]);
 
   async function account() {
     const address = who || (await hlAccount());
@@ -188,12 +257,17 @@ export function HlTicket() {
         />
       ) : null}
       <div className="flex flex-wrap gap-2">
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">Hyperliquid</span>
-        <span className="rounded-full bg-[#2a2a2e] px-3 py-1 text-xs font-semibold">Stocks · metals · FX</span>
-        <span className="rounded-full bg-[#2a2a2e] px-3 py-1 text-xs font-semibold">USDC on that account</span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-black">24/7</span>
+        <span className="rounded-full bg-[#2a2a2e] px-3 py-1 text-xs font-semibold">Crypto · stocks · private · gold · FX</span>
+        <span className="rounded-full bg-[#2a2a2e] px-3 py-1 text-xs font-semibold">No expiry</span>
       </div>
       <p className="text-sm text-white/60">
-        {book.length ? `${book.length} markets.` : "Loading the book."} Kept for Mexico and the other countries Hyperliquid allows. A US or UK address is refused. Crypto, stocks, metals, oil, FX, and indexes. One USDC account on Hyperliquid covers them.
+        {book.length
+          ? kind === "private"
+            ? `${shown.length} private names. ${book.length} markets on the book.`
+            : `${book.length} markets.`
+          : "Loading the book."}{" "}
+        Long or short. A private name is not a share of the company. Hyperliquid clears the order. Senda does not hold the margin, and you can lose it. A US or UK address is refused. The USDC has to already be on that account. Solana USDC is a different balance.
       </p>
       <button
         type="button"
@@ -203,12 +277,66 @@ export function HlTicket() {
         {who ? `${who.slice(0, 6)}…${who.slice(-4)} · perp $${(cash?.perp ?? 0).toFixed(2)} · spot $${(cash?.spot ?? 0).toFixed(2)}` : "Open the perp account"}
       </button>
       <div className="flex gap-2 overflow-x-auto">
-        {KINDS.map((id) => (
-          <button key={id} type="button" onClick={() => setKind(id)} className={cn("min-h-9 shrink-0 rounded-full px-3 text-sm font-semibold capitalize active:scale-95", kind === id ? "bg-white text-black" : "bg-[#2a2a2e]")}>
-            {id}
+        {KINDS.map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setKind(id)} className={cn("min-h-9 shrink-0 rounded-full px-3 text-sm font-semibold active:scale-95", kind === id ? "bg-white text-black" : "bg-[#2a2a2e]")}>
+            {label}
           </button>
         ))}
       </div>
+      {hero ? (
+        <div className="rounded-[22px] bg-[#101114] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] tracking-[0.14em] text-white/45 uppercase">{hero.company}</p>
+            <p className="text-[11px] text-white/40">{hero.id}</p>
+          </div>
+          <div className="mt-2 flex gap-2 overflow-x-auto">
+            {privates.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                onClick={() => setFeature(row.id)}
+                className={cn("min-h-8 shrink-0 rounded-full px-3 text-xs font-semibold", hero.id === row.id ? "bg-white text-black" : "bg-[#2a2a2e]")}
+              >
+                {chipLabel(row)}
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 font-mono text-4xl tabular-nums tracking-tight">{heroPrice(hero.mark, hero.unit)}</p>
+          {hero.unit === "valuation" ? <p className="mt-1 font-mono text-sm text-[#c6f56a]">{impliedValue(hero.mark)}</p> : null}
+          <p className="mt-1 text-sm">
+            <span className={cn("font-mono", (hero.change ?? 0) < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>
+              {dayChange(hero.mark, hero.prev, hero.unit)?.text ?? "—"}
+            </span>
+            <span className="ml-2 text-white/40">Past 24 hours</span>
+          </p>
+          <div className="mt-3 overflow-hidden rounded-2xl bg-black/40">
+            <DayChart
+              points={day?.id === hero.id ? day.points : []}
+              highText={day?.id === hero.id && day.high > 0 ? heroPrice(day.high, hero.unit) : "—"}
+              lowText={day?.id === hero.id && day.low > 0 ? heroPrice(day.low, hero.unit) : "—"}
+              empty={day?.id === hero.id ? "No day of trades on this book." : "Pulling the day."}
+            />
+          </div>
+          <p className="mt-3 text-sm leading-snug text-white/60">{hero.unitLine}</p>
+          {hero.unit === "share" && value && hero.id !== value.id ? (
+            <p className="mt-1 text-xs text-white/45">
+              The valuation book is {markText(value.mark, "valuation")} · {impliedValue(value.mark)}. It is not this price.
+            </p>
+          ) : null}
+          {hero.volume === 0 ? <p className="mt-1 text-sm text-[#ffb020]">No trades in the last day. A market order may not fill.</p> : null}
+          <button
+            type="button"
+            onClick={() => {
+              setPick(hero.id);
+              setOpen(true);
+              setLev((cur) => Math.min(cur, hero.maxLeverage));
+            }}
+            className="mt-3 min-h-11 w-full rounded-full bg-[#c6f56a] text-sm font-semibold text-black active:scale-[0.98]"
+          >
+            Long or short · {hero.maxLeverage}×
+          </button>
+        </div>
+      ) : null}
       <div className="flex gap-2 overflow-x-auto">
         {dexes.map((id) => (
           <button key={id} type="button" onClick={() => setDex(id)} className={cn("min-h-9 shrink-0 rounded-full px-3 text-xs font-semibold active:scale-95", dex === id ? "bg-white text-black" : "bg-[#1c1c1e] text-white/70")}>
@@ -240,11 +368,15 @@ export function HlTicket() {
               className="flex w-full items-center justify-between gap-3 py-3 text-left active:scale-[0.98]"
             >
               <span>
-                <span className="block text-sm font-semibold">{row.label}</span>
-                <span className="block text-[11px] capitalize text-white/40">{row.kind}{row.dex ? ` · ${row.dex}` : ""} · {row.maxLeverage}×</span>
+                <span className="block text-sm font-semibold">{row.company ? `${row.company} · ${row.label}` : row.label}</span>
+                <span className="block text-[11px] text-white/40">
+                  {row.unit === "valuation" ? "Valuation" : row.unit === "share" ? "Share price" : row.kind}
+                  {row.dex ? ` · ${row.dex}` : ""} · {row.maxLeverage}×
+                  {row.unit === "valuation" ? ` · ${impliedValue(row.mark)}` : ""}
+                </span>
               </span>
               <span className="text-right">
-                <span className="block font-mono text-sm">{money(row.mark)}</span>
+                <span className="block font-mono text-sm">{markText(row.mark, row.unit)}</span>
                 <span className={cn("font-mono text-xs", (row.change ?? 0) < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>
                   {row.change == null ? "—" : `${row.change >= 0 ? "+" : ""}${row.change.toFixed(2)}%`}
                 </span>
@@ -276,23 +408,30 @@ export function HlTicket() {
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/20" />
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm capitalize text-white/50">{market.kind}{market.dex ? ` · ${market.dex}` : " · Hyperliquid"}</p>
+                <p className="text-sm text-white/50">{market.company || market.kind}{market.dex ? ` · ${market.dex}` : " · Hyperliquid"}</p>
                 <h2 className="text-3xl font-semibold">{market.label}</h2>
-                <p className="mt-1 font-mono text-3xl tabular-nums">{money(market.mark)}</p>
+                <p className="mt-1 font-mono text-3xl tabular-nums">{markText(market.mark, market.unit)}</p>
+                {market.unit === "valuation" ? <p className="font-mono text-sm text-white/70">{impliedValue(market.mark)}</p> : null}
                 <p className={cn("font-mono text-sm", (market.change ?? 0) < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>
                   {market.change == null ? "no day" : `${market.change >= 0 ? "+" : ""}${market.change.toFixed(2)}%`}
                   {market.funding == null ? "" : ` · funding ${(market.funding * 100).toFixed(4)}%`}
                 </p>
+                {market.unitLine ? <p className="mt-2 text-sm leading-snug text-white/60">{market.unitLine}</p> : null}
+                {market.volume === 0 ? <p className="mt-1 text-sm text-[#ffb020]">No trades in the last day. A market order may not fill.</p> : null}
               </div>
               <button type="button" onClick={() => setOpen(false)} className="min-h-10 rounded-full bg-[#2a2a2e] px-4 text-sm font-semibold">Close</button>
             </div>
-            <div className="mt-3">
-              <MarkChart points={trail[market.id] ?? []} label={`${market.label} marks received on this screen`} />
+            <div className="mt-3 overflow-hidden rounded-2xl bg-black/30">
+              {range && range.points.length > 1 ? (
+                <DayChart points={range.points} highText={markText(range.high, market.unit)} lowText={markText(range.low, market.unit)} />
+              ) : (
+                <MarkChart points={trail[market.id] ?? []} label={`${market.label} marks received on this screen`} />
+              )}
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-[18px] bg-[#1c1c1e] px-2 py-3"><p className="text-[11px] text-white/45">24h high</p><p className="font-mono text-sm">{range ? markText(range.high, market.unit) : "—"}</p></div>
+              <div className="rounded-[18px] bg-[#1c1c1e] px-2 py-3"><p className="text-[11px] text-white/45">24h low</p><p className="font-mono text-sm">{range ? markText(range.low, market.unit) : "—"}</p></div>
               <div className="rounded-[18px] bg-[#1c1c1e] px-2 py-3"><p className="text-[11px] text-white/45">Max</p><p className="font-mono text-lg">{market.maxLeverage}×</p></div>
-              <div className="rounded-[18px] bg-[#1c1c1e] px-2 py-3"><p className="text-[11px] text-white/45">Open interest</p><p className="font-mono text-sm">{market.oi == null ? "—" : market.oi.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p></div>
-              <div className="rounded-[18px] bg-[#1c1c1e] px-2 py-3"><p className="text-[11px] text-white/45">24h volume</p><p className="font-mono text-sm">{market.volume == null ? "—" : `$${(market.volume / 1e6).toFixed(1)}m`}</p></div>
             </div>
             <label className="mt-4 block text-xs text-white/45">
               Margin, USDC

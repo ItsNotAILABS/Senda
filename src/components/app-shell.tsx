@@ -1,6 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  IdCard,
+  Activity,
+  Aperture,
+  Banknote,
+  Boxes,
   ArrowLeftRight,
   BookOpen,
   Bot,
@@ -8,16 +13,16 @@ import {
   FileText,
   Gamepad2,
   Hexagon,
-  KeyRound,
   LayoutGrid,
   LineChart,
+  ListOrdered,
   Lock,
   Menu,
   PanelLeft,
   Radar,
+  ScrollText,
   Shield,
   Sparkles,
-  Store,
   SquarePen,
   Tv,
   UserRound,
@@ -26,15 +31,20 @@ import {
   Bell,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FillPaint } from "@/components/fill-paint";
+import { TransactionRecovery } from "@/components/transaction-recovery";
 import { Onboard } from "@/components/onboard";
-import { FillReceipt } from "@/components/fill-receipt";
-import { WalletPicker } from "@/components/wallet-picker";
+import { startFaces } from "@/components/holding-cards";
+import { CoinTicker } from "@/components/coin-ticker";
 import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { readChain, connectPhantom } from "@/lib/phantom";
+import { readChain, connectPhantom, phantomProvider, waitForInjected, pickOwner, liveSolAddress, invalidateChain, rememberPhantom, rememberedPhantom } from "@/lib/phantom";
+import { humanWalletError, injectedWallet, insideWalletApp, isPhoneBrowser, phantomBrowseHref, takeBuyAgain } from "@/lib/mobile-wallet";
 import { connectWallet } from "@/lib/wallets";
-import { jupTape, type TapeRow } from "@/lib/world-book";
-import { sealOpen } from "@/lib/seal";
+import { loadClearing } from "@/lib/clearing";
+import { buildPicture, quoteHeld, type Picture } from "@/lib/money-picture";
+import { loadPulse } from "@/lib/universe";
+import { listTrades, onTrades, type TradeFill } from "@/lib/trade-log";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +53,7 @@ const PRIMARY = [
   { to: "/invest", label: "Trade", icon: Hexagon },
   { to: "/wire", label: "Markets", icon: Radar },
   { to: "/wallet", label: "Swap", icon: ArrowLeftRight },
-  { to: "/social", label: "Predict", icon: Gamepad2 },
+  { to: "/social", label: "Play", icon: Gamepad2 },
   { to: "/cards", label: "Pay", icon: CreditCard },
   { to: "/work", label: "Work", icon: SquarePen },
   { to: "/agents", label: "AI Agent", icon: Bot },
@@ -52,33 +62,88 @@ const PRIMARY = [
 ] as const;
 
 const BOOKS = [
-  { to: "/pre", label: "PreStocks" },
-  { to: "/xstocks", label: "xStocks" },
-  { to: "/radar", label: "Spot" },
+  { to: "/invest" as const, label: "Crypto", search: { desk: "tape" } },
+  { to: "/invest" as const, label: "Long / short", search: { desk: "hl" } },
+  { to: "/invest" as const, label: "Terminal", search: { desk: "spot" } },
+  { to: "/invest" as const, label: "Stocks", search: { desk: "xstock" } },
+  { to: "/invest" as const, label: "Pre-IPO", search: { desk: "pre" } },
+  { to: "/invest" as const, label: "Predict", search: { desk: "kalshi" } },
+  { to: "/invest" as const, label: "Polymarket", search: { desk: "poly" } },
+  { to: "/invest" as const, label: "Perps", search: { desk: "perps" } },
+  { to: "/invest" as const, label: "FX & metals", search: { desk: "world" } },
+  { to: "/invest" as const, label: "Commodities", search: { desk: "comms" } },
+  { to: "/invest" as const, label: "Options", search: { desk: "options" } },
+  { to: "/invest" as const, label: "Private", search: { desk: "private" } },
+  { to: "/invest" as const, label: "Slabs", search: { desk: "slabs" } },
+  { to: "/invest" as const, label: "Baskets", search: { desk: "baskets" } },
+  { to: "/invest" as const, label: "Futures", search: { desk: "futures" } },
+  { to: "/invest" as const, label: "Loans", search: { desk: "loans" } },
+  { to: "/invest" as const, label: "Bridge", search: { desk: "bridge" } },
+  { to: "/pre" as const, label: "PreStocks" },
+  { to: "/xstocks" as const, label: "xStocks" },
+  { to: "/radar" as const, label: "Spot" },
 ] as const;
 
 const MORE = [
   { to: "/cover", label: "Cover", icon: Shield },
+  { to: "/orders", label: "Orders", icon: ListOrdered },
   { to: "/launch", label: "Launch", icon: Zap },
-  { to: "/contracts", label: "Contracts", icon: FileText },
-  { to: "/market", label: "Protect", icon: Shield },
-  { to: "/solana", label: "Solana", icon: Hexagon },
-  { to: "/make", label: "Make", icon: Store },
-  { to: "/accounts", label: "Accounts", icon: UserRound },
+  { to: "/contracts", label: "Contracts", icon: ScrollText },
+  { to: "/market", label: "Crypto TV", icon: Tv },
   { to: "/books", label: "Books", icon: BookOpen },
   { to: "/docs", label: "Docs", icon: FileText },
+  { to: "/passport", label: "Passport", icon: IdCard },
   { to: "/more", label: "Account", icon: UserRound },
 ] as const;
 
-const WALLETS = [
-  { to: "/wallets", label: "Wallets", icon: Wallet },
-  { to: "/wallets/power", label: "Robinhood", icon: Zap },
-  { to: "/revolut", label: "Revolut", icon: CreditCard },
-  { to: "/phantom", label: "Phantom", icon: Zap },
-  { to: "/metamask", label: "MetaMask", icon: Hexagon },
+const ACCOUNTS = [
+  { to: "/revolut", label: "Revolut", icon: Banknote },
+  { to: "/phantom", label: "Phantom", icon: Aperture },
+  { to: "/metamask", label: "MetaMask", icon: Boxes },
+  { to: "/backpack", label: "Backpack", icon: Wallet },
 ] as const;
 
-type TabTo = (typeof PRIMARY)[number]["to"] | (typeof BOOKS)[number]["to"] | (typeof MORE)[number]["to"] | (typeof WALLETS)[number]["to"];
+const SEARCH: { label: string; where: string; keys: string; to: "/" | "/invest" | "/wire" | "/wallet" | "/wallets/activity" | "/payments" | "/payments/shop" | "/payments/mexico" | "/payments/house" | "/payments/rails" | "/solana/edges" | "/solana/things" | "/solana/launch" | "/agents" | "/agents/meter" | "/pre" | "/vault" | "/social" | "/work" | "/cards" | "/global" | "/passport" | "/equities/liquidity" | "/equities/bullish"; search?: Record<string, string | number> }[] = [
+  { label: "Screener", where: "Trade", keys: "screener smart route cheaper", to: "/invest", search: { desk: "smart" } },
+  { label: "Shares", where: "Trade", keys: "backpack securities aapl nvda", to: "/invest", search: { desk: "term" } },
+  { label: "Quotes", where: "Trade", keys: "spot quotes", to: "/invest", search: { desk: "spot" } },
+  { label: "Global", where: "Account", keys: "global bank pix spei esim wise", to: "/global" },
+  { label: "FX and metals", where: "Trade", keys: "fx forex gold silver metals", to: "/invest", search: { desk: "world" } },
+  { label: "Commodities", where: "Trade", keys: "oil commodities energy", to: "/invest", search: { desk: "comms" } },
+  { label: "Options", where: "Trade", keys: "calls puts options", to: "/invest", search: { desk: "options" } },
+  { label: "Stack", where: "Trade", keys: "stack covered call kamino jupiter option premium", to: "/invest", search: { desk: "stack" } },
+  { label: "Conviction", where: "Trade", keys: "conviction research early thesis reward vow", to: "/invest", search: { desk: "vow" } },
+  { label: "Perps", where: "Trade", keys: "perpetual perps jupiter sol eth btc", to: "/invest", search: { desk: "perps" } },
+  { label: "Long / short", where: "Trade", keys: "long short hyperliquid perps gold fx stocks 24/7 bitso", to: "/invest", search: { desk: "hl" } },
+  { label: "Private perps", where: "Trade", keys: "anthropic ant anth openai spacex shein unitree private pre-ipo valuation liquid", to: "/invest", search: { desk: "hl", book: "private" } },
+  { label: "PreStocks", where: "Trade", keys: "pre ipo prestocks", to: "/invest", search: { desk: "pre" } },
+  { label: "xStocks", where: "Trade", keys: "stocks etf spy", to: "/invest", search: { desk: "xstock" } },
+  { label: "Futures", where: "Trade", keys: "futures fdv", to: "/invest", search: { desk: "futures" } },
+  { label: "Loans", where: "Trade", keys: "borrow kamino aave loans", to: "/invest", search: { desk: "loans" } },
+  { label: "Bridge", where: "Trade", keys: "bridge swap chains monad optimism avalanche bnb", to: "/invest", search: { desk: "bridge" } },
+  { label: "Hedge", where: "Trade", keys: "hedge short", to: "/invest", search: { desk: "hedge" } },
+  { label: "Cover", where: "Trade", keys: "cover insure", to: "/invest", search: { desk: "cover" } },
+  { label: "Crypto", where: "Trade", keys: "crypto coins bitcoin sol eth jupiter", to: "/invest", search: { desk: "tape" } },
+  { label: "Markets", where: "Markets", keys: "markets wire news", to: "/wire" },
+  { label: "Swap", where: "Wallet", keys: "swap convert usdc", to: "/wallet" },
+  { label: "Send", where: "Pay", keys: "send pay link instant qr ramp lifi convert usdc balance", to: "/payments" },
+  { label: "Shop", where: "Pay", keys: "shop merchant bill qr tip counter usdc", to: "/payments/shop" },
+  { label: "House rails", where: "Pay", keys: "spei mexico guatemala el salvador ach pix house rails rosis sendapay", to: "/payments/house" },
+  { label: "Solana edges", where: "Solana", keys: "solana edges clock nonce memo token-2022 transfer hook durable fee market ed25519 notary pyusd", to: "/solana/edges" },
+  { label: "Things", where: "Solana", keys: "things seal lineage pass handoff tokenization proof custody memory lab crew device memo not a trade", to: "/solana/things" },
+  { label: "Launch", where: "Solana", keys: "launch product software edition seat entitlement split usdc tokenize catalog", to: "/solana/launch" },
+  { label: "Meter", where: "Agents", keys: "x402 exact meter license liquidity parallax devnet event book agent pay", to: "/agents/meter" },
+  { label: "Activity", where: "Wallet", keys: "activity receipts pending sends recipients recovery balances", to: "/wallets/activity" },
+  { label: "Cash rails", where: "Pay", keys: "western union usdpt moneygram cash rails breakpoint zelle solana", to: "/payments/rails" },
+  { label: "Predict", where: "Trade", keys: "kalshi predict", to: "/invest", search: { desk: "kalshi" } },
+  { label: "Polymarket", where: "Trade", keys: "polymarket predict poly", to: "/invest", search: { desk: "poly" } },
+  { label: "Passport", where: "Account", keys: "passport identity global jupiter", to: "/passport" },
+  { label: "Liquidity", where: "Trade", keys: "liquidity issuer jupiter ultra", to: "/equities/liquidity" },
+  { label: "Bullish", where: "Trade", keys: "bullish blsh lend issuer", to: "/equities/bullish" },
+  { label: "Slabs", where: "Trade", keys: "cards slabs packs collector crypt pokemon psa", to: "/invest", search: { desk: "slabs" } },
+  { label: "Baskets", where: "Trade", keys: "basket baskets recipe stake yield universes", to: "/invest", search: { desk: "baskets" } },
+  { label: "Portfolio", where: "Portfolio", keys: "portfolio vault balances", to: "/vault" },
+];
 
 function tabOn(pathname: string, to: string) {
   if (to === "/") return pathname === "/";
@@ -86,36 +151,107 @@ function tabOn(pathname: string, to: string) {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [booksOpen, setBooksOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
+  const onBook = pathname === "/invest" || BOOKS.some((b) => tabOn(pathname, b.to));
+  useEffect(() => {
+    if (onBook) setBooksOpen(true);
+  }, [onBook]);
   const navigate = useNavigate();
   const { user, isPending } = useCurrentUserState();
   const { w, linkChain } = useWallet();
-  const owner = w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+  const [liveOwner, setLiveOwner] = useState("");
+  useEffect(() => {
+    const pull = () => setLiveOwner(liveSolAddress());
+    pull();
+    const id = window.setInterval(pull, 2000);
+    return () => window.clearInterval(id);
+  }, []);
+  const owner = liveOwner || pickOwner(w.links);
   const [q, setQ] = useState("");
-  const [connectOpen, setConnectOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [sealed, setSealed] = useState(true);
+  const [notices, setNotices] = useState(false);
+  const [fills, setFills] = useState<TradeFill[]>([]);
   const [rail, setRail] = useState(true);
-  const [booksOpen, setBooksOpen] = useState(false);
-  const link = w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
+  const [phone, setPhone] = useState(false);
+  const [signer, setSigner] = useState(false);
+  const phantomLink = w.links.find((l) => l.kind === "phantom");
+  const shownPhantom = phantomLink?.address || liveOwner || rememberedPhantom();
+  const maskLink = w.links.find((l) => l.kind === "evm");
   const home = pathname === "/";
-  const booksOn = pathname === "/invest" || BOOKS.some((b) => tabOn(pathname, b.to));
 
   useEffect(() => {
-    if (booksOn) setBooksOpen(true);
-  }, [booksOn]);
-
+    startFaces();
+  }, []);
   useEffect(() => {
-    const sync = () => setSealed(!sealOpen());
-    sync();
-    window.addEventListener("senda-seal", sync);
-    return () => window.removeEventListener("senda-seal", sync);
+    const pull = () => setFills(listTrades());
+    pull();
+    return onTrades(pull);
   }, []);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("rail.open");
-    if (saved === "0") setRail(false);
-    else if (saved == null && window.innerWidth < 1180) setRail(false);
+    setPhone(isPhoneBrowser());
+    let live = true;
+    const look = () => {
+      if (!live) return;
+      const inside = insideWalletApp();
+      setSigner(inside || injectedWallet());
+    };
+    look();
+    const hint = insideWalletApp() ? takeBuyAgain() : null;
+    if (hint) toast(hint);
+    const id = window.setInterval(look, 400);
+    const stop = window.setTimeout(() => window.clearInterval(id), 12000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+  }, []);
+
+  useEffect(() => {
+    let live = true;
+    let busy = false;
+    let told = false;
+    const run = async () => {
+      if (busy) return;
+      const injected = phantomProvider() ?? (await waitForInjected(1200));
+      if (!live || !injected?.connect || busy) return;
+      busy = true;
+      setSigner(true);
+      try {
+        const addr = await connectPhantom();
+        if (!addr || !live) return;
+        rememberPhantom(addr);
+        const linked = linkChain(addr, "Phantom", "phantom");
+        if (!linked.ok && linked.error !== "Already linked.") return;
+        invalidateChain(addr);
+        window.clearInterval(id);
+      } catch (err) {
+        busy = false;
+        if (live && !told) {
+          told = true;
+          toast.error(humanWalletError(err instanceof Error ? err.message : "Phantom did not sign."));
+        }
+      }
+    };
+    void run();
+    const id = window.setInterval(() => void run(), 1500);
+    const stop = window.setTimeout(() => window.clearInterval(id), 20000);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      window.clearTimeout(stop);
+    };
+    // Once per open. linkChain changes identity every render, and a signature must not follow it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (window.localStorage.getItem("rail.open") === "0") setRail(false);
   }, []);
 
   function toggleRail() {
@@ -128,7 +264,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-dvh bg-bg text-fg">
-      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-[#07070f] transition-[width] duration-200 lg:flex", rail ? "w-52" : "w-[68px]")}>
+      <aside className={cn("sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-border bg-[#050508] transition-[width] duration-200 lg:flex", rail ? "w-56" : "w-[68px]")}>
         <div className={cn("flex items-center pt-4 pb-3", rail ? "gap-2 px-3" : "justify-center px-2")}>
           <Link to="/" className="grid size-8 shrink-0 place-items-center rounded-xl bg-accent text-accent-fg" title="Senda">
             <Zap className="size-4" />
@@ -155,12 +291,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <PanelLeft className="size-4" />
           </button>
         ) : null}
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2">
+        <nav className={cn("flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto", rail ? "px-2" : "px-2")}>
           {PRIMARY.map((t) => (
             <div key={t.to}>
               <div className="flex items-center">
                 <div className="min-w-0 flex-1">
-                  <NavLink to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to) || (t.to === "/invest" && booksOn)} compact={!rail} />
+                  <NavLink to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to) || (t.to === "/invest" && onBook)} compact={!rail} />
                 </div>
                 {t.to === "/invest" && rail ? (
                   <button type="button" aria-label="Books under Trade" onClick={() => setBooksOpen((v) => !v)} className="mr-1 rounded-lg px-2 py-1 text-xs text-subtle hover:bg-white/5">
@@ -185,16 +321,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             ))}
           </div>
           <div className="mt-3 border-t border-white/8 pt-2">
-            {WALLETS.map((t) => (
+            {ACCOUNTS.map((t) => (
               <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} quiet compact={!rail} />
             ))}
           </div>
         </nav>
         <div className={cn("border-t border-border py-3", rail ? "px-2" : "px-2")}>
-          <Link to="/vault" title="Vault" className={cn("mb-2 min-h-9 rounded-full bg-accent font-semibold text-accent-fg", rail ? "flex w-full items-center justify-center px-3 text-[12px]" : "mx-auto grid size-9 place-items-center")}>
+          <Link
+            to="/safe"
+            title="Vault"
+            className={cn("mb-2 min-h-9 rounded-full bg-accent font-semibold text-accent-fg", rail ? "flex w-full items-center justify-center px-3 text-[12px]" : "mx-auto grid size-9 place-items-center")}
+          >
             {rail ? "Vault" : <Lock className="size-3.5" />}
           </Link>
-          {rail ? <ChainChip owner={owner} /> : null}
+          {rail ? <RailMoney owner={owner} cash={w.balances.USD || 0} /> : null}
           <div className={cn("mt-2", rail ? "px-1" : "flex justify-center")}>
             {isPending ? (
               <div className="size-6 animate-pulse rounded-full bg-elevated" />
@@ -217,314 +357,192 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
-      <div className="senda-stage min-w-0 flex-1 pb-28 lg:pb-0">
-        <header className={cn("sticky top-0 z-20 bg-bg/90 px-4 py-3 backdrop-blur", home && "pointer-events-none")}>
-          <LiveTape />
-          <MoneyLine owner={owner} />
-          <div className={cn("flex items-center gap-2", home && "justify-end")}>
-            {home ? null : (
+      <div className="senda-stage min-w-0 flex-1 pb-24 lg:pb-0">
+        <div className="sticky top-0 z-30">
+        <CoinTicker />
+        <ChainChip owner={owner} cash={w.balances.USD || 0} />
+        <header className={cn("bg-[#050508]/90 px-4 py-3 backdrop-blur", home && "pointer-events-none")}>
+          <div className="flex items-center gap-3">
             <form
-              className="hidden min-w-0 w-full flex-1 lg:block"
+              className={cn("relative min-w-0 w-full flex-1", home && "pointer-events-auto")}
               onSubmit={(e) => {
                 e.preventDefault();
                 const key = q.trim().toLowerCase();
                 setQ("");
+                if (!key) return;
                 if (key === "send") void navigate({ to: "/payments" });
-                else if (key === "add") void navigate({ to: "/payments/add" });
-                else if (key === "card" || key === "cards" || key === "shop") void navigate({ to: "/cards" });
-                else if (key === "wallet" || key === "wallets") void navigate({ to: "/wallets" });
-                else if (key === "exchange" || key === "convert") void navigate({ to: "/wallet" });
-                else if (key === "vault" || key === "portfolio") void navigate({ to: "/vault" });
-                else if (key === "cover") void navigate({ to: "/cover" });
+                else if (key === "add") void navigate({ to: "/payments", search: { act: "add" } });
+                else if (key === "card" || key === "cards" || key === "shop") void navigate({ to: "/cards", search: { spend: 0 } });
+                else if (key === "wallets") void navigate({ to: "/wallet", search: { lane: "wallets" } });
+                else if (key === "stake") void navigate({ to: "/wallet", search: { lane: "stake" } });
+                else if (key === "exchange" || key === "convert" || key === "wallet" || key === "swap") void navigate({ to: "/wallet" });
+                else if (key === "vault") void navigate({ to: "/safe" });
+                else if (key === "portfolio") void navigate({ to: "/vault" });
+                else if (key === "revolut") void navigate({ to: "/revolut" });
+                else if (key === "phantom") void navigate({ to: "/phantom" });
+                else if (key === "metamask" || key === "mask") void navigate({ to: "/metamask" });
+                else if (key === "contracts" || key === "contract") void navigate({ to: "/contracts" });
                 else if (key === "play") void navigate({ to: "/social" });
                 else if (key === "agent" || key === "agents") void navigate({ to: "/agents" });
-                else if (key === "work") void navigate({ to: "/work" });
-                else if (key === "trade") void navigate({ to: "/invest" });
+                else if (key === "work" || key === "make") void navigate({ to: "/work" });
+                else if (key === "trade" || key === "solana") void navigate({ to: "/invest", search: key === "solana" ? { lane: "solana" } : {} });
+                else if (key === "markets" || key === "wire") void navigate({ to: "/wire" });
+                else if (key === "tv" || key === "market") void navigate({ to: "/market" });
+                else if (key === "spot" || key === "tape") void navigate({ to: "/radar" });
+                else if (key === "radar") void navigate({ to: "/wire" });
+                else if (key === "books") void navigate({ to: "/books" });
+                else if (key === "account" || key === "more") void navigate({ to: "/more" });
                 else if (key === "docs" || key === "doc") void navigate({ to: "/docs" });
                 else if (key === "home") void navigate({ to: "/" });
+                else if (key === "pre" || key === "prestocks") void navigate({ to: "/pre" });
                 else void navigate({ to: "/pre", search: { q: key } });
               }}
             >
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search companies, tickers, or anything…"
-                className="min-h-9 w-full rounded-full border border-white/10 bg-black/40 px-4 text-[13px] outline-none"
+                placeholder="Search markets, names, products"
+                className="min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none"
               />
+              {q.trim() ? (
+                <ul className="absolute inset-x-0 top-12 z-50 max-h-72 overflow-y-auto rounded-2xl bg-[#1c1c1e] py-1 shadow-2xl">
+                  {SEARCH.filter((row) => `${row.label} ${row.keys}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8).map((row) => (
+                    <li key={row.label}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQ("");
+                          void navigate({ to: row.to, search: row.search as never });
+                        }}
+                        className="flex w-full items-baseline justify-between gap-3 px-4 py-2 text-left"
+                      >
+                        <span className="text-sm font-semibold">{row.label}</span>
+                        <span className="text-[11px] text-white/40">{row.where}</span>
+                      </button>
+                    </li>
+                  ))}
+                  <li>
+                    <button type="submit" className="w-full px-4 py-2 text-left text-sm text-white/70">
+                      Names matching “{q.trim()}”
+                    </button>
+                  </li>
+                </ul>
+              ) : null}
             </form>
-            )}
-            {home ? null : (
-            <span className="grid size-10 place-items-center rounded-full border border-white/10 text-muted">
+            <button
+              type="button"
+              aria-label="Signed trades"
+              onClick={() => setNotices(true)}
+              className={cn("pointer-events-auto relative grid size-10 place-items-center rounded-full border border-white/10 text-muted", home && "bg-[#050508]")}
+            >
               <Bell className="size-4" />
-            </span>
-            )}
-            <div className={cn("relative", home && "pointer-events-auto")}>
-              {link ? (
-                <Link to="/wallet" className="inline-flex min-h-10 items-center rounded-full bg-[#d7e36a] px-4 text-sm font-semibold text-black">
-                  Phantom {link.address.slice(0, 4)}…
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
+              {fills.length ? <span className="absolute top-2 right-2 size-1.5 rounded-full bg-[#d7e36a]" /> : null}
+            </button>
+            <div className={cn("relative flex items-center gap-2", home && "pointer-events-auto")}>
+              <a
+                href={phantomBrowseHref(pathname)}
+                onClick={(e) => {
+                  if (injectedWallet() || insideWalletApp() || !isPhoneBrowser()) {
+                    e.preventDefault();
                     void connectPhantom()
                       .then((addr) => {
+                        rememberPhantom(addr);
+                        invalidateChain(addr);
                         const linked = linkChain(addr, "Phantom", "phantom");
                         if (!linked.ok && linked.error !== "Already linked.") toast.error(linked.error || "Phantom did not stay.");
                       })
-                      .catch((e) => toast.error(e instanceof Error ? e.message : "Phantom did not open."));
-                  }}
-                  className="inline-flex min-h-10 items-center rounded-full bg-[#d7e36a] px-4 text-sm font-semibold text-black"
-                >
-                  Connect Phantom
-                </button>
-              )}
-              {connectOpen && !link ? (
-                <div className="absolute right-0 z-30 mt-2 w-80 rounded-2xl border border-border bg-surface p-3 shadow-border">
-                  <WalletPicker />
-                </div>
-              ) : null}
+                      .catch((err) => toast.error(humanWalletError(err instanceof Error ? err.message : "Phantom did not connect.")));
+                  }
+                }}
+                className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+              >
+                {shownPhantom ? `Phantom ${shownPhantom.slice(0, 4)}…` : "Connect Phantom"}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  void connectWallet("metamask")
+                    .then((got) => {
+                      const linked = linkChain(got.address, "MetaMask", "evm");
+                      if (!linked.ok && linked.error !== "Already linked.") toast.error(linked.error || "MetaMask did not stay.");
+                    })
+                    .catch((e) => toast.error(e instanceof Error ? e.message : "MetaMask did not connect."));
+                }}
+                className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold"
+              >
+                {maskLink ? `MetaMask ${maskLink.address.slice(0, 6)}…` : "Connect MetaMask"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                void connectWallet("metamask")
-                  .then((got) => {
-                    const linked = linkChain(got.address, got.label, "evm");
-                    if (!linked.ok && linked.error !== "Already linked.") toast.error(linked.error || "MetaMask did not stay.");
-                  })
-                  .catch((e) => toast.error(e instanceof Error ? e.message : "MetaMask did not open."));
-              }}
-              className={cn("inline-flex min-h-10 items-center rounded-full border border-white/15 px-3 text-sm", home && "pointer-events-auto")}
-            >
-              Connect MetaMask
-            </button>
           </div>
         </header>
-        <div key={pathname} className="senda-rise">
-          {booksOn ? (
-            <div className="flex gap-1 overflow-x-auto px-3 pt-3 lg:px-4">
-              <Link to="/invest" className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-semibold", pathname === "/invest" ? "bg-white text-black" : "bg-white/10 text-white/70")}>
-                Trade
-              </Link>
-              {BOOKS.map((b) => (
-                <Link key={b.to} to={b.to} className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-semibold", tabOn(pathname, b.to) ? "bg-white text-black" : "bg-white/10 text-white/70")}>
-                  {b.label}
-                </Link>
-              ))}
-            </div>
-          ) : null}
+        </div>
+        <div key={pathname} className="senda-rise pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          {onBook ? <BookStrip pathname={pathname} /> : null}
           {children}
         </div>
         <Onboard />
-        <FillReceipt />
       </div>
-      <nav className="fixed inset-x-4 z-40 grid grid-cols-5 rounded-[32px] bg-[#2c2c2e]/95 px-1 py-1 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur lg:hidden bottom-[max(0.55rem,env(safe-area-inset-bottom))]">
-        {(
-          [
-            { to: "/", label: "Home", icon: LayoutGrid },
-            { to: "/invest", label: "Trade", icon: Hexagon },
-            { to: "/wire", label: "Markets", icon: Radar },
-            { to: "/vault", label: "Portfolio", icon: Lock },
-          ] as const
-        ).map((t) => {
-          const Icon = t.icon;
-          const on = tabOn(pathname, t.to);
-          return (
-            <Link
-              key={t.to}
-              to={t.to}
-              onClick={() => setMoreOpen(false)}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10px]",
-                on ? "bg-black/50 font-medium text-white" : "text-white/55",
-              )}
-            >
-              <Icon className={cn("size-4", on && "text-accent")} />
-              {t.label}
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          onClick={() => setMoreOpen((v) => !v)}
-          className={cn(
-            "flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10px]",
-            moreOpen ? "bg-black/50 font-medium text-white" : "text-white/55",
-          )}
-        >
-          <Menu className={cn("size-4", (moreOpen || tabOn(pathname, "/more")) && "text-accent")} strokeWidth={1.75} />
-          More
-        </button>
-      </nav>
       {moreOpen ? (
         <>
-          <button
-            type="button"
-            aria-label="Close"
-            className="fixed inset-x-0 top-0 z-40 bg-black/50 lg:hidden bottom-[calc(5.5rem+env(safe-area-inset-bottom))]"
-            onClick={() => setMoreOpen(false)}
-          />
+          <button type="button" aria-label="Close" className="fixed inset-x-0 top-0 z-40 bg-black/50 lg:hidden bottom-[calc(5.5rem+env(safe-area-inset-bottom))]" onClick={() => setMoreOpen(false)} />
           <div className="fixed inset-x-3 z-50 max-h-[70vh] overflow-y-auto rounded-[28px] bg-[#1c1c1e] p-2 lg:hidden bottom-[calc(5.5rem+env(safe-area-inset-bottom))]">
-            <PhoneMore onDone={() => setMoreOpen(false)} />
+            <p className="px-3 pt-2 pb-1 text-[10px] tracking-[0.14em] text-subtle uppercase">Move</p>
+            {PRIMARY.filter((t) => !["/", "/invest", "/wire", "/vault"].includes(t.to)).map((t) => (
+              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} close={() => setMoreOpen(false)} />
+            ))}
+            <p className="px-3 pt-3 pb-1 text-[10px] tracking-[0.14em] text-subtle uppercase">Markets</p>
+            {BOOKS.map((t) => (
+              <NavLink key={t.label} to={t.to} search={"search" in t ? t.search : undefined} label={t.label} icon={LineChart} on={tabOn(pathname, t.to)} close={() => setMoreOpen(false)} />
+            ))}
+            <p className="px-3 pt-3 pb-1 text-[10px] tracking-[0.14em] text-subtle uppercase">More</p>
+            {MORE.map((t) => (
+              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} close={() => setMoreOpen(false)} />
+            ))}
+            <p className="px-3 pt-3 pb-1 text-[10px] tracking-[0.14em] text-subtle uppercase">Wallets</p>
+            {ACCOUNTS.map((t) => (
+              <NavLink key={t.to} to={t.to} label={t.label} icon={t.icon} on={tabOn(pathname, t.to)} close={() => setMoreOpen(false)} />
+            ))}
           </div>
         </>
       ) : null}
+      <nav className="fixed inset-x-4 z-40 grid grid-cols-5 rounded-[32px] bg-[#2c2c2e]/95 px-1 py-1 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur lg:hidden bottom-[max(0.55rem,env(safe-area-inset-bottom))]">
+        <NavLink to="/" label="Home" icon={LayoutGrid} on={tabOn(pathname, "/")} dock />
+        <NavLink to="/invest" label="Trade" icon={LineChart} on={tabOn(pathname, "/invest")} dock />
+        <NavLink to="/wire" label="Markets" icon={Radar} on={tabOn(pathname, "/wire")} dock />
+        <NavLink to="/vault" label="Portfolio" icon={Wallet} on={tabOn(pathname, "/vault")} dock />
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          className={cn("flex min-h-14 w-full flex-col items-center justify-center gap-0.5 rounded-full px-1 py-1 text-[10px]", moreOpen || tabOn(pathname, "/more") ? "bg-black/50 font-medium text-white" : "text-white/55")}
+        >
+          <Menu className={cn("size-4", moreOpen || tabOn(pathname, "/more") ? "text-accent" : "")} strokeWidth={1.75} />
+          More
+        </button>
+      </nav>
+      <FillPaint />
+      {notices ? <TradeNotices owner={owner} fills={fills} onClose={() => setNotices(false)} /> : null}
     </div>
   );
 }
 
-function LiveTape() {
-  const [rows, setRows] = useState<TapeRow[]>([]);
-  useEffect(() => {
-    let live = true;
-    const pull = () => {
-      jupTape()
-        .then((list) => live && setRows(list))
-        .catch(() => undefined);
-    };
-    pull();
-    const id = window.setInterval(pull, 30_000);
-    return () => {
-      live = false;
-      window.clearInterval(id);
-    };
-  }, []);
-  const line = rows.filter((r) => r.price && r.price > 0).slice(0, 24);
+function BookStrip({ pathname }: { pathname: string }) {
+  const here = useRouterState({ select: (s) => s.location.search as { desk?: string } });
+  const tabs = [{ to: "/invest" as const, label: "All", search: undefined as { desk: string } | undefined }, ...BOOKS];
   return (
-    <div className="mb-2 flex items-center gap-3 overflow-hidden">
-      <span className="shrink-0 rounded-full bg-[#d7e36a] px-2.5 py-1 text-[11px] font-semibold text-black">LIVE</span>
-      <div className="flex min-w-0 gap-4 overflow-x-auto text-[11px] text-white/70">
-        {line.length === 0 ? <span>Pulling every coin…</span> : null}
-        {line.map((r) => {
-          const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
-          const px = r.price ?? 0;
-          const shown = px >= 1 ? px.toLocaleString("en-US", { maximumFractionDigits: 2 }) : px.toPrecision(3);
-          return (
-            <span key={r.id} className="shrink-0 font-mono">
-              {r.symbol} ${shown}{" "}
-              <span className={chg != null && chg < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]"}>
-                {chg == null ? "" : `${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%`}
-              </span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function MoneyLine({ owner }: { owner: string }) {
-  const [sol, setSol] = useState<number | null>(null);
-  const [usdc, setUsdc] = useState<number | null>(null);
-  useEffect(() => {
-    if (!owner) {
-      setSol(null);
-      setUsdc(null);
-      return;
-    }
-    let live = true;
-    const pull = () => {
-      readChain(owner)
-        .then((s) => {
-          if (!live) return;
-          setSol(s.sol);
-          setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0);
-        })
-        .catch(() => undefined);
-    };
-    pull();
-    const id = window.setInterval(pull, 20_000);
-    return () => {
-      live = false;
-      window.clearInterval(id);
-    };
-  }, [owner]);
-  const total = (usdc ?? 0);
-  return (
-    <div className="mb-2 flex items-baseline justify-between gap-3">
-      <p className="font-mono text-lg tabular-nums">{owner ? (usdc == null ? "…" : `$${total.toFixed(2)}`) : "$0.00"}</p>
-      <p className="truncate font-mono text-[11px] text-white/45">
-        {sol == null ? "Not connected" : `${sol.toFixed(4)} SOL`}
-        {usdc != null ? ` · USDC $${usdc.toFixed(2)}` : ""}
-      </p>
-    </div>
-  );
-}
-
-function PhoneMore({ onDone }: { onDone: () => void }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const groups: { name: string; rows: { to: "/wallet" | "/social" | "/cards" | "/work" | "/agents" | "/payments" | "/pre" | "/xstocks" | "/radar" | "/cover" | "/launch" | "/contracts" | "/market" | "/books" | "/docs" | "/more" | "/revolut" | "/phantom" | "/metamask" | "/wallets" | "/wallets/power" | "/solana" | "/make" | "/accounts"; label: string; icon: typeof Wallet }[] }[] = [
-    {
-      name: "Move",
-      rows: [
-        { to: "/payments", label: "Send", icon: Wallet },
-        { to: "/cards", label: "Pay", icon: CreditCard },
-        { to: "/work", label: "Work", icon: SquarePen },
-        { to: "/wallet", label: "Swap", icon: ArrowLeftRight },
-        { to: "/social", label: "Predict", icon: Gamepad2 },
-        { to: "/agents", label: "Agents", icon: Bot },
-      ],
-    },
-    {
-      name: "Trade",
-      rows: [
-        { to: "/pre", label: "PreStocks", icon: Sparkles },
-        { to: "/xstocks", label: "xStocks", icon: LineChart },
-        { to: "/radar", label: "Spot", icon: Hexagon },
-        { to: "/solana", label: "Solana", icon: Hexagon },
-        { to: "/make", label: "Make", icon: Store },
-      ],
-    },
-    {
-      name: "Hold",
-      rows: [
-        { to: "/cover", label: "Cover", icon: Shield },
-        { to: "/launch", label: "Launch", icon: Zap },
-        { to: "/contracts", label: "Contracts", icon: FileText },
-        { to: "/market", label: "Protect", icon: Shield },
-        { to: "/accounts", label: "Accounts", icon: UserRound },
-        { to: "/books", label: "Books", icon: BookOpen },
-        { to: "/docs", label: "Docs", icon: FileText },
-        { to: "/more", label: "Account", icon: UserRound },
-      ],
-    },
-    {
-      name: "Wallets",
-      rows: [
-        { to: "/wallets", label: "Wallets", icon: Wallet },
-        { to: "/wallets/power", label: "Robinhood", icon: Zap },
-        { to: "/revolut", label: "Revolut", icon: CreditCard },
-        { to: "/phantom", label: "Phantom", icon: Zap },
-        { to: "/metamask", label: "MetaMask", icon: Hexagon },
-      ],
-    },
-  ];
-  return (
-    <div className="pb-2">
-      {groups.map((group, i) => (
-        <div key={group.name}>
-          <p className={cn("px-3 pb-1 text-[10px] tracking-[0.14em] text-subtle uppercase", i === 0 ? "pt-2" : "pt-3")}>{group.name}</p>
-          {group.rows.map((row) => {
-            const Icon = row.icon;
-            const on = tabOn(pathname, row.to);
-            return (
-              <Link
-                key={row.label}
-                to={row.to}
-                onClick={onDone}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 text-sm leading-none",
-                  on ? "bg-white/8 font-medium text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
-                )}
-              >
-                <Icon className={cn("size-4 shrink-0", on && "text-accent")} strokeWidth={1.75} />
-                {row.label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+    <div className="flex gap-1 overflow-x-auto px-3 pt-3 lg:px-4">
+      {tabs.map((tab) => {
+        const on = tab.search?.desk ? pathname.startsWith("/invest") && here.desk === tab.search.desk : tab.to === "/invest" ? pathname === "/invest" && !here.desk : tabOn(pathname, tab.to);
+        return (
+          <Link
+            key={tab.label}
+            to={tab.to}
+            search={tab.search}
+            className={cn("shrink-0 rounded-full px-3 py-2 text-xs font-semibold", on ? "bg-white text-black" : "bg-white/10 text-white/70")}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -536,54 +554,174 @@ function NavLink({
   on,
   quiet,
   compact,
+  dock,
+  close,
+  search,
 }: {
-  to: TabTo;
+  to: "/" | "/pre" | "/xstocks" | "/contracts" | "/invest" | "/wallet" | "/wallets" | "/vault" | "/social" | "/agents" | "/work" | "/payments" | "/cards" | "/make" | "/cover" | "/orders" | "/launch" | "/solana" | "/swap" | "/market" | "/radar" | "/wire" | "/books" | "/docs" | "/passport" | "/more" | "/revolut" | "/phantom" | "/metamask" | "/backpack";
   label: string;
   icon: typeof LayoutGrid;
   on: boolean;
   quiet?: boolean;
   compact?: boolean;
+  dock?: boolean;
+  close?: () => void;
+  search?: { desk: string };
 }) {
   return (
     <Link
       to={to}
+      search={search ?? (to === "/cards" ? { spend: 0 } : undefined)}
       title={label}
+      onClick={close}
       className={cn(
-        "flex items-center rounded-xl text-[13px] leading-none",
-        compact ? "justify-center px-0 py-2" : "gap-2.5 px-2.5 py-2",
-        on ? "bg-white/8 font-medium text-fg" : quiet ? "text-subtle hover:bg-white/5 hover:text-fg" : "text-muted hover:bg-white/5 hover:text-fg",
+        "flex items-center rounded-xl text-sm leading-none",
+        dock ? "min-h-14 w-full flex-col justify-center gap-0.5 rounded-full px-1 py-1 text-[10px]" : compact ? "justify-center px-0 py-1.5" : "gap-2.5 px-2.5 py-1.5",
+        on && dock ? "bg-black/50 font-medium text-white" : on ? "bg-white/8 font-medium text-fg" : quiet ? "text-subtle hover:bg-white/5 hover:text-fg" : dock ? "text-white/55" : "text-muted hover:bg-white/5 hover:text-fg",
       )}
     >
       <Icon className={cn("size-4 shrink-0", on ? "text-accent" : "")} strokeWidth={1.75} />
-      {compact ? <span className="sr-only">{label}</span> : label}
+      {compact && !dock ? <span className="sr-only">{label}</span> : label}
     </Link>
   );
 }
 
-function ChainChip({ owner }: { owner: string }) {
-  const [usdc, setUsdc] = useState<number | null>(null);
+function RailMoney({ owner, cash }: { owner: string; cash: number }) {
+  const [pic, setPic] = useState<Picture | null>(null);
+  useEffect(() => {
+    let live = true;
+    const pull = () => {
+      const paint = (chain: { sol: number; tokens: Array<{ mint: string; ui: number; symbol?: string }> }, tape: Parameters<typeof buildPicture>[0]["tape"], house: Parameters<typeof buildPicture>[0]["house"]) => {
+        if (!live) return;
+        setPic(buildPicture({
+          owner,
+          sol: chain.sol,
+          tokens: chain.tokens.map((t) => ({ mint: t.mint, ui: t.ui, symbol: t.symbol })),
+          tape,
+          cash,
+          house,
+        }));
+      };
+      const chainP = owner
+        ? readChain(owner)
+        : Promise.resolve({ sol: 0, tokens: [] as Array<{ mint: string; ui: number; symbol: string }> });
+      void chainP.then((chain) => paint(chain, [], null)).catch(() => undefined);
+      void Promise.all([
+        chainP,
+        loadPulse().catch(() => ({ rows: [] })),
+        loadClearing().catch(() => null),
+      ]).then(async ([chain, pulse, house]) => {
+        paint(chain, pulse.rows, house);
+        const tape = await quoteHeld(chain.tokens.map((t) => t.mint), pulse.rows).catch(() => pulse.rows);
+        paint(chain, tape, house);
+      }).catch(() => undefined);
+    };
+    pull();
+    const id = window.setInterval(pull, 20_000);
+    const stop = onTrades(pull);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      stop();
+    };
+  }, [owner, cash]);
+  const row = pic || { total: 0, sol: 0, usdc: 0, phantomCash: 0, solUsd: 0, cash: 0, companies: 0, crypto: 0, listed: 0, posted: 0, lines: [] as Picture["lines"], open: [] as Array<{ id: string; label: string; usd: number }> };
+  return (
+    <div className="mb-2 rounded-lg bg-bg px-2.5 py-2">
+      <p className="text-[10px] text-subtle">Your money</p>
+      <p className="font-mono text-lg tabular-nums tracking-tight">{pic ? `$${row.total.toFixed(2)}` : owner ? "…" : "$0.00"}</p>
+      <ul className="mt-1 space-y-0.5 font-mono text-[10px] text-subtle">
+        <li className="flex justify-between gap-2"><span>USDC</span><span>${row.usdc.toFixed(2)}</span></li>
+        <li className="flex justify-between gap-2"><span>CASH</span><span>${row.phantomCash.toFixed(2)}</span></li>
+        <li className="flex justify-between gap-2"><span>SOL</span><span>{row.sol > 0 ? row.sol.toFixed(4) : "0"}{row.solUsd > 0 ? ` · $${row.solUsd.toFixed(2)}` : ""}</span></li>
+        {row.lines.slice(0, 8).map((line) => (
+          <li key={line.symbol} className="flex justify-between gap-2"><span>{line.symbol}</span><span>{line.usd > 0 ? `$${line.usd.toFixed(2)}` : line.ui.toFixed(4)}</span></li>
+        ))}
+      </ul>
+      {row.open.slice(0, 3).map((line) => (
+        <p key={line.id} className="mt-1 truncate font-mono text-[10px] text-fg">{line.label} ${line.usd.toFixed(2)}</p>
+      ))}
+    </div>
+  );
+}
+
+function ChainChip({ owner, cash }: { owner: string; cash: number }) {
+  const [pic, setPic] = useState<Picture | null>(null);
   useEffect(() => {
     if (!owner) {
-      setUsdc(null);
+      setPic(null);
       return;
     }
     let live = true;
     const pull = () => {
-      readChain(owner)
-        .then((s) => live && setUsdc(s.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0))
-        .catch(() => live && setUsdc(null));
+      Promise.all([
+        readChain(owner),
+        loadPulse().catch(() => ({ rows: [] })),
+      ]).then(async ([chain, pulse]) => {
+        if (!live) return;
+        const tape = await quoteHeld(chain.tokens.map((t) => t.mint), pulse.rows).catch(() => pulse.rows);
+        if (!live) return;
+        setPic(buildPicture({
+          owner,
+          sol: chain.sol,
+          tokens: chain.tokens.map((t) => ({ mint: t.mint, ui: t.ui, symbol: t.symbol })),
+          tape,
+          cash,
+          house: null,
+        }));
+      }).catch(() => undefined);
     };
     pull();
     const id = window.setInterval(pull, 20_000);
+    const stop = onTrades(pull);
     return () => {
       live = false;
       window.clearInterval(id);
+      stop();
     };
-  }, [owner]);
+  }, [owner, cash]);
+  const total = pic?.total ?? 0;
+  const chain = Math.max(0, total - (pic?.cash ?? 0));
+  const sol = pic?.sol ?? 0;
+  const book = pic?.cash ?? 0;
   return (
-    <Link to="/wallet" className="block rounded-lg bg-bg px-2.5 py-1.5 hover:bg-elevated">
-      <p className="font-mono text-xs text-fg">{owner ? (usdc == null ? "…" : `$${usdc.toFixed(2)} USDC`) : "Your money"}</p>
-      <p className="font-mono text-[10px] text-subtle">{owner ? `${owner.slice(0, 4)}…${owner.slice(-4)}` : "Not connected"}</p>
+    <Link to="/vault" className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#050508] px-4 py-1.5">
+      <p className="font-mono text-sm tabular-nums">{owner ? (pic ? `$${chain.toFixed(2)}` : "…") : "Your money"}</p>
+      <p className="truncate font-mono text-[11px] text-subtle">
+        {owner
+          ? `${sol.toFixed(3)} SOL · Wallet $${(pic?.usdc ?? 0).toFixed(2)} · Book $${book.toFixed(2)}`
+          : "Not connected"}
+      </p>
     </Link>
+  );
+}
+
+function TradeNotices({ owner, fills, onClose }: { owner: string; fills: TradeFill[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 sm:items-start sm:pt-16">
+      <button type="button" className="absolute inset-0" aria-label="Close notices" onClick={onClose} />
+      <section className="relative m-3 w-full max-w-md rounded-[28px] bg-[#10131c] p-4 shadow-2xl">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">Signed here</h2>
+          <button type="button" onClick={onClose} className="min-h-9 rounded-full px-3 text-sm text-white/60">Close</button>
+        </div>
+        <p className="mt-1 text-sm text-white/50">A trade you sign opens the confirmation, then stays in this list on this browser.</p>
+        <ul className="mt-3 max-h-64 divide-y divide-white/10 overflow-y-auto">
+          {fills.slice(0, 8).map((row) => (
+            <li key={row.signature} className="flex items-baseline justify-between gap-3 py-2">
+              <span>
+                <span className="block text-sm font-semibold">{row.side === "sell" ? "Sold" : row.side === "send" ? "Sent" : "Bought"} {row.symbol}</span>
+                <a className="block truncate font-mono text-[11px] text-[#c6f56a]" href={`https://solscan.io/tx/${row.signature}`} target="_blank" rel="noreferrer">{row.signature.slice(0, 12)}…</a>
+              </span>
+              <span className="font-mono text-sm">${row.usd.toFixed(2)}</span>
+            </li>
+          ))}
+          {fills.length === 0 ? <li className="py-4 text-sm text-white/45">Nothing signed in this browser yet.</li> : null}
+        </ul>
+        <div className="mt-3">
+          <TransactionRecovery owner={owner} />
+        </div>
+      </section>
+    </div>
   );
 }

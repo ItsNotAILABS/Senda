@@ -30,6 +30,15 @@ export type ChainCover = {
   status: "open" | "settled" | "cancelled";
 };
 
+export type CoverKind = "drop" | "drop5" | "life";
+
+/** The desk prints 10% for a 10% cover and 5% for a 5% cover. */
+export function coverPremium(kind: CoverKind, usd: number): number {
+  if (!(usd > 0)) return 0;
+  const rate = kind === "drop5" ? 0.05 : 0.1;
+  return Math.round(usd * rate * 100) / 100;
+}
+
 function rpc(method: string, params: unknown[]): Promise<unknown> {
   const urls = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
   return (async () => {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { outUi, quoteJup, type JupQuote } from "@/lib/jup-exec";
-import { connectPhantom, mintDecimals, readChain, splHolding } from "@/lib/phantom";
+import { connectPhantom, mintDecimals, PRESTOCK_MINTS, readChain, splHolding } from "@/lib/phantom";
 import { runPrestock, spendable, type PreRoute } from "@/lib/prestock";
 import { Link } from "@tanstack/react-router";
 import { FilmBand } from "@/components/film-band";
@@ -12,19 +12,8 @@ import { listChainCovers } from "@/lib/cover-chain";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { writeUsing, readUsing } from "@/lib/using";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
-
-const LOGO: Record<string, string> = {
-  SPACEX: "/logos/spacex.png",
-  OPENAI: "/logos/openai.png",
-  ANTHROPIC: "/logos/anthropic.png",
-  ANDURIL: "/logos/anduril.png",
-  NEURALINK: "/logos/neuralink.png",
-  FIGUREAI: "/logos/figureai.png",
-  KALSHI: "/logos/kalshi.png",
-  POLYMARKET: "/logos/polymarket.png",
-  XAI: "/logos/xai.png",
-};
 
 export function PreDesk({
   names,
@@ -40,7 +29,7 @@ export function PreDesk({
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...names]
-      .filter((n) => n.venue === "prestocks" && n.last > 0)
+      .filter((n) => n.venue === "prestocks" && (n.last > 0 || PRESTOCK_MINTS.some(([symbol]) => symbol === n.symbol)))
       .filter((n) => !q || n.symbol.toLowerCase().includes(q) || n.name.toLowerCase().includes(q))
       .sort((a, b) => (a.premium ?? 0) - (b.premium ?? 0));
   }, [names, query]);
@@ -289,11 +278,7 @@ export function PreDesk({
                 </select>
               </label>
               <div className="mt-3 flex items-center gap-3">
-                {LOGO[name.symbol] ? (
-                  <img src={LOGO[name.symbol]} alt="" className="size-9 rounded-full bg-white object-contain p-1" />
-                ) : (
-                  <span className="grid size-9 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{name.symbol.slice(0, 2)}</span>
-                )}
+                <MarkFace icon={name.image} symbol={name.symbol} mint={name.mint} size={36} />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold">{name.symbol}</span>
                   <span className="block truncate text-[11px] text-subtle">{name.name}</span>
@@ -370,11 +355,7 @@ export function PreDesk({
                     r.symbol === name?.symbol ? "bg-accent/10" : "hover:bg-white/[0.03]",
                   )}
                 >
-                  {LOGO[r.symbol] ? (
-                    <img src={LOGO[r.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
-                  ) : (
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{r.symbol.slice(0, 2)}</span>
-                  )}
+                  <MarkFace icon={r.image} symbol={r.symbol} mint={r.mint} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{r.symbol}</span>
                     <span className="block truncate text-[11px] text-subtle">{r.name}</span>
@@ -601,11 +582,7 @@ export function PreDesk({
                   )}
                 >
                   <div className="flex items-center gap-2">
-                    {LOGO[n.symbol] ? (
-                      <img src={LOGO[n.symbol]} alt="" className="size-8 rounded-full bg-white object-contain p-1" />
-                    ) : (
-                      <span className="grid size-8 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{n.symbol.slice(0, 2)}</span>
-                    )}
+                    <MarkFace icon={n.image} symbol={n.symbol} mint={n.mint} size={32} />
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold">{n.symbol}</span>
                       <span className="block truncate text-[11px] text-subtle">{n.name}</span>

@@ -11,6 +11,7 @@ import { connectPhantom, phantomProvider, splHolding } from "@/lib/phantom";
 import { type OptContract, type OptTenor } from "@/lib/option-chain";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
 
 const ETF = new Set(["SPY", "QQQ", "IWM", "DIA", "GLD", "SLV", "TLT", "HYG", "XLE", "XLF", "XLK", "URA", "USO", "UNG", "VTI", "VOO", "ARKK", "EEM", "EFA", "IBIT", "GDX", "GDXJ", "SMH", "SOXX", "IYR", "XBI", "KWEB", "EWZ", "EWJ", "FXI", "TIP", "LQD", "BND", "VNQ", "XOP", "COPX", "SIL", "PPLT", "CPER", "GLDX"]);
@@ -186,7 +187,7 @@ export function XStockDesk({
         url: "",
         swapUrl: "",
         sector: stock.exchange || "Listed",
-        image: stock.logo || "",
+        image: "",
       }
     : null;
   const mine = positions.filter((p) => p.mint === stock.mint);
@@ -227,10 +228,7 @@ export function XStockDesk({
                   onClick={() => onSymbol(s.symbol)}
                   className={cn("flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left", s.symbol === stock.symbol ? "bg-accent/10" : "hover:bg-white/[0.04]")}
                 >
-                  <span className="relative grid size-8 shrink-0 place-items-center rounded-full bg-[#2a2a2e] text-[10px] font-bold">
-                    {s.symbol.slice(0, 2)}
-                    {s.logo ? <img src={s.logo} alt="" className="absolute inset-0 size-8 rounded-full bg-white object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} /> : null}
-                  </span>
+                  <MarkFace symbol={s.symbol} mint={s.mint} size={32} />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold">{s.symbol}</span>
                     <span className="block truncate text-[11px] text-subtle">

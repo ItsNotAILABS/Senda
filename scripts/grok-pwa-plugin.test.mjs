@@ -11,7 +11,9 @@ import {
   injectGrokPwaHead,
   isDocumentPath,
   isInstallQuery,
+  publicAppHost,
   renderWebManifest,
+  resolveOgCardAsset,
   snapshotOgIdentity,
   stripInstallParams,
 } from "./grok-pwa-shared.mjs";
@@ -121,6 +123,16 @@ test("does not duplicate twitter:card or og:title", () => {
   assert.equal(twice.split('property="og:title"').length - 1, 1);
 });
 
+test("a baked site.image is treated as a custom card", () => {
+  const out = injectGrokPwaHead("<html><head></head></html>", {
+    host: "wild-race.grok.me",
+    cwd: mkdtempSync(join(tmpdir(), "grok-og-image-only-")),
+    site: { title: "Wild Race", image: "/og.jpg" },
+  });
+  assert.match(out, /property="og:image" content="https:\/\/wild-race\.grok\.me\/og\.jpg"/);
+  assert.doesNotMatch(out, /og\.grok\.me/);
+});
+
 test("baked identity does not need a workspace filesystem", () => {
   const empty = mkdtempSync(join(tmpdir(), "grok-og-empty-"));
   const out = injectGrokPwaHead("<html><head></head></html>", {
@@ -134,7 +146,9 @@ test("baked identity does not need a workspace filesystem", () => {
   assert.doesNotMatch(out, /og\.grok\.me/);
 });
 
-test("explicit site without card=custom is not overridden by a cwd card file", () => {
+test("a public card file wins over a baked site without card=custom", () => {
+  // Deploy middleware always passes a baked `site`. If that snapshot missed
+  // the file, public/og.jpg must still beat the og.grok.me placeholder.
   const root = mkdtempSync(join(tmpdir(), "grok-og-card-"));
   mkdirSync(join(root, "public"));
   writeFileSync(join(root, "public/og.jpg"), "x");
@@ -143,8 +157,36 @@ test("explicit site without card=custom is not overridden by a cwd card file", (
     cwd: root,
     site: {},
   });
-  assert.match(out, /og\.grok\.me\/v1\/card\.png/);
-  assert.doesNotMatch(out, /wild-race\.grok\.me\/og\.jpg/);
+  assert.match(out, /property="og:image" content="https:\/\/wild-race\.grok\.me\/og\.jpg"/);
+  assert.doesNotMatch(out, /og\.grok\.me/);
+});
+
+test("public/og.png wins when jpg is absent", () => {
+  const root = mkdtempSync(join(tmpdir(), "grok-og-png-"));
+  mkdirSync(join(root, "public"));
+  writeFileSync(join(root, "public/og.png"), "x");
+  const out = injectGrokPwaHead("<html><head></head></html>", {
+    host: "wild-race.grok.me",
+    cwd: root,
+    site: { title: "Wild Race" },
+  });
+  assert.match(out, /property="og:image" content="https:\/\/wild-race\.grok\.me\/og\.png"/);
+  assert.doesNotMatch(out, /og\.grok\.me/);
+});
+
+test("resolveOgCardAsset: disk file, then bake, then empty (placeholder)", () => {
+  const empty = mkdtempSync(join(tmpdir(), "grok-og-none-"));
+  assert.equal(resolveOgCardAsset({}, empty), "");
+  assert.equal(resolveOgCardAsset({ title: "X" }, empty), "");
+
+  const baked = resolveOgCardAsset({ card: "custom", image: "/og.jpg" }, empty);
+  assert.equal(baked, "/og.jpg");
+
+  const root = mkdtempSync(join(tmpdir(), "grok-og-disk-"));
+  mkdirSync(join(root, "public"));
+  writeFileSync(join(root, "public/og.jpg"), "x");
+  assert.equal(resolveOgCardAsset({}, root), "/og.jpg");
+  assert.equal(resolveOgCardAsset({ card: "custom", image: "/other.png" }, root), "/og.jpg");
 });
 
 test("snapshotOgIdentity stamps card=custom from a public card file", () => {
@@ -206,6 +248,58 @@ test("published grok.me slug is still a title fallback", () => {
     host: "wild-race.grok.me",
   });
   assert.match(out, /property="og:title" content="Wild Race"/);
+});
+
+test("rejects Vercel system hosts as og:image origins", () => {
+  assert.equal(publicAppHost("01a020b6-803a-71a2-bb47-e2bec57eb9a2-662k8x1l1-xai-org.vercel.app"), "");
+  assert.equal(publicAppHost("demo.vercel.app:443"), "");
+  assert.equal(publicAppHost("vercel.app"), "");
+  assert.equal(publicAppHost("wild-race.grok.me"), "wild-race.grok.me");
+});
+
+test("published VITE_PUBLIC_HOSTNAME wins over request Host for og:image", () => {
+  const prev = process.env.VITE_PUBLIC_HOSTNAME;
+  process.env.VITE_PUBLIC_HOSTNAME = "plum-plaza-reef-dream.grok.me";
+  try {
+    const vercelHost = injectGrokPwaHead("<html><head><title>RACK</title></head></html>", {
+      host: "01a020b6-803a-71a2-bb47-e2bec57eb9a2-662k8x1l1-xai-org.vercel.app",
+      site: { title: "RACK", card: "custom" },
+    });
+    assert.match(
+      vercelHost,
+      /property="og:image" content="https:\/\/plum-plaza-reef-dream\.grok\.me\/og\.jpg"/,
+    );
+    assert.doesNotMatch(vercelHost, /vercel\.app/);
+
+    const otherPublicHost = injectGrokPwaHead("<html><head><title>RACK</title></head></html>", {
+      host: "custom.example.com",
+      site: { title: "RACK", card: "custom" },
+    });
+    assert.match(
+      otherPublicHost,
+      /property="og:image" content="https:\/\/plum-plaza-reef-dream\.grok\.me\/og\.jpg"/,
+    );
+    assert.doesNotMatch(otherPublicHost, /custom\.example\.com/);
+  } finally {
+    if (prev === undefined) delete process.env.VITE_PUBLIC_HOSTNAME;
+    else process.env.VITE_PUBLIC_HOSTNAME = prev;
+  }
+});
+
+test("vercel Host without a public hostname emits no og:image", () => {
+  const prev = process.env.VITE_PUBLIC_HOSTNAME;
+  delete process.env.VITE_PUBLIC_HOSTNAME;
+  try {
+    const out = injectGrokPwaHead("<html><head><title>RACK</title></head></html>", {
+      host: "01a020b6-803a-71a2-bb47-e2bec57eb9a2-662k8x1l1-xai-org.vercel.app",
+      site: { title: "RACK", card: "custom" },
+    });
+    assert.doesNotMatch(out, /property="og:image"/);
+    assert.doesNotMatch(out, /vercel\.app/);
+  } finally {
+    if (prev === undefined) delete process.env.VITE_PUBLIC_HOSTNAME;
+    else process.env.VITE_PUBLIC_HOSTNAME = prev;
+  }
 });
 
 test("emits og:image for a public host and prefers a custom card", () => {
@@ -284,6 +378,41 @@ test("streaming injector matches </HEAD> case-insensitively", () => {
   const out = Buffer.concat(chunks).toString("utf8");
   assert.match(out, /property="og:title" content="x"/);
   assert.match(out, /<body>hello<\/body>/);
+});
+
+test("omits the extensions script when the deployer disables it", () => {
+  const previous = process.env.VITE_GROK_EXTENSIONS;
+  process.env.VITE_GROK_EXTENSIONS = "0";
+  try {
+    const baked =
+      '<html><head><script src="https://grok.com/grok-app-builder/extensions.js" data-project-id="old" defer></script></head></html>';
+    const out = injectGrokPwaHead(baked, { appName: "Demo", projectId: "proj-123" });
+    assert.doesNotMatch(out, /grok-app-builder\/extensions\.js/);
+    assert.match(out, /name="grok-project-id" content="proj-123"/);
+    assert.match(out, /property="grok:app_id" content="proj-123"/);
+    assert.match(out, /rel="manifest"/);
+    const twice = injectGrokPwaHead(out, { appName: "Demo", projectId: "proj-123" });
+    assert.equal(out, twice);
+  } finally {
+    if (previous === undefined) delete process.env.VITE_GROK_EXTENSIONS;
+    else process.env.VITE_GROK_EXTENSIONS = previous;
+  }
+});
+
+test("keeps the extensions script on commercial when the deployer enables it", () => {
+  const previous = process.env.VITE_GROK_EXTENSIONS;
+  process.env.VITE_GROK_EXTENSIONS = "1";
+  try {
+    const out = injectGrokPwaHead("<html><head></head></html>", {
+      appName: "Demo",
+      projectId: "proj-123",
+    });
+    assert.match(out, /src="https:\/\/grok\.com\/grok-app-builder\/extensions\.js"/);
+    assert.match(out, /data-project-id="proj-123"/);
+  } finally {
+    if (previous === undefined) delete process.env.VITE_GROK_EXTENSIONS;
+    else process.env.VITE_GROK_EXTENSIONS = previous;
+  }
 });
 
 test("does not duplicate the extensions script", () => {

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { PasskeyCard } from "@/components/passkey-card";
 import { FilmBand } from "@/components/film-band";
+import { passkeyBlocks } from "@/lib/passkey";
 import { LiveChart } from "@/components/price-chart";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
@@ -9,6 +11,7 @@ import { WalletPicker } from "@/components/wallet-picker";
 import { readChain, type ChainWallet } from "@/lib/phantom";
 import { markHolds, SOL_MINT, type HoldMark } from "@/lib/hold-marks";
 import { listFills } from "@/lib/account-book";
+import { MarkFace } from "@/components/holding-cards";
 import { MarginBook } from "@/components/fdv-desk";
 import { setSpendCap, spendCap } from "@/lib/spend-cap";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -16,8 +19,6 @@ import { unwrapUsdc, wrapUsdc, wrappedUsdc } from "@/lib/vault-wrap";
 import { CCYS, formatMoney, type Ccy } from "@/lib/wallet";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
-
-const LOGO_SYMBOLS = new Set(["SPACEX", "OPENAI", "ANTHROPIC", "ANDURIL", "NEURALINK", "FIGUREAI", "KALSHI", "POLYMARKET"]);
 
 type Position = {
   mint: string;
@@ -30,12 +31,6 @@ type Position = {
   change: number | null;
   icon: string;
 };
-
-function logoSrc(symbol: string): string | null {
-  const s = symbol.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (!LOGO_SYMBOLS.has(s)) return null;
-  return `/logos/${s.toLowerCase()}.png`;
-}
 
 function bookUsd(n: number): string {
   return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
@@ -100,7 +95,7 @@ function positionsOf(names: HouseListing[], chain: ChainWallet | null, marks: Re
   return rows;
 }
 
-export function VaultDesk({ names }: { names: HouseListing[] }) {
+export function VaultDesk({ names, view = "holdings" }: { names: HouseListing[]; view?: "holdings" | "sleeve" }) {
   const wallet = useWallet();
   const link = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana");
   const owner = link?.address ?? "";
@@ -113,13 +108,15 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
   const [ccy, setCcy] = useState<Ccy>("USD");
   const [marks, setMarks] = useState<Record<string, HoldMark>>({});
   const [openMint, setOpenMint] = useState("");
+  const [pocket, setPocket] = useState("10");
   const chain = snap && snap.owner === owner ? snap.chain : null;
   const usdc = chain?.tokens.find((t) => t.symbol === "USDC")?.ui ?? 0;
   const wrapped = owner ? wrappedUsdc(owner) : 0;
   const rows = useMemo(() => positionsOf(names, chain, marks), [names, chain, marks]);
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const day = rows.reduce((sum, row) => sum + (row.change == null ? 0 : row.value * (asPct(row.change) / 100)), 0);
-  const waiting = !wallet.ready || (Boolean(owner) && reading && !chain);
+  const waiting = Boolean(owner) && reading && !chain;
+  const sleeve = view === "sleeve";
 
   useEffect(() => setCap(spendCap()), []);
   useEffect(() => {
@@ -171,7 +168,14 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     };
   }, [chain]);
 
+  function needPasskey(): boolean {
+    if (!passkeyBlocks()) return false;
+    toast.error("Unlock with the passkey first. It approves this visit. It does not sign.");
+    return true;
+  }
+
   function wrap(amount?: number) {
+    if (needPasskey()) return;
     if (!owner) return;
     const n = amount ?? Number(raw);
     if (!(n > 0)) return toast.error("Enter an amount.");
@@ -193,6 +197,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
 
   function push(amount?: number) {
     if (!owner) return;
+    if (needPasskey()) return;
     const n = amount ?? Number(raw);
     if (!(n > 0)) return toast.error("Enter an amount.");
     if (n - wrapped > 0.001) return toast.error("Only wrapped USDC can be pushed back.");
@@ -219,17 +224,41 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
     push(n);
   }
 
+  function intoVault(id: string) {
+    if (needPasskey()) return;
+    const r = wallet.vaultIn(id, Number(pocket));
+    if (!r.ok) toast.error(r.error || "That did not move in.");
+    else toast.success("Moved into the vault.");
+  }
+
+  function outOfVault(id: string) {
+    if (needPasskey()) return;
+    const r = wallet.vaultOut(id, Number(pocket));
+    if (!r.ok) toast.error(r.error || "That did not move out.");
+    else toast.success("Moved back to cash.");
+  }
+
   return (
     <main className="space-y-3 px-3 py-3 lg:px-4">
       <TabLead
-        kicker="Portfolio"
-        title="PreStocks you hold,"
-        accent="marked live."
-        line="The total is tokens in this wallet times the last print. Nothing on the book is a paper share."
-        live={["Chain balance", "Value at the live last", "Wrap USDC and send it back"]}
+        kicker={sleeve ? "Cash sleeve" : "Portfolio"}
+        title={sleeve ? "Cash stays cash." : "PreStocks you hold,"}
+        accent={sleeve ? "The vault only holds a claim." : "marked live."}
+        line={sleeve ? "A wrap is a claim on USDC that never leaves Phantom. A named vault moves Senda cash in and out. Neither one mints dollars." : "The total is tokens in this wallet times the last print. Nothing on the book is a paper share."}
+        live={sleeve ? ["Wrap what Phantom holds", "Send the claim back", "Move cash into a named vault"] : ["Chain balance", "Value at the live last", "Wrap USDC and send it back"]}
         coming={["A broker account", "A custodian"]}
       />
       <MoneyBar />
+      <PasskeyCard />
+      {sleeve ? null : (
+      <>
+      <Link to="/vault/lens" className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 px-4 py-3">
+        <span>
+          <span className="block text-sm font-semibold">Position</span>
+          <span className="block text-xs text-muted">Bought, sold, and a 100% sell. Cost stays blank when this browser has no fill.</span>
+        </span>
+        <span className="text-accent">→</span>
+      </Link>
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5 lg:p-8">
         <p className="font-mono text-5xl tabular-nums tracking-tight lg:text-6xl">{waiting ? "—" : bookUsd(total)}</p>
@@ -244,7 +273,7 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Stat k="Day move" v={waiting ? "—" : `${day >= 0 ? "+" : "−"}$${Math.abs(day).toFixed(2)}`} />
           <Stat k="Cash" v={waiting ? "—" : formatUsd(usdc)} />
-          <Stat k="Staked SOL" v={chain ? `${chain.sol.toFixed(4)} SOL` : "—"} />
+          <Stat k="SOL" v={chain ? `${chain.sol.toFixed(4)} SOL` : "—"} />
           <Stat k="Savings" v={waiting ? "—" : formatUsd(wrapped)} />
         </div>
         <Activity />
@@ -274,16 +303,11 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
             })()}
             <ul className="divide-y divide-white/[0.06]">
               {rows.map((row) => {
-                const logo = logoSrc(row.symbol);
                 const on = (openMint || rows[0]?.mint) === row.mint;
                 return (
                   <li key={row.mint}>
                     <button type="button" onClick={() => setOpenMint(row.mint)} className={cn("flex w-full items-center gap-3 py-3 text-left", on && "opacity-100")}>
-                      {logo ? (
-                        <img src={logo} alt="" className="size-9 rounded-full bg-white object-contain p-1" />
-                      ) : (
-                        <span className="grid size-9 place-items-center rounded-full bg-black/40 font-mono text-[10px]">{row.symbol.slice(0, 2)}</span>
-                      )}
+                      <MarkFace icon={row.icon} symbol={row.symbol} mint={row.mint} size={36} />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">{row.symbol}</span>
                         <span className="block truncate text-[11px] text-subtle">{tokenQty(row.tokens)} · {row.name}</span>
@@ -302,6 +326,8 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
           </div>
         ) : null}
       </section>
+      </>
+      )}
 
       <section className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
         <h2 className="text-2xl tracking-tight">Cash sleeve</h2>
@@ -394,7 +420,8 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
         </Link>
       </section>
 
-      <section className="grid gap-3 lg:grid-cols-2">
+      <section className={sleeve ? "space-y-3" : "grid gap-3 lg:grid-cols-2"}>
+        {sleeve ? null : (
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <h2 className="text-lg">How a PreStock swap is signed</h2>
           <ul className="mt-3 space-y-2 text-sm text-muted">
@@ -405,19 +432,34 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
             <li>You sign. The key never comes here.</li>
           </ul>
         </div>
+        )}
         <div className="rounded-[22px] border border-white/10 bg-[#10131c] p-5">
           <h2 className="text-lg">Cash vaults</h2>
-          <p className="mt-1 text-sm text-muted">A named pocket of Senda cash. It is not a second wallet and it does not mint USDC.</p>
+          <p className="mt-1 text-sm text-muted">A named pocket of Senda cash. Money moves from the cash balance into the vault and back. It does not mint USDC.</p>
+          <p className="mt-2 font-mono text-xs text-subtle">Cash on hand {formatMoney(wallet.w.balances[ccy] || 0, ccy)}</p>
           <ul className="mt-3 space-y-2">
             {wallet.w.vaults.length === 0 ? <li className="rounded-[22px] bg-black/40 px-3 py-3 text-sm text-subtle">None yet.</li> : null}
             {wallet.w.vaults.map((v) => (
-              <li key={v.id} className="flex items-baseline justify-between rounded-[22px] bg-black/40 px-3 py-3 text-sm">
-                <span>{v.name}</span>
-                <span className="font-mono tabular-nums">{formatMoney(v.balance, v.ccy)}</span>
+              <li key={v.id} className="rounded-[22px] bg-black/40 px-3 py-3 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span>{v.name}</span>
+                  <span className="font-mono tabular-nums">{formatMoney(v.balance, v.ccy)}</span>
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={() => intoVault(v.id)} className="min-h-11 flex-1 rounded-full bg-accent text-sm font-semibold text-accent-fg">In</button>
+                  <button type="button" onClick={() => outOfVault(v.id)} className="min-h-11 flex-1 rounded-full bg-white/10 text-sm font-semibold">Out</button>
+                </div>
               </li>
             ))}
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              value={pocket}
+              onChange={(e) => setPocket(e.target.value)}
+              inputMode="decimal"
+              aria-label="Amount to move"
+              className="min-h-11 w-24 rounded-full border border-white/10 bg-black/40 px-4 font-mono text-sm outline-none"
+            />
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -444,10 +486,11 @@ export function VaultDesk({ names }: { names: HouseListing[] }) {
               Open
             </button>
           </div>
+          <Link to="/payments" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-accent">Add cash first if the vault says there is not enough.</Link>
         </div>
       </section>
 
-      <FilmBand poster="/images/orbit.jpg" label="The wallet stays the wallet." />
+      {sleeve ? null : <FilmBand poster="/images/orbit.jpg" label="The wallet stays the wallet." />}
     </main>
   );
 }

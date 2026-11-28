@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { createWorker, listWorkers, logWorker, type AgentAutonomy, type AgentCategory, type ToolId, type Worker } from "@/lib/agent-workspace";
+import { assignAgentWallet } from "@/lib/coffer-agent";
 import { formatUsd, type HouseListing } from "@/lib/sol-house";
 import { cn } from "@/lib/utils";
 
@@ -153,6 +154,7 @@ export function AgentLive({ names }: { names: HouseListing[] }) {
       side: "buy",
     });
     logWorker(row.id, firstNote(picked.id, names, size), "success");
+    void assignAgentWallet(row.id, row.name).catch((error) => toast.error(error instanceof Error ? error.message : "Coffer did not open a wallet."));
     toast.success(`${row.name} ran once. It stays in this browser.`);
     setName("");
     setJob("");

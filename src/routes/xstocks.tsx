@@ -1,13 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { ListedView } from "@/components/desk-views";
+import { EquitiesDesk } from "@/components/equities-desk";
 import { TabLead } from "@/components/tab-lead";
+import { getEquityBook } from "@/lib/equities";
 
 export const Route = createFileRoute("/xstocks")({
-  component: Page,
+  loader: () => getEquityBook(),
+  component: XStocksPage,
 });
 
-function Page() {
+function XStocksPage() {
+  const book = Route.useLoaderData();
   return (
     <AppShell>
       <div className="px-3 pt-3 lg:px-4">
@@ -17,10 +20,10 @@ function Page() {
           accent=""
           line="Names Jupiter traded in the last day come first. Halted names sit at the bottom. Phantom buys the token."
           live={["ETFs", "Single stocks", "Jupiter buy"]}
-          coming={["Parking the shares inside a named contract."]}
+          coming={["A named contract that holds the shares"]}
         />
       </div>
-      <ListedView view="market" />
+      <EquitiesDesk book={book} />
     </AppShell>
   );
 }

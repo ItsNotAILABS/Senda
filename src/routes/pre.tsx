@@ -1,7 +1,5 @@
 import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { ProductShell } from "@/components/product-shell";
-import { PRE_PAGES } from "@/lib/product-pages";
 
 type PreSearch = { q?: string };
 
@@ -16,9 +14,7 @@ export const Route = createFileRoute("/pre")({
 function Layout() {
   return (
     <AppShell>
-      <ProductShell title="PreStocks" pages={PRE_PAGES}>
-        <Outlet />
-      </ProductShell>
+      <Outlet />
     </AppShell>
   );
 }

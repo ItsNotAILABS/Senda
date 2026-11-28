@@ -75,4 +75,15 @@ export const STRATEGIES: Strategy[] = [
     symbols: [],
     mandate: "Pay USDC only to the address on this contract, and only up to the cap. The user signs each send.",
   },
+  {
+    id: "liquid-book",
+    title: "Liquid book",
+    line: "Only names Jupiter shows with at least $25,000 in the pool. The agent lists them and can draft a swap. It does not sign.",
+    job: "scout",
+    action: "watch",
+    order: "limit",
+    side: "buy",
+    symbols: [],
+    mandate: "Read the screener. Propose a buy only on a liquid name, sized under 5% of that pool. The user signs.",
+  },
 ];

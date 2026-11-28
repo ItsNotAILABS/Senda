@@ -36,13 +36,58 @@ type Pending = {
 
 export function isPhoneBrowser(): boolean {
   if (typeof navigator === "undefined") return false;
-  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) return true;
+  if (navigator.maxTouchPoints > 1) return true;
+  if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) return true;
+  return false;
 }
 
 /** True when this page is already the wallet's in-app browser. Do not open another link from here. */
 export function insideWalletApp(): boolean {
+  if (typeof window !== "undefined") {
+    const w = window as unknown as {
+      phantom?: { solana?: unknown };
+      solana?: { isPhantom?: boolean };
+      solflare?: unknown;
+    };
+    if (w.phantom?.solana || w.solana?.isPhantom || w.solflare) return true;
+  }
   if (typeof navigator === "undefined") return false;
   return /Phantom|Solflare|Backpack/i.test(navigator.userAgent);
+}
+
+/** True when a Solana wallet has injected a signer into this page. */
+export function injectedWallet(): boolean {
+  if (typeof window === "undefined") return false;
+  const w = window as unknown as {
+    phantom?: { solana?: { connect?: unknown } };
+    solana?: { connect?: unknown };
+    solflare?: { connect?: unknown };
+    backpack?: { connect?: unknown };
+  };
+  return Boolean(w.phantom?.solana?.connect || w.solflare?.connect || w.backpack?.connect || w.solana?.connect);
+}
+
+/** Opens this page inside the wallet app. Returns false when a signer is already here. */
+export function openInWallet(wallet: MobileWallet): boolean {
+  if (typeof window === "undefined") return false;
+  if (insideWalletApp() || injectedWallet()) return false;
+  openWalletBrowser(wallet);
+  return true;
+}
+
+/** One-shot line left for the wallet browser: tap the trade again, this window can sign. */
+export function takeBuyAgain(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  try {
+    const line = localStorage.getItem(HINT) || (typeof sessionStorage !== "undefined" ? sessionStorage.getItem(HINT) : "") || "";
+    if (!line) return null;
+    localStorage.removeItem(HINT);
+    sessionStorage.removeItem(HINT);
+    return line;
+  } catch {
+    return null;
+  }
 }
 
 function b64(bytes: Uint8Array): string {
@@ -64,6 +109,25 @@ function dappSecret(): Uint8Array {
   const pair = nacl.box.keyPair();
   localStorage.setItem(SECRET, b64(pair.secretKey));
   return pair.secretKey;
+}
+
+function dappPublic(): string {
+  return bs58.encode(nacl.box.keyPair.fromSecretKey(dappSecret()).publicKey);
+}
+
+const PUBLIC_ORIGIN = "https://senda.pocketnova.app";
+
+/** Phantom approves this app and sends the address back. That address is the account. */
+export function phantomConnectUrl(): string {
+  if (typeof localStorage === "undefined") return "https://phantom.app/ul/v1/connect";
+  const back = `${PUBLIC_ORIGIN}/wallets/app`;
+  const params = new URLSearchParams({
+    app_url: PUBLIC_ORIGIN,
+    redirect_link: back,
+    dapp_encryption_public_key: dappPublic(),
+    cluster: "mainnet-beta",
+  });
+  return `https://phantom.app/ul/v1/connect?${params.toString()}`;
 }
 
 export function mobileSession(): Session | null {
@@ -99,6 +163,11 @@ function rememberBack() {
   if (!location.pathname.startsWith("/wallets/app")) localStorage.setItem(BACK, here());
 }
 
+export function noteWalletReturn() {
+  if (typeof localStorage === "undefined") return;
+  rememberBack();
+}
+
 export function returnPath(): string {
   return localStorage.getItem(BACK) || "/wallets";
 }
@@ -116,22 +185,26 @@ function leave(url: string) {
 
 function pageToOpen(): string {
   const path = location.pathname.startsWith("/wallets/app") ? "/wallets" : `${location.pathname}${location.search}`;
-  return `${location.origin}${path}`;
+  return `https://senda.pocketnova.app${path}`;
+}
+
+/** The phone tap follows this. Phantom opens on Senda. No script required. */
+export function phantomBrowseHref(path?: string): string {
+  const here = path ?? (typeof location === "undefined" ? "/" : `${location.pathname}${location.search}`);
+  const target = `https://senda.pocketnova.app${here.startsWith("/wallets/app") ? "/wallets" : here}`;
+  const ref = encodeURIComponent("https://senda.pocketnova.app");
+  return `https://phantom.app/ul/browse/${encodeURIComponent(target)}?ref=${ref}`;
 }
 
 /** Opens the wallet's own browser on this page. The buy signs there. No KMS connect link. */
 export function openWalletBrowser(wallet: MobileWallet) {
   if (insideWalletApp() || location.pathname.startsWith("/wallets/app")) return;
-  const host = location.hostname;
-  if (/grok|sandbox|preview/i.test(host)) {
-    throw new Error("This preview opens an X login inside Phantom. Connect on senda.pocketnova.app, or use the Phantom extension.");
-  }
   const target = pageToOpen();
-  const ref = encodeURIComponent(location.origin);
+  const ref = encodeURIComponent("https://senda.pocketnova.app");
   leave(`${HOST[wallet]}/${encodeURIComponent(target)}?ref=${ref}`);
 }
 
-/** Opens the wallet app on this page. The encrypted connect link is not used. */
+/** Opens the wallet app on this page. Signing happens on the injected provider, the same sheet as a normal confirm. */
 export function startMobileConnect(wallet: MobileWallet, _keepTx = false) {
   localStorage.removeItem(PENDING);
   openWalletBrowser(wallet);
@@ -150,7 +223,7 @@ export function startMobileSign(_bytes: Uint8Array, _job: SignJob) {
 export function openInsideBackpack() {
   if (insideWalletApp()) return;
   const url = pageToOpen();
-  leave(`https://backpack.app/ul/v1/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(location.origin)}`);
+  leave(`https://backpack.app/ul/v1/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent("https://senda.pocketnova.app")}`);
 }
 
 function readPending(): Pending | null {
@@ -215,4 +288,18 @@ export function takeMobileReturn(search: string): MobileReturn {
 /** Old encrypted sign jobs are not resumed. Signing happens on the injected provider. */
 export function resumeMobileSign() {
   localStorage.removeItem(PENDING);
+}
+
+/** Never show a wallet login payload as if Senda wrote it. */
+export function humanWalletError(message: string): string {
+  const raw = message.trim();
+  if (/oidc|kms|accountidentifier|phantom\.com\/ul\/v1\/connect|\{/.test(raw.toLowerCase()) || raw.length > 180) {
+    return insideWalletApp()
+      ? "Phantom is already open. Tap Connect. This page signs here."
+      : "That link was a wallet login page, not the signer. Open Phantom and buy on this page.";
+  }
+  if (/did not match the expected pattern/i.test(raw)) {
+    return "The wallet could not read that transfer. Sign the same amount again.";
+  }
+  return raw || "The wallet did not connect.";
 }

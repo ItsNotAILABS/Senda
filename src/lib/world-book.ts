@@ -28,17 +28,28 @@ export type TapeRow = {
   price: number | null;
   change: number | null;
   icon?: string;
+  /** 24h traded notional, when Jupiter sent buy and sell volume. */
+  volume?: number;
+  /** Pool depth in dollars, when Jupiter search returned it. */
+  liquidity?: number;
 };
+
+function dayVolume(stats: { buyVolume?: unknown; sellVolume?: unknown } | undefined): number | undefined {
+  const buy = num(stats?.buyVolume) ?? 0;
+  const sell = num(stats?.sellVolume) ?? 0;
+  const sum = buy + sell;
+  return sum > 0 ? sum : undefined;
+}
 
 const OSTIUM = "https://builder.prod.bedrock.ostium.io/v1/prices";
 const JUP = "https://api.jup.ag/price/v3?ids=";
 const FEEDS = [
-  "https://lite-api.jup.ag/tokens/v2/tag?query=stocks",
   "https://lite-api.jup.ag/tokens/v2/tag?query=verified",
   "https://lite-api.jup.ag/tokens/v2/tag?query=lst",
   "https://lite-api.jup.ag/tokens/v2/toptraded/24h?limit=100",
   "https://lite-api.jup.ag/tokens/v2/toptrending/24h?limit=100",
   "https://lite-api.jup.ag/tokens/v2/toporganicscore/24h?limit=100",
+  "https://lite-api.jup.ag/tokens/v2/recent",
 ];
 
 const BOOK: { lane: WorldLane; ids: string[] }[] = [
@@ -315,7 +326,7 @@ async function contractPairs(): Promise<{ id: number; from: string; to: string; 
   const res = await fetch(GRAPH, {
     method: "POST",
     headers: { accept: "application/json", "content-type": "application/json", "user-agent": "Senda" },
-    body: JSON.stringify({ query: "{ pairs(first: 200) { id from to maxLeverage } }" }),
+    body: JSON.stringify({ query: "{ pairs(first: 500) { id from to maxLeverage } }" }),
     signal: AbortSignal.timeout(8000),
   });
   if (!res.ok) return [];
@@ -367,8 +378,11 @@ async function loadOstium(): Promise<WorldRow[]> {
   return rows.sort((a, b) => a.lane.localeCompare(b.lane) || a.base.localeCompare(b.base));
 }
 
+let tapeCache: { at: number; rows: TapeRow[] } | null = null;
+
 export async function loadTape(): Promise<TapeRow[]> {
-  const lists = await Promise.all(FEEDS.map((url) => getJson(url, 8000).catch(() => [])));
+  if (tapeCache && Date.now() - tapeCache.at < 45_000) return tapeCache.rows;
+  const lists = await Promise.all(FEEDS.map((url) => getJson(url, 20000).catch(() => [])));
   const rows: TapeRow[] = [];
   const seen = new Set<string>();
   for (const json of lists) {
@@ -381,7 +395,8 @@ export async function loadTape(): Promise<TapeRow[]> {
         name?: unknown;
         usdPrice?: unknown;
         icon?: unknown;
-        stats24h?: { priceChange?: unknown };
+        liquidity?: unknown;
+        stats24h?: { priceChange?: unknown; buyVolume?: unknown; sellVolume?: unknown };
       };
       if (typeof row.id !== "string" || typeof row.symbol !== "string" || seen.has(row.id)) continue;
       if (rows.length >= 6000) break;
@@ -393,6 +408,8 @@ export async function loadTape(): Promise<TapeRow[]> {
         price: num(row.usdPrice),
         change: num(row.stats24h?.priceChange),
         icon: typeof row.icon === "string" ? row.icon : undefined,
+        volume: dayVolume(row.stats24h),
+        liquidity: num(row.liquidity) ?? undefined,
       });
     }
   }
@@ -401,7 +418,18 @@ export async function loadTape(): Promise<TapeRow[]> {
     seen.add(hold.mint);
     rows.push({ id: hold.mint, symbol: hold.symbol, name: hold.symbol, price: null, change: null });
   }
+  rows.sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0) || a.symbol.localeCompare(b.symbol));
+  tapeCache = { at: Date.now(), rows };
   return rows;
+}
+
+/** The verified Jupiter book, slimmed on the desk so the phone is not handed a 5MB blob. */
+export async function fetchTape(): Promise<TapeRow[]> {
+  const res = await fetch("/api/chain", { method: "GET", headers: { accept: "application/json" } });
+  if (!res.ok) throw new Error(`The tape did not load (${res.status}).`);
+  const json: unknown = await res.json();
+  if (!Array.isArray(json)) throw new Error("The tape was not a list.");
+  return json as TapeRow[];
 }
 
 export const worldBook = createServerFn({ method: "GET" }).handler(async () => loadBook());
@@ -409,3 +437,41 @@ export const worldBook = createServerFn({ method: "GET" }).handler(async () => l
 export const ostiumBook = createServerFn({ method: "GET" }).handler(async () => loadOstium());
 
 export const jupTape = createServerFn({ method: "GET" }).handler(async () => loadTape());
+
+/** A ticker Jupiter can quote, including names that are not on the verified list. Deepest pool first. */
+export const searchTape = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const q = typeof input === "string" ? input : "";
+    return q.trim().slice(0, 44);
+  })
+  .handler(async ({ data }): Promise<TapeRow[]> => {
+    if (data.length < 2) return [];
+    const json = await getJson(`https://lite-api.jup.ag/tokens/v2/search?query=${encodeURIComponent(data)}`, 8000).catch(() => []);
+    if (!Array.isArray(json)) return [];
+    const rows: TapeRow[] = [];
+    for (const raw of json) {
+      if (!raw || typeof raw !== "object") continue;
+      const row = raw as {
+        id?: unknown;
+        symbol?: unknown;
+        name?: unknown;
+        usdPrice?: unknown;
+        icon?: unknown;
+        liquidity?: unknown;
+        stats24h?: { priceChange?: unknown; buyVolume?: unknown; sellVolume?: unknown };
+      };
+      if (typeof row.id !== "string" || row.id.length < 32 || typeof row.symbol !== "string") continue;
+      rows.push({
+        id: row.id,
+        symbol: row.symbol,
+        name: typeof row.name === "string" && row.name ? row.name : row.symbol,
+        price: num(row.usdPrice),
+        change: num(row.stats24h?.priceChange),
+        icon: typeof row.icon === "string" ? row.icon : undefined,
+        liquidity: num(row.liquidity) ?? undefined,
+        volume: dayVolume(row.stats24h),
+      });
+    }
+    rows.sort((a, b) => (b.liquidity ?? 0) - (a.liquidity ?? 0));
+    return rows.slice(0, 30);
+  });

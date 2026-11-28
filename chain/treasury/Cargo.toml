@@ -1,0 +1,12 @@
+[package]
+name = "senda-treasury"
+version = "0.1.0"
+edition = "2021"
+description = "Devnet treasury. Other programs read the account and fund it. Draw stays closed until the authority opens it."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "=2.2.1"

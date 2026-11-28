@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { connectPhantom, readChain } from "@/lib/phantom";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { openDeposit } from "@/components/fund-sheet";
+import { injectedWallet, insideWalletApp, isPhoneBrowser, phantomBrowseHref } from "@/lib/mobile-wallet";
 
 /** What the connected Solana wallet holds right now. Senda does not keep a balance. */
 export function MoneyBar() {
   const wallet = useWallet();
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const owner = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
   const [sol, setSol] = useState<number | null>(null);
   const [usdc, setUsdc] = useState<number | null>(null);
@@ -55,14 +58,26 @@ export function MoneyBar() {
       <Stat k="USDC" v={usdc == null ? "—" : usdc.toFixed(2)} />
       <Stat k="Other" v={owner ? String(other) : "—"} />
       {owner ? (
-        <Link to="/wallets" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
-          Wallets
+        <Link to="/wallets/activity" className="inline-flex min-h-10 items-center rounded-full border border-white/15 px-4 text-sm font-semibold">
+          Activity
         </Link>
       ) : (
-        <button type="button" onClick={() => void open()} className="min-h-10 rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg">
+        <a
+          href={phantomBrowseHref(path)}
+          onClick={(e) => {
+            if (injectedWallet() || insideWalletApp() || !isPhoneBrowser()) {
+              e.preventDefault();
+              void open();
+            }
+          }}
+          className="inline-flex min-h-10 items-center rounded-full bg-accent px-4 text-sm font-semibold text-accent-fg"
+        >
           Connect Phantom
-        </button>
+        </a>
       )}
+      <button type="button" onClick={() => openDeposit()} className="min-h-10 rounded-full bg-white/10 px-4 text-sm font-semibold">
+        Deposit
+      </button>
     </section>
   );
 }

@@ -19,18 +19,6 @@ export const EVM_MARKETS = [
 
 const SOLANA_MINTS = new Set(SOLANA_MORE.map((row) => row[2]));
 
-const BASES = new Set([
-  USDC_MAINNET,
-  SOL_MINT,
-  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
-  "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH",
-  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo",
-]);
-
-function solMint(mint) {
-  return typeof mint === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint);
-}
-
 export function solanaDecimals(mint) {
   return SOLANA_DECIMALS[mint] ?? null;
 }
@@ -39,10 +27,8 @@ export function evmMarketFor(symbol) {
   return EVM_MARKETS.find((row) => row.tape === symbol) ?? null;
 }
 
-/** SOL, USDC, CASH, USDT, or PYUSD against any Solana mint Jupiter can quote. Both bases can swap with each other. */
+/** SOL, USDC, a listed Solana market, or a PreStock. Anything else never reaches a wallet. */
 export function pairAllowed(inputMint, outputMint, prestockMints = []) {
-  if (!solMint(inputMint) || !solMint(outputMint)) return false;
-  if (BASES.has(inputMint) || BASES.has(outputMint)) return true;
   const allowed = new Set([USDC_MAINNET, SOL_MINT, ...SOLANA_MINTS, ...prestockMints]);
   return allowed.has(inputMint) && allowed.has(outputMint);
 }
@@ -66,6 +52,8 @@ export const EVM_CHAINS = {
   56: { name: "BNB Smart Chain", rpc: "https://bsc-dataseed.binance.org", symbol: "BNB", explorer: "https://bscscan.com" },
   42161: { name: "Arbitrum", rpc: "https://arb1.arbitrum.io/rpc", symbol: "ETH", explorer: "https://arbiscan.io" },
   43114: { name: "Avalanche", rpc: "https://api.avax.network/ext/bc/C/rpc", symbol: "AVAX", explorer: "https://snowtrace.io" },
+  8453: { name: "Base", rpc: "https://mainnet.base.org", symbol: "ETH", explorer: "https://basescan.org" },
+  137: { name: "Polygon", rpc: "https://polygon-rpc.com", symbol: "POL", explorer: "https://polygonscan.com" },
 };
 
 /** Token units to sell for about `usd`, never more than the wallet holds. */

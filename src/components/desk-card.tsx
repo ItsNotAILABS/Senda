@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MarkFace } from "@/components/holding-cards";
 
 export function Spark({ points, down }: { points: number[]; down?: boolean }) {
   const vals = points.filter((n) => Number.isFinite(n));
@@ -55,11 +56,7 @@ export function InstrumentCard({
     <article className="overflow-hidden rounded-[28px] border border-[#c6f56a]/20 bg-[#070b08] px-4 py-4">
       <div className="flex items-start gap-3">
         <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-          {logo ? (
-            <img src={logo} alt="" className="size-11 shrink-0 rounded-full bg-white object-contain p-1.5" />
-          ) : (
-            <span className="grid size-11 shrink-0 place-items-center rounded-full bg-white text-xs font-semibold text-black">{title.slice(0, 2)}</span>
-          )}
+          <MarkFace icon={logo} symbol={title} size={44} />
           <span className="min-w-0">
             <span className="block truncate text-base font-semibold">{title}</span>
             <span className="block truncate text-xs text-white/40">{sub}</span>

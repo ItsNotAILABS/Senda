@@ -4,6 +4,7 @@ import { connectPhantom } from "@/lib/phantom";
 import { runPrestock } from "@/lib/prestock";
 import { loadTape, type TapeCoin } from "@/lib/jup-tape";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
+import { MarkFace } from "@/components/holding-cards";
 import { cn } from "@/lib/utils";
 
 function px(n: number): string {
@@ -78,11 +79,7 @@ export function TokenTape() {
         {shown.map((item) => (
           <article key={item.id} className="flex flex-col rounded-[22px] bg-[#16181e] p-4">
             <div className="flex items-center gap-2">
-              {item.icon ? (
-                <img src={item.icon} alt="" className="size-8 rounded-full bg-white/10 object-cover" />
-              ) : (
-                <span className="grid size-8 place-items-center rounded-full bg-[#2a2e38] text-[10px] text-white/50">?</span>
-              )}
+              <MarkFace icon={item.icon} symbol={item.symbol} mint={item.id} size={32} />
               <span>
                 <span className="block text-sm font-semibold">{item.symbol}</span>
                 <span className={cn("block text-xs", item.change < 0 ? "text-[#ff5d73]" : "text-[#c6f56a]")}>

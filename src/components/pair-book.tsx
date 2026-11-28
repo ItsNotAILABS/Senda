@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const GROUPS: { id: MarketGroup; label: string }[] = [
   { id: "metal", label: "Gold and silver" },
   { id: "crypto", label: "Crypto" },
+  { id: "meme", label: "Solana memes" },
   { id: "fx", label: "Forex" },
 ];
 
@@ -64,7 +65,7 @@ export function PairBook() {
   return (
     <div className="px-3 py-3">
       <p className="text-[11px] tracking-[0.16em] text-accent uppercase">Pairs</p>
-      <h2 className="mt-1 text-2xl font-semibold">Gold, crypto, forex</h2>
+      <h2 className="mt-1 text-2xl font-semibold">Gold, crypto, memes, forex</h2>
       <p className="mt-1 text-sm text-white/55">A row with a token signs in Phantom. A row without one is the print. New markets are added in the catalog, not in this screen.</p>
       <div className="mt-3 flex gap-2">
         {[1, 5, 25].map((n) => (

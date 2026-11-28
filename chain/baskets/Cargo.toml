@@ -1,0 +1,12 @@
+[package]
+name = "baskets"
+version = "0.1.0"
+edition = "2021"
+description = "Devnet program. A basket is a recipe account. The wallet signs and pays rent. It does not custody tokens."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "=2.2.1"

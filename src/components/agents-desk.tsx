@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Binoculars, CalendarClock, Eye, FileText, Lock, Shield, TrendingDown, TrendingUp } from "lucide-react";
 import { AgentComputer } from "@/components/agent-computer";
+import { BundleDesk } from "@/components/bundle-desk";
 import { MoneyBar } from "@/components/money-bar";
 import { TabLead } from "@/components/tab-lead";
 import { bookLevel, pushLevel, review, type Gate } from "@/lib/agent-risk";
@@ -18,6 +19,7 @@ import { connectPhantom, mintDecimals, readChain } from "@/lib/phantom";
 import { assertAgentBox } from "@/lib/agent-box";
 import { guardRoute } from "@/lib/route-guard";
 import { parseIntent } from "@/lib/intent";
+import { VAULT_RECEIPTS } from "@/lib/vault-book";
 import { runPrestock } from "@/lib/prestock";
 import { jupTape, type TapeRow } from "@/lib/world-book";
 import { formatPremium, formatUsd, type HouseListing } from "@/lib/sol-house";
@@ -424,9 +426,18 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
   runRef.current = runMade;
 
   function sayTrade() {
-    const parsed = parseIntent(said, book);
+    const bookPlus = [
+      ...VAULT_RECEIPTS.map((r) => ({ symbol: r.symbol, name: r.name, mint: r.mint })),
+      ...book.map((n) => ({ symbol: n.symbol, name: n.name, mint: n.mint })),
+    ];
+    const parsed = parseIntent(said, bookPlus);
     if (!parsed.ok) {
       toast.error(parsed.error);
+      return;
+    }
+    const onHouse = book.some((n) => n.symbol === parsed.symbol);
+    if (parsed.kind === "send" || !onHouse) {
+      void speak(parsed);
       return;
     }
     const row = createEnvelope({
@@ -449,6 +460,33 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
     setSaid("");
     toast.success(parsed.refused ? `${parsed.line} ${parsed.refused}` : `${parsed.line} Confirm it in Phantom.`);
     void runRef.current(next.find((e) => e.id === row.id));
+  }
+
+  async function speak(parsed: Extract<ReturnType<typeof parseIntent>, { ok: true }>) {
+    setBusy(true);
+    try {
+      const existing = wallet.w.links.find((l) => l.kind === "phantom" || l.kind === "solana")?.address ?? "";
+      const owner = existing || (await connectPhantom());
+      if (!existing) {
+        const linked = wallet.linkChain(owner, "Phantom", "phantom");
+        if (!linked.ok) throw new Error(linked.error || "Could not keep the address.");
+      }
+      if (parsed.kind === "send") {
+        assertAgentBox({ usd: parsed.usd, mint: USDC, allowed: [], cap: parsed.usd, velocity: true });
+        const done = await payUsdc({ owner, to: parsed.to, usd: parsed.usd, memo: "senda" });
+        toast.success(`Sent $${parsed.usd.toFixed(2)} USDC. ${done.signature.slice(0, 8)}…`);
+      } else {
+        if (parsed.mint.length < 32) throw new Error("That name has no mint on this book.");
+        assertAgentBox({ usd: parsed.usd, mint: parsed.mint, allowed: [parsed.mint], cap: parsed.usd, velocity: true });
+        const done = await runPrestock({ owner, mint: parsed.mint, side: parsed.side, usd: parsed.usd, price: 0 });
+        toast.success(`${parsed.line} ${done.signature.slice(0, 8)}…`);
+      }
+      setSaid("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "It did not send.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   function makeAgent() {
@@ -647,6 +685,7 @@ export function AgentsDesk({ names }: { names: HouseListing[] }) {
         coming={["An agent you host off this browser", "A key of its own"]}
       />
       <MoneyBar />
+      <BundleDesk mode="sign" />
 
       <form
         onSubmit={(e) => {

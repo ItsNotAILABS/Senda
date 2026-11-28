@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate } from "@tanstack/react-router";
+import { Link, Navigate } from "@tanstack/react-router";
 import { authEnabled, signOut } from "./client";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
 
@@ -40,23 +40,23 @@ export function RedirectToSignIn({ to = SIGN_IN_PATH }: { to?: string }) {
 export function UserButton() {
   const user = useCurrentUser();
   if (!user) return null;
-  const label = user.displayName ?? user.primaryEmail ?? "Account";
+  const label = user.isDevFallback ? "No account" : user.displayName ?? user.primaryEmail ?? "Account";
   return (
     <div className="flex items-center gap-2">
-      {user.profileImageUrl ? (
-        <img
-          src={user.profileImageUrl}
-          alt=""
-          className="size-8 rounded-full object-cover outline outline-1 -outline-offset-1 outline-fg/15"
-        />
-      ) : (
-        <span className="grid size-8 place-items-center rounded-full bg-elevated text-xs font-medium text-fg">
-          {label.charAt(0).toUpperCase()}
-        </span>
-      )}
-      <span className="hidden max-w-28 truncate text-sm font-medium sm:inline">
-        {label}
-      </span>
+      <Link to="/profile" aria-label="Profile" className="flex min-w-0 items-center gap-2">
+        {user.profileImageUrl ? (
+          <img
+            src={user.profileImageUrl}
+            alt=""
+            className="size-8 rounded-full object-cover outline outline-1 -outline-offset-1 outline-fg/15"
+          />
+        ) : (
+          <span className="grid size-8 place-items-center rounded-full bg-elevated text-xs font-medium text-fg">
+            {label.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <span className="hidden max-w-28 truncate text-sm font-medium sm:inline">{label}</span>
+      </Link>
       {authEnabled && (
         <button
           type="button"

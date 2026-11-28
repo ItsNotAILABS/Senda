@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { ArrowUpRight, Bluetooth, Plus, RefreshCw } from "lucide-react";
 import { AddAccountScreen } from "@/components/add-account";
 import { AddMoneyScreen } from "@/components/add-money";
+import { MarkFace } from "@/components/holding-cards";
 import { TokenMark } from "@/components/token-mark";
 import { VaultRow } from "@/components/vault-row";
 import { loadHouseBook, markHouse } from "@/lib/house-paper";
@@ -274,7 +275,7 @@ export function WalletHome() {
         ) : null}
         {w.senda ? (
           <div className="flex items-center gap-3 px-5 py-3.5">
-            <div className="grid size-10 place-items-center rounded-full bg-elevated text-xs font-semibold">SOL</div>
+            <MarkFace symbol="SOL" size={40} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Senda wallet</p>
               <p className="truncate font-mono text-xs text-subtle">{shortPk(w.senda.pubkey)}</p>
@@ -284,9 +285,7 @@ export function WalletHome() {
         ) : null}
         {w.links.map((l) => (
           <div key={l.id} className="flex items-center gap-3 px-5 py-3.5">
-            <div className="grid size-10 place-items-center rounded-full bg-elevated text-xs font-semibold">
-              {l.kind === "evm" ? "ETH" : l.kind === "phantom" ? "Ph" : "SOL"}
-            </div>
+            <MarkFace symbol={l.kind === "evm" ? "ETH" : "SOL"} size={40} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{l.label}</p>
               <p className="truncate font-mono text-xs text-subtle">{shortPk(l.address)}</p>
@@ -352,7 +351,7 @@ function AccountRow({ ccy, bal }: { ccy: Ccy; bal: number }) {
       search={{ act: "exchange", from: ccy }}
       className="flex items-center gap-3 px-5 py-3.5 active:bg-elevated"
     >
-      <div className="grid size-10 place-items-center rounded-full bg-elevated text-xs font-semibold">{ccy}</div>
+      <MarkFace symbol={ccy} size={40} />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{CCY_META[ccy].name}</p>
         <p className="text-xs text-subtle tabular-nums">{formatMoney(bal * (usdPer[ccy] || 0), "USD")}</p>

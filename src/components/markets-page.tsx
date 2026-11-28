@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { jupTape, type TapeRow } from "@/lib/world-book";
+import { MarkFace } from "@/components/holding-cards";
+import { jupTape, searchTape, type TapeRow } from "@/lib/world-book";
 import { useHouse } from "@/lib/use-house";
 import { FillButton } from "@/components/fill-button";
 import { LiveChart } from "@/components/price-chart";
 import { ListedView } from "@/components/desk-views";
 import { OstiumBook } from "@/components/ostium-book";
+import { PhoenixDesk } from "@/components/phoenix-desk";
 import { PairBook } from "@/components/pair-book";
 import { PerpDesk } from "@/components/perp-desk";
 import { SolanaFloor } from "@/components/solana-floor";
@@ -21,19 +23,25 @@ import { PerpBooks } from "@/components/perp-books";
 import { DerivDesk } from "@/components/deriv-desk";
 import { FdvDesk } from "@/components/fdv-desk";
 import { RegistryDesk } from "@/components/registry-desk";
+import { ScreenDesk } from "@/components/screen-desk";
+import { VendorHub } from "@/components/vendor-hub";
 import { BasketDesk } from "@/components/basket-desk";
+import { BundleDesk } from "@/components/bundle-desk";
 import { CoverDesk } from "@/components/cover-desk";
 import { CurveDesk } from "@/components/curve-desk";
 import { EcosystemDesk } from "@/components/ecosystem-desk";
 import { LaunchDesk } from "@/components/launch-desk";
+import { EarnDesk } from "@/components/earn-desk";
+import { ReflectDesk } from "@/components/reflect-desk";
 import { LendDesk } from "@/components/lend-desk";
 import { PlayDesk } from "@/components/play-desk";
 import { RadarDesk } from "@/components/radar-desk";
 import { NetBrief, NetworkSheet } from "@/components/network-sheet";
 import { PHANTOM_NETS, netMatches } from "@/lib/chain-book";
+import { PRESTOCK_MINTS } from "@/lib/phantom";
 import { cn } from "@/lib/utils";
 
-type Tab = "trending" | "up" | "down" | "names" | "registry" | "futures" | "kalshi" | "poly" | "fx" | "metals" | "comms" | "pairs" | "ostium" | "hl" | "deriv" | "chains" | "vaults" | "products" | "shares" | "perps" | "solana" | "stake" | "basket" | "lend" | "cover" | "radar" | "curve" | "launch" | "rails" | "news";
+type Tab = "trending" | "up" | "down" | "names" | "registry" | "futures" | "kalshi" | "poly" | "fx" | "metals" | "energy" | "softs" | "index" | "comms" | "pairs" | "ostium" | "hl" | "deriv" | "chains" | "vaults" | "earn" | "reflect" | "products" | "shares" | "perps" | "phoenix" | "solana" | "stake" | "basket" | "bundles" | "lend" | "cover" | "radar" | "curve" | "launch" | "rails" | "news";
 
 const TITLES: Record<Tab, string> = {
   trending: "Coins",
@@ -46,6 +54,9 @@ const TITLES: Record<Tab, string> = {
   poly: "Polymarket",
   fx: "FX",
   metals: "Metals",
+  energy: "Energy",
+  softs: "Softs",
+  index: "Indexes",
   comms: "Commodities",
   pairs: "Pairs",
   ostium: "Ostium",
@@ -53,12 +64,16 @@ const TITLES: Record<Tab, string> = {
   deriv: "Derivatives",
   chains: "Chains",
   vaults: "Vaults",
+  earn: "Earn",
+  reflect: "Reflect",
   products: "Products",
   shares: "xStocks",
   perps: "Perps",
+  phoenix: "Phoenix",
   solana: "Solana",
   stake: "Stakes",
   basket: "Index",
+  bundles: "Baskets",
   lend: "Borrow",
   cover: "Cover",
   radar: "Radar",
@@ -77,16 +92,17 @@ function formatPx(n: number) {
   return n >= 1 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : `$${n.toPrecision(3)}`;
 }
 
-export function MarketsPage() {
+export function MarketsPage({ initial }: { initial?: string }) {
   const book = useHouse();
-  const house = book.filter((h) => h.venue === "prestocks" && h.last > 0);
+  const house = book.filter((h) => h.venue === "prestocks" && (h.last > 0 || PRESTOCK_MINTS.some(([symbol]) => symbol === h.symbol)));
   const [tape, setTape] = useState<TapeRow[]>([]);
-  const [tab, setTab] = useState<Tab>("trending");
+  const [hits, setHits] = useState<TapeRow[]>([]);
+  const [tab, setTab] = useState<Tab>(initial && initial in TITLES ? (initial as Tab) : "trending");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<TapeRow | null>(null);
   const [nameId, setNameId] = useState("");
   const [sort, setSort] = useState<"gain" | "loss" | "price" | "name">("gain");
-  const [cap, setCap] = useState(40);
+  const [cap, setCap] = useState(120);
   const [shape, setShape] = useState<"rows" | "cards">("cards");
   const [usd, setUsd] = useState(5);
   const [netId, setNetId] = useState("solana");
@@ -113,7 +129,26 @@ export function MarketsPage() {
   }, []);
 
   const query = q.trim().toLowerCase();
-  const coins = tape.filter((r) => !query || `${r.symbol} ${r.name}`.toLowerCase().includes(query));
+
+  useEffect(() => {
+    if (query.length < 2) {
+      setHits([]);
+      return;
+    }
+    let live = true;
+    const timer = window.setTimeout(() => {
+      searchTape({ data: query })
+        .then((rows) => live && setHits(rows))
+        .catch(() => live && setHits([]));
+    }, 280);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [query]);
+
+  const local = tape.filter((r) => !query || `${r.symbol} ${r.name} ${r.id}`.toLowerCase().includes(query));
+  const coins = query.length < 2 ? local : [...hits, ...local.filter((r) => !hits.some((h) => h.id === r.id))];
   const shown = (tab === "up" ? coins.filter((r) => (r.change ?? 0) > 0) : tab === "down" ? coins.filter((r) => (r.change ?? 0) < 0) : coins)
     .slice()
     .sort((a, b) => {
@@ -126,7 +161,16 @@ export function MarketsPage() {
   const names = house.filter((h) => (!query || `${h.symbol} ${h.name}`.toLowerCase().includes(query)) && netMatches(net, h.symbol));
   const name = names.find((h) => h.id === nameId) ?? names[0] ?? null;
   const coinsOnNet = shown.filter((r) => netMatches(net, r.symbol));
+  const listed = query ? coinsOnNet : coinsOnNet.slice(0, cap);
   const spend = usd > 0 ? usd : 1;
+  const tabGroups: { label: string; ids: Tab[] }[] = [
+    { label: "Trade", ids: ["trending", "up", "down", "shares", "names"] },
+    { label: "Predict", ids: ["kalshi", "poly", "futures", "news"] },
+    { label: "Derivatives", ids: ["perps", "phoenix", "ostium", "hl", "deriv", "pairs", "cover"] },
+    { label: "World", ids: ["fx", "metals", "energy", "softs", "index", "comms"] },
+    { label: "Yield", ids: ["earn", "reflect", "stake", "vaults", "lend", "basket", "bundles"] },
+    { label: "Networks", ids: ["chains", "solana", "rails", "registry", "products", "radar", "curve", "launch"] },
+  ];
 
   return (
     <div className="px-3 py-3 lg:px-4">
@@ -135,10 +179,8 @@ export function MarketsPage() {
         <h1 className="mt-1 text-3xl tracking-tight">{TITLES[tab]}</h1>
         <p className="mt-1 max-w-xl text-sm text-white/50">
           {coinTab(tab)
-            ? shape === "cards"
-              ? "Cards is a filter on the coin book. Each square buys and sells in the wallet."
-              : "Same coins, as a list. Cards puts the grid back."
-            : "This desk stays its own book. Cards jumps back to the coin grid."}
+            ? `${coinsOnNet.length.toLocaleString("en-US")} on this filter.${query.length >= 2 ? " Jupiter search is included, deepest pool first. The same ticker can be more than one mint." : ""} ${shape === "cards" ? "Cards are the coin book." : "Same coins, as a list."}`
+            : `${TITLES[tab]} stays its own book. Nothing else was removed.`}
         </p>
       </header>
       <div className="mt-3 flex gap-2">
@@ -166,47 +208,21 @@ export function MarketsPage() {
       </div>
       <NetworkSheet open={sheet} current={net.id} onClose={() => setSheet(false)} onPick={setNetId} />
       {net.id !== "solana" ? <NetBrief net={net} /> : null}
-      <div className="mt-3 flex gap-1 overflow-x-auto">
-        {(
-          [
-            ["trending", "Coins"],
-            ["up", "Up"],
-            ["down", "Down"],
-            ["names", "Names"],
-            ["registry", "Registry"],
-            ["futures", "Futures"],
-            ["kalshi", "Kalshi"],
-            ["poly", "Polymarket"],
-            ["fx", "FX"],
-            ["metals", "Metals"],
-            ["comms", "Commodities"],
-            ["pairs", "Pairs"],
-            ["ostium", "Ostium"],
-            ["hl", "Hyperliquid"],
-            ["deriv", "Derivatives"],
-            ["chains", "Chains"],
-            ["vaults", "Vaults"],
-            ["products", "Products"],
-            ["shares", "xStocks"],
-            ["perps", "Perps"],
-            ["solana", "Solana"],
-            ["stake", "Stakes"],
-            ["basket", "Index"],
-            ["lend", "Borrow"],
-            ["cover", "Cover"],
-            ["radar", "Radar"],
-            ["curve", "Curve"],
-            ["launch", "Launch"],
-            ["rails", "Rails"],
-            ["news", "News"],
-          ] as const
-        ).map(([id, label]) => (
-          <button key={id} type="button" onClick={() => setTab(id)} className={tab === id ? "min-h-9 shrink-0 rounded-full bg-white px-3 text-sm font-semibold text-black" : "min-h-9 shrink-0 rounded-full px-3 text-sm text-white/60"}>
-            {label}
-          </button>
+      <div className="mt-3 space-y-3">
+        {tabGroups.map((group) => (
+          <div key={group.label}>
+            <p className="mb-1 text-[10px] tracking-[0.14em] text-white/35 uppercase">{group.label}</p>
+            <div className="flex gap-1 overflow-x-auto">
+              {group.ids.map((id) => (
+                <button key={id} type="button" onClick={() => setTab(id)} className={tab === id ? "min-h-9 shrink-0 rounded-full bg-white px-3 text-sm font-semibold text-black" : "min-h-9 shrink-0 rounded-full bg-white/10 px-3 text-sm text-white/70"}>
+                  {TITLES[id]}
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
-      <input value={q} onChange={(e) => { setQ(e.target.value); setCap(40); }} placeholder="Search" className="mt-3 min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
+      <input value={q} onChange={(e) => { setQ(e.target.value); setCap(120); }} placeholder="Search a ticker or a mint" className="mt-3 min-h-11 w-full rounded-full bg-[#1c1c1e] px-4 text-sm outline-none" />
       <div className="mt-3 flex gap-2 overflow-x-auto">
         {(
           [
@@ -239,6 +255,9 @@ export function MarketsPage() {
       ) : null}
       {tab === "fx" ? <WorldDesk start="fx" /> : null}
       {tab === "metals" ? <WorldDesk start="metals" /> : null}
+      {tab === "energy" ? <WorldDesk start="energy" /> : null}
+      {tab === "softs" ? <WorldDesk start="softs" /> : null}
+      {tab === "index" ? <WorldDesk start="index" /> : null}
       {tab === "comms" ? <CommodityBook /> : null}
       {tab === "pairs" ? <PairBook /> : null}
       {tab === "ostium" ? <OstiumBook /> : null}
@@ -246,7 +265,9 @@ export function MarketsPage() {
       {tab === "deriv" ? <DerivDesk /> : null}
       {tab === "chains" ? <ChainDesk /> : null}
       {tab === "vaults" ? <VaultMarket /> : null}
-      {tab === "products" ? <div className="mt-3"><OfferingBook /></div> : null}
+      {tab === "earn" ? <EarnDesk /> : null}
+      {tab === "reflect" ? <ReflectDesk /> : null}
+      {tab === "products" ? <div className="mt-3"><VendorHub /><OfferingBook /></div> : null}
       {tab === "shares" ? <ListedView view="market" /> : null}
       {tab === "perps" ? (
         <div className="mt-3 space-y-4">
@@ -254,20 +275,22 @@ export function MarketsPage() {
           <PerpBooks />
         </div>
       ) : null}
+      {tab === "phoenix" ? <PhoenixDesk /> : null}
       {tab === "solana" ? <SolanaFloor house={book} view="mints" /> : null}
       {tab === "news" ? <DeskNews flush /> : null}
       {tab === "kalshi" ? <KalshiTape /> : null}
       {tab === "poly" ? <PolyTape /> : null}
       {tab === "futures" ? <FdvDesk /> : null}
-      {tab === "registry" ? <RegistryDesk /> : null}
+      {tab === "registry" ? <><ScreenDesk /><RegistryDesk /></> : null}
       {tab === "stake" ? <PlayDesk house={book} /> : null}
       {tab === "basket" ? <BasketDesk house={house} /> : null}
+      {tab === "bundles" ? <BundleDesk /> : null}
       {tab === "lend" ? <LendDesk house={house} /> : null}
       {tab === "cover" ? <CoverDesk names={house} view="all" /> : null}
       {tab === "radar" ? <RadarDesk house={house} /> : null}
       {tab === "curve" ? <CurveDesk /> : null}
       {tab === "launch" ? <LaunchDesk /> : null}
-      {tab === "rails" ? <EcosystemDesk house={house} /> : null}
+      {tab === "rails" ? <><VendorHub /><EcosystemDesk house={house} /></> : null}
       {tab === "names" ? (
         <>
           <ul className="mt-3 divide-y divide-white/10 rounded-[22px] bg-[#101114] px-4">
@@ -302,13 +325,14 @@ export function MarketsPage() {
       ) : tab === "trending" || tab === "up" || tab === "down" ? (
         shape === "cards" ? (
           <ul className="mt-3 grid grid-cols-2 gap-3">
-            {coinsOnNet.slice(0, cap).map((r) => {
+            {listed.map((r) => {
               const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
               return (
                 <li key={r.id} className="flex min-h-[168px] flex-col rounded-[22px] border border-white/10 bg-[#10131c] p-3">
                   <button type="button" onClick={() => setOpen(r)} className="text-left">
-                    {r.icon ? <img src={r.icon} alt="" className="size-9 rounded-full object-cover" /> : <span className="grid size-9 place-items-center rounded-full bg-white text-[10px] font-semibold text-black">{r.symbol.slice(0, 2)}</span>}
+                    <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={36} />
                     <span className="mt-2 block truncate font-semibold">{r.symbol}</span>
+                    <span className="block truncate font-mono text-[10px] text-white/35">{r.id.slice(0, 4)}…{r.id.slice(-4)}{r.liquidity ? ` · pool $${Math.round(r.liquidity).toLocaleString("en-US")}` : ""}</span>
                     <span className="block font-mono text-lg">{r.price == null ? "—" : formatPx(r.price)}</span>
                     <span className={chg != null && chg < 0 ? "text-xs text-[#ff5d73]" : "text-xs text-[#c6f56a]"}>{chg == null ? "" : `${chg >= 0 ? "+" : ""}${chg.toFixed(1)}%`}</span>
                   </button>
@@ -319,25 +343,28 @@ export function MarketsPage() {
                 </li>
               );
             })}
-            {coinsOnNet.length > cap ? (
-              <li className="col-span-2">
-                <button type="button" onClick={() => setCap((n) => n + 40)} className="min-h-11 w-full rounded-full bg-white/10 text-sm font-semibold">
-                  Show more · {(coinsOnNet.length - cap).toLocaleString("en-US")} still on the book
+            {coinsOnNet.length > listed.length ? (
+              <li className="col-span-2 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setCap((n) => n + 40)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+                  More
+                </button>
+                <button type="button" onClick={() => setCap(coinsOnNet.length)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+                  All {coinsOnNet.length.toLocaleString("en-US")}
                 </button>
               </li>
             ) : null}
           </ul>
         ) : (
           <ul className="mt-2">
-            {coinsOnNet.slice(0, cap).map((r) => {
+            {listed.map((r) => {
               const chg = r.change == null ? null : Math.abs(r.change) <= 2 ? r.change * 100 : r.change;
               return (
                 <li key={r.id}>
                   <button type="button" onClick={() => setOpen(r)} className="flex w-full items-center gap-3 py-3 text-left">
-                    {r.icon ? <img src={r.icon} alt="" className="size-10 rounded-full object-cover" /> : <span className="grid size-10 place-items-center rounded-full bg-white text-xs font-semibold text-black">?</span>}
+                    <MarkFace icon={r.icon} symbol={r.symbol} mint={r.id} size={40} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-semibold">{r.symbol}</span>
-                      <span className="block truncate text-xs text-muted">{r.name}</span>
+                      <span className="block truncate text-xs text-muted">{r.name} · {r.id.slice(0, 4)}…{r.id.slice(-4)}</span>
                     </span>
                     <span className="text-right">
                       <span className="block font-mono text-sm">{r.price == null ? "—" : formatPx(r.price)}</span>
@@ -348,10 +375,13 @@ export function MarketsPage() {
               );
             })}
             {coinsOnNet.length === 0 ? <li className="py-6 text-sm text-muted">Nothing on this network is on the Jupiter book.</li> : null}
-            {coinsOnNet.length > cap ? (
-              <li className="py-3">
-                <button type="button" onClick={() => setCap((n) => n + 40)} className="min-h-11 w-full rounded-full bg-white/10 text-sm font-semibold">
-                  Show more · {(coinsOnNet.length - cap).toLocaleString("en-US")} still on the book
+            {coinsOnNet.length > listed.length ? (
+              <li className="grid grid-cols-2 gap-2 py-3">
+                <button type="button" onClick={() => setCap((n) => n + 40)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+                  More
+                </button>
+                <button type="button" onClick={() => setCap(coinsOnNet.length)} className="min-h-11 rounded-full bg-white/10 text-sm font-semibold">
+                  All {coinsOnNet.length.toLocaleString("en-US")}
                 </button>
               </li>
             ) : null}
@@ -361,7 +391,11 @@ export function MarketsPage() {
       {open && coinTab(tab) ? (
         <section className="mt-2 rounded-[22px] border border-white/10 bg-[#10131c] p-4">
           <p className="text-sm font-semibold">{open.symbol}</p>
-          <p className="mt-1 text-xs text-muted">{open.name}</p>
+          <p className="mt-1 break-all font-mono text-[11px] text-muted">{open.name} · {open.id}</p>
+          <p className="mt-1 font-mono text-xs text-white/45">
+            {open.volume ? `${open.volume.toLocaleString("en-US", { maximumFractionDigits: 0 })} traded 24h` : "24h volume was not on this print"}
+            {open.liquidity ? ` · pool $${Math.round(open.liquidity).toLocaleString("en-US")}` : ""}
+          </p>
           <div className="mt-3 overflow-hidden rounded-2xl bg-black/30">
             <LiveChart compact mint={open.id} symbol={open.symbol} live={open.price ?? 0} />
           </div>

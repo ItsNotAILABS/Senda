@@ -1,4 +1,5 @@
-// Senda. The PreStocks desk. Dev server stays on 8080.
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -7,17 +8,34 @@ import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
+// @ts-expect-error JS plugin alongside the TS vite config
+import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
+import { isMigrationFile } from "./scripts/migration-plan.mjs";
+
+/** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
+function hasGlobbedMigrations(root: string): boolean {
+  try {
+    return readdirSync(join(root, "migrations")).some(isMigrationFile);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Finish PGLite bootstrap during dev-server setup (before traffic). Vite awaits
  * async `configureServer` hooks. Production: `src/lib/db` kicks `ensureDbReady`
  * on import.
+ *
+ * Vite awaiting the hook puts this on time-to-first-render, so an app with no
+ * migrations — no schema to apply — skips it entirely rather than paying for a
+ * PGLite instance it never queries.
  */
 function pgliteBootstrapPlugin(): Plugin {
   return {
     name: "app-builder:pglite-bootstrap",
     apply: "serve",
     async configureServer(server) {
+      if (!hasGlobbedMigrations(server.config.root)) return;
       try {
         const mod = (await server.ssrLoadModule("/src/lib/db.ts")) as {
           ensureDbReady?: () => Promise<void>;
@@ -124,6 +142,42 @@ function authPopupPlugin(): Plugin {
   };
 }
 
+/**
+ * Safari throws "Can't find variable: Buffer" for a free `Buffer` inside an
+ * ES module, even after `globalThis.Buffer` is set. Property access is fine.
+ * Rewrite only a bare `Buffer.`. A file that already imports `buffer` must
+ * keep that binding: web3.js pads keys with `imported.copy(global.alloc())`,
+ * and a stub alloc made copy throw "argument should be a Buffer".
+ */
+function importsBuffer(code: string): boolean {
+  return /from\s+["']buffer["']/.test(code) || /require\(\s*["']buffer["']\s*\)/.test(code) || /require_buffer\b/.test(code);
+}
+
+function bindBuffer(code: string, id: string): string | null {
+  const clean = id.split("?")[0] ?? id;
+  if (!/\.(mjs|cjs|js|ts|tsx|jsx)$/.test(clean)) return null;
+  if (/[/\\]node_modules[/\\]buffer[/\\]/.test(clean) || /[/\\]deps[/\\]buffer[-.]/.test(clean)) return null;
+  if (clean.includes("/node_modules/vite/") || clean.includes("buffer-inject") || clean.includes("buffer-polyfill")) return null;
+  if (importsBuffer(code)) return null;
+  if (!/\bBuffer\./.test(code)) return null;
+  const next = code.replace(/(?<![\w.$])Buffer(?=\s*\.)/g, "globalThis.Buffer");
+  if (next === code) return null;
+  return next;
+}
+
+function bufferBind(): Plugin {
+  const transform = function (this: { getCombinedSourcemap?: () => unknown }, code: string, id: string) {
+    const next = bindBuffer(code, id);
+    if (next == null) return null;
+    return { code: next, map: null };
+  };
+  return {
+    name: "senda-buffer-bind",
+    enforce: "pre",
+    transform,
+  };
+}
+
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
@@ -139,10 +193,31 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  define: {
+    global: "globalThis",
+  },
+  optimizeDeps: {
+    include: ["buffer"],
+    rolldownOptions: {
+      plugins: [
+        {
+          name: "senda-buffer-bind-deps",
+          transform(code: string, id: string) {
+            const next = bindBuffer(code, id);
+            if (next == null) return null;
+            return { code: next, map: null };
+          },
+        },
+      ],
+    },
+  },
   plugins: [
+    bufferBind(),
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
+    // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
+    appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),

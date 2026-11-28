@@ -1,15 +1,20 @@
-/** A sentence becomes a contract only when the name is already on the book. */
+/** A sentence becomes a signable action only when the name, or the address, is already real. */
 
 import { spendCap } from "@/lib/spend-cap";
 
-export type IntentBook = { symbol: string; name: string };
+export type IntentBook = { symbol: string; name: string; mint?: string };
+
+export type IntentKind = "swap" | "earn" | "send";
 
 export type ParsedIntent =
   | {
       ok: true;
+      kind: IntentKind;
       side: "buy" | "sell";
       usd: number;
       symbol: string;
+      mint: string;
+      to: string;
       maxImpact: number | null;
       line: string;
       refused: string | null;
@@ -43,6 +48,34 @@ function nameOf(text: string, book: IntentBook[]): IntentBook | null {
   return null;
 }
 
+/** What Phantom will be asked to sign. No calldata is invented. */
+export function intentPlan(row: Extract<ParsedIntent, { ok: true }>): {
+  type: "INTENT_BATCH_EXECUTION";
+  executionBlock: {
+    strategy: "JUPITER_SWAP" | "USDC_TRANSFER";
+    description: string;
+    mint: string;
+    to: string;
+    usd: number;
+    side: "buy" | "sell";
+    constraints: { maxSlippageBps: number; deadline: number };
+  };
+} {
+  const bps = row.maxImpact != null ? Math.round(row.maxImpact * 100) : 100;
+  return {
+    type: "INTENT_BATCH_EXECUTION",
+    executionBlock: {
+      strategy: row.kind === "send" ? "USDC_TRANSFER" : "JUPITER_SWAP",
+      description: row.line,
+      mint: row.mint,
+      to: row.to,
+      usd: row.usd,
+      side: row.side,
+      constraints: { maxSlippageBps: bps, deadline: Math.floor(Date.now() / 1000) + 120 },
+    },
+  };
+}
+
 export function parseIntent(text: string, book: IntentBook[]): ParsedIntent {
   const said = text.trim();
   if (said.length < 4) return { ok: false, error: "Say the size and the name." };
@@ -50,20 +83,41 @@ export function parseIntent(text: string, book: IntentBook[]): ParsedIntent {
   if (usd == null) return { ok: false, error: "Say a dollar size. Nothing was queued." };
   const cap = spendCap();
   if (usd - cap > 0.001) return { ok: false, error: `That is $${usd.toFixed(2)}. The cap is $${cap.toFixed(2)}. Nothing was queued.` };
+  const maxImpact = impactOf(said);
+  const address = said.match(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/);
+  if (/\b(send|pay|transfer)\b/i.test(said) && address) {
+    return {
+      ok: true,
+      kind: "send",
+      side: "sell",
+      usd,
+      symbol: "USDC",
+      mint: "",
+      to: address[0],
+      maxImpact,
+      refused: null,
+      line: `Send $${usd.toFixed(2)} USDC to ${address[0]}. Phantom signs the transfer.`,
+    };
+  }
   const hit = nameOf(said, book);
   if (!hit) return { ok: false, error: "That name is not on this book. Nothing was queued." };
   const side: "buy" | "sell" = /\b(sell|short|dump|exit|trim)\b/i.test(said) ? "sell" : "buy";
-  const maxImpact = impactOf(said);
+  const earn = /\b(earn|stake|lend|deposit|supply)\b/i.test(said);
   const rotate = /\b(rotate|bridge|switch)\b/i.test(said) && /\b(base|ethereum|arbitrum)\b/i.test(said);
-  const refused = rotate ? "A rotate onto Base, Ethereum, or Arbitrum is not signed. The token stays the Solana one." : null;
+  const refused = rotate ? "A rotate onto Base, Ethereum, or Arbitrum is not a Jupiter swap. USDC to those chains is the CCTP lane, and this sentence did not open it." : null;
   const slip = maxImpact != null ? ` It refuses the quote if impact is over ${maxImpact}%.` : "";
+  const kind: IntentKind = earn ? "earn" : "swap";
+  const verb = kind === "earn" ? "Buy the receipt" : side === "buy" ? "Buy" : "Sell";
   return {
     ok: true,
-    side,
+    kind,
+    side: kind === "earn" ? "buy" : side,
     usd,
     symbol: hit.symbol,
+    mint: hit.mint ?? "",
+    to: "",
     maxImpact,
     refused,
-    line: `${side === "buy" ? "Buy" : "Sell"} $${usd.toFixed(2)} ${hit.symbol}.${slip}`,
+    line: `${verb} $${usd.toFixed(2)} ${hit.symbol}.${slip}`,
   };
 }

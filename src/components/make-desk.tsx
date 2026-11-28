@@ -2,9 +2,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { KINDS, listListings, saveListing, type Listing, type MakeKind } from "@/lib/make-board";
 import { MoneyBar } from "@/components/money-bar";
-import { payUsdc } from "@/lib/solana-pay";
+import { payToken, payUsdc } from "@/lib/solana-pay";
 import { useWalletCtx as useWallet } from "@/lib/wallet-context";
 import { cn } from "@/lib/utils";
+
+const PAYS = [
+  { id: "CASH", mint: "CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH", label: "Phantom Cash" },
+  { id: "USDC", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", label: "USDC" },
+  { id: "USDT", mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", label: "USDT" },
+] as const;
 
 export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) {
   const wallet = useWallet();
@@ -17,13 +23,15 @@ export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) 
   const [payTo, setPayTo] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<MakeKind | "all">("all");
+  const [pay, setPay] = useState<(typeof PAYS)[number]["id"]>("USDC");
   const shown = filter === "all" ? rows : rows.filter((r) => r.kind === filter);
+  const picked = PAYS.find((row) => row.id === pay) ?? PAYS[1];
 
   function post() {
     const n = Math.round(Number(usd) * 100) / 100;
     if (!title.trim()) return toast.error("Name what you are offering, or what you need.");
-    if (!(n > 0)) return toast.error("Set a price in USDC.");
-    if (payTo.trim().length < 32) return toast.error("Paste the Solana address that should receive the USDC.");
+    if (!(n > 0)) return toast.error("Set a price.");
+    if (payTo.trim().length < 32) return toast.error("Paste the Solana address that should receive it.");
     const row = saveListing({ kind, title: title.trim(), detail: detail.trim(), usd: n, payTo: payTo.trim() });
     setRows((r) => [row, ...r]);
     setTitle("");
@@ -40,8 +48,15 @@ export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) 
             Make something a person will pay for.
           </h1>
           <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/55">
-            A job. Software. A service. Hardware. A robot. Or what a teacher’s class is missing. The price is USDC. The wallet signs. The whole amount goes to the address on the listing.
+            A job. Software. A service. Hardware. A robot. Or what a teacher’s class is missing. Phantom signs. The whole amount, in the token you pick, goes to the address on the listing. Contracts for this account sit on this tab.
           </p>
+          <div className="mt-4 flex gap-2">
+            {PAYS.map((row) => (
+              <button key={row.id} type="button" onClick={() => setPay(row.id)} className={cn("min-h-10 rounded-full px-3 text-sm font-semibold", pay === row.id ? "bg-white text-black" : "bg-white/10")}>
+                {row.label}
+              </button>
+            ))}
+          </div>
           <div className="mt-5 max-w-xl">
             <MoneyBar />
           </div>
@@ -71,7 +86,7 @@ export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) 
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What it is" className="mt-3 min-h-12 w-full rounded-2xl bg-black/30 px-4 text-sm outline-none" />
           <textarea value={detail} onChange={(e) => setDetail(e.target.value)} placeholder="Who it helps, and what they get" rows={3} className="mt-2 w-full rounded-2xl bg-black/30 px-4 py-3 text-sm outline-none" />
           <div className="mt-2 grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
-            <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" aria-label="USDC" className="min-h-12 rounded-2xl bg-black/30 px-4 font-mono text-sm outline-none" />
+            <input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" aria-label="Amount" className="min-h-12 rounded-2xl bg-black/30 px-4 font-mono text-sm outline-none" />
             <input value={payTo} onChange={(e) => setPayTo(e.target.value)} placeholder="Solana address to pay" spellCheck={false} className="min-h-12 rounded-2xl bg-black/30 px-4 font-mono text-xs outline-none" />
           </div>
           <button type="submit" className="mt-3 min-h-12 w-full rounded-full bg-accent text-sm font-semibold text-accent-fg">
@@ -107,14 +122,17 @@ export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) 
                   onClick={() => {
                     if (!owner) return toast.error("Connect a Solana wallet. It has to sign.");
                     setBusy(row.id);
-                    void payUsdc({ owner, to: row.payTo, usd: row.usd })
-                      .then((r) => toast.success(`Signed. ${r.signature.slice(0, 8)}…`))
+                    const sent = pay === "USDC"
+                      ? payUsdc({ owner, to: row.payTo, usd: row.usd }).then((r) => r.signature)
+                      : payToken({ owner, to: row.payTo, mint: picked.mint, symbol: picked.id, amount: row.usd }).then((r) => r.signature);
+                    void sent
+                      .then((signature) => toast.success(`Phantom signed. ${signature.slice(0, 8)}…`))
                       .catch((e: unknown) => toast.error(e instanceof Error ? e.message : "The transfer did not send."))
                       .finally(() => setBusy(null));
                   }}
                   className="mt-4 min-h-11 rounded-full bg-white text-sm font-semibold text-black disabled:opacity-50"
                 >
-                  {busy === row.id ? "Waiting on the wallet" : row.kind === "teaching" ? "Fund this" : "Pay in USDC"}
+                  {busy === row.id ? "Waiting on the wallet" : `Pay in ${picked.label}`}
                 </button>
               </li>
             );
@@ -127,7 +145,7 @@ export function MakeDesk({ view = "all" }: { view?: "all" | "board" | "post" }) 
 
 function Filter({ on, label, set }: { on: boolean; label: string; set: () => void }) {
   return (
-    <button type="button" onClick={set} className={cn("min-h-10 rounded-full px-4 text-sm", on ? "bg-white text-black" : "bg-[#14141c] text-white/70")}>
+    <button type="button" onClick={set} className={cn("min-h-10 rounded-full px-3 text-sm", on ? "bg-white text-black" : "bg-white/10 text-white/70")}>
       {label}
     </button>
   );

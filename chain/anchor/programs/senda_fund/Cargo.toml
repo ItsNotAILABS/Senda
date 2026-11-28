@@ -1,0 +1,16 @@
+[package]
+name = "senda_fund"
+version = "0.1.0"
+edition = "2021"
+description = "Anchor CPI into the native treasury. The account layout stays the native 92 bytes."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+no-entrypoint = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.31.1"

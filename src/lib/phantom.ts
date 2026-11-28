@@ -1,6 +1,7 @@
 import { activeSolProvider } from "@/lib/wallets";
 import { insideWalletApp, isPhoneBrowser, mobileSession, startMobileConnect, startMobileSign, type SignJob } from "@/lib/mobile-wallet";
-import { unlockSeal } from "@/lib/seal";
+import { sealOpen, unlockSeal } from "@/lib/seal";
+import { PublicKey } from "@solana/web3.js";
 
 type Pub = { toString: () => string };
 
@@ -56,17 +57,23 @@ export function waitForInjected(ms = 2500): Promise<PhantomProvider | null> {
 }
 
 export async function connectPhantom(): Promise<string> {
-  const injected = await waitForInjected(insideWalletApp() ? 4000 : 400);
+  const live = (activeSolProvider() as PhantomProvider | null) ?? phantomProvider();
+  if (!live?.connect && isPhoneBrowser() && !insideWalletApp() && !location.pathname.startsWith("/wallets/app")) {
+    startMobileConnect("phantom");
+    return new Promise(() => {});
+  }
+  const injected = live?.connect ? live : await waitForInjected(insideWalletApp() ? 4000 : 400);
   if (injected?.connect) {
     const res = await injected.connect();
     const addr = res?.publicKey?.toString() || injected.publicKey?.toString();
     if (!addr) throw new Error("The wallet returned no account.");
-    await unlockSeal(addr);
+    rememberPhantom(addr);
+    if (!sealOpen()) await unlockSeal(addr);
     return addr;
   }
   const known = mobileSession();
   if (known && !insideWalletApp()) {
-    await unlockSeal(known.publicKey);
+    if (!sealOpen()) await unlockSeal(known.publicKey);
     return known.publicKey;
   }
   if (isPhoneBrowser() && !insideWalletApp() && !location.pathname.startsWith("/wallets/app")) {
@@ -76,7 +83,7 @@ export async function connectPhantom(): Promise<string> {
   throw new Error(
     insideWalletApp()
       ? "Phantom is open, but this page cannot see the wallet yet. Tap Connect Phantom."
-      : "No Solana wallet in this browser. On a phone, Phantom or Solflare opens to approve.",
+      : "No Solana wallet in this browser. On a phone, Phantom opens to approve.",
   );
 }
 
@@ -100,9 +107,65 @@ async function providerOrThrow(): Promise<PhantomProvider | null> {
   if (isPhoneBrowser() && !insideWalletApp() && !location.pathname.startsWith("/wallets/app")) return null;
   throw new Error(
     insideWalletApp()
-      ? "Phantom is open. Tap Connect Phantom, then buy again. This page signs here."
-      : "Connect a Solana wallet. On a phone, Phantom or Solflare opens to sign.",
+      ? "Phantom is open. Tap again. This page signs here."
+      : "Connect a Solana wallet. On a phone, Phantom opens to sign.",
   );
+}
+
+export function liveSolAddress(): string {
+  try {
+    return phantomProvider()?.publicKey?.toString() || "";
+  } catch {
+    return "";
+  }
+}
+
+const ACCOUNT = "senda.phantom.account";
+
+export function rememberedPhantom(): string {
+  if (typeof localStorage === "undefined") return "";
+  try {
+    return localStorage.getItem(ACCOUNT) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function rememberPhantom(addr: string) {
+  if (!addr || typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(ACCOUNT, addr);
+  } catch {
+    /* the address still shows for this visit */
+  }
+}
+
+export function pickOwner(links: Array<{ kind?: string; address?: string }>): string {
+  const live = liveSolAddress();
+  if (live) return live;
+  return (
+    links.find((l) => l.kind === "phantom" && l.address)?.address ||
+    links.find((l) => l.kind === "solana" && l.address)?.address ||
+    rememberedPhantom() ||
+    ""
+  );
+}
+
+export async function signSerializedTx(b64: string): Promise<string> {
+  const { Buffer } = await import("buffer");
+  if (!globalThis.Buffer) globalThis.Buffer = Buffer;
+  const raw = Buffer.from(b64, "base64");
+  const { VersionedTransaction, Transaction } = await import("@solana/web3.js");
+  const p = await providerOrThrow();
+  if (!p?.signTransaction) throw new Error("Connect a Solana wallet. A limit needs the signature before it is sent.");
+  let tx: { serialize: () => Uint8Array };
+  try {
+    tx = VersionedTransaction.deserialize(raw);
+  } catch {
+    tx = Transaction.from(raw);
+  }
+  const signed = await p.signTransaction(tx);
+  return Buffer.from(signed.serialize()).toString("base64");
 }
 
 export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promise<string> {
@@ -120,18 +183,28 @@ export async function sendVersioned(tx: { serialize: () => Uint8Array }): Promis
   return broadcastSigned(signed);
 }
 
-/** Legacy USDC transfer. The phone opens the wallet app when there is no extension. */
-export async function signAndBroadcast(tx: { serialize: (...args: never[]) => Uint8Array }): Promise<string> {
+/** One key has already signed. The wallet adds its signature. A send-and-sign call is not used, so the first signature stays. */
+export async function sendPartial(tx: { serialize: () => Uint8Array }): Promise<string> {
   const p = await providerOrThrow();
-  if (!p) return phoneSign(tx, { kind: "broadcast", note: "USDC" });
-  if (p.signTransaction) {
-    const signed = await p.signTransaction(tx);
-    return broadcastSigned(signed);
+  if (!p) return phoneSign(tx, { kind: "broadcast", note: "Create" });
+  if (!p.signTransaction) throw new Error("This wallet cannot add a signature. Nothing was sent.");
+  const signed = await p.signTransaction(tx);
+  return broadcastSigned(signed);
+}
+
+/** USDC leaves the connected wallet. A laptop pops Phantom's confirm. A phone opens the Phantom app. The order stays on Senda. */
+export async function signAndBroadcast(tx: { serialize: (...args: never[]) => Uint8Array }, note = "USDC"): Promise<string> {
+  const p = await providerOrThrow();
+  if (!p) return phoneSign(tx, { kind: "broadcast", note });
+  if (p.signAndSendTransaction) {
+    const out = await p.signAndSendTransaction(tx);
+    const sig = out.signature;
+    if (typeof sig === "string") return sig;
+    return bytesToBase58(sig);
   }
-  const out = await p.signAndSendTransaction!(tx);
-  const sig = out.signature;
-  if (typeof sig === "string") return sig;
-  return bytesToBase58(sig);
+  if (!p.signTransaction) throw new Error("This wallet cannot send a transaction.");
+  const signed = await p.signTransaction(tx);
+  return broadcastSigned(signed);
 }
 
 /** Simulate and submit a transaction that is already signed. Does not ask the wallet again. */
@@ -184,9 +257,33 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-const RPCS = ["https://api.mainnet-beta.solana.com", "https://solana-rpc.publicnode.com"];
+const RPCS = [
+  "https://solana-rpc.publicnode.com",
+  "https://api.mainnet-beta.solana.com",
+  "https://rpc.ankr.com/solana",
+];
 
-async function rpc(method: string, params: unknown[]): Promise<unknown> {
+function asLamports(result: unknown): number {
+  if (typeof result === "number" && Number.isFinite(result)) return result;
+  if (typeof result === "string" && Number.isFinite(Number(result))) return Number(result);
+  if (result && typeof result === "object" && "value" in result) return asLamports((result as { value: unknown }).value);
+  return 0;
+}
+
+export async function rpc(method: string, params: unknown[]): Promise<unknown> {
+  try {
+    const same = await fetch("/api/chain", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ method, params }),
+    });
+    if (same.ok) {
+      const body = (await same.json()) as { result?: unknown; error?: string };
+      if (!body.error) return body.result ?? null;
+    }
+  } catch {
+    /* The phone often cannot see a public RPC. The desk route is the first try. */
+  }
   let last = "RPC failed";
   for (const url of RPCS) {
     try {
@@ -233,6 +330,26 @@ const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 const NAMES: Record<string, string> = {
   EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v: "USDC",
   Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB: "USDT",
+  "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo": "PYUSD",
+  "2u1tszSeqZ3qBWF3uNGPFc8TzMk2tdiwknnRMWGWjGWH": "USDG",
+  USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB: "USD1",
+  CASHx9KJUStyftLFWGvEVf59SGeG9sh5FfcnZMVPCASH: "CASH",
+  USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA: "USDS",
+  JuprjznTrTSp2UFa3ZBUFgwdAmtZCq4MQCwysN55USD: "JupUSD",
+  KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS: "KMNO",
+  pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn: "PUMP",
+  METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL: "MET",
+  JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN: "JUP",
+  "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": "JLP",
+  HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3: "PYTH",
+  "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": "RAY",
+  orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE: "ORCA",
+  jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL: "JTO",
+  "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr": "POPCAT",
+  MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5: "MEW",
+  "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv": "PENGU",
+  "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump": "FARTCOIN",
+  "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN": "TRUMP",
   PresTj4Yc2bAR197Er7wz4UUKSfqt6FryBEdAriBoQB: "ANDURIL",
   Pren1FvFX6J3E4kXhJuCiAD5aDmGEb7qJRncwA8Lkhw: "ANTHROPIC",
   PreZad18qfPtbxNpMtMuAuX2zVpvkEU8DnJx56faCWd: "FIGUREAI",
@@ -278,6 +395,15 @@ export async function splHolding(owner: string, mint: string): Promise<{ ui: num
   return { ui, raw: raw.toString(), decimals };
 }
 
+function tokenUi(amount: { uiAmount?: number | null; uiAmountString?: string; amount?: string; decimals?: number } | undefined): number {
+  if (!amount) return 0;
+  if (typeof amount.uiAmount === "number" && amount.uiAmount > 0) return amount.uiAmount;
+  const fromString = Number(amount.uiAmountString || "");
+  if (fromString > 0) return fromString;
+  if (amount.amount && typeof amount.decimals === "number") return Number(amount.amount) / 10 ** amount.decimals;
+  return 0;
+}
+
 async function tokenAccounts(owner: string, programId: string): Promise<ChainToken[]> {
   const result = (await rpc("getTokenAccountsByOwner", [owner, { programId }, { encoding: "jsonParsed" }])) as {
     value?: Array<{ account?: { data?: { parsed?: { info?: { mint?: string; tokenAmount?: { uiAmount?: number; decimals?: number } } } } } }>;
@@ -286,13 +412,14 @@ async function tokenAccounts(owner: string, programId: string): Promise<ChainTok
   for (const row of result?.value ?? []) {
     const info = row.account?.data?.parsed?.info;
     const mint = info?.mint ?? "";
-    const ui = info?.tokenAmount?.uiAmount || 0;
+    const amount = info?.tokenAmount;
+    const ui = tokenUi(amount);
     if (!mint || !(ui > 0)) continue;
     out.push({
       mint,
       symbol: NAMES[mint] || `${mint.slice(0, 4)}…${mint.slice(-4)}`,
       ui,
-      decimals: info?.tokenAmount?.decimals ?? 0,
+      decimals: amount?.decimals ?? 0,
     });
   }
   return out;
@@ -311,7 +438,7 @@ export async function readChain(owner: string): Promise<ChainWallet> {
   const tokens = [...merged.values()].sort((a, b) => Number(b.symbol === "USDC") - Number(a.symbol === "USDC") || b.ui - a.ui);
   const list = Array.isArray(sigs) ? (sigs as Array<{ signature?: string; err?: unknown; blockTime?: number | null }>) : [];
   return {
-    sol: (Number(lamports) || 0) / 1e9,
+    sol: asLamports(lamports) / 1e9,
     tokens,
     txs: list.map((s) => ({
       signature: String(s.signature || ""),
@@ -319,5 +446,100 @@ export async function readChain(owner: string): Promise<ChainWallet> {
       time: s.blockTime ?? null,
     })),
   };
+}
+
+/** The same chain read the desks already use. */
+export function chainRpc(method: string, params: unknown[]): Promise<unknown> {
+  return rpc(method, params);
+}
+
+/** Wait until the chain has seen this signature. Do not send it again while this is running. */
+export async function confirmSig(signature: string): Promise<void> {
+  const start = Date.now();
+  let last = "The transaction was sent. The chain has not confirmed it. Do not send it again.";
+  while (Date.now() - start < 22_000) {
+    try {
+      const result = (await rpc("getSignatureStatuses", [[signature]])) as {
+        value?: Array<{ err?: unknown; confirmationStatus?: string } | null>;
+      };
+      const row = result?.value?.[0];
+      if (row?.err) throw new Error("The chain rejected the transaction.");
+      const status = row?.confirmationStatus;
+      if (status === "processed" || status === "confirmed" || status === "finalized") return;
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("The chain rejected")) throw e;
+      last = e instanceof Error ? e.message : last;
+    }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  throw new Error(last);
+}
+
+export async function requirePhantom(): Promise<PhantomProvider & { signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }> }> {
+  const signer = phantomProvider() ?? (await waitForInjected(800));
+  if (!signer?.signTransaction) throw new Error("Connect Phantom in this window. It has to sign.");
+  return signer as PhantomProvider & { signTransaction: (tx: unknown) => Promise<{ serialize: () => Uint8Array }> };
+}
+
+export function invalidateChain(_owner?: string) {
+  /* This reader does not keep a wallet cache. */
+}
+
+const shownMints = new Set<string>();
+
+export async function showInPhantom(mint: string): Promise<void> {
+  if (!mint || shownMints.has(mint)) return;
+  const provider = phantomProvider() as (PhantomProvider & { request?: (args: { method: string; params: unknown }) => Promise<unknown> }) | null;
+  if (!provider?.request) return;
+  shownMints.add(mint);
+  try {
+    await provider.request({ method: "wallet_watchAsset", params: { type: "SPL", options: { mint } } });
+  } catch {
+    shownMints.delete(mint);
+  }
+}
+
+export type UsdcMove = {
+  signature: string;
+  delta: number;
+  other: string;
+  time: number | null;
+  err: boolean;
+};
+
+/** USDC in and out of this address, read from the chain. */
+export async function readUsdcMoves(owner: string): Promise<UsdcMove[]> {
+  const USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const ata = PublicKey.findProgramAddressSync(
+    [new PublicKey(owner).toBytes(), new PublicKey(TOKEN_PROGRAM).toBytes(), new PublicKey(USDC).toBytes()],
+    new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+  )[0];
+  const listed = (await rpc("getSignaturesForAddress", [ata.toBase58(), { limit: 12 }])) as
+    | Array<{ signature?: string; err?: unknown; blockTime?: number | null }>
+    | null;
+  const out: UsdcMove[] = [];
+  for (const row of listed ?? []) {
+    if (!row.signature) continue;
+    const tx = (await rpc("getTransaction", [row.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }])) as {
+      blockTime?: number | null;
+      meta?: { err?: unknown; preTokenBalances?: Array<{ mint?: string; owner?: string; uiTokenAmount?: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } }>; postTokenBalances?: Array<{ mint?: string; owner?: string; uiTokenAmount?: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } }> };
+    } | null;
+    const ui = (rowBal: { uiAmount?: number; uiAmountString?: string; amount?: string; decimals?: number } | undefined) => {
+      if (!rowBal) return 0;
+      if (typeof rowBal.uiAmount === "number") return rowBal.uiAmount;
+      if (rowBal.uiAmountString) return Number(rowBal.uiAmountString) || 0;
+      if (rowBal.amount && typeof rowBal.decimals === "number") return Number(rowBal.amount) / 10 ** rowBal.decimals;
+      return 0;
+    };
+    const pre = (tx?.meta?.preTokenBalances ?? []).filter((b) => b.mint === USDC && b.owner === owner);
+    const post = (tx?.meta?.postTokenBalances ?? []).filter((b) => b.mint === USDC && b.owner === owner);
+    const before = pre.reduce((s, b) => s + ui(b.uiTokenAmount), 0);
+    const after = post.reduce((s, b) => s + ui(b.uiTokenAmount), 0);
+    const delta = Math.round((after - before) * 1e6) / 1e6;
+    const other = (tx?.meta?.postTokenBalances ?? []).find((b) => b.mint === USDC && b.owner && b.owner !== owner)?.owner ?? "";
+    if (delta === 0 && !tx?.meta?.err) continue;
+    out.push({ signature: row.signature, delta, other, time: tx?.blockTime ?? row.blockTime ?? null, err: Boolean(tx?.meta?.err || row.err) });
+  }
+  return out;
 }
 

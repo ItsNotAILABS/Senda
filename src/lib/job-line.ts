@@ -3,9 +3,12 @@
  * The line runs the route before anyone is asked to sign.
  */
 
-import { acceptQuote, acceptSize } from "@/lib/engine";
+import { acceptSize } from "@/lib/engine";
+import { checkBook } from "@/lib/book-check";
+import { readMintFlags } from "@/lib/mint-flags";
 import { USDC } from "@/lib/jup-exec";
 import { quoteRoute } from "@/lib/jup-sign";
+import { mintDecimals } from "@/lib/phantom";
 import { spendCap } from "@/lib/spend-cap";
 
 const KEY = "senda.jobs.v1";
@@ -83,28 +86,49 @@ export function dropJob(id: string): Job[] {
   return next;
 }
 
-/** Ask Jupiter. The job stays blocked until the route clears the same gate as a buy. */
+/** Ask Jupiter, then the same check a signature uses. A sell still waits for the tokens in the wallet. */
 export async function quoteJob(job: Job): Promise<Job> {
   if (job.side !== "buy") {
     return { ...job, step: "quoted", why: "", route: "Sell uses the tokens already in the wallet." };
   }
+  const started = Date.now();
   try {
-    const q = await quoteRoute({
-      inputMint: USDC,
-      outputMint: job.mint,
-      amountRaw: Math.max(1, Math.round(job.usd * 1e6)),
-      outDecimals: 9,
-    });
+    const dec = await mintDecimals(job.mint).catch(() => 9);
+    const [q, flags] = await Promise.all([
+      quoteRoute({
+        inputMint: USDC,
+        outputMint: job.mint,
+        amountRaw: Math.max(1, Math.round(job.usd * 1e6)),
+        outDecimals: dec,
+      }),
+      readMintFlags(job.mint),
+    ]);
     const size = acceptSize(job.usd, spendCap());
-    const gate = acceptQuote(q);
-    const why = !size.ok ? size.reason : !gate.ok ? gate.reason : "";
+    const gate = checkBook({
+      inMint: USDC,
+      outMint: job.mint,
+      inRaw: q.inAmount,
+      outRaw: q.outAmount,
+      minRaw: q.otherAmountThreshold || q.outAmount,
+      inDecimals: 6,
+      outDecimals: dec,
+      impactPct: q.impact,
+      slippageBps: 100,
+      shownIn: job.usd,
+      symbol: job.symbol,
+      paused: flags.paused,
+      frozenDefault: flags.frozenDefault,
+      fees: flags.fees,
+    });
+    const why = !size.ok ? size.reason : !gate.ok ? gate.line : "";
+    const ms = Math.max(1, Date.now() - started);
     return {
       ...job,
       step: why ? "blocked" : "quoted",
       outUi: q.outUi,
       minUi: q.minUi,
       impact: q.impact,
-      route: q.route,
+      route: why ? q.route : `${q.route} · clears · ${gate.checks} checks · ${ms}ms`,
       why,
     };
   } catch (e) {

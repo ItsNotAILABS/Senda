@@ -1,4 +1,4 @@
-/** A clear is a money movement the desk can show. Chain rows have a signature. */
+import { coverDesk } from "@/lib/privacy";
 
 export type ClearLeg = {
   side: "out" | "in";
@@ -36,8 +36,11 @@ export function rememberClear(row: Omit<ClearRecord, "id" | "at">): ClearRecord 
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
     at: Date.now(),
   };
+  if (typeof window === "undefined" || coverDesk()) return next;
   const rows = [next, ...listClears()].slice(0, 80);
   window.localStorage.setItem(KEY, JSON.stringify(rows));
   window.dispatchEvent(new Event("senda-clear"));
   return next;
 }
+
+export { loadClearing, postPerp, closePerp, confirmFlight, postPred, settlePred, postRace, settleRace, fundPurse, agentStake } from "@/lib/clearing-desk";

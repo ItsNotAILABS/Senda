@@ -48,7 +48,8 @@
     -webkit-font-smoothing: antialiased;
     background: var(--color-bg);
     color: var(--color-fg);
-    overflow-x: hidden;
+    overflow-x: clip;
+    scrollbar-gutter: stable;
   }
   body {
     min-height: 100dvh;
@@ -83,6 +84,11 @@
   }
 }
 
+@keyframes senda-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.senda-in { animation: senda-in 0.18s ease-out both; }
 @keyframes senda-rise {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: none; }
@@ -101,6 +107,53 @@
 }
 .senda-film { animation: senda-film 18s ease-out both; transform-origin: center center; }
 .senda-dot { animation: senda-live 1.8s ease-in-out infinite; }
+@keyframes coin-tape {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.coin-tape { animation: coin-tape 70s linear infinite; }
+
+@keyframes senda-flow {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(420%); }
+}
+.senda-flow { animation: senda-flow 1.15s ease-in-out infinite; }
+@keyframes senda-swap {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.senda-swap { animation: senda-swap 0.38s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes senda-paint {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+.senda-paint { animation: senda-paint 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes senda-sheet {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: none; }
+}
+.senda-sheet { animation: senda-sheet 0.45s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes senda-coin {
+  0% { left: 12%; opacity: 0; transform: translateY(0) scale(0.7); }
+  18% { opacity: 1; }
+  70% { left: 78%; opacity: 1; transform: translateY(-18px) scale(1); }
+  100% { left: 84%; opacity: 0; transform: translateY(0) scale(0.85); }
+}
+.senda-coin { animation: senda-coin 1.35s ease-in-out infinite; }
+@keyframes senda-scan {
+  0% { top: 12%; }
+  50% { top: 78%; }
+  100% { top: 12%; }
+}
+.senda-scan { animation: senda-scan 1.8s ease-in-out infinite; }
+@keyframes senda-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.senda-pop { animation: senda-pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+
 
 /* Content type only. The side column is outside this box, so it stays as it is.
    Phone and laptop use the same steps. A wider window does not jump back to poster size. */

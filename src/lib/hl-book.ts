@@ -2,10 +2,11 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { parseDay, privateBook, type DayBar, type PrivateUnit } from "@/lib/hl-private";
 
 const INFO = "https://api.hyperliquid.xyz/info";
 
-export type HlKind = "crypto" | "stock" | "fx" | "commodity" | "index";
+export type HlKind = "crypto" | "stock" | "fx" | "commodity" | "index" | "private";
 
 export type HlMarket = {
   id: string;
@@ -21,6 +22,9 @@ export type HlMarket = {
   funding: number | null;
   oi: number | null;
   volume: number | null;
+  unit: PrivateUnit | "price";
+  unitLine: string;
+  company: string;
 };
 
 export type HlPosition = {
@@ -39,7 +43,8 @@ const FX = new Set(["EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "DXY", "NZD", "KRW
 const COMMODITY = new Set(["GOLD", "SILVER", "COPPER", "CL", "BRENTOIL", "NATGAS", "CORN", "WHEAT", "ALUMINIUM", "HO", "PLATINUM", "PALLADIUM", "COCOA", "COFFEE", "SUGAR", "COTTON", "SOY", "WTI"]);
 const INDEX = new Set(["XYZ100", "SPX", "SP500", "NDX", "NAS100", "DJI", "VIX", "HSI", "NKY", "DAX", "UK100"]);
 
-function kindOf(label: string, dex: string): HlKind {
+function kindOf(id: string, label: string, dex: string): HlKind {
+  if (privateBook(id)) return "private";
   const name = label.toUpperCase();
   if (INDEX.has(name)) return "index";
   if (COMMODITY.has(name)) return "commodity";
@@ -82,12 +87,13 @@ export async function loadHlMarkets(): Promise<HlMarket[]> {
           const funding = Number(ctx[i]?.funding);
           const oi = Number(ctx[i]?.openInterest);
           const volume = Number(ctx[i]?.dayNtlVlm);
+          const priv = privateBook(full);
           return {
             id: full || `${name}:${i}`,
             label,
             asset: dexIndex === 0 ? i : 100000 + dexIndex * 10000 + i,
             dex: name,
-            kind: kindOf(label, name),
+            kind: kindOf(full, label, name),
             maxLeverage: Number(row.maxLeverage) || 1,
             szDecimals: Number(row.szDecimals) || 0,
             mark: mark > 0 ? mark : 0,
@@ -96,6 +102,9 @@ export async function loadHlMarkets(): Promise<HlMarket[]> {
             funding: Number.isFinite(funding) ? funding : null,
             oi: Number.isFinite(oi) ? oi : null,
             volume: Number.isFinite(volume) ? volume : null,
+            unit: priv?.unit ?? "price",
+            unitLine: priv?.line ?? "",
+            company: priv?.name ?? "",
           } satisfies HlMarket;
         });
       } catch {
@@ -107,6 +116,17 @@ export async function loadHlMarkets(): Promise<HlMarket[]> {
 }
 
 export const hlBook = createServerFn({ method: "GET" }).handler(async () => loadHlMarkets());
+
+export const hlRange = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ coin: z.string().min(1).max(40) }).parse(input))
+  .handler(async ({ data }): Promise<DayBar | null> => {
+    const end = Date.now();
+    const rows = await info({
+      type: "candleSnapshot",
+      req: { coin: data.coin, interval: "1h", startTime: end - 24 * 60 * 60 * 1000, endTime: end },
+    });
+    return parseDay(rows);
+  });
 
 export type HlCash = { perp: number; spot: number; abstraction: string };
 
